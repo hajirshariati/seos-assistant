@@ -42,6 +42,7 @@ import {
   stripInternalLeaks,
   containsInternalLanguageLeak,
   resolverPromisedRecommendation,
+  stripAvailabilityDenialSentences,
 } from "../app/lib/chat-postprocessing.js";
 import {
   isSingularPrescriptive,
@@ -565,6 +566,19 @@ test("'we don't have' → no-match", () => assert(detectAiNoMatchPhrasing("We do
 test("'don't carry' → no-match", () => assert(detectAiNoMatchPhrasing("We don't carry that brand.")));
 test("'no exact match available' → no-match", () => assert(detectAiNoMatchPhrasing("no exact match available")));
 test("plain reply → no no-match", () => assert(!detectAiNoMatchPhrasing("Here are great options for you.")));
+
+test("stripAvailabilityDenialSentences removes false denial lead-in but keeps correction", () => {
+  const text = "We don't have any white men's sneakers in stock right now — our closest options are in Black, Grey, Navy, and Light Blue. Good news — we actually do carry white men's sneakers! Here are two styles with arch support.";
+  const out = stripAvailabilityDenialSentences(text);
+  assert(!out.includes("don't have"), `denial should be stripped: ${out}`);
+  assert(out.includes("Good news"));
+  assert(out.includes("white men's sneakers"));
+});
+
+test("stripAvailabilityDenialSentences does not wipe a single denial sentence", () => {
+  const text = "We don't have any in your size.";
+  assert.equal(stripAvailabilityDenialSentences(text), text);
+});
 
 // =====================================================================
 section("looksLikeClarifyingQuestion");

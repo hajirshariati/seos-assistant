@@ -2200,6 +2200,7 @@ export function extractProductCards(name, result) {
       _searchQuery: query,
       _category: categoryFromAttrs(p),
       _gender: genderFromAttrs(p),
+      _attributes: p.attributes || {},
     }));
   }
   if (name === "find_similar_products" && Array.isArray(result.products)) {
@@ -2215,6 +2216,7 @@ export function extractProductCards(name, result) {
       _searchQuery: refTitle,
       _category: categoryFromAttrs(p),
       _gender: genderFromAttrs(p),
+      _attributes: p.attributes || {},
     }));
   }
   if (name === "get_product_details" && result.handle) {

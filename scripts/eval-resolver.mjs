@@ -490,6 +490,39 @@ await test("R19 — real impossibility still produces no_match (men's red sandal
   assert.ok(out.impossible_constraints.some((c) => c.field === "color"));
 });
 
+await test("R20 — classifier-style capitalized constraints are canonicalized before facet checks", async () => {
+  // Production trace: classifier emitted gender="Men" while the facet
+  // index stores "men". The resolver compared them case-sensitively,
+  // marked gender impossible, then gave the LLM a false no_match even
+  // while candidate_products contained real men's sneakers.
+  const facetIndex = {
+    categoryByGender: { sneakers: ["men", "women"] },
+    colorByGenderCategory: {
+      "men:sneakers": ["white", "black"],
+      "women:sneakers": ["white"],
+    },
+    conditionByCategory: {},
+    sizeByGenderCategory: {},
+  };
+  const products = [
+    { handle: "chase-white", title: "Chase Arch Support Sneaker - White", category: "sneakers", gender: ["men"], colors: ["white"], available: true, conditionTags: [] },
+    { handle: "dash-white", title: "Dash Arch Support Men's Sneaker - White", category: "sneakers", gender: ["men"], colors: ["white"], available: true, conditionTags: [] },
+  ];
+  const out = await resolveCatalogTurn({
+    shop: SHOP,
+    query: "in white",
+    userConstraints: { gender: "Men", category: "Sneakers", color: "White" },
+    _testFacetIndex: facetIndex,
+    _testFetchCandidates: makeFetcher(products),
+  });
+  assert.equal(out.matched_constraints.gender, "men");
+  assert.equal(out.matched_constraints.category, "sneakers");
+  assert.equal(out.matched_constraints.color, "white");
+  assert.equal(out.impossible_constraints.length, 0);
+  assert.equal(out.recommended_next_action.type, "recommend", `must recommend, got ${JSON.stringify(out.recommended_next_action)}`);
+  assert.equal(out.candidate_products.length, 2);
+});
+
 await test("buildResolverStatePromptBlock — produces non-empty block for resolver_state output", async () => {
   const facetIndex = {
     categoryByGender: { sandals: ["women"] },

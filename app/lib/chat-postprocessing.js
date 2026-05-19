@@ -576,6 +576,16 @@ export function detectAiNoMatchPhrasing(text) {
   return AI_NO_MATCH_RE.test(text);
 }
 
+export function stripAvailabilityDenialSentences(text) {
+  if (typeof text !== "string" || !text) return text;
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  if (sentences.length <= 1) return text;
+  const kept = sentences.filter((sentence) => !detectAiNoMatchPhrasing(sentence));
+  if (kept.length === sentences.length) return text;
+  const cleaned = kept.join(" ").replace(/\s{2,}/g, " ").trim();
+  return cleaned.length >= 20 ? cleaned : text;
+}
+
 // Clarifying-question detection — the AI's reply ends with a
 // question mark, OR the last sentence is a question. Used to protect
 // recommender elicitation turns from product-pitch repair (no pool +

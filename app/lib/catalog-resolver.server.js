@@ -32,7 +32,7 @@
 // redundant disambiguation.
 
 import prisma from "../db.server.js";
-import { getCatalogFacetIndex } from "./catalog-facts.server.js";
+import { getCatalogFacetIndex, __internals as catalogFactInternals } from "./catalog-facts.server.js";
 
 // ─── helpers ───────────────────────────────────────────────────
 
@@ -41,6 +41,26 @@ import { getCatalogFacetIndex } from "./catalog-facts.server.js";
 // debugging and used to break ties.
 function mkFact(value, reason, source, confidence = 1.0) {
   return { value, reason, source, confidence };
+}
+
+const {
+  normalizeColor: normalizeCatalogColor,
+  normalizeCategory: normalizeCatalogCategory,
+  normalizeGender: normalizeCatalogGender,
+} = catalogFactInternals;
+
+function canonicalizeResolverConstraints(input = {}) {
+  const out = { ...input };
+  if (out.gender) {
+    out.gender = normalizeCatalogGender(out.gender) || String(out.gender).toLowerCase().trim();
+  }
+  if (out.category) {
+    out.category = normalizeCatalogCategory(out.category) || String(out.category).toLowerCase().trim().replace(/\s+/g, "-");
+  }
+  if (out.color) {
+    out.color = normalizeCatalogColor(out.color) || String(out.color).toLowerCase().trim();
+  }
+  return out;
 }
 
 // Build sessionMemory facts dictionary from existing
@@ -258,7 +278,7 @@ export async function resolveCatalogTurn({
   }
 
   // Merge user constraints + session memory. User-provided wins.
-  const merged = { ...sessionMemory.explicit, ...userConstraints };
+  const merged = canonicalizeResolverConstraints({ ...sessionMemory.explicit, ...userConstraints });
   // Strip nulls.
   for (const k of Object.keys(merged)) if (merged[k] == null || merged[k] === "") delete merged[k];
 

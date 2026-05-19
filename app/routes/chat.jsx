@@ -41,6 +41,7 @@ import { maybeRunOrthoticFlow } from "../lib/orthotic-flow-gate.server";
 import { classifyOrthoticTurn } from "../lib/orthotic-classifier.server";
 import { resolveCatalogTurn, buildResolverStatePromptBlock, extractUserConstraints, detectSpecificProduct } from "../lib/catalog-resolver.server";
 import { buildSessionMemory, memorySummary, buildSessionMemoryPromptBlock } from "../lib/session-memory.server";
+import { __internals as catalogFactInternals } from "../lib/catalog-facts.server";
 import {
   detectSingularIntent,
   detectComparisonIntent,
@@ -64,6 +65,7 @@ import {
   detectFootwearOverElicitation,
   stripInternalLeaks,
   resolverPromisedRecommendation,
+  stripAvailabilityDenialSentences,
 } from "../lib/chat-postprocessing";
 import prisma from "../db.server";
 import { recordChatUsage, getTodayMessageCount } from "../models/ChatUsage.server";
@@ -83,6 +85,12 @@ const MAX_TOKENS = parseInt(process.env.CHAT_MAX_TOKENS, 10) || 1024;
 const MAX_TOOL_HOPS = parseInt(process.env.CHAT_MAX_TOOL_HOPS, 10) || 3;
 
 const DEPRECATED_MODELS = new Set(["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620", "claude-opus-4-20250514"]);
+
+const {
+  normalizeColor: normalizeCatalogColor,
+  normalizeCategory: normalizeCatalogCategory,
+  normalizeGender: normalizeCatalogGender,
+} = catalogFactInternals;
 
 const RATE_LIMIT_PER_IP_SHOP = parseInt(process.env.RATE_LIMIT_PER_IP_SHOP, 10) || 20;
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60_000;
@@ -261,6 +269,70 @@ function scoreCardAgainstText(card, textLower, userTextLower) {
   }
 
   return Math.max(titleScore, queryScore);
+}
+
+function readCardAttrCI(card, aliases) {
+  const attrs = card?._attributes || {};
+  const wanted = new Set(aliases.map((a) => String(a).toLowerCase()));
+  for (const [key, value] of Object.entries(attrs)) {
+    if (wanted.has(String(key).toLowerCase())) return value;
+  }
+  return undefined;
+}
+
+function flattenAttrValues(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap(flattenAttrValues);
+  if (typeof value === "object") return Object.values(value).flatMap(flattenAttrValues);
+  return [String(value)];
+}
+
+function cardMatchesRequestedColor(card, requestedColor) {
+  const color = normalizeCatalogColor(requestedColor);
+  if (!color) return true;
+  const rawValues = [
+    readCardAttrCI(card, ["color", "colour", "color_family", "Color Family", "color_fallback"]),
+    card?.title,
+  ];
+  return flattenAttrValues(rawValues).some((value) => normalizeCatalogColor(value) === color);
+}
+
+function productPoolSatisfiesCurrentScope(pool, ctx) {
+  if (!Array.isArray(pool) || pool.length === 0) return false;
+  const explicit = ctx.sessionMemory?.explicit || {};
+  const classified = ctx.classifiedIntent?.attributes || {};
+  const resolverMatched = ctx.resolverState?.matched_constraints || {};
+  const resolverInferred = ctx.resolverState?.inferred_constraints || {};
+
+  const gender = normalizeCatalogGender(
+    explicit.gender ||
+    classified.gender ||
+    resolverMatched.gender ||
+    resolverInferred.gender?.value ||
+    ctx.sessionGender,
+  );
+  const category = normalizeCatalogCategory(
+    explicit.category ||
+    classified.category ||
+    resolverMatched.category ||
+    resolverInferred.category?.value,
+  );
+  const color = normalizeCatalogColor(
+    explicit.color ||
+    classified.color ||
+    resolverMatched.color ||
+    resolverInferred.color?.value,
+  );
+
+  if (!gender && !category && !color) return false;
+  return pool.some((card) => {
+    const cardGender = normalizeCatalogGender(card?._gender);
+    const cardCategory = normalizeCatalogCategory(card?._category) || normalizeCatalogCategory(card?.productType);
+    if (gender && cardGender && cardGender !== gender && cardGender !== "unisex") return false;
+    if (category && cardCategory && cardCategory !== category) return false;
+    if (color && !cardMatchesRequestedColor(card, color)) return false;
+    return true;
+  });
 }
 
 const SKU_PATTERN = /\b[A-Z]{1,2}\d{3,5}[A-Z]?\b/g;
@@ -1815,6 +1887,23 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
+  if (
+    pool.length > 0 &&
+    fullResponseText &&
+    detectAiNoMatchPhrasing(fullResponseText) &&
+    productPoolSatisfiesCurrentScope(pool, ctx)
+  ) {
+    const before = fullResponseText;
+    const stripped = stripAvailabilityDenialSentences(fullResponseText);
+    fullResponseText = detectAiNoMatchPhrasing(stripped)
+      ? "Here are the matching styles I found."
+      : stripped;
+    console.log(
+      `[chat] response-contract: stripped contradictory availability denial ` +
+        `while exact-scope products are present (${before.length}→${fullResponseText.length} chars)`,
+    );
+  }
+
   console.log(`[chat] emit textLen=${fullResponseText.length} poolSize=${pool.length} searchAttempted=${productSearchAttempted}`);
 
   // Observability only — no behavior change. Flag long non-product
@@ -2314,7 +2403,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         if (c._gender) {
           genderCounts.set(c._gender, (genderCounts.get(c._gender) || 0) + 1);
         }
-        const { _descriptionSnippet, _searchQuery, _category, _gender, ...publicCard } = c;
+        const { _descriptionSnippet, _searchQuery, _category, _gender, _attributes, ...publicCard } = c;
         deduped.push(publicCard);
       }
       // show product cards
