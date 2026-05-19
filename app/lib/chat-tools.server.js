@@ -1051,6 +1051,27 @@ const isExcludedByRule = (p) => {
       return typeof val === "string" && [...wants].some((w) => val.toLowerCase().includes(w));
     };
 
+    // Case-insensitive attribute lookup: merchants store metafields
+    // with arbitrary key capitalization ("Color" / "color" / "COLOR" /
+    // "Colour"). A case-sensitive bag[key] misses real values and
+    // filter-wipes turns that have a perfectly valid match in the
+    // catalog. Phase A fix for "white men's sneakers" regression.
+    const readBagCI = (bag, key) => {
+      if (!bag || typeof bag !== "object") return undefined;
+      const target = String(key).toLowerCase();
+      for (const k of Object.keys(bag)) {
+        if (k.toLowerCase() === target) return bag[k];
+      }
+      // Also accept common alternate spellings.
+      if (target === "color") {
+        for (const k of Object.keys(bag)) {
+          if (k.toLowerCase() === "colour") return bag[k];
+          if (k.toLowerCase() === "color_family") return bag[k];
+        }
+      }
+      return undefined;
+    };
+
     filtered = filtered.filter((p) => {
       const productAttrs = p.attributesJson || {};
       return attrKeys.every((key) => {
@@ -1060,8 +1081,8 @@ const isExcludedByRule = (p) => {
           return matchesCategoryWant(p, want);
         }
         const wants = expandFilterValue(want);
-        if (matchesAttrExpanded(productAttrs[key], wants)) return true;
-        return (p.variants || []).some((v) => matchesAttrExpanded((v.attributesJson || {})[key], wants));
+        if (matchesAttrExpanded(readBagCI(productAttrs, key), wants)) return true;
+        return (p.variants || []).some((v) => matchesAttrExpanded(readBagCI(v.attributesJson, key), wants));
       });
     });
 

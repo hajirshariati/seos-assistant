@@ -42,25 +42,42 @@ function normalizeColor(raw) {
   if (!raw) return null;
   const lc = String(raw).toLowerCase().trim().replace(/[_-]+/g, " ");
   if (COLOR_SYNONYMS[lc]) return COLOR_SYNONYMS[lc];
-  // Sub-string match: "red leather" → red
-  for (const [key, canonical] of Object.entries(COLOR_SYNONYMS)) {
-    if (lc.includes(key)) return canonical;
+  // Multi-word phrase match — try longest keys first so "off white"
+  // wins over "white" when both appear.
+  const keys = Object.keys(COLOR_SYNONYMS).sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    // Word-boundary match. Avoids "blackberry" → "black" and
+    // "whiteboard" → "white". Multi-word keys ("off white") use
+    // \s+ between tokens.
+    const pattern = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const re = new RegExp(`\\b${pattern}\\b`, "i");
+    if (re.test(lc)) return COLOR_SYNONYMS[key];
   }
   return null;
 }
 
 const CATEGORY_SYNONYMS = {
   sneakers: "sneakers", sneaker: "sneakers", trainers: "sneakers", trainer: "sneakers",
+  // Aetrex / footwear-merchant productTypes that ARE sneakers.
+  "walking shoes": "sneakers", "walking shoe": "sneakers",
+  "running shoes": "sneakers", "running shoe": "sneakers",
+  "athletic shoes": "sneakers", "athletic shoe": "sneakers",
+  "training shoes": "sneakers", "training shoe": "sneakers",
+  "casual shoes": "sneakers", "casual shoe": "sneakers", "casual sneaker": "sneakers", "casual sneakers": "sneakers",
+  "tennis shoes": "sneakers", "tennis shoe": "sneakers",
+  "gym shoes": "sneakers", "gym shoe": "sneakers",
   sandals: "sandals", sandal: "sandals", slides: "sandals",
+  flips: "sandals", "flip flops": "sandals", "flip-flops": "sandals",
   boots: "boots", boot: "boots", booties: "boots", "ankle boots": "boots",
+  "winter boots": "boots", "snow boots": "boots", "work boots": "boots",
   loafers: "loafers", loafer: "loafers",
-  oxfords: "oxfords", oxford: "oxfords",
+  oxfords: "oxfords", oxford: "oxfords", "dress shoes": "oxfords", "dress shoe": "oxfords",
   clogs: "clogs", clog: "clogs", "slip-on": "slip-ons", "slip ons": "slip-ons",
   "slip ons": "slip-ons", "slip-ons": "slip-ons",
   slippers: "slippers", slipper: "slippers",
   "mary janes": "mary-janes", "mary-janes": "mary-janes",
-  "wedges heels": "wedges-heels", wedges: "wedges-heels", heels: "wedges-heels",
-  orthotics: "orthotics", orthotic: "orthotics", insoles: "orthotics", insole: "orthotics",
+  "wedges heels": "wedges-heels", wedges: "wedges-heels", heels: "wedges-heels", pumps: "wedges-heels",
+  orthotics: "orthotics", orthotic: "orthotics", insoles: "orthotics", insole: "orthotics", insert: "orthotics", inserts: "orthotics", footbed: "orthotics", footbeds: "orthotics",
   accessories: "accessories", accessory: "accessories",
   footwear: "footwear",
 };
@@ -141,57 +158,142 @@ function buildCorpus(product) {
   return parts.join("  ");
 }
 
-// Pull gender from tags first ("women", "men", "kids"), then from
-// title/productType, then from attribute keys. Returns an array
-// since a product can be tagged for multiple (e.g. unisex).
+// Case-insensitive lookup on an attribute bag. Merchants store
+// Shopify metafields with arbitrary key capitalization ("Color" /
+// "color" / "COLOR" / "Colour"), so a case-sensitive lookup misses
+// real values. Returns the first non-empty value matching any of
+// the requested aliases.
+function readAttr(bag, aliases) {
+  if (!bag || typeof bag !== "object") return null;
+  const keys = Object.keys(bag);
+  const lookup = new Map();
+  for (const k of keys) lookup.set(k.toLowerCase(), bag[k]);
+  for (const alias of aliases) {
+    const v = lookup.get(alias.toLowerCase());
+    if (v != null && v !== "") return v;
+  }
+  return null;
+}
+
+function safeParseAttrs(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  if (typeof raw !== "string") return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+// Pull gender from (1) attributesJson["Gender"] direct, (2) variant
+// attributesJson["Gender"] direct, then (3) corpus scan as fallback.
+// Returns an array since a product can be tagged for multiple
+// (e.g. unisex).
 function extractGender(product) {
   const out = new Set();
+  // 1. Product-level attribute
+  const direct = readAttr(safeParseAttrs(product.attributesJson), ["gender"]);
+  if (direct) {
+    const arr = Array.isArray(direct) ? direct : [direct];
+    for (const v of arr) {
+      const norm = normalizeGender(v);
+      if (norm) out.add(norm);
+    }
+  }
+  // 2. Variant-level attribute
+  for (const v of product.variants || []) {
+    const a = readAttr(safeParseAttrs(v.attributesJson), ["gender"]);
+    if (a) {
+      const arr = Array.isArray(a) ? a : [a];
+      for (const item of arr) {
+        const norm = normalizeGender(item);
+        if (norm) out.add(norm);
+      }
+    }
+  }
+  // 3. Corpus fallback (tags / title / description)
   const corpus = buildCorpus(product).toLowerCase();
   for (const [synonym, canonical] of Object.entries(GENDER_SYNONYMS)) {
     // Word-boundary check to avoid matching e.g. "amen" → "men"
     const re = new RegExp(`(?:^|[^a-z])${synonym.replace(/'/g, "['']?")}(?:[^a-z]|$)`, "i");
     if (re.test(corpus)) out.add(canonical);
   }
-  // If nothing matched, leave empty (search code's existing
-  // matchesGender already tolerates this).
   return Array.from(out);
 }
 
 function extractCategory(product) {
-  // productType is the strongest signal in Aetrex's catalog.
+  // 1. attributesJson Category
+  const directAttr = readAttr(safeParseAttrs(product.attributesJson), ["category", "product_type", "productType"]);
+  const normDirect = normalizeCategory(directAttr);
+  if (normDirect) return normDirect;
+  // 2. productType is the strongest signal in Aetrex's catalog.
   const pt = normalizeCategory(product.productType);
   if (pt) return pt;
-  // Fall back to scanning tags + title.
+  // 3. Fall back to scanning tags + title. Try LONGEST synonyms
+  //    first so "walking shoes" wins over "shoes" when both match.
   const corpus = buildCorpus(product).toLowerCase();
-  for (const [synonym, canonical] of Object.entries(CATEGORY_SYNONYMS)) {
+  const keys = Object.keys(CATEGORY_SYNONYMS).sort((a, b) => b.length - a.length);
+  for (const synonym of keys) {
     const re = new RegExp(`\\b${synonym.replace(/\s+/g, "\\s+")}\\b`, "i");
-    if (re.test(corpus)) return canonical;
+    if (re.test(corpus)) return CATEGORY_SYNONYMS[synonym];
   }
   return null;
 }
 
 function extractColors(product) {
   const out = new Set();
-  // Tags often carry color words.
+  // 1. Tags often carry color words.
   for (const t of product.tags || []) {
     const c = normalizeColor(t);
     if (c) out.add(c);
   }
-  // Title suffix pattern: "Vania Sandal - Red"
-  const titleColorMatch = String(product.title || "").match(/\s[-–—]\s+([\w-]+(?:\s+[\w-]+)?)$/);
-  if (titleColorMatch) {
-    const c = normalizeColor(titleColorMatch[1]);
+  // 2. attributesJson Color (case-insensitive).
+  const directAttr = readAttr(safeParseAttrs(product.attributesJson), ["color", "colour", "color_family", "colorfamily"]);
+  if (directAttr) {
+    const arr = Array.isArray(directAttr) ? directAttr : [directAttr];
+    for (const v of arr) {
+      const c = normalizeColor(v);
+      if (c) out.add(c);
+    }
+  }
+  // 3. Title patterns (more flexible than the legacy suffix-only):
+  //    "Vania Sandal - Red"           (hyphen suffix)
+  //    "Aetrex Daphne White"           (trailing word, no hyphen)
+  //    "White Daphne Sneaker"          (leading word)
+  //    "Daphne in White"               ("in <color>" phrase)
+  //    "Daphne | White"                (pipe separator)
+  const title = String(product.title || "");
+  // Stage A: scan every whitespace-separated token of the title for a
+  // direct color match.
+  for (const tok of title.split(/\s+/)) {
+    const c = normalizeColor(tok);
     if (c) out.add(c);
   }
-  // Variant option JSON might carry color.
+  // Stage B: phrase patterns
+  const phraseMatches = [
+    /\s[-–—|]\s+([\w-]+(?:\s+[\w-]+)?)$/i,    // suffix " - Color" / " | Color"
+    /\bin\s+([a-z][a-z\s-]+?)$/i,              // "Daphne in Off-White"
+  ];
+  for (const re of phraseMatches) {
+    const m = title.match(re);
+    if (m) {
+      const c = normalizeColor(m[1]);
+      if (c) out.add(c);
+    }
+  }
+  // 4. Variant option JSON (legacy Shopify product-options shape).
   for (const v of product.variants || []) {
-    let opts = null;
-    try {
-      opts = typeof v.optionsJson === "string" ? JSON.parse(v.optionsJson) : v.optionsJson;
-    } catch { /* skip */ }
-    if (opts && typeof opts === "object") {
-      for (const key of ["Color", "color", "COLOR", "Colour", "colour"]) {
-        const c = normalizeColor(opts[key]);
+    const opts = safeParseAttrs(v.optionsJson);
+    if (opts) {
+      const direct = readAttr(opts, ["color", "colour"]);
+      if (direct != null) {
+        const c = normalizeColor(direct);
+        if (c) out.add(c);
+      }
+    }
+    // 5. Variant attributesJson (case-insensitive).
+    const va = readAttr(safeParseAttrs(v.attributesJson), ["color", "colour", "color_family"]);
+    if (va) {
+      const arr = Array.isArray(va) ? va : [va];
+      for (const item of arr) {
+        const c = normalizeColor(item);
         if (c) out.add(c);
       }
     }
