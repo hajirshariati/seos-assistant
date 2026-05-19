@@ -40,6 +40,7 @@ import { buildRecommenderTools } from "../lib/recommender-tools.server";
 import { maybeRunOrthoticFlow } from "../lib/orthotic-flow-gate.server";
 import { classifyOrthoticTurn } from "../lib/orthotic-classifier.server";
 import { resolveCatalogTurn, buildResolverStatePromptBlock, extractUserConstraints, detectSpecificProduct } from "../lib/catalog-resolver.server";
+import { buildSessionMemory, memorySummary, buildSessionMemoryPromptBlock } from "../lib/session-memory.server";
 import {
   detectSingularIntent,
   detectComparisonIntent,
@@ -3034,15 +3035,24 @@ export const action = async ({ request }) => {
               } catch (sErr) {
                 console.error("[resolver] specific-product detection failed:", sErr?.message || sErr);
               }
-              // sessionMemory carries only KEYED facts. answeredChoices
-              // is an array of {question, answer} pairs — spreading it
-              // produces {"0": {...}} which the resolver ignores. The
-              // LLM still sees answeredChoices via the prompt's
-              // "Established Answers" block; resolver does not need
-              // them duplicated until a future milestone adds keyed
-              // session memory.
-              const sessionMemory = { explicit: {} };
-              if (sessionGender) sessionMemory.explicit.gender = sessionGender;
+              // M2 keyed session memory. Walks the conversation
+              // history, applies subject-pivot / rejection rules,
+              // and layers classifier output. Feeds the resolver and
+              // (additively, below) the LLM prompt. Replaces the M1
+              // placeholder that only carried sessionGender.
+              const memory = buildSessionMemory({
+                messages,
+                classifiedIntent,
+                resolverState: null, // resolver-inferred layered post-resolve below
+              });
+              ctx.sessionMemory = memory;
+              const sessionMemory = { explicit: { ...memory.explicit } };
+              // Belt-and-suspenders: sessionGender wasn't always picked
+              // up by the memory walk in pre-M2 fixtures, keep the
+              // existing carry as a fallback.
+              if (sessionGender && !sessionMemory.explicit.gender) {
+                sessionMemory.explicit.gender = sessionGender;
+              }
               const resolverState = await resolveCatalogTurn({
                 shop: session.shop,
                 query: latestMsg,
@@ -3050,6 +3060,20 @@ export const action = async ({ request }) => {
                 sessionMemory,
                 messages,
               });
+              // Layer resolver inferences back into ctx.sessionMemory
+              // so the LLM prompt block + later code paths see them.
+              ctx.sessionMemory = buildSessionMemory({
+                messages,
+                classifiedIntent,
+                resolverState,
+              });
+              // Compact one-line memory log per turn (M2).
+              console.log(`[memory] ${ctx.shop} ${memorySummary(ctx.sessionMemory)}`);
+              // Additive prompt block surfacing the keyed scope to
+              // the LLM. Internal-language-leak strip catches any
+              // verbatim emission of internal tokens.
+              const memBlock = buildSessionMemoryPromptBlock(ctx.sessionMemory);
+              if (memBlock) systemPrompt = systemPrompt + memBlock;
               if (resolverState && resolverState.type === "resolver_state") {
                 ctx.resolverState = resolverState;
                 const block = buildResolverStatePromptBlock(resolverState);
