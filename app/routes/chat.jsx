@@ -351,6 +351,32 @@ async function hydrateScopedProductCards({ ctx, allProductPool, reason }) {
   }
   let attached = hydratedCards.length;
 
+  if (attached === 0 && input.filters?.color && (input.filters?.category || input.filters?.gender)) {
+    const relaxedFilters = { ...input.filters };
+    delete relaxedFilters.color;
+    const relaxedQuery = [scope.condition, scope.category]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || String(ctx?.latestUserMessage || "").slice(0, 160).trim() || "shoes";
+    console.log(
+      `[chat] product-turn hydrate: exact color search empty; relaxing color while keeping ` +
+        `gender=${relaxedFilters.gender || "-"} category=${relaxedFilters.category || "-"}`,
+    );
+    const relaxed = await dispatchTool("search_products", {
+      ...input,
+      query: relaxedQuery,
+      filters: relaxedFilters,
+    }, ctx);
+    const relaxedCards = extractProductCards("search_products", relaxed);
+    for (const card of relaxedCards) {
+      const key = card.handle || card.title;
+      if (key && !allProductPool.has(key)) {
+        allProductPool.set(key, card);
+        attached += 1;
+      }
+    }
+  }
+
   if (attached === 0 && Array.isArray(ctx?.resolverState?.candidate_products)) {
     const handles = ctx.resolverState.candidate_products
       .map((p) => p?.handle)
