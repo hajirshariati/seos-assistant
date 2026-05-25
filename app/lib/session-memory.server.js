@@ -189,12 +189,31 @@ function isGenderOnlyContinuation(text, extracted, recipient) {
   return SUBJECT_PIVOT_KEYS.every((key) => extracted[key] == null);
 }
 
+export function detectClarifyingQuestionType(text) {
+  const value = String(text || "");
+  if (!value.trim()) return null;
+  if (/\bmen'?s?,?\s+women'?s?,?\s+or\s+kids'?|\bwho\s+(?:are|is)\s+(?:these|this)\s+for\b|<<\s*Men'?s?\s*>>.*<<\s*Women'?s?\s*>>/is.test(value)) {
+    return "gender";
+  }
+  if (/\bwhat'?s?\s+your\s+budget\b|<<\s*Under\s+\$\d+/i.test(value)) {
+    return "budget";
+  }
+  if (/\bwhat\s+(?:type|kind|style|category)\s+of\b|\bwhich\s+(?:type|kind|style|category)\b/i.test(value)) {
+    return "category";
+  }
+  if (/\bwhat\s+size\b|\bwhich\s+size\b|\bwhat\s+width\b|\bwide\s+or\s+regular\b/i.test(value)) {
+    return "size_width";
+  }
+  return null;
+}
+
 export function buildSessionMemory({ messages, classifiedIntent, resolverState } = {}) {
   const memory = {
     explicit: { rejectedCategories: [] },
     inferred: {},
     stale: {},
     facts: [],
+    lastClarifyingQuestion: null,
   };
 
   if (!Array.isArray(messages) || messages.length === 0) return memory;
@@ -209,7 +228,17 @@ export function buildSessionMemory({ messages, classifiedIntent, resolverState }
 
   messages.forEach((msg, i) => {
     if (!msg) return;
-    if (msg.role === "assistant" && typeof msg.content === "string") return;
+    if (msg.role === "assistant" && typeof msg.content === "string") {
+      const type = detectClarifyingQuestionType(msg.content);
+      if (type) {
+        memory.lastClarifyingQuestion = {
+          type,
+          turnIndex: i,
+          text: msg.content.slice(0, 180),
+        };
+      }
+      return;
+    }
     if (msg.role !== "user" || typeof msg.content !== "string") return;
     const text = msg.content.trim();
     if (!text) return;

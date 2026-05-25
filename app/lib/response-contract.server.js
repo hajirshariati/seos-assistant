@@ -6,6 +6,7 @@ import {
 import { normalizeCategory, normalizeColor, normalizeGender } from "./catalog-facts.server.js";
 import {
   detectAiNoMatchPhrasing,
+  resolverPromisedRecommendation,
   stripAvailabilityDenialSentences,
 } from "./chat-postprocessing.js";
 import { sanitizeCtaLabel } from "./cta-label.server.js";
@@ -115,6 +116,7 @@ export function stripMissingSkus(text, missing) {
   }
   return cleaned
     .replace(/\(\s*\)/g, "")
+    .replace(/\bI don't see\s+(?:an?|the)\s+(?=in\s+(?:our\s+)?catalog\b)/i, "I don't see that ")
     .replace(/\b(and|or|,)\s*(?=(?:and|or|,|are|is|both)\b)/gi, " ")
     .replace(/\b(both|and)\s+(are|is)\b/gi, "$2")
     .replace(/\bare\s+(?:both\s+)?great\s+picks\b/gi, "is a great pick")
@@ -475,6 +477,143 @@ export function filterProductCardsToCatalogScope(pool = [], ctx = {}) {
   };
 }
 
+function addCardsToPool(cards, allProductPool) {
+  if (!(allProductPool instanceof Map)) return 0;
+  let added = 0;
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const key = card?.handle || card?.title;
+    if (key && !allProductPool.has(key)) {
+      allProductPool.set(key, card);
+      added += 1;
+    }
+  }
+  return added;
+}
+
+async function attachResolverCandidateCards({ ctx, allProductPool, dispatchTool, extractProductCards, reason }) {
+  if (!Array.isArray(ctx?.resolverState?.candidate_products)) return 0;
+  const handles = ctx.resolverState.candidate_products
+    .map((p) => p?.handle)
+    .filter(Boolean)
+    .slice(0, 6);
+  if (handles.length === 0) return 0;
+
+  let attached = 0;
+  console.log(`[chat] ${reason}: attaching ${handles.length} resolver candidate handle(s)`);
+  for (const handle of handles) {
+    try {
+      const details = await dispatchTool("get_product_details", { handle }, ctx);
+      attached += addCardsToPool(extractProductCards("get_product_details", details), allProductPool);
+    } catch (err) {
+      console.error(`[chat] ${reason}: resolver candidate ${handle} failed`, err?.message || err);
+    }
+  }
+  return attached;
+}
+
+export async function ensureProductTurnCards({
+  ctx = {},
+  allProductPool,
+  dispatchTool,
+  extractProductCards,
+  searchInput,
+  shouldAttach = false,
+  reason = "product turn",
+} = {}) {
+  if (!(allProductPool instanceof Map)) {
+    return { products: [], attached: 0, searchAttempted: false, diagnostics: { rung: "no-pool" } };
+  }
+
+  const diagnostics = { rung: "existing", scope: currentCatalogScopeFromContext(ctx), reason };
+  let searchAttempted = false;
+  let attached = 0;
+
+  const scopedProducts = () => {
+    const products = Array.from(allProductPool.values());
+    const scoped = filterProductCardsToCatalogScope(products, ctx);
+    if (scoped.dropped > 0) {
+      console.log(
+        `[chat] response-contract: dropped ${scoped.dropped} off-scope card(s) ` +
+          `before emit (gender=${scoped.scope.gender || "-"} category=${scoped.scope.category || "-"} ` +
+          `color=${scoped.scope.color || "-"} enforcedColor=${scoped.enforcedColor ? "yes" : "no"})`,
+      );
+    }
+    if (scoped.products.length === 0 && products.length > 0 && resolverPromisedRecommendation(ctx.resolverState)) {
+      console.log(
+        `[chat] response-contract: resolver promised recommendation; keeping ${products.length} candidate card(s) ` +
+          `after display scope filter wiped all`,
+      );
+      return products;
+    }
+    return scoped.products;
+  };
+
+  let products = scopedProducts();
+  if (products.length > 0 || !shouldAttach) {
+    return { products, attached, searchAttempted, diagnostics };
+  }
+
+  const input = searchInput?.input || searchInput || {};
+  const scope = searchInput?.scope || diagnostics.scope || {};
+  if (dispatchTool && extractProductCards) {
+    console.log(
+      `[chat] product-turn cards: ${reason}; forcing scoped search ` +
+        `(gender=${scope.gender || "-"} category=${scope.category || "-"} color=${scope.color || "-"} ` +
+        `query=${JSON.stringify(input.query || "")})`,
+    );
+    try {
+      searchAttempted = true;
+      const found = await dispatchTool("search_products", input, ctx);
+      attached += addCardsToPool(extractProductCards("search_products", found), allProductPool);
+      diagnostics.rung = "scoped-search";
+    } catch (err) {
+      console.error("[chat] product-turn cards scoped search failed:", err?.message || err);
+      diagnostics.rung = "scoped-search-error";
+    }
+  }
+
+  if (attached === 0 && input?.filters?.color && (input.filters.category || input.filters.gender) && dispatchTool && extractProductCards) {
+    const relaxedFilters = { ...input.filters };
+    delete relaxedFilters.color;
+    const relaxedQuery = [scope.condition, scope.category]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || String(ctx?.latestUserMessage || "").slice(0, 160).trim() || "shoes";
+    console.log(
+      `[chat] product-turn cards: exact color search empty; relaxing color while keeping ` +
+        `gender=${relaxedFilters.gender || "-"} category=${relaxedFilters.category || "-"}`,
+    );
+    try {
+      searchAttempted = true;
+      const relaxed = await dispatchTool("search_products", {
+        ...input,
+        query: relaxedQuery,
+        filters: relaxedFilters,
+        _suppressColorInjection: true,
+      }, ctx);
+      attached += addCardsToPool(extractProductCards("search_products", relaxed), allProductPool);
+      if (attached > 0) diagnostics.rung = "color-relaxed-search";
+    } catch (err) {
+      console.error("[chat] product-turn cards relaxed search failed:", err?.message || err);
+    }
+  }
+
+  if (attached === 0) {
+    attached += await attachResolverCandidateCards({
+      ctx,
+      allProductPool,
+      dispatchTool,
+      extractProductCards,
+      reason: "product-turn cards",
+    });
+    if (attached > 0) diagnostics.rung = "resolver-candidates";
+  }
+
+  products = scopedProducts();
+  console.log(`[chat] product-turn cards: attached ${attached} card(s); final=${products.length}; rung=${diagnostics.rung}`);
+  return { products, attached, searchAttempted, diagnostics };
+}
+
 export function deriveProductResponseContract({ pool = [], ctx = {}, relaxedFilters = null } = {}) {
   const scope = currentCatalogScopeFromContext(ctx);
   const exactScopeSatisfied = productPoolSatisfiesCatalogScope(pool, scope);
@@ -498,6 +637,17 @@ export function deriveProductResponseContract({ pool = [], ctx = {}, relaxedFilt
 const PRODUCT_INTRO_RE = /\b(?:here (?:are|is)|take a look|check out|i found|we have|these are|this is|good news|great news|closest options|matching styles)\b/i;
 const CLARIFYING_LEAD_RE = /^\s*(?:what|which)\s+(?:type|kind|style|category)\s+of\s+[^?]{1,160}\?\s*/i;
 const GENDER_CLARIFYING_LEAD_RE = /^\s*(?:is this|are these|who (?:is|are) (?:this|these)|would this be)\s+[^?]{0,120}\?\s*/i;
+const NUMBER_WORDS = new Map([
+  ["one", 1], ["two", 2], ["three", 3], ["four", 4], ["five", 5],
+  ["six", 6], ["seven", 7], ["eight", 8], ["nine", 9], ["ten", 10],
+]);
+const COUNT_LABELS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const FEATURE_ALIASES = [
+  { name: "arch support", re: /\b(?:arch support|orthotic support|built-in support)\b/i },
+  { name: "waterproof", re: /\b(?:waterproof|water-resistant|water resistant)\b/i },
+  { name: "cushioning", re: /\b(?:ultrasky|cushioning|cushioned)\b/i },
+  { name: "memory foam", re: /\bmemory foam\b/i },
+];
 
 function stripChoiceButtons(text) {
   return String(text || "")
@@ -547,6 +697,191 @@ export function repairProductTurnAssembly({ text, pool = [], ctx = {}, relaxedFi
   }
 
   return { text: nextText, changed, logs, contract: denialRepair.contract };
+}
+
+function sentenceSplit(text) {
+  const decimalToken = "__DECIMAL_DOT__";
+  const protectedText = String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/(\d)\.(\d)/g, `$1${decimalToken}$2`);
+  return (protectedText.match(/[^.!?]+[.!?]?/g) || [])
+    .map((sentence) => sentence.replaceAll(decimalToken, "."));
+}
+
+function cardTextForFacts(card) {
+  const attrs = flattenValues(card?._attributes || card?.attributes || {});
+  return [
+    card?.title,
+    card?.productType,
+    card?._category,
+    card?._descriptionSnippet,
+    ...attrs,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function cardColors(card) {
+  const values = [
+    cardAttr(card, ["color", "colour", "color_family", "Color Family", "color_fallback"]),
+    card?.title,
+  ];
+  return new Set(flattenValues(values).map(normalizeKnownTextColor).filter(Boolean));
+}
+
+function cardsAllHaveFeature(cards, feature) {
+  if (!Array.isArray(cards) || cards.length === 0) return false;
+  return cards.every((card) => feature.re.test(cardTextForFacts(card)));
+}
+
+function normalizeKnownTextColor(value) {
+  const normalized = normalizeColor(value);
+  if (normalized) return normalized;
+  if (/\beggplant\b/i.test(String(value || ""))) return "purple";
+  return null;
+}
+
+function productCountWord(count) {
+  return COUNT_LABELS[count] || String(count);
+}
+
+function repairCountClaim(text, cards) {
+  const count = Array.isArray(cards) ? cards.length : 0;
+  if (!text || count <= 0) return { text, changed: false };
+  let changed = false;
+  const countRe = /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\b(?=(?:\s+(?:great|lovely|matching|closest|pink|black|white|brown|purple|men'?s|women'?s)){0,4}\s+(?:options?|styles?|pairs?|sneakers?|sandals?|boots?|loafers?|clogs?|wedges?|heels?|orthotics?|slides?))/gi;
+  const next = text.replace(countRe, (raw) => {
+    const stated = /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS.get(raw.toLowerCase());
+    if (!stated || stated === count) return raw;
+    changed = true;
+    return productCountWord(count);
+  });
+  return { text: next, changed };
+}
+
+function repairClosestColorClaim(text, cards, ctx = {}) {
+  const requested = normalizeKnownTextColor(currentCatalogScopeFromContext(ctx).color);
+  if (!text || !requested || !Array.isArray(cards) || cards.length === 0) {
+    return { text, changed: false };
+  }
+  const hasRequested = cards.some((card) => cardColors(card).has(requested));
+  if (!hasRequested) return { text, changed: false };
+  const re = new RegExp(`\\b(?:closest\\s+(?:match|matches|option|options)\\s+(?:to|for)|closest\\s+to)\\s+${escapeRegex(requested)}\\b`, "gi");
+  const next = text.replace(re, `${requested} option`);
+  return { text: next, changed: next !== text };
+}
+
+function removeUngroundedPromises(text) {
+  const sentences = sentenceSplit(text);
+  let changed = false;
+  const kept = sentences.filter((sentence) => {
+    const s = sentence.trim();
+    if (/\b(?:breakdown|stock status|availability status|for each style|for each option)\b/i.test(s)) {
+      changed = true;
+      return false;
+    }
+    if (/\b(?:here are|a couple of|two|several)\s+ways to save\b/i.test(s) && !/discount|sale|clearance|reward|code|promo/i.test(s.replace(/\bways to save\b/i, ""))) {
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+  return { text: kept.join(" ").replace(/\s{2,}/g, " ").trim(), changed };
+}
+
+function cleanSentenceAfterRepair(sentence) {
+  const next = String(sentence || "")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+[—–-]\s*$/g, "")
+    .replace(/[\s,;:—–-]+$/g, "")
+    .trim();
+  if (!next) return "";
+  return /[.!?]$/.test(next) ? next : `${next}.`;
+}
+
+function stripUnsupportedFeatureFromSentence(sentence, feature) {
+  let next = String(sentence || "").trim();
+  next = next.replace(new RegExp(`\\s*[—–]\\s*[^.!?]*${feature.re.source}[^.!?]*`, "i"), "");
+  next = next.replace(new RegExp(`,\\s*(?:all|both|every|each|these|they|the options|the styles)[^.!?]*${feature.re.source}[^.!?]*`, "i"), "");
+  next = next.replace(new RegExp(`\\s+with\\s+[^,.!?;—–-]*${feature.re.source}[^,.!?;—–-]*`, "i"), "");
+  next = next.replace(new RegExp(`\\s*,?\\s*(?:all|both|every|each|these|they|the options|the styles)\\s+(?:are|have|feature|features|include|includes|come|offer)[^.!?]*${feature.re.source}[^.!?]*`, "i"), "");
+  return cleanSentenceAfterRepair(next);
+}
+
+function repairFeatureClaims(text, cards) {
+  if (!text || !Array.isArray(cards) || cards.length === 0) return { text, changed: false };
+  let changed = false;
+  const sentences = [];
+  for (const sentence of sentenceSplit(text)) {
+    let s = sentence.trim();
+    for (const feature of FEATURE_ALIASES) {
+      if (!feature.re.test(s)) continue;
+      const broadClaim = /\b(?:all|both|every|each|these|they|the options|the styles)\b/i.test(s) ||
+        /\b(?:here are|we have|i found|matching styles|options?)\b/i.test(s);
+      if (broadClaim && !cardsAllHaveFeature(cards, feature)) {
+        const repaired = stripUnsupportedFeatureFromSentence(s, feature);
+        changed = true;
+        s = repaired;
+      }
+    }
+    if (s) sentences.push(s);
+  }
+  return { text: sentences.join(" ").replace(/\s{2,}/g, " ").trim(), changed };
+}
+
+function fallbackProductIntro(ctx = {}) {
+  const scope = currentCatalogScopeFromContext(ctx);
+  const parts = [];
+  if (scope.color) parts.push(scope.color);
+  if (scope.gender) parts.push(scope.gender === "men" ? "men's" : scope.gender === "women" ? "women's" : scope.gender);
+  if (scope.category) parts.push(scope.category);
+  return parts.length > 0
+    ? `Here are the ${parts.join(" ")} I found.`
+    : "Here are the matching styles I found.";
+}
+
+export function reconcileProseToCards({ text, cards = [], ctx = {} } = {}) {
+  if (!text || !Array.isArray(cards) || cards.length === 0) {
+    return { text, changed: false, logs: [] };
+  }
+  let next = String(text || "").trim();
+  const logs = [];
+
+  for (const step of [
+    ["count", (value) => repairCountClaim(value, cards)],
+    ["closest_color", (value) => repairClosestColorClaim(value, cards, ctx)],
+    ["unsupported_promise", removeUngroundedPromises],
+    ["feature_claim", (value) => repairFeatureClaims(value, cards)],
+  ]) {
+    const [label, fn] = step;
+    const result = fn(next);
+    if (result.changed) {
+      next = result.text || fallbackProductIntro(ctx);
+      logs.push(label);
+    }
+  }
+
+  return { text: next, changed: logs.length > 0, logs };
+}
+
+export function ensureCompleteCustomerText({ text, fallback = "Here are the matching styles I found." } = {}) {
+  let next = String(text || "").replace(/[ \t]{2,}/g, " ").trim();
+  if (!next) return { text: fallback, changed: true, reason: "empty" };
+
+  const danglingRe = /(?:,\s*)?\b(?:so|but|and|or|because|while|then|with|for|to|from|including|such as|the width options are|the options are|ways to save are)\s*[.!?]?$/i;
+  const trailingListLeadRe = /(?:^|\s)(?:here are|including|such as|ways to save|options are|width options are)\s*[:—-]\s*$/i;
+  if (!danglingRe.test(next) && !trailingListLeadRe.test(next)) {
+    return { text: next, changed: false, reason: "" };
+  }
+
+  const sentences = sentenceSplit(next)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (sentences.length > 1) {
+    sentences.pop();
+    const repaired = sentences.join(" ").trim();
+    if (repaired.length >= 12) return { text: repaired, changed: true, reason: "trimmed_dangling_sentence" };
+  }
+  return { text: fallback, changed: true, reason: "fallback_after_dangling" };
 }
 
 export function repairProductResponseText({ text, pool = [], ctx = {}, relaxedFilters = null } = {}) {

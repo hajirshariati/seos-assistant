@@ -22,7 +22,6 @@ import {
   detectConditionOrOccasion,
   containsAvailabilityDenial,
   stripLineupPromiseSentences,
-  stripFillerIntensifiers,
   isCapabilityCheckAboutPriorProducts,
   reflowInlineList,
   truncateAtWordBoundary,
@@ -38,20 +37,22 @@ import { buildRecommenderTools } from "../lib/recommender-tools.server";
 import { maybeRunOrthoticFlow } from "../lib/orthotic-flow-gate.server";
 import { classifyOrthoticTurn } from "../lib/orthotic-classifier.server";
 import { resolveCatalogTurn, buildResolverStatePromptBlock, extractUserConstraints, detectSpecificProduct } from "../lib/catalog-resolver.server";
-import { buildSessionMemory, memorySummary, buildSessionMemoryPromptBlock } from "../lib/session-memory.server";
+import { buildSessionMemory, detectClarifyingQuestionType, memorySummary, buildSessionMemoryPromptBlock } from "../lib/session-memory.server";
 import {
   SKU_PATTERN,
   createTurnResult,
   detectFalseCategoryDenial,
   detectFalseGenderCategoryAffirmation,
   dropSiblingCards,
+  ensureProductTurnCards,
   extractCollectionCTA,
   extractGenericCTA,
   extractOrphanSkus,
   extractSupportCTA,
   currentCatalogScopeFromContext,
-  filterProductCardsToCatalogScope,
+  ensureCompleteCustomerText,
   prepareProductCardsForTurn,
+  reconcileProseToCards,
   repairProductTurnAssembly,
   resolveProductTurnLink,
   scoreCardAgainstText,
@@ -325,7 +326,7 @@ function scopedProductSearchInput(ctx = {}) {
   };
 }
 
-function shouldHydrateProductCardsForTurn({ text, ctx, recommenderAskedForMoreInfo }) {
+function shouldAttachProductCardsForTurn({ text, ctx, recommenderAskedForMoreInfo }) {
   const latest = ctx?.latestUserMessage || "";
   const compound = isCompoundPolicyProductQuestion(latest);
   const latestIsPolicyOnly = isPolicyOrServiceQuestion(latest) && !compound;
@@ -335,84 +336,6 @@ function shouldHydrateProductCardsForTurn({ text, ctx, recommenderAskedForMoreIn
   if (!text) return false;
   if (looksLikeClarifyingQuestion(text)) return false;
   return looksLikeProductPitch(text);
-}
-
-async function hydrateScopedProductCards({ ctx, allProductPool, reason }) {
-  const { input, scope } = scopedProductSearchInput(ctx);
-  console.log(
-    `[chat] product-turn hydrate: ${reason}; forcing scoped search ` +
-      `(gender=${scope.gender || "-"} category=${scope.category || "-"} color=${scope.color || "-"} ` +
-      `query=${JSON.stringify(input.query)})`,
-  );
-  const hydrated = await dispatchTool("search_products", input, ctx);
-  const hydratedCards = extractProductCards("search_products", hydrated);
-  for (const card of hydratedCards) {
-    const key = card.handle || card.title;
-    if (key && !allProductPool.has(key)) allProductPool.set(key, card);
-  }
-  let attached = hydratedCards.length;
-
-  if (attached === 0 && input.filters?.color && (input.filters?.category || input.filters?.gender)) {
-    const relaxedFilters = { ...input.filters };
-    delete relaxedFilters.color;
-    const relaxedQuery = [scope.condition, scope.category]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || String(ctx?.latestUserMessage || "").slice(0, 160).trim() || "shoes";
-    console.log(
-      `[chat] product-turn hydrate: exact color search empty; relaxing color while keeping ` +
-        `gender=${relaxedFilters.gender || "-"} category=${relaxedFilters.category || "-"}`,
-    );
-    const relaxed = await dispatchTool("search_products", {
-      ...input,
-      query: relaxedQuery,
-      filters: relaxedFilters,
-      _suppressColorInjection: true,
-    }, ctx);
-    const relaxedCards = extractProductCards("search_products", relaxed);
-    for (const card of relaxedCards) {
-      const key = card.handle || card.title;
-      if (key && !allProductPool.has(key)) {
-        allProductPool.set(key, card);
-        attached += 1;
-      }
-    }
-  }
-
-  if (attached === 0) {
-    attached += await hydrateResolverCandidateCards({ ctx, allProductPool, reason: "product-turn hydrate" });
-  }
-
-  console.log(`[chat] product-turn hydrate: attached ${attached} card(s)`);
-  return attached;
-}
-
-async function hydrateResolverCandidateCards({ ctx, allProductPool, reason }) {
-  if (!Array.isArray(ctx?.resolverState?.candidate_products)) return 0;
-  const handles = ctx.resolverState.candidate_products
-    .map((p) => p?.handle)
-    .filter(Boolean)
-    .slice(0, 6);
-  if (handles.length === 0) return 0;
-
-  let attached = 0;
-  console.log(`[chat] ${reason}: hydrating ${handles.length} resolver candidate handle(s)`);
-  for (const handle of handles) {
-    try {
-      const details = await dispatchTool("get_product_details", { handle }, ctx);
-      const cards = extractProductCards("get_product_details", details);
-      for (const card of cards) {
-        const key = card.handle || card.title;
-        if (key && !allProductPool.has(key)) {
-          allProductPool.set(key, card);
-          attached += 1;
-        }
-      }
-    } catch (err) {
-      console.error(`[chat] ${reason}: resolver candidate ${handle} failed`, err?.message || err);
-    }
-  }
-  return attached;
 }
 
 function compoundPolicyFallbackText(latestMessage = "") {
@@ -928,23 +851,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Fix E — availability-denial recovery.
-  // When the AI ends a turn without searching but its text says
-  // "we don't have", "we don't carry", "couldn't find", "not
-  // available", etc., that's almost always wrong — the AI
-  // hallucinated unavailability instead of calling search. The
-  // existing prompt rule "NEVER imply the store lacks an item"
-  // is supposed to prevent this; the AI ignores it. Detect the
-  // pattern, force a search using the customer's literal latest
-  // message, and either replace the denial with real results or
-  // (if the search confirms 0 results) keep the denial honest.
-  // Resolver no_match exception (M1.3): when the resolver explicitly
-  // returned recommended_next_action.type === "no_match" (or surfaced
-  // impossible_constraints), the LLM's denial IS the correct answer —
-  // it's relaying the resolver's catalog-grounded verdict. Skip
-  // recovery so we don't overwrite an honest "we don't carry pink
-  // men's sneakers" with the generic "Actually, take a look at these"
-  // bait-and-switch.
   const resolverDeniedHonestly =
     ctx.resolverState?.recommended_next_action?.type === "no_match" ||
     (Array.isArray(ctx.resolverState?.impossible_constraints) &&
@@ -984,16 +890,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Auto-broaden — when the AI's search returned a tiny pool (≤2)
-  // and the customer's query was a broad-need (no specific category
-  // named, mentions an occasion/condition/use-case), the pool is
-  // probably skewed toward one category that semantically matched the
-  // query best. Customers asking "what should I wear for X" deserve
-  // variety, not two of the same thing. Run a follow-up search with
-  // the literal user phrase (no category filter) and merge in any
-  // products from a category not already represented in the pool.
-  // Pure data: dominant category comes from the products themselves;
-  // no hardcoded vertical vocabulary.
   if (productSearchAttempted && allProductPool.size > 0 && allProductPool.size <= 2) {
     const userT = String(ctx.userText || "").toLowerCase();
     const namesCategory = Array.isArray(ctx.catalogCategories) && ctx.catalogCategories.some((c) => {
@@ -1035,138 +931,43 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Resolver fulfillment invariant (M1 stabilization). If the
-  // resolver returned action=recommend with non-empty
-  // candidate_products and the LLM didn't surface any cards, force
-  // a deterministic search using the resolver's matched/inferred
-  // scope so the customer never sees a no-match for a resolver-
-  // confirmed recommendation. Runs BEFORE the post-processing strips
-  // and the empty-pool repair so the recovered cards are visible to
-  // every downstream check.
-  if (allProductPool.size === 0 && resolverPromisedRecommendation(ctx.resolverState)) {
-    const matched = ctx.resolverState.matched_constraints || {};
-    const inferred = ctx.resolverState.inferred_constraints || {};
-    const gender = matched.gender || inferred.gender?.value;
-    const category = matched.category || inferred.category?.value;
-    const color = matched.color || inferred.color?.value;
-    const condition = matched.condition;
-    const filters = {};
-    if (gender) filters.gender = gender;
-    if (category) filters.category = category;
-    if (color) filters.color = color;
-    const queryParts = [color, condition, category].filter(Boolean);
-    const query = queryParts.join(" ").trim() || String(ctx.latestUserMessage || "").slice(0, 120).trim();
+  const currentClarifyingType = detectClarifyingQuestionType(fullResponseText);
+  const lastClarifyingType = ctx.sessionMemory?.lastClarifyingQuestion?.type || null;
+  if (currentClarifyingType && currentClarifyingType === lastClarifyingType && allProductPool.size === 0) {
     try {
-      const hydrated = await dispatchTool(
-        "search_products",
-        { query, filters, limit: 6 },
-        ctx,
-      );
-      if (hydrated && Array.isArray(hydrated.products) && hydrated.products.length > 0) {
+      const browse = await dispatchTool("search_products", softGenderBrowseSearchInput(ctx.latestUserMessage || ""), ctx);
+      const cards = extractProductCards("search_products", browse);
+      for (const card of cards) {
+        const key = card?.handle || card?.title;
+        if (key && !allProductPool.has(key)) allProductPool.set(key, card);
+      }
+      if (cards.length > 0) {
         productSearchAttempted = true;
-        for (const p of hydrated.products) {
-          if (p?.handle && !allProductPool.has(p.handle)) allProductPool.set(p.handle, p);
-        }
-        console.log(
-          `[chat] resolver-recovery: hydrated ${hydrated.products.length} card(s) ` +
-            `from resolver scope (gender=${gender || "-"} category=${category || "-"} color=${color || "-"})`,
-        );
-      } else {
-        console.log(`[chat] resolver-recovery: search returned 0 even with resolver scope`);
-        const attached = await hydrateResolverCandidateCards({
-          ctx,
-          allProductPool,
-          reason: "resolver-recovery fallback",
-        });
-        if (attached > 0) {
-          productSearchAttempted = true;
-          console.log(`[chat] resolver-recovery: attached ${attached} resolver candidate card(s)`);
-        }
+        fullResponseText = "No problem — here are a few styles to start with. You can narrow by gender, style, color, or price from here.";
+        console.log(`[chat] repeated-clarifier escape: ${currentClarifyingType} → showing ${cards.length} starter product(s)`);
       }
     } catch (err) {
-      console.error("[chat] resolver-recovery failed:", err?.message || err);
+      console.error("[chat] repeated-clarifier escape failed:", err?.message || err);
     }
   }
 
-  // Product-turn payload invariant. The LLM is allowed to write the
-  // friendly sentence, but it is not allowed to create a product
-  // presentation with zero product payloads. This catches the broad
-  // handoff class behind "Here are white sneakers" / "Here are pink
-  // sandals" with no cards: hydrate once from the canonical turn scope
-  // before any text/card coherence checks run.
-  if (
-    allProductPool.size === 0 &&
-    shouldHydrateProductCardsForTurn({ text: fullResponseText, ctx, recommenderAskedForMoreInfo })
-  ) {
-    try {
-      const attached = await hydrateScopedProductCards({
-        ctx,
-        allProductPool,
-        reason: "empty pool before display",
-      });
-      productSearchAttempted = true;
-      if (attached === 0) console.log("[chat] product-turn hydrate: scoped search returned no cards");
-    } catch (err) {
-      console.error("[chat] product-turn hydrate failed:", err?.message || err);
-    }
-  }
+  const productTurnWantsCards = shouldAttachProductCardsForTurn({
+    text: fullResponseText,
+    ctx,
+    recommenderAskedForMoreInfo,
+  });
+  const ensuredCards = await ensureProductTurnCards({
+    ctx,
+    allProductPool,
+    dispatchTool,
+    extractProductCards,
+    searchInput: scopedProductSearchInput(ctx),
+    shouldAttach: productTurnWantsCards,
+    reason: "pre-display",
+  });
+  if (ensuredCards.searchAttempted) productSearchAttempted = true;
+  let pool = ensuredCards.products;
 
-  let pool = Array.from(allProductPool.values());
-  if (pool.length > 0) {
-    const scoped = filterProductCardsToCatalogScope(pool, ctx);
-    if (scoped.dropped > 0) {
-      console.log(
-        `[chat] response-contract: dropped ${scoped.dropped} off-scope card(s) ` +
-          `before emit (gender=${scoped.scope.gender || "-"} category=${scoped.scope.category || "-"} ` +
-          `color=${scoped.scope.color || "-"} enforcedColor=${scoped.enforcedColor ? "yes" : "no"})`,
-      );
-      if (scoped.products.length === 0 && resolverPromisedRecommendation(ctx.resolverState)) {
-        console.log(
-          `[chat] response-contract: resolver promised recommendation; keeping ${pool.length} candidate card(s) ` +
-            `after display scope filter wiped all`,
-        );
-      } else {
-        pool = scoped.products;
-      }
-    }
-  }
-  if (
-    pool.length === 0 &&
-    allProductPool.size > 0 &&
-    shouldHydrateProductCardsForTurn({ text: fullResponseText, ctx, recommenderAskedForMoreInfo })
-  ) {
-    try {
-      const attached = await hydrateScopedProductCards({
-        ctx,
-        allProductPool,
-        reason: "display scope filtered pool to zero",
-      });
-      productSearchAttempted = true;
-      if (attached > 0) {
-        const rescoped = filterProductCardsToCatalogScope(Array.from(allProductPool.values()), ctx);
-        pool = rescoped.products.length === 0 && resolverPromisedRecommendation(ctx.resolverState)
-          ? Array.from(allProductPool.values())
-          : rescoped.products;
-        if (rescoped.dropped > 0) {
-          console.log(
-            `[chat] response-contract: after hydrate dropped ${rescoped.dropped} off-scope card(s) ` +
-              `(gender=${rescoped.scope.gender || "-"} category=${rescoped.scope.category || "-"} ` +
-              `color=${rescoped.scope.color || "-"} enforcedColor=${rescoped.enforcedColor ? "yes" : "no"})`,
-          );
-        }
-      }
-    } catch (err) {
-      console.error("[chat] product-turn hydrate after scope filter failed:", err?.message || err);
-    }
-  }
-
-  // Internal-language leak scrub. The resolver-state block in the
-  // system prompt occasionally bleeds into customer-facing text
-  // ("The resolver state indicates...", "Based on matched_constraints
-  // ..."). Strip lead-in phrases when possible; if a forbidden
-  // internal term still remains, replace the whole reply with a
-  // neutral clarification line. Runs FIRST so the downstream strips
-  // don't have to handle these tokens.
   if (fullResponseText) {
     const result = stripInternalLeaks(fullResponseText);
     if (result.changed) {
@@ -1175,9 +976,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Compliance backstop for the BANNED NARRATION prompt rule. Strips
-  // "let me look that up", "i'll find", "one moment", etc. — phrases
-  // the model ships despite being told not to.
   if (fullResponseText) {
     const stripped = stripBannedNarration(fullResponseText);
     if (stripped !== fullResponseText.trim()) {
@@ -1186,10 +984,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Strip meta-narration: "Since the customer already established
-  // Men's via the choice button…", "we know: A, B, C —", "the user
-  // has chosen…". Customer-facing text addresses them in second
-  // person; AI's reasoning chain doesn't belong in the bubble.
   if (fullResponseText) {
     const beforeMeta = fullResponseText;
     const stripped = stripMetaNarration(fullResponseText);
@@ -1199,9 +993,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Dedupe back-to-back near-duplicate sentences. AI sometimes ships
-  // an "echo opener" pair ("Here are some great X. Here are some great
-  // X with arch support…") despite the NO REPETITION prompt rule.
   if (fullResponseText) {
     const beforeDedupe = fullResponseText;
     const deduped = dedupeConsecutiveSentences(fullResponseText);
@@ -1211,25 +1002,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Strip mid-sentence filler intensifiers ("Honestly,", "Frankly,").
-  // Production trace 2026-05-13 12:12:40: "For more rugged terrain,
-  // Honestly, our boots are more lifestyle..." — the "Honestly,"
-  // reads as a weird internal aside in a customer-facing reply.
-  if (fullResponseText) {
-    const before = fullResponseText;
-    const stripped = stripFillerIntensifiers(fullResponseText);
-    if (stripped !== before) {
-      console.log(`[chat] stripped filler intensifier`);
-      fullResponseText = stripped;
-    }
-  }
-
-  // Reflow inline ` - **Label** — text` lists into proper newline-
-  // separated bullets. Production trace 2026-05-13 12:12:48: "tell
-  // me more about aetrex" → bot returned 1061 chars all in one
-  // paragraph with " - **Mission** — ... - **Headquarters** — ..."
-  // inline. The widget renders it as a wall of text. With newlines,
-  // the markdown renderer turns each "- **X** — ..." into a bullet.
   if (fullResponseText) {
     const before = fullResponseText;
     const reflowed = reflowInlineList(fullResponseText);
@@ -1239,44 +1011,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Hard cap on response length when product cards will render. The
-  // prompt has a "ONE SENTENCE when showing products" rule but the AI
-  // ignores it on long customer messages. Code-level enforcement: if
-  // products are coming AND text exceeds a generous threshold, truncate
-  // to the first 1-2 sentences. The cards carry the detail; the text is
-  // an opener, not a sales pitch.
-  //
-  // Threshold is generous (300 chars) so legitimate 1-sentence presentations
-  // pass untouched. Comparison-style requests ("compare X vs Y") are
-  // harder — those legitimately need 2-3 sentences. We allow up to the
-  // first sentence-end past 300 chars to handle that case.
   const PRODUCT_REPLY_HARD_CAP = 300;
   if (
     pool.length > 0 &&
     fullResponseText &&
     fullResponseText.length > PRODUCT_REPLY_HARD_CAP &&
-    !hasChoiceButtons(fullResponseText) // never truncate when AI is asking — keep the question intact
+    !hasChoiceButtons(fullResponseText)
   ) {
-    // Find first sentence-end AT OR AFTER the cap. Searching from position 0
-    // would catch early sentence-ends like "Got it." and truncate at ~8 chars.
-    // The cap is a MINIMUM length, not a starting point.
-    //
-    // Then prefer cutting at a natural list/colon break BEFORE the sentence
-    // end if one exists — so we don't ship a half-eaten markdown bullet like
-    // "Top picks: - **Danika Arch Support Sneaker - N…" when the AI ignored
-    // the no-inline-list rule. The product cards render below; the text only
-    // needs the lead-in sentence.
-    // truncateAtWordBoundary looks ahead 400 chars for a sentence-end;
-    // if none found, walks back to the last word boundary instead of
-    // chopping mid-word. Fixes 2026-05-13 12:12:40 "casual-wea..." bug.
     let truncated = truncateAtWordBoundary(fullResponseText, PRODUCT_REPLY_HARD_CAP, 400);
-    // Cut any inline markdown product list that started before the cap —
-    // the cards render those names below, and a half-list reads as broken.
-    // Detect the first list marker (`- `, `* `, `1. `, `**Name`) and trim
-    // back to the prior sentence-end / colon. Keep the lead-in sentence.
-    // Match BOTH start-of-line list markers AND inline markers like
-    // ": - **Name" or ": **Name**" that the AI uses when packing a list
-    // into a single paragraph instead of breaking on newlines.
     const lineStartListRe = /(?:\n|^)\s*(?:[-*]\s+\*?\*?|\d+[.)]\s+|\*\*[A-Z])/;
     const inlineListRe = /(?::\s*[-*]\s+\*\*|:\s+\*\*[A-Z]|—\s*\*\*[A-Z])/;
     const lineStartIdx = truncated.search(lineStartListRe);
@@ -1285,7 +1027,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     const listStart = candidates.length > 0 ? Math.min(...candidates) : -1;
     if (listStart >= 0) {
       const head = truncated.slice(0, listStart).trimEnd();
-      // Strip trailing "Top picks:" / "Here are:" lead-in (no products to list)
       const cleaned = head.replace(/[\s,;:—–-]+$/, "").replace(/\s+(top picks|here are|a few|some options|the picks|the options)\s*$/i, "").trim();
       if (cleaned.length >= 30) {
         truncated = cleaned.endsWith(".") || cleaned.endsWith("!") || cleaned.endsWith("?") ? cleaned : cleaned + ".";
@@ -1297,25 +1038,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Pitch text without products = incoherent turn. Replace with the
-  // graceful fallback below. Catches both "search ran, returned 0" and
-  // "AI claimed a recommendation without ever searching" cases.
-  //
-  // EXCEPT when the AI is legitimately asking a clarifying question
-  // (e.g. recommender tool returned needMoreInfo and the AI wrote
-  // "Are these for men or women, and what kind of shoes?"). That's
-  // not a failed pitch — it's the elicitation step of the
-  // recommender flow. Detect by: ends with a question mark, OR the
-  // text contains a question phrasing followed by a question mark
-  // anywhere. Those responses must pass through unedited.
-  // ALSO except when the customer asked a brand/info question
-  // ("tell me about aetrex", "what is X"). Those legitimately produce
-  // text-only answers with phrases like "here are the highlights:"
-  // that look pitchy to the regex but aren't product pitches.
-  // Merchant trace 2026-05-13 12:26:23: bot wrote 747 chars about
-  // Aetrex (with "here are the highlights:"), reflowInlineList
-  // bulleted it correctly, then this repair wiped the answer to a
-  // generic "Hmm, nothing's quite hitting..." fallback.
   if (
     pool.length === 0 &&
     looksLikeProductPitch(fullResponseText) &&
@@ -1668,22 +1390,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Yes/No follow-up card suppression. When the customer's latest
-  // message is a yes/no question about an already-shown product
-  // ("do they work with sneakers", "does this come in red", "is
-  // it good for plantar fasciitis"), and the AI's reply opens
-  // with "Yes" or "No" or similar, the customer wants a direct
-  // answer — NOT a fresh card grid. The agentic loop sometimes
-  // calls search_products anyway and pulls 6 lookalikes by
-  // semantic similarity (kids orthotics for women's questions,
-  // diabetic for active questions, etc.) which dumps unrelated
-  // cards under the answer text. Suppress the pool in that case.
-  //
-  // Detection is conservative — must hit BOTH (a) yes/no question
-  // shape in the customer's message AND (b) yes/no opener in the
-  // AI's reply. A genuine "show me more like this" wouldn't open
-  // with "Yes —"; the customer's message wouldn't match a yes/no
-  // shape. Pool stays untouched.
   if (pool.length > 0 && fullResponseText) {
     if (isYesNoQuestion(ctx.latestUserMessage) && isYesNoAnswer(fullResponseText, pool)) {
       console.log(
@@ -1698,20 +1404,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // question suppress blocks below. Keep these synced.
   const PRODUCT_NOUN_IN_USER_RE = /\b(?:sandals?|sneakers?|heels?|wedges?|boots?|loafers?|oxfords?|clogs?|slippers?|mary[- ]?janes?|slip[- ]?ons?|footwear|shoes?|orthotics?|insoles?|inserts?|footbeds?)\b/i;
 
-  // Capability-check suppress (merchant trace 2026-05-13 12:12:35):
-  // Customer asked "are they good for mountain climbing?" about the
-  // sneakers shown on the prior turn. Bot's text correctly explained
-  // "These are athletic sneakers... not technical mountain-climbing
-  // boots" — but ALSO ran a new search ("hiking boots rugged outdoor")
-  // and emitted 6 BOOT cards. Customer sees text describing sneakers +
-  // 6 boot cards below = text-card mismatch.
-  //
-  // Gate: when the latest message is a capability check ("are/do/can/
-  // will they [...] for X?") AND it doesn't mention a NEW product
-  // category, suppress the new pool. The text answer is the right
-  // shape; the prior turn's cards remain visible above. If the
-  // customer wants alternatives, they'll ask directly ("show me
-  // boots then" / "what about boots?").
   if (pool.length > 0 && fullResponseText && ctx.latestUserMessage) {
     const userMsg = String(ctx.latestUserMessage);
     if (
@@ -1727,25 +1419,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Policy-question suppress (merchant trace 2026-05-13 11:55:10):
-  // Customer asked "How do I contact your support team about teacher
-  // discounts?" — a pure policy/support question. The bot answered
-  // correctly (text mentions GovX) but ALSO showed 4 men's sneaker
-  // cards because:
-  //   (a) MANDATORY-SEARCH prompt rule fires on history containing
-  //       a medical condition (plantar fasciitis from 2 turns earlier)
-  //   (b) LLM reused the stale "plantar fasciitis trip Italy" query
-  //   (c) Search returned 5 sneakers → emitted as cards
-  // The cards have nothing to do with the customer's actual question.
-  //
-  // Gate: when the customer's latest message is a policy/support
-  // question AND it does NOT also mention a product-shaped noun
-  // (sandals, sneakers, heels, etc.) AND does not name a specific
-  // product, drop the pool. The text answer stays; the support button
-  // CTA is still rendered by the widget when relevant. If the customer
-  // asks "what's the return policy on the Vania?" (policy + product),
-  // the product noun ("Vania") in the message defeats this gate and
-  // the cards stay.
   if (pool.length > 0 && fullResponseText && ctx.latestUserMessage) {
     const userMsg = String(ctx.latestUserMessage);
     if (
@@ -1774,6 +1447,30 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
+  if (pool.length > 0 && fullResponseText) {
+    const reconciled = reconcileProseToCards({ text: fullResponseText, cards: pool, ctx });
+    if (reconciled.changed) {
+      console.log(
+        `[chat] response-contract: reconciled prose to card facts (${reconciled.logs.join("+")}) ` +
+          `(${fullResponseText.length}→${reconciled.text.length} chars, pool=${pool.length})`,
+      );
+      fullResponseText = reconciled.text;
+    }
+  }
+
+  if (fullResponseText) {
+    const fallback = pool.length > 0
+      ? "Here are the matching styles I found."
+      : (looksLikeClarifyingQuestion(fullResponseText)
+        ? "Could you tell me a bit more about what you're looking for?"
+        : "I can help with that.");
+    const coherent = ensureCompleteCustomerText({ text: fullResponseText, fallback });
+    if (coherent.changed) {
+      console.log(`[chat] response-contract: repaired incomplete sentence (${coherent.reason})`);
+      fullResponseText = coherent.text;
+    }
+  }
+
   console.log(`[chat] emit textLen=${fullResponseText.length} poolSize=${pool.length} searchAttempted=${productSearchAttempted}`);
 
   // Observability only — no behavior change. Flag long non-product
@@ -1791,55 +1488,17 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     console.log(`[chat] WARN long-non-product-reply chars=${fullResponseText.length} sentences~=${sentenceCount}`);
   }
 
-  const finalShouldHydrateProducts = shouldHydrateProductCardsForTurn({
-    text: fullResponseText,
-    ctx,
-    recommenderAskedForMoreInfo,
-  });
   if (ctx.debugChatEvents) {
     controller.enqueue(encoder.encode(sseChunk({
       type: "debug",
-      stage: "before_final_hydrate",
+      stage: "before_emit",
       poolSize: pool.length,
       allProductPoolSize: allProductPool.size,
-      shouldHydrateProducts: finalShouldHydrateProducts,
+      shouldAttachProducts: shouldAttachProductCardsForTurn({ text: fullResponseText, ctx, recommenderAskedForMoreInfo }),
       resolverPromisedRecommendation: resolverPromisedRecommendation(ctx.resolverState),
       looksLikeProductPitch: looksLikeProductPitch(fullResponseText),
       scope: currentCatalogScopeFromContext(ctx),
     })));
-  }
-
-  if (
-    pool.length === 0 &&
-    finalShouldHydrateProducts
-  ) {
-    try {
-      const attached = await hydrateScopedProductCards({
-        ctx,
-        allProductPool,
-        reason: "final pre-emit zero-card product turn",
-      });
-      productSearchAttempted = true;
-      if (attached > 0) {
-        const rescoped = filterProductCardsToCatalogScope(Array.from(allProductPool.values()), ctx);
-        pool = rescoped.products.length === 0 && resolverPromisedRecommendation(ctx.resolverState)
-          ? Array.from(allProductPool.values())
-          : rescoped.products;
-        if (isCompoundPolicyProductQuestion(ctx.latestUserMessage) && !PRODUCT_SHOPPING_NOUN_RE.test(fullResponseText)) {
-          fullResponseText = `${fullResponseText} ${compoundProductFallbackText(ctx)}`.trim();
-          console.log("[chat] compound-contract: added product clause after final hydration");
-        }
-      }
-    } catch (err) {
-      console.error("[chat] final product-turn hydrate failed:", err?.message || err);
-      if (ctx.debugChatEvents) {
-        controller.enqueue(encoder.encode(sseChunk({
-          type: "debug",
-          stage: "final_hydrate_error",
-          message: err?.message || String(err),
-        })));
-      }
-    }
   }
 
   controller.enqueue(encoder.encode(sseChunk({
@@ -1882,23 +1541,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     controller.enqueue(encoder.encode(sseChunk({ type: "klaviyo_form" })));
   }
 
-  // STRUCTURAL: cards-with-chips suppression.
-  //
-  // Original intent: prevent the bug where the AI shows product
-  // cards alongside a CLARIFYING question (e.g. "Are you a man or a
-  // woman? <<Men>><<Women>>"). Customer reads the cards as the
-  // answer and skips the gating question.
-  //
-  // But the AI also legitimately combines "here are some products
-  // + want to see more styles? <<Sneakers>><<Loafers>>" in a single
-  // turn. That's a "browse more" affordance, not a gating question.
-  // Suppressing cards there hides the actual answer.
-  //
-  // Heuristic: only suppress when the text looks like a PURE
-  // gating question — short, no plural-intro presentation, and no
-  // pool product title named in the body. If the AI presented
-  // products (plural-intro framing OR named a pool product), the
-  // cards are the answer; chips are extras.
   const hasChoiceButtonsForCards = hasChoiceButtons(fullResponseText);
   let suppressCardsForChips = false;
   if (hasChoiceButtonsForCards && pool.length > 0) {
@@ -1921,14 +1563,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  // Lineup-promise strip (merchant trace 2026-05-13 12:02:14):
-  // When chip-suppression fires, the cards go away but the LLM's
-  // promise of products in the text remains — e.g., "Here's the full
-  // women's lineup — they come in standard, posted, and metatarsal
-  // variants, all at $74.95–$79.95." The promise becomes a lie.
-  // Strip those phrases so the response reads as a clean definitional
-  // answer + the chip question. Patterns live in chat-helpers so the
-  // regression suite can test them.
   if (suppressCardsForChips && fullResponseText) {
     const before = fullResponseText;
     const cleaned = stripLineupPromiseSentences(before);
@@ -1959,18 +1593,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         });
 
     if (ctx.activeCategoryGroup) {
-      // ROOT-CAUSE PROTECTION: cards whose full title appears
-      // verbatim in the AI's reply text are AI-named. They reflect
-      // the AI's specific recommendation for THIS turn and override
-      // the conversation's active-group lock — the lock can be
-      // stale (set 3 turns ago by a chip click) while the AI has
-      // since pivoted to a different group at the customer's
-      // request. Without this, a stale Footwear lock can wipe the
-      // very Orthotic cards the AI just named, leaving the customer
-      // reading "the X Orthotic is best" with sandals shown. Same
-      // protection logic the search layer uses (`active-group skip:
-      // query matches a different group`); we just apply it at
-      // render time too. Pure substring check — no vocabulary.
       const textLowerForProtection = fullResponseText.toLowerCase();
       const protectedHandles = new Set();
       for (const card of filteredPool) {
@@ -1980,15 +1602,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         }
       }
 
-      // Mirror of the search-layer override (chat-tools.server.js): when
-      // the AI's reply matches the terms of a DIFFERENT merchant group
-      // than the active one, the group lock is stale. Trust the AI's
-      // intent and skip the render-layer filter so the right cards
-      // aren't wiped.
-      //
-      // Pure data-driven: the merchant's categoryGroups define the
-      // divergence vocabulary. Works for any vertical (footwear,
-      // jewelry, apparel, etc.).
       const replyDiverges = textIntentDivergesFromGroup(
         fullResponseText,
         ctx.activeCategoryGroup,
@@ -2091,47 +1704,13 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // Horizontal layout = 3 (legacy); showcase layout = 10 (scroll-snap row).
     const cardCap = ctx.productCardCap || 3;
 
-    // Singular INTENT from the customer — the small, stable surface.
-    // Default behavior is plural (show top cardCap from the pool). We
-    // only collapse to a single card when the customer themselves
-    // signalled they're asking about ONE specific item:
-    //   - "tell me (more) about [X]" / "more info|details on [X]"
-    //   - "what about [X]" / "how about [X]" / "how is [X]"
-    //   - "is the [X]" / "does (the|this|that) [X]" — qualifier on a thing
-    //   - "this one" / "that one" / "the [first|cheapest|red|same] one"
-    // Vocabulary-agnostic — no catalog terms, works in any vertical.
-    // Plural intent (the much larger surface) is the implicit default,
-    // so we don't try to enumerate plural phrasings.
-    //
-    // SCOPE: latest user message ONLY. Testing the full concatenated
-    // user history caused intent to leak across turns — one earlier
-    // "which is best" pinned singular for every subsequent turn,
-    // including unrelated plural follow-ups like "show me sneakers
-    // under $100". Latest message wins.
-    // Singular intent — extracted to chat-postprocessing.js
-    // and unit-tested in eval-chat-postprocessing.mjs. The detector
-    // also handles the comparison-overrides-singular rule.
     const latestMsgForIntent = String(ctx.latestUserMessage || "");
     let singularIntent = detectSingularIntent(latestMsgForIntent);
 
-    // Comparison override: when the customer is asking to compare two
-    // options ("which is better, X or Y", "compare A vs B", "what's the
-    // difference between …"), they want to SEE both items side-by-side
-    // — even if the phrasing also matches singular ("the cheapest and
-    // most comfortable"). Comparison wins.
-    // Comparison override is now handled inside detectSingularIntent
-    // (see chat-postprocessing.js). Logging the suppress for
-    // backwards compat with operational logs.
     if (detectComparisonIntent(latestMsgForIntent)) {
       console.log(`[chat] singular-suppress: comparison phrasing in latest message — keeping plural pool`);
     }
 
-    // Plural-catalog-noun override: if the latest message names a
-    // catalog category in plural form ("sneakers under $100", "show
-    // me orthotics", "what boots do you have"), the customer is
-    // browsing a category — show the pool, not one card. Plural
-    // forms come from the merchant's catalogCategories — no
-    // hardcoded vocabulary.
     if (singularIntent && Array.isArray(ctx.fullCatalogCategories) && ctx.fullCatalogCategories.length > 0) {
       const lower = latestMsgForIntent.toLowerCase();
       const matchedPlural = ctx.fullCatalogCategories.find((cat) => {
@@ -2146,11 +1725,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       }
     }
 
-    // SKU-mention narrowing: if the AI text named a specific SKU (e.g.
-    // "the L700M is your best match"), render ONLY the card(s) for that
-    // SKU instead of all top-3 from the pool. Prevents the "text says one
-    // product, cards show three different ones" mismatch. Tolerant of
-    // gender suffixes — L700M and L700W both match L700 in the pool.
     const baseSku = (s) => String(s).toUpperCase().replace(/[A-Z]$/, "");
     const mentionedSkus = fullResponseText.match(SKU_PATTERN) || [];
     let skuNarrowedCards = null;
@@ -2171,26 +1745,6 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       }
     }
 
-    // Title-mention narrowing: if the AI named specific products by
-    // their full title (e.g. "the Women's Dress Posted Orthotics W/
-    // Metatarsal Support is your best bet"), render ONLY those
-    // cards. Catches the case where the AI didn't use a SKU code.
-    //
-    // Substring overlap: a longer title ("Women's Dress Posted
-    // Orthotics W/ Metatarsal Support") fully contains a shorter
-    // sibling ("Women's Dress Posted Orthotics"). We process longest
-    // titles first and skip any card whose title falls inside an
-    // already-claimed text span — so naming one product doesn't
-    // accidentally match a less-specific sibling.
-    //
-    // Plural-intent guard: if the AI named only ONE product and the
-    // customer's question was clearly plural ("what heel heights do
-    // your wedges come in?"), do NOT narrow to that one card. The
-    // customer wanted a category overview; the AI just happened to
-    // pick a representative example. Show the full pool so they can
-    // compare. Narrow only when (a) the AI named 2+ products
-    // explicitly (clear small set), or (b) the AI named 1 AND the
-    // customer expressed singular intent.
     let titleNarrowedCards = null;
     if (!skuNarrowedCards && filteredPool.length > 1) {
       const sortedByLen = [...filteredPool].sort(
@@ -2358,7 +1912,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     } else if (
       (!effectiveSaysNoMatch || isCompoundPolicyProductQuestion(ctx.latestUserMessage)) &&
       pool.length > 0 &&
-      shouldHydrateProductCardsForTurn({ text: fullResponseText, ctx, recommenderAskedForMoreInfo })
+      shouldAttachProductCardsForTurn({ text: fullResponseText, ctx, recommenderAskedForMoreInfo })
     ) {
       // Last display-boundary invariant: a scoped product pool plus
       // product-presenting text must never degrade to a text-only turn
@@ -2949,23 +2503,6 @@ export const action = async ({ request }) => {
             console.error("[recommender] tool registration failed:", recErr?.message || recErr);
           }
 
-          // ── M1.3 Resolver-First Chat Orchestration ──────────────
-          //
-          // Strict stage order per turn:
-          //   1. Classifier (Haiku intent + attributes)
-          //   2. Resolver preflight (catalog ground truth)
-          //   3. Orthotic gate decision (receives resolverState).
-          //      The deterministic state machine answers the turn —
-          //      emitting the next seed-authoritative question or
-          //      the resolved product card — without an LLM call.
-          //      Yields to the LLM when the resolver already has
-          //      catalog scope (Cases C/D in the gate).
-          //   4. LLM/tool loop
-          //   5. Post-processing (untouched)
-          //
-          // The router emits one log block per turn at the end of
-          // this section so the routing decision is auditable.
-
           const routerLog = {
             classifier: null,
             resolver: null,
@@ -3010,21 +2547,12 @@ export const action = async ({ request }) => {
                 ...(classifiedAttrs.condition ? { condition: classifiedAttrs.condition } : {}),
                 ...(classifiedAttrs.useCase ? { useCase: classifiedAttrs.useCase } : {}),
               };
-              // Conservative catalog-based specific-product detection.
-              // Populates specificProduct only when the message
-              // unambiguously names a product handle/title — gates
-              // the resolver's controlled_oos path in production.
               try {
                 const handle = await detectSpecificProduct(session.shop, latestMsg);
                 if (handle) userConstraints.specificProduct = handle;
               } catch (sErr) {
                 console.error("[resolver] specific-product detection failed:", sErr?.message || sErr);
               }
-              // M2 keyed session memory. Walks the conversation
-              // history, applies subject-pivot / rejection rules,
-              // and layers classifier output. Feeds the resolver and
-              // (additively, below) the LLM prompt. Replaces the M1
-              // placeholder that only carried sessionGender.
               const memory = buildSessionMemory({
                 messages,
                 classifiedIntent,
@@ -3032,9 +2560,6 @@ export const action = async ({ request }) => {
               });
               ctx.sessionMemory = memory;
               const sessionMemory = { explicit: { ...memory.explicit } };
-              // Belt-and-suspenders: sessionGender wasn't always picked
-              // up by the memory walk in pre-M2 fixtures, keep the
-              // existing carry as a fallback.
               if (sessionGender && !sessionMemory.explicit.gender) {
                 sessionMemory.explicit.gender = sessionGender;
               }
@@ -3045,18 +2570,12 @@ export const action = async ({ request }) => {
                 sessionMemory,
                 messages,
               });
-              // Layer resolver inferences back into ctx.sessionMemory
-              // so the LLM prompt block + later code paths see them.
               ctx.sessionMemory = buildSessionMemory({
                 messages,
                 classifiedIntent,
                 resolverState,
               });
-              // Compact one-line memory log per turn (M2).
               console.log(`[memory] ${ctx.shop} ${memorySummary(ctx.sessionMemory)}`);
-              // Additive prompt block surfacing the keyed scope to
-              // the LLM. Internal-language-leak strip catches any
-              // verbatim emission of internal tokens.
               const memBlock = buildSessionMemoryPromptBlock(ctx.sessionMemory);
               if (memBlock) systemPrompt = systemPrompt + memBlock;
               if (resolverState && resolverState.type === "resolver_state") {
@@ -3124,8 +2643,6 @@ export const action = async ({ request }) => {
           }
           if (!routerLog.orthoticGate) routerLog.orthoticGate = "handled=false case=none";
 
-          // Final path is "resolver" if resolver produced a strong
-          // action that the LLM will simply restate; "llm" otherwise.
           const resolverAction = ctx.resolverState?.recommended_next_action?.type;
           routerLog.finalPath =
             resolverAction && resolverAction !== "skip" && resolverAction !== "ask"
@@ -3136,17 +2653,6 @@ export const action = async ({ request }) => {
           console.log(`[router] ${ctx.shop} ${routerLog.orthoticGate}`);
           console.log(`[router] ${ctx.shop} final_path=${routerLog.finalPath}`);
 
-          // Footwear over-elicitation guard. When the customer has
-          // established BOTH a gender AND a category (the latest
-          // message matches an allowed catalog category — usually a
-          // chip click like "Sneakers"), the system prompt's
-          // 2-question rule SHOULD trigger an immediate
-          // search_products call. In practice the LLM sometimes
-          // still asks a third question. Inject a turn-scoped
-          // directive to force a search. Belt-and-suspenders
-          // alongside the FOOTWEAR PATH HARD 2-QUESTION CAP rule.
-          // Match logic in chat-postprocessing.detectFootwearOverElicitation
-          // (unit-tested there).
           {
             const guard = detectFootwearOverElicitation({
               classifiedIntent: ctx.classifiedIntent,
