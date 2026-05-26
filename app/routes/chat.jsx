@@ -81,6 +81,7 @@ import {
   detectAiNoMatchPhrasing,
   looksLikeClarifyingQuestion,
   suggestionContradictsGender,
+  isUnanswerableSuggestion,
   detectFootwearOverElicitation,
   stripInternalLeaks,
   scrubInternalEnums,
@@ -2775,14 +2776,9 @@ export const action = async ({ request }) => {
                 // emit. Customer is better off with 1-2 good
                 // suggestions than 3 with one that triggers a
                 // hallucinated reply on the next turn.
-                const lastTextLower = lastText.toLowerCase();
-                const TECH_NAME_RE = /(?:[™®]|\b[A-Z][A-Za-z]*(?:[A-Z][A-Za-z]+){1,}\b)/;
-                const SPEC_DEEPDIVE_RE = /\b(?:tell me more about|explain|how does .* work|what (?:is|are) the (?:[a-z]+\s+)?(?:technology|system|fabric|foam|material|tech)|details?\s+(?:on|about)\s+the)\b/i;
-                const SPEC_MEASURE_RE = /\b(?:heel\s+height|stack\s+height|toe\s+drop|heel-to-toe\s+drop|stack|gradient|density|grade|weight\s+in\s+(?:oz|grams|g)|dimensions|cm\b|mm\b)\b/i;
-                // Established gender from the conversation. Used to
-                // drop follow-up suggestions that contradict it. Match
-                // logic in chat-postprocessing.suggestionContradictsGender
-                // (unit-tested there).
+                // Established gender from the conversation, used to drop
+                // suggestions that name the opposite gender (logic + unit
+                // tests live in chat-postprocessing.suggestionContradictsGender).
                 const conversationTextForGender = messages
                   .map((m) => (typeof m.content === "string" ? m.content : ""))
                   .join("\n");
@@ -2790,53 +2786,18 @@ export const action = async ({ request }) => {
                 const filtered = [];
                 const dropped = [];
                 for (const q of questions) {
-                  const lower = q.toLowerCase();
-
-                  // Gender-contradiction check. If the conversation has
-                  // established a gender, drop suggestions that name the
-                  // opposite gender. Production scenario: customer asked
-                  // "find men's shoes" → Haiku suggested "Do you have
-                  // sneakers for women?" — confusing, looks broken.
                   if (suggestionContradictsGender(q, establishedGender)) {
                     dropped.push({ q, reason: `gender contradicts established=${establishedGender}` });
                     continue;
                   }
-
-                  // Spec deep-dive pattern check.
-                  if (SPEC_DEEPDIVE_RE.test(q)) {
-                    // Allowed only if the question's subject already
-                    // appeared in the assistant's reply (e.g. AI
-                    // mentioned UltraSKY → customer can drill in).
-                    const subjectMatch = q.match(/\babout\s+(?:the\s+)?([A-Za-z][A-Za-z0-9™®\s-]{2,40})/i);
-                    const subj = subjectMatch ? subjectMatch[1].trim().toLowerCase() : "";
-                    if (!subj || !lastTextLower.includes(subj.replace(/[™®]/g, "").trim())) {
-                      dropped.push({ q, reason: "spec-deepdive without prior mention" });
-                      continue;
-                    }
-                  }
-
-                  // Trademarked / TitleCase tech-name check.
-                  const techMatches = q.match(new RegExp(TECH_NAME_RE.source, "g")) || [];
-                  let techHallucination = false;
-                  for (const term of techMatches) {
-                    const cleaned = term.replace(/[™®]/g, "").trim();
-                    if (cleaned.length < 4) continue;
-                    if (!lastTextLower.includes(cleaned.toLowerCase())) {
-                      techHallucination = true;
-                      break;
-                    }
-                  }
-                  if (techHallucination) {
-                    dropped.push({ q, reason: "branded tech term not in reply" });
+                  // Single code-owned answerability gate: never suggest a
+                  // follow-up the bot can't answer (spec deep-dives, branded
+                  // tech names, unverifiable discount mechanics).
+                  const verdict = isUnanswerableSuggestion(q, { lastText });
+                  if (verdict.unanswerable) {
+                    dropped.push({ q, reason: verdict.reason });
                     continue;
                   }
-
-                  // Spec/measurement check.
-                  if (SPEC_MEASURE_RE.test(q) && !SPEC_MEASURE_RE.test(lastText)) {
-                    dropped.push({ q, reason: "spec measurement not in reply" });
-                    continue;
-                  }
-
                   filtered.push(q);
                 }
                 if (dropped.length > 0) {

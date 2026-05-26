@@ -44,6 +44,7 @@ import {
   containsInternalLanguageLeak,
   scrubInternalEnums,
   friendlyEnumLabel,
+  isUnanswerableSuggestion,
   resolverPromisedRecommendation,
   stripAvailabilityDenialSentences,
 } from "../app/lib/chat-postprocessing.js";
@@ -969,6 +970,42 @@ test("enum-scrub — every known enum token resolves to an enum-free label", () 
     assert.ok(!/_/.test(label), `label for ${t} still contains underscore: "${label}"`);
     const r = scrubInternalEnums(`recommendation note: ${t}.`);
     assert.ok(!new RegExp(t).test(r.text), `raw token ${t} survived scrub: ${r.text}`);
+  }
+});
+
+// =====================================================================
+// Suggested-follow-up answerability gate
+// =====================================================================
+
+test("suggestion-gate — drops unverifiable discount mechanics (GovX by category)", () => {
+  const v = isUnanswerableSuggestion("Does GovX apply to specific product categories?", { lastText: "Here are men's sneakers." });
+  assert.equal(v.unanswerable, true, `should drop; got ${JSON.stringify(v)}`);
+});
+
+test("suggestion-gate — drops spec deep-dive when subject not in reply", () => {
+  const v = isUnanswerableSuggestion("Tell me more about the UltraSKY technology", { lastText: "Here are men's sneakers." });
+  assert.equal(v.unanswerable, true);
+});
+
+test("suggestion-gate — allows spec deep-dive when subject WAS mentioned", () => {
+  const v = isUnanswerableSuggestion("Tell me more about the arch support", { lastText: "These have built-in arch support." });
+  assert.equal(v.unanswerable, false, `should allow; got ${JSON.stringify(v)}`);
+});
+
+test("suggestion-gate — drops branded tech name absent from reply", () => {
+  const v = isUnanswerableSuggestion("How does OrthoLite compare?", { lastText: "Here are women's sandals." });
+  assert.equal(v.unanswerable, true);
+});
+
+test("suggestion-gate — drops spec/measurement not quoted in reply", () => {
+  const v = isUnanswerableSuggestion("What's the heel height?", { lastText: "Here are women's wedges." });
+  assert.equal(v.unanswerable, true);
+});
+
+test("suggestion-gate — keeps good pivots (gender / width / price)", () => {
+  for (const q of ["Do you have these in women's?", "Do you have wider widths?", "Anything under $100?", "Show me sneakers instead"]) {
+    const v = isUnanswerableSuggestion(q, { lastText: "Here are men's sandals." });
+    assert.equal(v.unanswerable, false, `must keep "${q}"; got ${JSON.stringify(v)}`);
   }
 });
 
