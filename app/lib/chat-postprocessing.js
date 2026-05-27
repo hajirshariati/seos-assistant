@@ -743,6 +743,22 @@ export function isUnanswerableSuggestion(question, { lastText = "", latestUserMe
   return { unanswerable: false, reason: "" };
 }
 
+// =====================================================================
+// Cost-mode observability: would this Haiku turn have wanted Sonnet?
+// =====================================================================
+// Pure signal (no behavior change) so we can MEASURE the escalation rate
+// before building the actual Haiku→Sonnet re-run. It flags a low-risk
+// turn that was routed to Haiku but produced a weak result: a product
+// search that came back empty, or essentially no text. Watch this rate
+// in logs once cost-optimized mode is enabled; a high rate means the
+// router is over-sending to Haiku (or the re-run is worth building).
+export function haikuEscalationSignal({ isHaiku = false, productSearchAttempted = false, poolSize = 0, textLen = 0 } = {}) {
+  if (!isHaiku) return { escalate: false, reason: "" };
+  if (textLen < 2) return { escalate: true, reason: "empty-text" };
+  if (productSearchAttempted && poolSize === 0) return { escalate: true, reason: "searched-but-no-cards" };
+  return { escalate: false, reason: "" };
+}
+
 const INLINE_CHIP_RE = /<<\s*([^<>]+?)\s*>>/g;
 const SAFE_INLINE_CHIP_QUESTION_RE =
   /\b(?:who\s+are|what\s+(?:kind|type)|which\s+(?:style|styles|category)|what'?s\s+your\s+arch|any\s+specific|are\s+you\s+looking\s+for|would\s+you\s+like|do\s+you\s+want|choose|select|men'?s\s+or\s+women'?s|women'?s\s+or\s+men'?s)\b/i;

@@ -83,6 +83,7 @@ import {
   looksLikeClarifyingQuestion,
   suggestionContradictsGender,
   isUnanswerableSuggestion,
+  haikuEscalationSignal,
   stripUnsafeInlineChips,
   detectFootwearOverElicitation,
   stripInternalLeaks,
@@ -1676,6 +1677,20 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   }
 
   console.log(`[chat] emit textLen=${fullResponseText.length} poolSize=${pool.length} searchAttempted=${productSearchAttempted}`);
+
+  // Cost-mode observability (no behavior change): which model handled the
+  // turn, and whether a Haiku turn produced a weak result that a future
+  // Sonnet re-run would target. Lets us measure the cost split + the
+  // escalation rate before building the actual re-run.
+  {
+    const esc = haikuEscalationSignal({
+      isHaiku: model === HAIKU_MODEL,
+      productSearchAttempted,
+      poolSize: pool.length,
+      textLen: fullResponseText.length,
+    });
+    console.log(`[model] ${ctx.shop} used=${model} escalate_signal=${esc.escalate}${esc.reason ? ` reason=${esc.reason}` : ""}`);
+  }
 
   // Observability only — no behavior change. Flag long non-product
   // replies (text >450 chars, no pool, no search) so we can spot

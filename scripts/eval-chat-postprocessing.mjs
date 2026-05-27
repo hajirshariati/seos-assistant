@@ -45,6 +45,7 @@ import {
   scrubInternalEnums,
   friendlyEnumLabel,
   isUnanswerableSuggestion,
+  haikuEscalationSignal,
   stripUnsafeInlineChips,
   resolverPromisedRecommendation,
   stripAvailabilityDenialSentences,
@@ -1008,6 +1009,32 @@ test("suggestion-gate — keeps good pivots (gender / width / price)", () => {
     const v = isUnanswerableSuggestion(q, { lastText: "Here are men's sandals." });
     assert.equal(v.unanswerable, false, `must keep "${q}"; got ${JSON.stringify(v)}`);
   }
+});
+
+// =====================================================================
+// haikuEscalationSignal (cost-mode observability)
+// =====================================================================
+
+test("escalation-signal — Sonnet turns never flag", () => {
+  const s = haikuEscalationSignal({ isHaiku: false, productSearchAttempted: true, poolSize: 0, textLen: 0 });
+  assert.equal(s.escalate, false);
+});
+
+test("escalation-signal — Haiku empty text flags", () => {
+  const s = haikuEscalationSignal({ isHaiku: true, productSearchAttempted: false, poolSize: 0, textLen: 0 });
+  assert.equal(s.escalate, true);
+  assert.equal(s.reason, "empty-text");
+});
+
+test("escalation-signal — Haiku searched-but-no-cards flags", () => {
+  const s = haikuEscalationSignal({ isHaiku: true, productSearchAttempted: true, poolSize: 0, textLen: 40 });
+  assert.equal(s.escalate, true);
+  assert.equal(s.reason, "searched-but-no-cards");
+});
+
+test("escalation-signal — healthy Haiku product turn does NOT flag", () => {
+  const s = haikuEscalationSignal({ isHaiku: true, productSearchAttempted: true, poolSize: 5, textLen: 40 });
+  assert.equal(s.escalate, false);
 });
 
 test("suggestion-gate — drops suggestions that repeat the customer's current filter", () => {
