@@ -145,6 +145,31 @@ export function detectGenderFromHistory(messages) {
   return null;
 }
 
+// ── reconcileSessionGender ──────────────────────────────────────────
+// Single source of truth for adult gender. The bot derives a session
+// gender three ways (positional regex over history, recipient pivot,
+// and the LLM classifier); they can disagree. The classifier extracts
+// gender ONLY when the customer explicitly stated it (this or a recent
+// turn), so a confident Men/Women from it is higher-precision than the
+// positional regex scan — which can re-land on a stale earlier mention
+// after a recipient pivot ("a gift for my mom" following an earlier
+// "men's"), producing the "we don't have men's" dead-end.
+//
+// Rule: the classifier wins for adult genders when it is confident;
+// otherwise keep the regex value. Deliberately scoped to men/women —
+// "Kids" keeps the regex value because kids uses lowercase tokens
+// (kid/boy/girl) and a separate scoping path we don't want to disturb
+// from here. Inputs: regexGender ("men"|"women"|"kid"|"boy"|"girl"|
+// null), classifierGender ("Men"|"Women"|"Kids"|null), confidence
+// ("low"|"medium"|"high"|undefined). Returns the authoritative gender
+// (lowercase) or null.
+export function reconcileSessionGender(regexGender, classifierGender, classifierConfidence) {
+  const cg = String(classifierGender || "").toLowerCase().trim();
+  const conf = String(classifierConfidence || "medium").toLowerCase().trim();
+  if ((cg === "men" || cg === "women") && conf !== "low") return cg;
+  return regexGender || null;
+}
+
 // Strip "let me look that up", "i'll find", "one moment" etc. from the
 // AI's response. Compliance backstop for the BANNED NARRATION prompt
 // rule the model intermittently violates. Returns the cleaned string;

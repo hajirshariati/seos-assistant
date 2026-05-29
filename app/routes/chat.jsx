@@ -11,6 +11,7 @@ import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGr
 import { extractAnsweredChoices } from "../lib/conversation-memory.server";
 import {
   detectGenderFromHistory as _detectGenderFromHistory,
+  reconcileSessionGender,
   stripBannedNarration,
   stripMetaNarration,
   looksLikeProductPitch,
@@ -2301,7 +2302,12 @@ export const action = async ({ request }) => {
     // scoping, ctx.sessionGender, search filters, all flow from this
     // single value. Without the pivot, fall back to the historical
     // detection (chip clicks + earlier mentions).
-    const sessionGender = latestPivotedGender || historicalSessionGender;
+    //
+    // `let`, not `const`: this is the EARLY (pre-classifier) estimate
+    // used for catalog chip scoping. After the LLM classifier runs it
+    // is reconciled via reconcileSessionGender so the authoritative
+    // adult gender (classifier-owned) drives the search / gender-lock.
+    let sessionGender = latestPivotedGender || historicalSessionGender;
     if (latestPivotedGender && latestPivotedGender !== historicalSessionGender) {
       console.log(
         `[chat] gender-pivot: history=${historicalSessionGender || "-"} → latest=${latestPivotedGender} ` +
@@ -2772,6 +2778,34 @@ export const action = async ({ request }) => {
           routerLog.classifier = classifiedIntent
             ? `isOrthoticRequest=${!!classifiedIntent.isOrthoticRequest} attrs=${JSON.stringify(classifiedIntent.attributes || {})}`
             : "none";
+
+          // Gender authority. The LLM classifier extracts adult gender
+          // only when the customer EXPLICITLY stated it, so a confident
+          // Men/Women beats the positional regex history scan — which
+          // can re-land on a stale earlier mention after a recipient
+          // pivot ("a gift for my mom" following an earlier "men's"),
+          // the root of the "we don't have men's" dead-end. Reconcile
+          // here, after the classifier and before the resolver / agentic
+          // loop, so the corrected gender drives the search and the
+          // gender-lock (both read ctx.sessionGender). The pre-classifier
+          // chip scoping above keeps the early estimate; on a true pivot
+          // that only affects which chips render, not search correctness.
+          {
+            const reconciledGender = reconcileSessionGender(
+              sessionGender,
+              classifiedIntent?.attributes?.gender,
+              classifiedIntent?.confidence,
+            );
+            if (reconciledGender !== sessionGender) {
+              console.log(
+                `[chat] gender-authority: classifier="${classifiedIntent?.attributes?.gender}" ` +
+                  `(conf=${classifiedIntent?.confidence}) overrides regex sessionGender=` +
+                  `"${sessionGender || "-"}" → "${reconciledGender || "-"}"`,
+              );
+              sessionGender = reconciledGender;
+              ctx.sessionGender = reconciledGender;
+            }
+          }
 
           // STAGE 2: resolver preflight
           try {
