@@ -85,6 +85,7 @@ import {
   suggestionContradictsGender,
   isUnanswerableSuggestion,
   haikuEscalationSignal,
+  sonnetEscalationSignal,
   stripUnsafeInlineChips,
   detectFootwearOverElicitation,
   stripInternalLeaks,
@@ -632,6 +633,18 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // recommender resolver cannot fulfill, leading to a dead-end.
   let recommenderInvokedThisTurn = false;
   let productSearchAttempted = false;
+  // Quality signals — set when a fact-validator catches the model
+  // reasoning WRONG this turn (not a cosmetic fix). These drive the
+  // Sonnet→Opus reactive escalation at the call site: when a weaker
+  // model produces a denial/hallucination/garbage that code had to
+  // patch into a degraded fallback, re-running on a stronger model
+  // usually yields a genuinely correct answer. Cosmetic fixes (dedup,
+  // reflow, clean color-rewrite) deliberately do NOT set these.
+  const qualitySignals = {
+    definitionalHallucination: false,
+    falseDenial: false,
+    emptyAfterStrips: false,
+  };
   // Set when a recommender tool returned needMoreInfo (the gate
   // detected required attributes were missing and instructed the
   // LLM to ask the customer first). When this fires, the AI's
@@ -1283,6 +1296,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     looksLikeDefinitionalHallucination(fullResponseText)
   ) {
     console.log(`[chat] empty-pool repair: definitional hallucination`);
+    qualitySignals.definitionalHallucination = true;
     fullResponseText = "";
   }
 
@@ -1300,6 +1314,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     const deniedCat = detectFalseCategoryDenial(fullResponseText, fullCats);
     if (deniedCat) {
       console.log(`[chat] false-denial guard: AI claimed the store doesn't carry "${deniedCat}" — stripping (catalog actually contains it)`);
+      qualitySignals.falseDenial = true;
       fullResponseText = pool.length > 0
         ? `Take a look — here are some ${deniedCat.toLowerCase()} from the catalog.`
         : `We do carry ${deniedCat.toLowerCase()} — could you share a bit more (gender, style, occasion)? I can pull up a few for you.`;
@@ -1325,6 +1340,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // "Let me look that up for you!") but a search returned products.
     // Without a fallback we'd ship an empty bubble above the cards.
     console.log(`[chat] empty-text repair: text wiped by strips, pool=${pool.length}`);
+    qualitySignals.emptyAfterStrips = true;
     fullResponseText = "Take a look — these are the closest matches I've got.";
   }
 
@@ -2245,6 +2261,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     recommenderInvokedThisTurn,
     turnResult,
     turnWarnings,
+    qualitySignals,
   };
 }
 
@@ -3046,18 +3063,36 @@ export const action = async ({ request }) => {
             const stored = config.anthropicModel || DEFAULT_MODEL;
             return DEPRECATED_MODELS.has(stored) ? DEFAULT_MODEL : stored;
           })();
-          let result;
-          if (modelStrategy === "cost-optimized" && model === HAIKU_MODEL) {
-            const baseOpts = {
-              anthropic, systemPrompt, encoder,
-              promptCaching: config.promptCaching === true,
-              tools: activeTools,
-            };
-            const haikuBuf = [];
-            const haikuResult = await runAgenticLoop({
-              ...baseOpts, model, messages: messages.slice(), ctx: { ...ctx },
-              controller: { enqueue: (c) => haikuBuf.push(c) },
+          // Reactive Sonnet→Opus escalation. The whole turn is already
+          // buffered server-side (nothing streams token-by-token), so we
+          // run the chosen model into a BUFFER, inspect the loop's
+          // quality signals, and — when a fact-validator caught the model
+          // reasoning wrong this turn — silently re-run on Opus and flush
+          // THAT instead. Enabled for every mode whose answering model
+          // isn't already Opus; merchant can disable via config.
+          const baseOpts = {
+            anthropic, systemPrompt, encoder,
+            promptCaching: config.promptCaching === true,
+            tools: activeTools,
+          };
+          const opusModel = OPUS_MODEL;
+          const opusEscalationEnabled =
+            config.opusEscalation !== false && modelStrategy !== "always-opus";
+          // Run a model into its own buffer with a fresh messages copy +
+          // shallow ctx clone so a buffered attempt never pollutes a retry.
+          const runBuffered = async (m) => {
+            const buf = [];
+            const r = await runAgenticLoop({
+              ...baseOpts, model: m, messages: messages.slice(), ctx: { ...ctx },
+              controller: { enqueue: (c) => buf.push(c) },
             });
+            return { buf, r };
+          };
+
+          let result;
+          let chosenBuf;
+          if (modelStrategy === "cost-optimized" && model === HAIKU_MODEL) {
+            const { buf: haikuBuf, r: haikuResult } = await runBuffered(model);
             const esc = haikuEscalationSignal({
               isHaiku: true,
               productSearchAttempted: haikuResult.productSearchAttempted,
@@ -3066,31 +3101,36 @@ export const action = async ({ request }) => {
             });
             if (esc.escalate) {
               console.log(`[model] ${ctx.shop} Haiku→Sonnet escalation reason=${esc.reason}`);
-              const sonnetBuf = [];
-              const sonnetResult = await runAgenticLoop({
-                ...baseOpts, model: sonnetModel, messages: messages.slice(), ctx,
-                controller: { enqueue: (c) => sonnetBuf.push(c) },
-              });
-              for (const c of sonnetBuf) controller.enqueue(c);
+              const { buf: sonnetBuf, r: sonnetResult } = await runBuffered(sonnetModel);
               addUsage(sonnetResult.totalUsage, haikuResult.totalUsage); // bill both attempts
-              result = sonnetResult;
+              result = sonnetResult; chosenBuf = sonnetBuf;
             } else {
-              for (const c of haikuBuf) controller.enqueue(c);
-              result = haikuResult;
+              result = haikuResult; chosenBuf = haikuBuf;
             }
           } else {
-            result = await runAgenticLoop({
-              anthropic,
-              model,
-              systemPrompt,
-              messages,
-              ctx,
-              controller,
-              encoder,
-              promptCaching: config.promptCaching === true,
-              tools: activeTools,
-            });
+            const { buf, r } = await runBuffered(model);
+            result = r; chosenBuf = buf;
           }
+
+          // Reactive Sonnet→Opus escalation: a fact-validator caught the
+          // model reasoning wrong this turn (denied a real category,
+          // hallucinated a definition, or produced text wiped to a
+          // generic fallback). Re-run on Opus and prefer its answer.
+          if (opusEscalationEnabled && result.model !== opusModel) {
+            const esc = sonnetEscalationSignal({
+              alreadyTopTier: result.model === opusModel,
+              signals: result.qualitySignals || {},
+            });
+            if (esc.escalate) {
+              console.log(`[model] ${ctx.shop} ${result.model}→Opus escalation reason=${esc.reason}`);
+              const { buf: opusBuf, r: opusResult } = await runBuffered(opusModel);
+              addUsage(opusResult.totalUsage, result.totalUsage); // bill both attempts
+              result = opusResult; chosenBuf = opusBuf;
+            }
+          }
+
+          // Flush the chosen attempt to the real controller (single emit).
+          for (const c of chosenBuf) controller.enqueue(c);
 
           const lastText = result.fullResponseText || "";
           const hasChoiceButtons = /<<[^<>]+>>/.test(lastText);

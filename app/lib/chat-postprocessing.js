@@ -759,6 +759,23 @@ export function haikuEscalationSignal({ isHaiku = false, productSearchAttempted 
   return { escalate: false, reason: "" };
 }
 
+// Sonnet→Opus reactive escalation. Driven by the loop's qualitySignals
+// — set ONLY when a fact-validator caught the model reasoning wrong
+// this turn (denied a category the catalog carries, hallucinated a
+// definition, or produced text so off it got wiped to a generic
+// fallback). On those turns the customer-facing reply is a degraded
+// patch, and re-running on a stronger model usually yields a genuinely
+// correct answer. Never escalates a model that's already top-tier
+// (alreadyTopTier), and never on cosmetic fixes (dedup/reflow/clean
+// color-rewrite don't set these signals).
+export function sonnetEscalationSignal({ alreadyTopTier = false, signals = {} } = {}) {
+  if (alreadyTopTier) return { escalate: false, reason: "" };
+  if (signals.falseDenial) return { escalate: true, reason: "false-category-denial" };
+  if (signals.definitionalHallucination) return { escalate: true, reason: "definitional-hallucination" };
+  if (signals.emptyAfterStrips) return { escalate: true, reason: "empty-after-strips" };
+  return { escalate: false, reason: "" };
+}
+
 const INLINE_CHIP_RE = /<<\s*([^<>]+?)\s*>>/g;
 const SAFE_INLINE_CHIP_QUESTION_RE =
   /\b(?:who\s+are|what\s+(?:kind|type)|which\s+(?:style|styles|category)|what'?s\s+your\s+arch|any\s+specific|are\s+you\s+looking\s+for|would\s+you\s+like|do\s+you\s+want|choose|select|men'?s\s+or\s+women'?s|women'?s\s+or\s+men'?s)\b/i;

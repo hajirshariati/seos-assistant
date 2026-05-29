@@ -46,6 +46,7 @@ import {
   friendlyEnumLabel,
   isUnanswerableSuggestion,
   haikuEscalationSignal,
+  sonnetEscalationSignal,
   stripUnsafeInlineChips,
   resolverPromisedRecommendation,
   stripAvailabilityDenialSentences,
@@ -1080,6 +1081,42 @@ test("escalation-signal — Haiku searched-but-no-cards flags", () => {
 
 test("escalation-signal — healthy Haiku product turn does NOT flag", () => {
   const s = haikuEscalationSignal({ isHaiku: true, productSearchAttempted: true, poolSize: 5, textLen: 40 });
+  assert.equal(s.escalate, false);
+});
+
+// =====================================================================
+section("sonnetEscalationSignal (reactive Sonnet→Opus)");
+
+test("escalates when the false-category-denial validator fired", () => {
+  const s = sonnetEscalationSignal({ alreadyTopTier: false, signals: { falseDenial: true } });
+  assert.equal(s.escalate, true);
+  assert.equal(s.reason, "false-category-denial");
+});
+
+test("escalates on definitional hallucination", () => {
+  const s = sonnetEscalationSignal({ alreadyTopTier: false, signals: { definitionalHallucination: true } });
+  assert.equal(s.escalate, true);
+  assert.equal(s.reason, "definitional-hallucination");
+});
+
+test("escalates when the reply was wiped to a generic fallback", () => {
+  const s = sonnetEscalationSignal({ alreadyTopTier: false, signals: { emptyAfterStrips: true } });
+  assert.equal(s.escalate, true);
+  assert.equal(s.reason, "empty-after-strips");
+});
+
+test("does NOT escalate when no quality signal fired (clean turn)", () => {
+  const s = sonnetEscalationSignal({ alreadyTopTier: false, signals: {} });
+  assert.equal(s.escalate, false);
+});
+
+test("does NOT escalate when already on the top tier (Opus)", () => {
+  const s = sonnetEscalationSignal({ alreadyTopTier: true, signals: { falseDenial: true } });
+  assert.equal(s.escalate, false);
+});
+
+test("missing signals object is treated as a clean turn", () => {
+  const s = sonnetEscalationSignal({});
   assert.equal(s.escalate, false);
 });
 
