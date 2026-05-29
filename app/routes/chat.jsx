@@ -2790,6 +2790,7 @@ export const action = async ({ request }) => {
           // gender-lock (both read ctx.sessionGender). The pre-classifier
           // chip scoping above keeps the early estimate; on a true pivot
           // that only affects which chips render, not search correctness.
+          let genderAuthorityFromClassifier = false;
           {
             const reconciledGender = reconcileSessionGender(
               sessionGender,
@@ -2804,6 +2805,7 @@ export const action = async ({ request }) => {
               );
               sessionGender = reconciledGender;
               ctx.sessionGender = reconciledGender;
+              genderAuthorityFromClassifier = true;
             }
           }
 
@@ -2838,7 +2840,12 @@ export const action = async ({ request }) => {
               });
               ctx.sessionMemory = memory;
               const sessionMemory = { explicit: { ...memory.explicit } };
-              if (sessionGender && !sessionMemory.explicit.gender) {
+              // Fill from the authoritative session gender when memory
+              // has none, OR overwrite when the classifier just took
+              // authority over a stale regex value — otherwise the
+              // resolver would see the regex gender while the search
+              // uses the classifier's (split-brain).
+              if (sessionGender && (!sessionMemory.explicit.gender || genderAuthorityFromClassifier)) {
                 sessionMemory.explicit.gender = sessionGender;
               }
               const resolverState = await resolveCatalogTurn({
@@ -2855,7 +2862,9 @@ export const action = async ({ request }) => {
               });
               if (
                 sessionGender &&
-                (!ctx.sessionMemory.explicit?.gender || latestPivotedGender)
+                (!ctx.sessionMemory.explicit?.gender ||
+                  latestPivotedGender ||
+                  genderAuthorityFromClassifier)
               ) {
                 ctx.sessionMemory.explicit = {
                   ...(ctx.sessionMemory.explicit || {}),
