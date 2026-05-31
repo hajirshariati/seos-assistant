@@ -741,7 +741,7 @@ export default function Home() {
                   <Box paddingBlockStart="100">
                     <InlineStack align="start" gap="200" wrap>
                       {totalMessages > 0 && (
-                        <Badge tone="info">{totalMessages} conversations this month</Badge>
+                        <Badge tone="info">{totalMessages} AI requests · last 30 days</Badge>
                       )}
                       {showRateLimit && (
                         <Badge tone={rateLimitHits >= 10 ? "critical" : "attention"}>
@@ -808,9 +808,9 @@ export default function Home() {
             </InlineGrid>
             <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
               <MetricTile
-                label="Conversations"
+                label="AI requests"
                 value={String(totalMessages)}
-                sublabel={totalMessages > 0 ? `Avg ${formatCost(avgCostPerMessage)} / msg` : "Awaiting first chat"}
+                sublabel={totalMessages > 0 ? `Avg ${formatCost(avgCostPerMessage)} / request · last 30 days` : "Awaiting first chat"}
               />
               <MetricTile
                 label="Satisfaction"
