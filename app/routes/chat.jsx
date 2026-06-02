@@ -66,7 +66,6 @@ import {
 } from "../lib/response-contract.server";
 import {
   detectSingularIntent,
-  detectComparisonIntent,
   detectAiPivotPhrasing,
   detectRejectedCategories,
   stripRejectedCategoryChips,
@@ -1214,8 +1213,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       pool = footwearOnly.cards;
     }
   }
+  // Compare-intent flows read the single shared signal off session
+  // memory's latestTurnIntent rather than re-running a regex here.
+  const isCompareTurn = ctx?.sessionMemory?.latestTurnIntent?.reason === "compare_request";
   const latestComparisonUsesPriorCards =
-    detectComparisonIntent(ctx.latestUserMessage) &&
+    isCompareTurn &&
     /\b(?:first\s+two|1st\s+two|these|those|them|ones|both)\b/i.test(String(ctx.latestUserMessage || ""));
   if (
     latestComparisonUsesPriorCards &&
@@ -1709,7 +1711,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  if (pool.length >= 2 && ctx.latestUserMessage && detectComparisonIntent(ctx.latestUserMessage)) {
+  if (pool.length >= 2 && ctx?.sessionMemory?.latestTurnIntent?.reason === "compare_request") {
     const comparison = buildCodeOwnedComparisonText({
       text: fullResponseText,
       cards: pool,
@@ -1737,7 +1739,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   }
 
   if (pool.length > 0 && fullResponseText) {
-    if (!detectComparisonIntent(ctx.latestUserMessage)) {
+    if (ctx?.sessionMemory?.latestTurnIntent?.reason !== "compare_request") {
       const listing = buildCodeOwnedProductListingText({
         text: fullResponseText,
         cards: pool,
@@ -2026,7 +2028,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     const latestMsgForIntent = String(ctx.latestUserMessage || "");
     let singularIntent = detectSingularIntent(latestMsgForIntent);
 
-    if (detectComparisonIntent(latestMsgForIntent)) {
+    if (ctx?.sessionMemory?.latestTurnIntent?.reason === "compare_request") {
       console.log(`[chat] singular-suppress: comparison phrasing in latest message — keeping plural pool`);
     }
 

@@ -65,8 +65,15 @@ const YES_NO_INVERTED_RE =
   /^\s*(?:so\s+|wait\s*,?\s*|actually\s*,?\s*|hmm\s*,?\s*|hey\s*,?\s*)?(?:is|are|isn'?t|aren'?t|does|do|doesn'?t|don'?t|will|won'?t|can|can'?t|did|didn'?t|was|wasn'?t|were|weren'?t)\s+[A-Za-z][\w'-]{1,30}\b[^?]{0,120}\?\s*$/i;
 const YES_NO_NON_INVERTED_RE =
   /^\s*(?:so\s+|wait\s*,?\s*|actually\s*,?\s*|hmm\s*,?\s*|hey\s*,?\s*)?[A-Za-z][\w'-]{1,30}\s+(?:is|are|isn'?t|aren'?t|was|wasn'?t|were|weren'?t|will\s+be|won'?t\s+be)\s+[^?]{0,120}\?\s*$/i;
-const COMPARE_RE =
-  /\b(?:compare|which\s+(?:is|one|of)|difference\s+between|tell\s+me\s+the\s+difference|the\s+first\s+two|the\s+top\s+two)\b/i;
+// Compare-request vocabulary. Single source of truth — also
+// imported by chat-postprocessing's detectSingularIntent so the
+// codebase has ONE definition of "this turn is a comparison".
+// Covers explicit compare verbs (compare/comparison), shorthand
+// (vs/versus/side-by-side), "which is better / which one is better",
+// "difference between" / "between X and Y", and back-references to
+// shown cards ("the first two / the top two").
+export const COMPARE_RE =
+  /\b(?:compare|comparison|vs\.?|versus|difference\s+between|better\s+between|between\s+[a-z0-9'-]+\s+(?:and|or)\s+[a-z0-9'-]+|which\s+(?:is|one\s+is)\s+(?:better|worse)|side[- ]by[- ]side|tell\s+me\s+the\s+difference|the\s+(?:first|top)\s+two|which\s+(?:is|one|of))\b/i;
 
 // Refinement vocabulary — customer is narrowing the existing ask
 // rather than starting over.

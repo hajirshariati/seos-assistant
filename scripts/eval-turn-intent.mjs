@@ -317,6 +317,49 @@ await test("T19 — 'actually for my husband' is gender pivot; drops category/co
 });
 
 // ---------------------------------------------------------------------------
+// Compare vocabulary — turn-intent's COMPARE_RE is the single shared
+// rule (chat-postprocessing's detectComparisonIntent + detectSingularIntent
+// negation both delegate to it). Verify the consolidated vocabulary covers
+// what the old per-file regexes covered.
+// ---------------------------------------------------------------------------
+const compareInputs = [
+  "compare the L1 and the L2",
+  "L1 vs L2",
+  "L1 versus L2",
+  "what's the difference between L1 and L2",
+  "show me a side-by-side comparison",
+  "which is better, X or Y",
+  "compare the first two",
+  "the top two",
+];
+for (const msg of compareInputs) {
+  await test(`T20-compare — "${msg}" → reason=compare_request`, () => {
+    const intent = resolveTurnIntent({
+      latestUserText: msg,
+      previousScope: { gender: "women", category: "sandals" },
+    });
+    assert.equal(intent.label, L.META, `expected META label; got ${intent.label}`);
+    assert.equal(intent.reason, "compare_request", `expected compare_request; got ${intent.reason}`);
+  });
+}
+
+await test("T20-compare — 'tell me about the L1' is NOT compare", () => {
+  const intent = resolveTurnIntent({
+    latestUserText: "tell me about the L1",
+    previousScope: { gender: "women", category: "sandals" },
+  });
+  assert.notEqual(intent.reason, "compare_request");
+});
+
+await test("T20-compare — 'show me sandals' is NOT compare", () => {
+  const intent = resolveTurnIntent({
+    latestUserText: "show me sandals",
+    previousScope: { gender: "women" },
+  });
+  assert.notEqual(intent.reason, "compare_request");
+});
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);

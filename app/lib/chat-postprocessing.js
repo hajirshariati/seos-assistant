@@ -32,25 +32,27 @@
 //     phrases.
 //   - 'best' / 'cheapest' / 'most X' alone DO match (clear singular
 //     superlative — "what's the best" wants ONE answer).
+import { COMPARE_RE } from "./turn-intent.server.js";
+
 export const SINGULAR_INTENT_RE = /\btell me (?:more |a (?:bit|little) more )?about\b|\bmore (?:info|information|details) (?:on|about)\b|\b(?:what|how) about\s+(?:this|that|the\s+\w+\s+one\b)|\bhow is\b|\bis the\b|\bdoes (?:the|this|that)\b|\b(?:this|that) one\b|\bthe (?:first|second|third|last|cheapest|cheaper|priciest|most expensive|best|top|finest|red|blue|black|white|same)\s+(?:one\b|[a-z'-]+s?\b)|\bwhich\s+[a-z'-]+\s+(?:is|are)\s+(?:best|most|finest|top|the\s+(?:best|most))\b|\bwhat\s*'?s\s+(?:the\s+)?(?:best|cheapest|priciest|most expensive|finest|top|most\s+[a-z'-]+)\b/i;
 
-// Comparison intent — customer wants to see two things side-by-side.
-// Overrides singular intent (we want both cards even if phrasing is
-// otherwise singular-shaped).
-export const COMPARISON_INTENT_RE = /\b(?:compare|comparison|vs\.?|versus|difference between|better between|between [a-z0-9'-]+ (?:and|or) [a-z0-9'-]+|which (?:is|one is) (?:better|worse)|side[- ]by[- ]side)\b/i;
+// Comparison detection — single source of truth lives in
+// turn-intent.server.js (`COMPARE_RE`). The helper below and
+// detectSingularIntent's negation both delegate to it so the
+// codebase has ONE compare-detection rule.
 
 export function detectSingularIntent(text) {
   if (typeof text !== "string" || !text) return false;
   if (!SINGULAR_INTENT_RE.test(text)) return false;
   // Comparison overrides singular: 'which is better, X or Y' is plural
   // even though it matches singular phrasing.
-  if (COMPARISON_INTENT_RE.test(text)) return false;
+  if (COMPARE_RE.test(text)) return false;
   return true;
 }
 
 export function detectComparisonIntent(text) {
   if (typeof text !== "string" || !text) return false;
-  return COMPARISON_INTENT_RE.test(text);
+  return COMPARE_RE.test(text);
 }
 
 // =====================================================================
