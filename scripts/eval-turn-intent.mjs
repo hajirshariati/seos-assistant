@@ -401,6 +401,82 @@ await test("T22 — dress useCase alone (no new gender) + carried sandals → dr
 });
 
 // ---------------------------------------------------------------------------
+// 2026-06-03 live failure: stale color carried into a fresh claim-driven
+// query. New rule 9c — "claim refresh" — drops the stale color when a
+// new condition or use-case arrives without an explicit color mention
+// AND without "same color" phrasing.
+// ---------------------------------------------------------------------------
+
+await test("T23 — Turn1 pink+sandals+bunions → Turn2 plantar fasciitis sandals: color drops", () => {
+  // The exact live shape from the user's failure report.
+  const intent = resolveTurnIntent({
+    latestUserText: "I have plantar fasciitis, what women's sandals do you recommend?",
+    previousScope: { gender: "women", category: "sandals", color: "pink", condition: "bunions" },
+  });
+  assert.equal(intent.reason, "claim_refresh_condition",
+    `expected claim_refresh_condition; got reason=${intent.reason} drops=${JSON.stringify(intent.staleKeysToDrop)}`);
+  assert.ok(intent.staleKeysToDrop.includes("color"),
+    `expected color in staleKeysToDrop; got ${JSON.stringify(intent.staleKeysToDrop)}`);
+});
+
+await test("T24 — Turn1 pink sandals → Turn2 'do you have those for plantar fasciitis?': color drops, category may stay", () => {
+  const intent = resolveTurnIntent({
+    latestUserText: "do you have those for plantar fasciitis?",
+    previousScope: { category: "sandals", color: "pink" },
+  });
+  assert.ok(intent.staleKeysToDrop.includes("color"),
+    `expected color drop on fresh-claim turn without color mention; got ${JSON.stringify(intent.staleKeysToDrop)}`);
+  // Category is NOT explicitly dropped — the customer is asking about
+  // the same shopping subject, just with a fresh claim. Memory
+  // continues to carry category=sandals via the standard refine
+  // path.
+  assert.equal(intent.staleKeysToDrop.includes("category"), false,
+    `category should NOT drop; got ${JSON.stringify(intent.staleKeysToDrop)}`);
+});
+
+await test("T25 — Turn1 women's sandals → Turn2 'in pink': color is set, category stays (no drop rule fires)", () => {
+  const intent = resolveTurnIntent({
+    latestUserText: "in pink",
+    previousScope: { gender: "women", category: "sandals" },
+  });
+  // Standard refine path — no drops. extracted.color="pink" applies on
+  // top of category=sandals via SCALAR_KEYS in session-memory.
+  assert.equal(intent.staleKeysToDrop.length, 0,
+    `expected no drops on color-refine; got ${JSON.stringify(intent.staleKeysToDrop)}`);
+  // Reason isn't claim_refresh — the color was explicitly named.
+  assert.notEqual(intent.reason, "claim_refresh_condition");
+  assert.notEqual(intent.reason, "claim_refresh_usecase");
+});
+
+await test("T26 — Turn1 pink sandals → Turn2 'same color but for plantar fasciitis': color stays", () => {
+  // "same color" without naming a specific color → SAME_COLOR_RE
+  // matches → claim_refresh does NOT fire → color stays.
+  const intent = resolveTurnIntent({
+    latestUserText: "same color but for plantar fasciitis",
+    previousScope: { category: "sandals", color: "pink" },
+  });
+  assert.equal(intent.staleKeysToDrop.includes("color"), false,
+    `same-color phrasing must keep color; got ${JSON.stringify(intent.staleKeysToDrop)}`);
+});
+
+await test("T27 — useCase change without color mention also triggers claim_refresh", () => {
+  // Turn1 athletic sneakers in red → Turn2 "for hiking"
+  // useCase changes (athletic → hiking via usecase-category-conflict),
+  // but here we cover the simpler case where no category conflict
+  // exists. e.g. Turn1: red boots for walking. Turn2: for hiking.
+  const intent = resolveTurnIntent({
+    latestUserText: "for hiking",
+    previousScope: { category: "boots", color: "red", useCase: "walking" },
+    extractedUserConstraints: { useCase: "hiking" },
+  });
+  // hiking + boots isn't a conflict (boots are fine for hiking), so
+  // rule 8 doesn't fire. Rule 9c should drop the stale color.
+  assert.equal(intent.reason, "claim_refresh_usecase",
+    `expected claim_refresh_usecase; got reason=${intent.reason}`);
+  assert.ok(intent.staleKeysToDrop.includes("color"));
+});
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);

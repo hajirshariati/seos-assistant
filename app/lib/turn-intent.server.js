@@ -56,6 +56,15 @@ const BROAD_RESET_RE =
 // the assistant already showed. Treat as continue.
 const PRONOUN_BACK_REF_RE = /\b(?:all|any|both)\s+of\s+(?:them|those|these|it)\b/i;
 
+// Generic "same color" phrasing — used to KEEP a prior color when
+// the customer's new turn names a new claim/use-case but explicitly
+// asks for the same colorway. A specific color word in the message
+// (e.g. "still pink", "in pink") sets extracted.color through the
+// lex matcher and bypasses the claim-refresh drop without needing
+// this regex; this is only for the case where the customer says
+// "same color" without naming one.
+const SAME_COLOR_RE = /\b(?:same|those|that)\s+colou?rs?\b|\bstill\s+(?:in\s+)?(?:the\s+)?same\s+colou?rs?\b/i;
+
 // Meta / fact-question shapes. Customer is asking a yes/no factual
 // question or expressing frustration / calling out the bot. Don't
 // touch scope; downstream listing template should not run.
@@ -290,10 +299,16 @@ export function resolveTurnIntent({
   }
   if (YES_NO_INVERTED_RE.test(text) || YES_NO_NON_INVERTED_RE.test(text)) {
     // Yes/no question — meta UNLESS the customer also named a NEW
-    // search constraint (color/category) that should advance scope.
+    // search constraint (color/category/condition/useCase) that
+    // should advance scope. condition/useCase added 2026-06-03 to
+    // catch the live shape "do you have those for plantar fasciitis?"
+    // where a yes/no question carries a fresh claim — the resolver
+    // must let downstream rules (claim_refresh) clear stale color.
     const namesNewSearchTerm =
       (extracted.category && extracted.category !== normStr(prev.category)) ||
-      (extracted.color && extracted.color !== normStr(prev.color));
+      (extracted.color && extracted.color !== normStr(prev.color)) ||
+      (extracted.condition && extracted.condition !== normStr(prev.condition)) ||
+      (extracted.useCase && extracted.useCase !== normStr(prev.useCase));
     if (!namesNewSearchTerm) {
       return {
         label: LABEL.META,
@@ -475,6 +490,45 @@ export function resolveTurnIntent({
           ? "refine_size_width"
           : "refine_more_like",
       staleKeysToDrop: [],
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // 9c. Claim refresh: customer named a new condition (or new use-
+  //     case) this turn AND did NOT mention a color AND did NOT use
+  //     "same color" / "same colour" phrasing. The customer is
+  //     starting a fresh claim-driven query within the same
+  //     gender/category scope — the prior color was a stylistic
+  //     constraint on the OLD query and should not ride into the
+  //     new one.
+  //
+  //     Live 2026-06-02 failure: turn 1 = "pink sandals with arch
+  //     support and bunions", turn 2 = "I have plantar fasciitis,
+  //     what women's sandals do you recommend?". Without this rule
+  //     the resolver fell through to rule 11's "restated_category"
+  //     and color=pink rode through; the search ran
+  //     "plantar_fasciitis pink sandals" against filters.color=pink.
+  //
+  //     Explicit color this turn (e.g. "in pink", "still pink") sets
+  //     extracted.color via the lex matcher and bypasses this rule.
+  //     Generic "same color"/"same colour" phrasing keeps the prior
+  //     color via the SAME_COLOR_RE check.
+  const prevCondition = normStr(prev.condition);
+  const newCondition = normStr(extracted.condition);
+  const prevUseCaseScalar = normStr(prev.useCase);
+  const conditionChanged = newCondition && newCondition !== prevCondition;
+  const useCaseChanged = newUseCase && newUseCase !== prevUseCaseScalar;
+  if (
+    (conditionChanged || useCaseChanged) &&
+    !extracted.color &&
+    prev.color &&
+    !SAME_COLOR_RE.test(text)
+  ) {
+    return {
+      label: LABEL.REFINE,
+      confidence: 0.85,
+      reason: conditionChanged ? "claim_refresh_condition" : "claim_refresh_usecase",
+      staleKeysToDrop: ["color"],
     };
   }
 
