@@ -687,6 +687,16 @@ const SUGG_TECH_NAME_RE = /(?:[™®]|\b[A-Z][A-Za-z]*(?:[A-Z][A-Za-z]+){1,}\b)/
 // to the live offer, so suggesting the question sets up a non-answer.
 const SUGG_DISCOUNT_MECHANICS_RE = /\b(?:govx|gov\s*x|discount|promo(?:tion)?|coupon|code|loyalty|rewards?|points?)\b/i;
 const SUGG_MECHANICS_QUALIFIER_RE = /\b(?:categor|specific|which|each|certain|appl(?:y|ies|ied)|stack|combine|maximi[sz]e|best way)\b/i;
+
+// Attribute vocabulary recognized in customer suggestions. Each key
+// is the attribute name as the chat/resolver knows it; the regex
+// captures phrasings the AI typically generates when asking about
+// it. Used by the catalog-attribute existence check below.
+const SUGG_ATTRIBUTE_PATTERNS = {
+  color: /\b(?:color|colors|colour|colours|shade|shades|in\s+(?:red|blue|black|white|pink|navy|tan|brown|gray|grey|beige|olive|cream|nude|gold|silver|bronze|burgundy|cognac|charcoal|ivory|metallic))\b/i,
+  size: /\b(?:size|sizes|sized|sizing)\b/i,
+  width: /\b(?:width|widths|wide|narrow|extra[\s-]wide|d\s+width|2e|4e|ee|eee)\b/i,
+};
 const SUGG_TOKEN_STOPWORDS = new Set([
   "can", "you", "show", "me", "do", "does", "have", "any", "with", "for", "the", "these",
   "those", "ones", "options", "option", "style", "styles", "different", "more", "other",
@@ -701,7 +711,65 @@ function suggestionTokens(text) {
     .filter((token) => token.length >= 4 && !SUGG_TOKEN_STOPWORDS.has(token));
 }
 
-export function isUnanswerableSuggestion(question, { lastText = "", latestUserMessage = "" } = {}) {
+// Common English words that start Title-Case at the beginning of a
+// sentence or after a punctuation break. When one of these precedes
+// a candidate noun, treat the noun as a standalone reference, not a
+// brand-name modifier.
+const SUGG_NON_BRAND_TITLE_STARTERS = new Set([
+  "a", "an", "the", "other", "some", "any", "what", "which", "show",
+  "can", "do", "does", "are", "is", "how", "when", "where", "i",
+  "you", "your", "my", "these", "those", "this", "that", "see",
+  "browse", "or", "and", "for", "with", "in", "of", "on",
+]);
+
+// Extract every catalog-category mention from a suggestion, given
+// the list of categories the shop actually carries. Returns an array
+// of canonical category keys (lowercased).
+//
+// Matching is case-insensitive, whole-word, and tolerant of
+// singular/plural (the category "Orthotics" matches both "orthotic"
+// and "orthotics" in the suggestion).
+//
+// A candidate match is REJECTED when it's preceded by a Title-Case
+// word that isn't a common English word — that's the brand-name
+// modifier pattern ("Maui Orthotic Women's Flips" or "Aetrex
+// Orthotic System"). The same noun preceded by "or", "the", "any",
+// etc. counts as a category reference.
+function extractCategoryMentions(question, catalogCategories) {
+  const q = String(question || "");
+  if (!q || !Array.isArray(catalogCategories) || catalogCategories.length === 0) return [];
+
+  const stemToKey = new Map();
+  for (const cat of catalogCategories) {
+    const c = String(cat || "").trim();
+    if (!c) continue;
+    const lower = c.toLowerCase();
+    const stem = lower.replace(/s$/, "");
+    if (stem) stemToKey.set(stem, lower);
+  }
+  if (stemToKey.size === 0) return [];
+
+  const tokens = q.split(/\s+/);
+  const found = new Set();
+  for (let i = 0; i < tokens.length; i++) {
+    const cleaned = tokens[i].replace(/[.,!?;:'"()]/g, "");
+    if (!cleaned) continue;
+    const lower = cleaned.toLowerCase();
+    const stem = lower.replace(/s$/, "");
+    if (!stemToKey.has(stem)) continue;
+
+    if (i > 0) {
+      const prev = tokens[i - 1].replace(/[.,!?;:'"()]/g, "");
+      if (/^[A-Z][a-z]+/.test(prev) && !SUGG_NON_BRAND_TITLE_STARTERS.has(prev.toLowerCase())) {
+        continue;
+      }
+    }
+    found.add(stemToKey.get(stem));
+  }
+  return [...found];
+}
+
+export function isUnanswerableSuggestion(question, { lastText = "", latestUserMessage = "", catalogCategories = [], categoryAttributeCoverage = null } = {}) {
   const q = String(question || "");
   if (!q.trim()) return { unanswerable: true, reason: "empty" };
   const lastLower = String(lastText || "").toLowerCase();
@@ -757,6 +825,40 @@ export function isUnanswerableSuggestion(question, { lastText = "", latestUserMe
   if (SUGG_DISCOUNT_MECHANICS_RE.test(q) && SUGG_MECHANICS_QUALIFIER_RE.test(q)) {
     return { unanswerable: true, reason: "discount mechanics the bot can't verify" };
   }
+
+  // Catalog-attribute existence check — the generic answer to "would
+  // the bot have data to answer this?" The validator already trusts
+  // catalogCategories as the allow-list of valid product types. This
+  // extends that: for each category mentioned in the suggestion, if
+  // the suggestion also asks about a specific attribute (color,
+  // size, width), the catalog must have at least one product in that
+  // category WITH that attribute set. If zero coverage, the bot can
+  // only deny or hallucinate — drop the suggestion.
+  //
+  // Concrete failure this prevents (production trace): catalog has an
+  // "Orthotics" category, but every product in it is an insole with
+  // no color metafield. Haiku generated "Can I see other Sandals or
+  // Orthotics in those colors?" The allow-list said Orthotics is
+  // valid, the bot would have failed on the color half. Now the
+  // coverage map says orthotics.color = false, and this rule fires.
+  if (categoryAttributeCoverage && categoryAttributeCoverage.size > 0) {
+    const mentionedCats = extractCategoryMentions(q, catalogCategories);
+    if (mentionedCats.length > 0) {
+      for (const [attr, pattern] of Object.entries(SUGG_ATTRIBUTE_PATTERNS)) {
+        if (!pattern.test(q)) continue;
+        for (const cat of mentionedCats) {
+          const cov = categoryAttributeCoverage.get(cat);
+          if (cov && cov[attr] === false) {
+            return {
+              unanswerable: true,
+              reason: `catalog category "${cat}" has no ${attr} attribute on any product`,
+            };
+          }
+        }
+      }
+    }
+  }
+
   return { unanswerable: false, reason: "" };
 }
 

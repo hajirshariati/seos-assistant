@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { authenticate } from "../shopify.server";
 import { getShopConfig, getKnowledgeFilesWithContent, incrementRateLimitHits } from "../models/ShopConfig.server";
 import { getAttributeMappings } from "../models/AttributeMapping.server";
-import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability } from "../models/Product.server";
+import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability, getCategoryAttributeCoverage } from "../models/Product.server";
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
@@ -2461,12 +2461,13 @@ export const action = async ({ request }) => {
       }
     }
 
-    let [knowledge, attrMappings, catalogProductTypes, allCatalogCategories, categoryGenderMap, activeCampaigns] = await Promise.all([
+    let [knowledge, attrMappings, catalogProductTypes, allCatalogCategories, categoryGenderMap, categoryAttributeCoverage, activeCampaigns] = await Promise.all([
       getKnowledgeFilesWithContent(session.shop),
       getAttributeMappings(session.shop),
       getCatalogCategories(session.shop, { gender: sessionGender }),
       getAllCatalogCategories(session.shop),
       getCategoryGenderAvailability(session.shop),
+      getCategoryAttributeCoverage(session.shop),
       getActiveCampaigns(session.shop),
     ]);
 
@@ -3238,6 +3239,8 @@ export const action = async ({ request }) => {
                   const verdict = isUnanswerableSuggestion(q, {
                     lastText,
                     latestUserMessage: String(body.message || ""),
+                    catalogCategories: allCatalogCategories,
+                    categoryAttributeCoverage,
                   });
                   if (verdict.unanswerable) {
                     dropped.push({ q, reason: verdict.reason });

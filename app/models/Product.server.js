@@ -507,3 +507,66 @@ export async function getCategoryGenderAvailability(shop) {
   }
   return out;
 }
+
+// Per-category attribute coverage. For each catalog category, reports
+// whether the shop has at least one product in that category with a
+// non-empty value for each tracked attribute (color, size, width).
+// Used by the suggestion validator to drop follow-ups that ask for an
+// attribute the category doesn't carry (e.g. "orthotics in red" when
+// every orthotic in the catalog has no color metafield).
+//
+// Returns a Map<categoryKey, { color, size, width }> where each
+// attribute is a boolean. Categories not present in the map are
+// implicitly fully covered (fail-open: don't block legit suggestions
+// when we have no data).
+//
+// The check is intentionally generous — it asks "does ANY product in
+// this category have this attribute set?" because the chat can search
+// within any category and surface a card. The denial case ("Orthotics
+// has zero products with color") is the unambiguous one.
+export async function getCategoryAttributeCoverage(shop) {
+  const rows = await prisma.product.findMany({
+    where: {
+      shop,
+      OR: [
+        { status: null },
+        { status: { notIn: ["DRAFT", "draft", "ARCHIVED", "archived"] } },
+      ],
+    },
+    select: { productType: true, attributesJson: true },
+  });
+
+  const ATTRS = ["color", "size", "width"];
+  const valuePresent = (v) => {
+    if (v == null) return false;
+    if (Array.isArray(v)) return v.some((x) => typeof x === "string" && x.trim().length > 0);
+    if (typeof v === "string") return v.trim().length > 0;
+    return false;
+  };
+
+  const map = new Map();
+  for (const r of rows) {
+    const attrs = r.attributesJson;
+    const cats = [];
+    if (r.productType) cats.push(String(r.productType).trim());
+    for (const v of extractCategoryValues(attrs)) cats.push(v);
+
+    const has = {};
+    for (const a of ATTRS) has[a] = valuePresent(getAttrCaseInsensitive(attrs, a));
+
+    for (const raw of cats) {
+      const trimmed = String(raw || "").trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) {
+        const init = {};
+        for (const a of ATTRS) init[a] = false;
+        map.set(key, init);
+      }
+      const entry = map.get(key);
+      for (const a of ATTRS) if (has[a]) entry[a] = true;
+    }
+  }
+
+  return map;
+}
