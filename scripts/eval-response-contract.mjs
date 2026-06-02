@@ -13,6 +13,12 @@ import {
   extractGenericCTA,
   verifyClaimsAgainstCards,
 } from "../app/lib/response-contract.server.js";
+import {
+  buildProductClaimFacts,
+  attachClaimFactsToCard,
+  lookupSkuToCanonical,
+  recommenderProductToCanonical,
+} from "../app/lib/product-claim-facts.server.js";
 
 let passed = 0;
 let failed = 0;
@@ -1120,6 +1126,255 @@ test("R59 — buildCodeOwnedProductListingText('', pool) produces a non-empty li
   assert.ok(out.text && out.text.trim().length > 0,
     `expected non-empty listing line; got text="${out.text}" reason=${out.reason}`);
   assert.equal(out.changed, true);
+});
+
+// ---------------------------------------------------------------------------
+// Canonical ProductClaimFacts builder — single source of truth for the
+// verifier-side per-card facts. Every emit path funnels through this.
+// ---------------------------------------------------------------------------
+
+const aetrexShop = { shop: "aetrex.myshopify.com" };
+
+// Helper: a Shopify-shaped product fixture as it would arrive on
+// search_products / get_product_details / find_similar_products /
+// recommender. lookup_sku uses different keys — see lookupSkuToCanonical.
+const product = ({
+  title = "Maui Charcoal",
+  handle = "maui-charcoal",
+  productType = "Sandals",
+  description = "Aetrex Maui women's sandals with Built-In Arch Support.",
+  descriptionSnippet = "",
+  tags = ["Bunions", "Plantar Fasciitis"],
+  attributes = {
+    category: "Sandals",
+    gender: "Women",
+    activity: ["Walking", "Beach"],
+    footbed: "Memory Foam",
+    badge: "Best Seller",
+  },
+  price = "129.95",
+  compareAtPrice = null,
+} = {}) => ({
+  title, handle, productType, description, descriptionSnippet,
+  tags, attributes, price, compareAtPrice,
+});
+
+test("R60 — buildProductClaimFacts returns value+source+evidence per fact", () => {
+  const facts = buildProductClaimFacts(product(), aetrexShop);
+  assert.deepEqual(facts.conditionTags.value.sort(), ["bunions", "plantar_fasciitis"]);
+  assert.equal(facts.conditionTags.source, "merchant_tags");
+  assert.deepEqual(facts.useCaseTags.value.sort(), ["beach", "walking"]);
+  assert.equal(facts.useCaseTags.source, "activity_attribute");
+  assert.equal(facts.archSupport.value, true);
+  assert.equal(facts.archSupport.source, "title_description_scan");
+  assert.equal(facts.footbed.value, "memory foam");
+  assert.equal(facts.footbed.source, "attribute:footbed");
+  assert.equal(facts.badge.value, "best seller");
+  assert.equal(facts.category.value, "sandals");
+});
+
+test("R61 — Aetrex brand rule: footwear category proves archSupport when description omits it", () => {
+  // Card with NO "arch support" in description and NO footbed attribute —
+  // legacy logic would mark _archSupport=false. Brand rule (Aetrex shop +
+  // footwear category) must promote it to true.
+  const p = product({
+    description: "Comfortable sandal with cushioned sole.",
+    attributes: { category: "Sandals", gender: "Women", activity: ["Walking"] },
+  });
+  const facts = buildProductClaimFacts(p, aetrexShop);
+  assert.equal(facts.archSupport.value, true);
+  assert.equal(facts.archSupport.source, "brand_rule_footwear_category");
+  assert.equal(facts.archSupport.evidence.category, "sandals");
+});
+
+test("R62 — Aetrex brand rule: Wedges Heels category proves archSupport", () => {
+  // Spec callout: "For Aetrex, footwear categories including Wedges Heels
+  // should prove archSupport=true from a global/category rule".
+  const p = product({
+    title: "Aetrex Finley Heels",
+    handle: "finley",
+    description: "Stylish wedge heel.",
+    productType: "Wedges Heels",
+    attributes: { category: "Wedges Heels", gender: "Women" },
+  });
+  const facts = buildProductClaimFacts(p, aetrexShop);
+  assert.equal(facts.archSupport.value, true);
+  assert.equal(facts.archSupport.source, "brand_rule_footwear_category");
+  assert.equal(facts.archSupport.evidence.category, "wedges-heels");
+});
+
+test("R63 — non-Aetrex shop: brand rule does NOT fire (no inheritance)", () => {
+  // Spec: brand rule must be opt-in per shop. A non-Aetrex shop's
+  // sandal with no description proof must NOT be promoted to archSupport=true.
+  const p = product({
+    description: "Comfortable sandal.",
+    attributes: { category: "Sandals", gender: "Women" },
+  });
+  const facts = buildProductClaimFacts(p, { shop: "other-brand.myshopify.com" });
+  assert.equal(facts.archSupport.value, false);
+  assert.equal(facts.archSupport.source, "none");
+});
+
+test("R64 — orthotics category does NOT inherit footwear brand archSupport", () => {
+  // The product IS an orthotic insole — not a shoe. Brand rule excludes it.
+  const p = product({
+    title: "L1 Orthotic",
+    handle: "l1-orthotic",
+    description: "Premium orthotic insole.",
+    productType: "Orthotics",
+    attributes: { category: "Orthotics" },
+  });
+  const facts = buildProductClaimFacts(p, aetrexShop);
+  assert.equal(facts.archSupport.value, false);
+  assert.equal(facts.archSupport.source, "brand_rule_non_footwear_category");
+});
+
+test("R65 — helps_with attribute contributes condition tags alongside tags array", () => {
+  const p = product({
+    tags: ["Bunions"],
+    attributes: {
+      category: "Sandals",
+      gender: "Women",
+      helps_with: ["Plantar Fasciitis", "Heel Pain"],
+    },
+  });
+  const facts = buildProductClaimFacts(p, aetrexShop);
+  assert.ok(facts.conditionTags.value.includes("bunions"));
+  assert.ok(facts.conditionTags.value.includes("plantar_fasciitis"));
+  assert.ok(facts.conditionTags.value.includes("heel_pain"));
+  assert.equal(facts.conditionTags.source, "merchant_tags+helps_with");
+});
+
+// ---------------------------------------------------------------------------
+// Path parity — same product through every emit path produces identical facts.
+// The original bug class: lookup_sku and recommender paths used different
+// shapes than search_products, so the verifier saw inconsistent fact bags
+// for the same product. This test locks in the invariant.
+// ---------------------------------------------------------------------------
+
+test("R66 — path parity: shape adapters produce identical canonical input across paths", () => {
+  // The actual invariant: same product, regardless of which tool
+  // result shape it arrived in, must produce identical claim facts.
+  // We assert this at the adapter level (no chat-tools.server.js
+  // import — that pulls prisma transitively which isn't available
+  // in an offline node script). Each adapter projects its shape
+  // onto the canonical product, and buildProductClaimFacts then
+  // produces the verifier fact bag. If the adapters drift, this
+  // test catches it before the verifier's missing-proof log does.
+  const shared = product({
+    title: "Maui Charcoal",
+    handle: "maui-charcoal-am1234",
+    description: "Aetrex Maui sandal with Built-In Arch Support.",
+    tags: ["Bunions"],
+    attributes: {
+      category: "Sandals",
+      gender: "Women",
+      activity: ["Walking", "Beach"],
+      footbed: "Memory Foam",
+    },
+    price: "129.95",
+    compareAtPrice: null,
+  });
+
+  // search_products / find_similar_products / get_product_details
+  // arrive in the canonical shape directly.
+  const searchCanonical = shared;
+  // find_similar_products differs only in that descriptionSnippet
+  // is forced to "" at the card emit layer — mirror that here.
+  const similarCanonical = { ...shared, descriptionSnippet: "" };
+  // get_product_details is the canonical shape too.
+  const detailsCanonical = shared;
+  // lookup_sku is non-canonical → adapted.
+  const lookupCanonical = lookupSkuToCanonical({
+    productHandle: shared.handle,
+    productTitle: shared.title,
+    productType: shared.productType,
+    productDescription: shared.description,
+    productTags: shared.tags,
+    productAttributes: shared.attributes,
+    price: shared.price,
+    compareAtPrice: shared.compareAtPrice,
+  });
+  // recommender result shape → adapted.
+  const recoCanonical = recommenderProductToCanonical(shared);
+
+  const ctx = { shop: "aetrex.myshopify.com" };
+  const paths = {
+    search:  attachClaimFactsToCard(searchCanonical,  ctx),
+    similar: attachClaimFactsToCard(similarCanonical, ctx),
+    details: attachClaimFactsToCard(detailsCanonical, ctx),
+    lookup:  attachClaimFactsToCard(lookupCanonical,  ctx),
+    reco:    attachClaimFactsToCard(recoCanonical,    ctx),
+  };
+  const pick = (c) => ({
+    _conditionTags: [...(c._conditionTags || [])].sort(),
+    _useCaseTags: [...(c._useCaseTags || [])].sort(),
+    _onSale: c._onSale,
+    _removableInsole: c._removableInsole,
+    _archSupport: c._archSupport,
+    _waterFriendly: c._waterFriendly,
+    _footbed: c._footbed,
+    _badge: c._badge,
+    _productLine: c._productLine,
+  });
+  const ref = pick(paths.search);
+  for (const [name, c] of Object.entries(paths)) {
+    assert.deepEqual(pick(c), ref, `path ${name} diverges from search fact bag`);
+  }
+  // Sanity: every path got the brand-rule-driven archSupport=true
+  // even when the canonical shape's description was sparse.
+  assert.equal(ref._archSupport, true);
+});
+
+test("R67 — recommender adapter carries claim facts (previously missing entirely)", () => {
+  const canonical = recommenderProductToCanonical(product({
+    description: "Aetrex Maui sandal with Built-In Arch Support.",
+  }));
+  const card = attachClaimFactsToCard(canonical, { shop: "aetrex.myshopify.com" });
+  assert.ok(card._claimFacts, "recommender adapter must produce _claimFacts");
+  assert.equal(card._archSupport, true);
+  assert.ok(Array.isArray(card._conditionTags));
+});
+
+test("R68 — lookupSkuToCanonical adapter shape lines up with builder expectations", () => {
+  const lookupEntry = {
+    productHandle: "maui",
+    productTitle: "Maui",
+    productType: "Sandals",
+    productDescription: "Aetrex Maui sandal.",
+    productTags: ["Bunions"],
+    productAttributes: { category: "Sandals", activity: ["Walking"] },
+    price: "100.00",
+    compareAtPrice: "150.00",
+  };
+  const canonical = lookupSkuToCanonical(lookupEntry);
+  assert.equal(canonical.title, "Maui");
+  assert.equal(canonical.handle, "maui");
+  assert.equal(canonical.description, "Aetrex Maui sandal.");
+  assert.deepEqual(canonical.tags, ["Bunions"]);
+  assert.deepEqual(canonical.attributes, lookupEntry.productAttributes);
+  const facts = buildProductClaimFacts(canonical, aetrexShop);
+  assert.deepEqual(facts.conditionTags.value, ["bunions"]);
+  assert.equal(facts.onSale.value, true);
+});
+
+test("R69 — recommenderProductToCanonical adapter preserves shape", () => {
+  const p = product();
+  const canonical = recommenderProductToCanonical(p);
+  // Identity-ish: the recommender shape IS already canonical, so the
+  // adapter just normalizes optional fields.
+  assert.equal(canonical.title, p.title);
+  assert.equal(canonical.handle, p.handle);
+  assert.deepEqual(canonical.tags, p.tags);
+  assert.deepEqual(canonical.attributes, p.attributes);
+});
+
+test("R70 — attachClaimFactsToCard projects facts onto legacy _field keys", () => {
+  const card = attachClaimFactsToCard(product(), aetrexShop);
+  assert.ok(Array.isArray(card._conditionTags));
+  assert.equal(typeof card._archSupport, "boolean");
+  assert.ok(card._claimFacts, "must also expose the canonical fact bag");
+  assert.equal(card._claimFacts.archSupport.value, card._archSupport);
 });
 
 if (failed > 0) {

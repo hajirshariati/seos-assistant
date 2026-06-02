@@ -4,8 +4,11 @@ import { fetchCustomerContext } from "./customer-context.server";
 import { embedText, vectorLiteral, resolveShopEmbedding } from "./embeddings.server";
 import { normalizeGenderChipAnswer } from "./chat-helpers.server";
 import { textIntentDivergesFromGroup } from "./category-intent.server";
-import { __internals as catalogFactInternals } from "./catalog-facts.server.js";
-const { extractMerchantConditionTags, extractMerchantUseCaseTags } = catalogFactInternals;
+import {
+  attachClaimFactsToCard,
+  lookupSkuToCanonical,
+  recommenderProductToCanonical,
+} from "./product-claim-facts.server.js";
 import { TOOLS, FIT_PREDICTOR_TOOL, CUSTOMER_ORDERS_TOOL } from "./chat-tool-schemas.js";
 import {
   canonicalizeCatalogConstraints,
@@ -2426,7 +2429,7 @@ function mentionsFromResult(name, result) {
 
 const MAX_PRODUCT_CARDS = 10;
 
-export function extractProductCards(name, result) {
+export function extractProductCards(name, result, ctx = null) {
   if (!result || result.error) return [];
   const categoryFromAttrs = (p) => {
     const a = p.attributes || {};
@@ -2442,90 +2445,13 @@ export function extractProductCards(name, result) {
     return String(v || "").toLowerCase().trim();
   };
 
-  // Verifiable claim facts surfaced on every card so response-contract's
-  // single claim verifier can check AI text against catalog data without
-  // re-deriving. See catalog-facts.server.js for the merchant-tag-first
-  // extraction logic — these helpers mirror it on the card side.
-  // ConditionTags now also reads `attributes.helps_with` (merchant's
-  // details_icons metafield) — see extractMerchantConditionTags.
-  const conditionTagsFromCard = (p) => extractMerchantConditionTags({
-    tags: Array.isArray(p.tags) ? p.tags : [],
-    attributesJson: p.attributes || null,
-  });
-  const useCaseTagsFromCard = (p) => extractMerchantUseCaseTags({
-    attributesJson: p.attributes || null,
-  });
-  const onSaleFromCard = (p) => {
-    const price = parseFloat(p.price);
-    const compareAt = parseFloat(p.compareAtPrice);
-    return Number.isFinite(price) && Number.isFinite(compareAt) && compareAt > price;
-  };
-  // Only set true/false when the description explicitly states it.
-  // Aetrex (and most merchants) keep this in the description body as
-  // "Removable Insole: Yes" / "Removable Insole: No". Anything fuzzier
-  // returns null so the verifier doesn't make assumptions.
-  const removableInsoleFromCard = (p) => {
-    const text = String(p.descriptionSnippet || p.description || "");
-    if (!text) return null;
-    if (/removable\s+insole\s*[:\-]\s*(?:yes|removable)\b/i.test(text)) return true;
-    if (/removable\s+insole\s*[:\-]\s*(?:no|none)\b/i.test(text)) return false;
-    return null;
-  };
-  // Arch support — conservative: true only when the merchant's
-  // attributes explicitly say so, or "arch support" appears as a
-  // phrase in description/title. Aetrex's whole brand positioning
-  // includes "Built-In Arch Support" in product copy. Setting this
-  // boolean per card lets the verifier accept universal claims like
-  // "all of these have arch support" only when every card actually
-  // has it.
-  const archSupportFromCard = (p) => {
-    const text = String(p.title || "") + " " + String(p.descriptionSnippet || p.description || "");
-    if (/\barch\s+support\b/i.test(text)) return true;
-    // Attribute-side checks — if the merchant explicitly tagged it
-    const attrs = p.attributes || {};
-    const footbed = String(attrs.footbed || "").toLowerCase();
-    if (footbed.includes("arch") || footbed.includes("orthotic")) return true;
-    return false;
-  };
-  // Water-friendly — true only when the description literally says
-  // so. Aetrex actually uses the phrasing "water-friendly" (53/700
-  // products per the live audit) — a different claim than
-  // "waterproof" (which stays kind:absent because the catalog has
-  // no structured field and only 1 description match). Per-card
-  // boolean lets the verifier allow legitimate "water-friendly
-  // construction" prose against backing cards and strip otherwise.
-  const waterFriendlyFromCard = (p) => {
-    const text = String(p.title || "") + " " + String(p.descriptionSnippet || p.description || "");
-    return /\bwater[\s-]?friendly\b/i.test(text);
-  };
-
-  // Simple admin-attribute promotions (single-value, lowercase). null
-  // when the merchant hasn't mapped or hasn't populated the field.
-  const stringAttr = (p, key) => {
-    const v = (p.attributes || {})[key];
-    if (v == null) return null;
-    if (Array.isArray(v)) {
-      const first = v.find((x) => x != null && x !== "");
-      return first ? String(first).toLowerCase().trim() : null;
-    }
-    const s = String(v).toLowerCase().trim();
-    return s || null;
-  };
-  const footbedFromCard = (p) => stringAttr(p, "footbed");
-  const badgeFromCard = (p) => stringAttr(p, "badge");
-  const productLineFromCard = (p) => stringAttr(p, "orthotic_line");
-
-  const claimFacts = (p) => ({
-    _conditionTags: conditionTagsFromCard(p),
-    _useCaseTags: useCaseTagsFromCard(p),
-    _onSale: onSaleFromCard(p),
-    _removableInsole: removableInsoleFromCard(p),
-    _archSupport: archSupportFromCard(p),
-    _waterFriendly: waterFriendlyFromCard(p),
-    _footbed: footbedFromCard(p),
-    _badge: badgeFromCard(p),
-    _productLine: productLineFromCard(p),
-  });
+  // Canonical claim-facts builder — single source of truth for the
+  // verifier-side per-card facts. Every emit path below must funnel
+  // through attachClaimFactsToCard so the verifier never sees an
+  // ad-hoc subset. shopContext.shop drives brand-rules (e.g. Aetrex's
+  // archSupportFromFootwearCategory). See app/lib/product-claim-facts.server.js.
+  const shopContext = { shop: ctx?.shop || null };
+  const facts = (canonical) => attachClaimFactsToCard(canonical, shopContext);
 
   if (name === "search_products" && Array.isArray(result.products)) {
     const query = result.query || "";
@@ -2544,7 +2470,7 @@ export function extractProductCards(name, result) {
       _variantFacts: p.variantFacts || {},
       _variantScope: result.variantScope || undefined,
       _relaxedFilters: result.relaxedFilters || undefined,
-      ...claimFacts(p),
+      ...facts(p),
     }));
   }
   if (name === "find_similar_products" && Array.isArray(result.products)) {
@@ -2562,7 +2488,7 @@ export function extractProductCards(name, result) {
       _gender: genderFromAttrs(p),
       _attributes: p.attributes || {},
       _variantFacts: p.variantFacts || {},
-      ...claimFacts(p),
+      ...facts(p),
     }));
   }
   if (name === "get_product_details" && result.handle) {
@@ -2577,7 +2503,7 @@ export function extractProductCards(name, result) {
       _gender: genderFromAttrs(result),
       _attributes: result.attributes || {},
       _variantFacts: result.variantFacts || {},
-      ...claimFacts(result),
+      ...facts(result),
     }];
   }
   if (name === "lookup_sku" && Array.isArray(result.found)) {
@@ -2585,19 +2511,10 @@ export function extractProductCards(name, result) {
     return result.found
       .filter((f) => !seen.has(f.productHandle) && seen.add(f.productHandle))
       .map((f) => {
-        // Synthesize the shape `claimFacts` expects from the
-        // lookup_sku entry (which uses productTitle / productAttributes
-        // / productTags / productDescription instead of search_products'
-        // title / attributes / tags / description keys).
-        const claimSource = {
-          title: f.productTitle,
-          description: f.productDescription,
-          descriptionSnippet: undefined,
-          tags: f.productTags,
-          attributes: f.productAttributes,
-          price: f.price,
-          compareAtPrice: f.compareAtPrice,
-        };
+        // lookup_sku entries use productTitle / productAttributes /
+        // productTags / productDescription. Convert to the canonical
+        // shape so the builder sees the same input as search_products.
+        const canonical = lookupSkuToCanonical(f);
         return {
           title: f.productTitle,
           url: f.url,
@@ -2608,16 +2525,20 @@ export function extractProductCards(name, result) {
           _category: categoryFromAttrs({ attributes: f.productAttributes, productType: f.productType }),
           _gender: genderFromAttrs({ attributes: f.productAttributes }),
           _attributes: f.productAttributes || {},
-          ...claimFacts(claimSource),
+          ...facts(canonical),
         };
       });
   }
   // Smart Recommender result. The recommender returns a single
   // `product` shaped like the variant-lookup output; expose it as a
   // single-card array so the chat layer renders it the same way as
-  // any other tool's product output.
+  // any other tool's product output. Before this refactor the
+  // recommender card path bypassed claim facts entirely — the
+  // verifier saw a fact-less card and either no-op'd or treated the
+  // pool as unverifiable. Funnel it through the canonical builder.
   if (typeof name === "string" && name.startsWith("recommend_") && result.product?.handle) {
     const p = result.product;
+    const canonical = recommenderProductToCanonical(p);
     return [{
       title: p.title,
       url: p.url,
@@ -2627,6 +2548,8 @@ export function extractProductCards(name, result) {
       compare_at_price: p.compareAtPrice ? Math.round(parseFloat(p.compareAtPrice) * 100) : undefined,
       _category: categoryFromAttrs(p),
       _gender: genderFromAttrs(p),
+      _attributes: p.attributes || {},
+      ...facts(canonical),
     }];
   }
   return [];

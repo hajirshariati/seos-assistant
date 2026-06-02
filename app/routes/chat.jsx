@@ -580,7 +580,7 @@ async function fetchSoftBrowseCards({ ctx, input, excludeHandles = null }) {
   const hasGenderScope = Boolean(ctx?.sessionGender || searchInput?.filters?.gender);
   if (hasGenderScope) {
     const result = await dispatchTool("search_products", searchInput, ctx);
-    return filterExcluded(extractProductCards("search_products", result)).slice(0, cap);
+    return filterExcluded(extractProductCards("search_products", result, ctx)).slice(0, cap);
   }
 
   const withGender = (gender) => ({
@@ -593,15 +593,15 @@ async function fetchSoftBrowseCards({ ctx, input, excludeHandles = null }) {
   ]);
   const mixed = interleaveUniqueCards(
     [
-      filterExcluded(extractProductCards("search_products", women)),
-      filterExcluded(extractProductCards("search_products", men)),
+      filterExcluded(extractProductCards("search_products", women, ctx)),
+      filterExcluded(extractProductCards("search_products", men, ctx)),
     ],
     cap,
   );
   if (mixed.length > 0) return mixed;
 
   const fallback = await dispatchTool("search_products", searchInput, ctx);
-  return filterExcluded(extractProductCards("search_products", fallback)).slice(0, cap);
+  return filterExcluded(extractProductCards("search_products", fallback, ctx)).slice(0, cap);
 }
 
 async function emitSoftGenderGateBrowse({ ctx, controller, encoder }) {
@@ -898,7 +898,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           display,
         })));
       }
-      const cards = extractProductCards(u.name, r);
+      const cards = extractProductCards(u.name, r, ctx);
       for (const c of cards) {
         const key = c.handle || c.title;
         if (!allProductPool.has(key)) {
@@ -963,7 +963,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       try {
         const recovery = await dispatchTool("lookup_sku", { skus: orphanSkus.slice(0, 10) }, ctx);
         toolCallCount += 1;
-        const newCards = extractProductCards("lookup_sku", recovery);
+        const newCards = extractProductCards("lookup_sku", recovery, ctx);
         for (const card of newCards) {
           const key = card.handle || card.title;
           if (!allProductPool.has(key)) allProductPool.set(key, card);
@@ -1170,7 +1170,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       const repeated = repeatIndex > 0;
       const excludeHandles = repeated && !hasScope ? priorlyShownHandles(ctx) : null;
       const cards = hasScope
-        ? extractProductCards("search_products", await dispatchTool("search_products", input, ctx))
+        ? extractProductCards("search_products", await dispatchTool("search_products", input, ctx), ctx)
         : await fetchSoftBrowseCards({ ctx, input, excludeHandles });
       for (const card of cards) {
         const key = card?.handle || card?.title;
@@ -1195,7 +1195,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     ctx,
     allProductPool,
     dispatchTool,
-    extractProductCards,
+    extractProductCards: (n, r) => extractProductCards(n, r, ctx),
     searchInput: scopedProductSearchInput(ctx),
     shouldAttach: productTurnWantsCards,
     reason: "pre-display",

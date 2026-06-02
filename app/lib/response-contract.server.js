@@ -11,6 +11,7 @@ import {
 } from "./chat-postprocessing.js";
 import { sanitizeCtaLabel } from "./cta-label.server.js";
 import { buildStorefrontSearchCTA } from "./storefront-search-cta.server.js";
+import { claimSourcesChecked } from "./product-claim-facts.server.js";
 import {
   canonicalizeVariantConstraints,
   normalizeVariantSize,
@@ -1299,6 +1300,41 @@ function poolSupportsClaim(cards, claim, { universal = false } = {}) {
 //
 // Sentence drop is preferred over surgical word edits because a
 // broken half-sentence reads worse than a missing line.
+// Surface the per-card proof that the verifier consulted when it
+// dropped a sentence. Helps tell apart "the catalog genuinely has
+// no card supporting this" from "a card-emit path is dropping
+// provenance before the verifier sees it". Per-card line so the
+// log reads like:
+//   [response-contract] missing proof: claim=archSupport phrase=arch support universal=true
+//     card="Maui Charcoal" handle=maui-charcoal cat=sneakers checked=title_description_scan,footbed_attribute,brand_rule_footwear_category
+//     archSupport.value=false archSupport.source=none
+// One log line per card, capped at 3 cards to avoid runaway noise.
+function logMissingProof({ claim, sentence, pool }) {
+  const phrase = claim?.phrase || "?";
+  const kind = claim?.claim?.kind || "?";
+  const universal = !!claim?.universal;
+  const checked = claimSourcesChecked(kind, pool?.[0] || {}).join(",") || "(no-facts-attached)";
+  const sentencePreview = String(sentence || "").slice(0, 100).replace(/\s+/g, " ");
+  console.warn(
+    `[response-contract] missing proof: claim=${kind} phrase="${phrase}" universal=${universal} ` +
+      `checked=${checked} sentence="${sentencePreview}"`,
+  );
+  const sample = Array.isArray(pool) ? pool.slice(0, 3) : [];
+  for (const card of sample) {
+    const facts = card?._claimFacts || null;
+    const factEntry = facts ? facts[kind] : null;
+    const factValue = factEntry ? JSON.stringify(factEntry.value) : "(no _claimFacts on card)";
+    const factSource = factEntry ? factEntry.source : "(none)";
+    const title = String(card?.title || "?").slice(0, 60);
+    const handle = card?.handle || "?";
+    const cat = card?._claimFacts?.category?.value || card?._category || "?";
+    console.warn(
+      `  card="${title}" handle=${handle} cat=${cat} ` +
+        `${kind}.value=${factValue} ${kind}.source=${factSource}`,
+    );
+  }
+}
+
 export function verifyClaimsAgainstCards({ text, cards } = {}) {
   const input = String(text || "");
   if (!input.trim()) return { text: input, changed: false, logs: [] };
@@ -1341,6 +1377,7 @@ export function verifyClaimsAgainstCards({ text, cards } = {}) {
     const lower = s.toLowerCase();
     let drop = false;
     let reason = null;
+    let droppedClaim = null;
 
     // Feature claim verification — single generic loop. Sale claims
     // (universal AND per-product), arch support, conditions, use-
@@ -1354,6 +1391,7 @@ export function verifyClaimsAgainstCards({ text, cards } = {}) {
         if (claim.kind === "absent") {
           drop = true;
           reason = `unverifiable_feature:${phrase}`;
+          droppedClaim = { phrase, claim, universal };
           break;
         }
         const supported = poolSupportsClaim(pool, claim, { universal });
@@ -1362,6 +1400,7 @@ export function verifyClaimsAgainstCards({ text, cards } = {}) {
           reason = universal
             ? `unverified_universal:${phrase}`
             : `unverified_feature:${phrase}`;
+          droppedClaim = { phrase, claim, universal };
           break;
         }
       }
@@ -1369,6 +1408,14 @@ export function verifyClaimsAgainstCards({ text, cards } = {}) {
 
     if (drop) {
       logs.push(reason);
+      // Missing-proof log — surface card title/handle/category and
+      // the fact-sources the canonical builder consulted, so the
+      // next defender can tell "no card had the tag" from "every
+      // card had the tag but the builder lost provenance". Skipped
+      // for "absent" claims (catalog literally has no field).
+      if (droppedClaim && droppedClaim.claim.kind !== "absent") {
+        logMissingProof({ claim: droppedClaim, sentence: s, pool });
+      }
       continue;
     }
     out.push(s);
