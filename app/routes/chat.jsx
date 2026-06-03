@@ -409,7 +409,12 @@ async function runProductTurnDispatch({ ctx, controller, encoder, claimConfig })
   // family exclusion. No parallel similarity engine.
   const similarFn = async ({ handle, limit }) => {
     try {
-      return await dispatchTool("find_similar_products", { handle, limit }, ctx);
+      const result = await dispatchTool("find_similar_products", { handle, limit }, ctx);
+      if (!result || result.error || !Array.isArray(result.products)) return result;
+      return {
+        ...result,
+        products: extractProductCards("find_similar_products", result, ctx),
+      };
     } catch (err) {
       console.warn(`[product-turn-engine] similarFn failed: ${err?.message || err}`);
       return { error: err?.message || "similar lookup failed", products: [] };

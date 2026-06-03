@@ -119,6 +119,7 @@ export async function runPolicyTurn(ctx = {}, options = {}) {
     relevant,
     supportUrl: ctx.supportUrl || "",
     supportLabel: ctx.supportLabel || "",
+    trackingPageUrl: ctx.trackingPageUrl || "",
   });
   diagnostics.composer = composed.reason;
 
@@ -245,7 +246,7 @@ function intentMatchesTitle(intentKey, lowerTitle) {
 }
 
 export function composePolicyAnswer({
-  intent, relevant, supportUrl = "", supportLabel = "",
+  intent, relevant, supportUrl = "", supportLabel = "", trackingPageUrl = "",
 }) {
   // Contact-support CTA (rendered as a button by the widget).
   // ONLY when supportUrl is configured — we NEVER invent a URL.
@@ -270,6 +271,22 @@ export function composePolicyAnswer({
         scopeSource: "policy_support_url",
       }
     : null;
+
+  const trackingUrl = String(trackingPageUrl || "").trim();
+  if (intent?.primary === "tracking" && trackingUrl) {
+    return {
+      text:
+        `You can track your order from the tracking page. ` +
+        `Use the button below, and have your order number or confirmation email handy if the page asks for it.`,
+      reason: "tracking_page_url",
+      cta: {
+        kind: "external_link",
+        label: "Track order",
+        url: trackingUrl,
+        scopeSource: "policy_tracking_page_url",
+      },
+    };
+  }
 
   // No relevant chunks → honest "I don't have that specific
   // detail" line. Avoid putting the raw URL in the body when a CTA

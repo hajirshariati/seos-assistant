@@ -191,6 +191,7 @@ await test("P2-7 — engine output products preserve UI fields from similarFn (t
     assert.ok(card.image, "image preserved");
     assert.ok(card.url, "url preserved");
     assert.ok(card.price, "price preserved");
+    assert.ok(card.price_formatted, "price_formatted normalized for widget display");
     assert.ok(card._claimFacts, "_claimFacts attached");
   }
 });
@@ -520,6 +521,82 @@ await test("P2-20 — CTA is derived from the ANCHOR product, never from stale s
   assert.equal(out.cta.scopeSource, "anchor_product");
   // The kind tells the dispatcher to convert via buildStorefrontSearchCTA.
   assert.equal(out.cta.kind, "storefront_search");
+});
+
+await test("P2-21 — raw similar prices are normalized to widget price_formatted", async () => {
+  const out = await runProductTurn({
+    ...ctxBase,
+    latestUserMessage: "what other shoes have same support as Danika",
+    sessionMemory: { explicit: {}, inferred: {} },
+  }, {
+    forceEnable: true,
+    searchFn: async () => [],
+    similarFn: spy({
+      reference: {
+        handle: "danika-navy-ap105w",
+        title: "Danika Arch Support Sneaker - Navy",
+        category: "sneakers",
+        gender: "women",
+      },
+      products: [
+        {
+          title: "Chase Arch Support Sneaker - Navy",
+          handle: "chase-navy-ap907m",
+          productType: "Sneakers",
+          description: "Sneaker with arch support.",
+          tags: [],
+          attributes: { category: "Sneakers", gender: "Men", footbed: "ap" },
+          price: "160",
+          image: "https://cdn/chase.jpg",
+          url: "https://shop/products/chase",
+        },
+      ],
+    }),
+    resolveNamedProductFn: async () => "danika-navy-ap105w",
+    claimConfig: FIXTURE_CLAIM_CONFIG,
+  });
+  assert.ok(!out.decline);
+  assert.equal(out.products[0].price_formatted, "$160.00",
+    `raw decimal price must display as $160.00, not $1.60; got ${out.products[0].price_formatted}`);
+});
+
+await test("P2-22 — similar CTA uses reference gender/category when cards disagree", async () => {
+  const out = await runProductTurn({
+    ...ctxBase,
+    latestUserMessage: "what other shoes have same support as Danika",
+    sessionMemory: { explicit: { gender: "men", category: "footwear" }, inferred: {} },
+  }, {
+    forceEnable: true,
+    searchFn: async () => [],
+    similarFn: spy({
+      reference: {
+        handle: "danika-navy-ap105w",
+        title: "Danika Arch Support Sneaker - Navy",
+        category: "sneakers",
+        gender: "women",
+      },
+      products: [
+        {
+          title: "Chase Arch Support Sneaker - Navy",
+          handle: "chase-navy-ap907m",
+          productType: "Sneakers",
+          description: "Sneaker with arch support.",
+          tags: [],
+          attributes: { category: "Sneakers", gender: "Men", footbed: "ap" },
+          price: "160",
+          image: "https://cdn/chase.jpg",
+          url: "https://shop/products/chase",
+        },
+      ],
+    }),
+    resolveNamedProductFn: async () => "danika-navy-ap105w",
+    claimConfig: FIXTURE_CLAIM_CONFIG,
+  });
+  assert.ok(!out.decline);
+  assert.equal(out.cta?.gender, "women",
+    `CTA must use reference gender=women over first card/stale gender; got ${out.cta?.gender}`);
+  assert.equal(out.cta?.category, "sneakers",
+    `CTA must use reference category=sneakers over stale category; got ${out.cta?.category}`);
 });
 
 // ──────────────────────────────────────────────────────────────

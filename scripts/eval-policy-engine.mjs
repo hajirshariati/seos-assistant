@@ -45,6 +45,7 @@ const ctxBase = {
   shop: "fixture.myshopify.com",
   supportUrl: "https://example.com/support",
   supportLabel: "our support team",
+  trackingPageUrl: "https://example.com/track-order",
 };
 
 // Chunk fixture — the shape retrieveRelevantChunks returns. These
@@ -522,6 +523,52 @@ await test("PE-25 — engine CTA shape must be convertible to widget-renderable 
   assert.equal(ctaForSse.type, "link");
   assert.ok(typeof ctaForSse.url === "string" && /^https?:\/\//.test(ctaForSse.url));
   assert.ok(typeof ctaForSse.label === "string" && ctaForSse.label.length > 0);
+});
+
+await test("PE-30 — tracking intent prefers configured tracking page over generic shipping knowledge", async () => {
+  const out = await runPolicyTurn(
+    { ...ctxBase, latestUserMessage: "Can I track my order?" },
+    {
+      forceEnable: true,
+      retrievedChunks: [
+        chunk({
+          similarity: 0.4,
+          fileType: "faqs",
+          sectionTitle: "SHIPPING & DELIVERY",
+          content: "Q: How long?\nA: 3-7 business days standard.",
+        }),
+      ],
+    },
+  );
+  assert.ok(!out.decline);
+  assert.equal(out.diagnostics?.composer, "tracking_page_url");
+  assert.equal(out.cta?.kind, "external_link");
+  assert.equal(out.cta?.label, "Track order");
+  assert.equal(out.cta?.url, ctxBase.trackingPageUrl);
+  assert.match(out.answerText, /track your order/i);
+  assert.doesNotMatch(out.answerText, /3-7 business days/i,
+    `tracking should not dump generic shipping timelines when trackingPageUrl exists; got "${out.answerText}"`);
+});
+
+await test("PE-31 — tracking without trackingPageUrl can still use tracking-specific knowledge", async () => {
+  const out = await runPolicyTurn(
+    { ...ctxBase, trackingPageUrl: "", latestUserMessage: "Can I track my order?" },
+    {
+      forceEnable: true,
+      retrievedChunks: [
+        chunk({
+          similarity: 0.72,
+          fileType: "faqs",
+          sectionTitle: "ORDER STATUS",
+          content: "Track your order from your account or with the tracking number we email.",
+        }),
+      ],
+    },
+  );
+  assert.ok(!out.decline);
+  assert.equal(out.diagnostics?.composer, "knowledge_confident");
+  assert.match(out.answerText, /ORDER STATUS/);
+  assert.match(out.answerText, /tracking number we email/i);
 });
 
 // ──────────────────────────────────────────────────────────────

@@ -574,14 +574,18 @@ function pickAttr(attrs, aliases) {
 // anchor lookup needed. Returns null when category or gender
 // can't be confidently read; we'd rather omit a CTA than ship one
 // rooted in stale memory.
-function deriveAnchorCTA(cardsWithFacts) {
+function deriveAnchorCTA(cardsWithFacts, reference = {}) {
   const anchor = cardsWithFacts?.[0];
   if (!anchor) return null;
   const attrs = anchor.attributes || anchor._attributes || {};
-  const category = anchor?._claimFacts?.category?.value
+  const category = String(reference.category || "").toLowerCase().trim()
+    || anchor?._category
+    || anchor?._claimFacts?.category?.value
     || pickAttr(attrs, ["category", "Category", "category_for_filter", "subcategory"])
     || (anchor.productType ? String(anchor.productType).toLowerCase().trim() : null);
-  const genderRaw = pickAttr(attrs, ["gender", "Gender", "gender_fallback"]);
+  const genderRaw = String(reference.gender || "").toLowerCase().trim()
+    || anchor?._gender
+    || pickAttr(attrs, ["gender", "Gender", "gender_fallback"]);
   // Normalize merchant gender label to "men" / "women" / "kids".
   let gender = null;
   if (genderRaw) {
@@ -601,6 +605,42 @@ function deriveAnchorCTA(cardsWithFacts) {
     gender,
     color: null,
   };
+}
+
+function normalizeEngineProductCard(card) {
+  const out = { ...(card || {}) };
+  if (!out.price_formatted) {
+    if (out.priceRange) {
+      out.price_formatted = String(out.priceRange);
+    } else if (out.price != null && out.price !== "" && Number.isFinite(Number(out.price))) {
+      out.price_formatted = `$${Number(out.price).toFixed(2)}`;
+    }
+  }
+
+  const attrs = out.attributes || out._attributes || {};
+  if (!out._category) {
+    out._category =
+      pickAttr(attrs, ["category", "Category", "category_for_filter", "subcategory"]) ||
+      (out.productType ? String(out.productType).toLowerCase().trim() : "");
+  }
+  if (!out._gender) {
+    out._gender = normalizeGender(
+      pickAttr(attrs, ["gender", "Gender", "gender_fallback"]) ||
+      out.gender ||
+      "",
+    );
+  }
+  return out;
+}
+
+function normalizeGender(raw) {
+  const value = String(raw || "").toLowerCase().trim();
+  if (!value) return "";
+  if (value.startsWith("men") || value.startsWith("male") || value.startsWith("boy")) return "men";
+  if (value.startsWith("women") || value.startsWith("female") || value.startsWith("girl") || value.startsWith("lad")) return "women";
+  if (value.startsWith("kid") || value.startsWith("child") || value.startsWith("youth")) return "kids";
+  if (value === "unisex") return "unisex";
+  return value;
 }
 
 // ─── Phase 2: named-product / similar-product path ──────────────
@@ -710,7 +750,8 @@ async function runSimilarProductTurn({
   // Fact-attach + base-style group (same as the retrieval path).
   const cardsWithFacts = [];
   for (const cand of rawCandidates) {
-    const card = { ...cand, ...attachClaimFactsToCard(cand, { shop: ctx.shop, claimConfig }) };
+    const normalized = normalizeEngineProductCard(cand);
+    const card = { ...normalized, ...attachClaimFactsToCard(normalized, { shop: ctx.shop, claimConfig }) };
     if (!card._claimFacts) continue;
     cardsWithFacts.push(card);
   }
@@ -744,7 +785,7 @@ async function runSimilarProductTurn({
   // scope mirrors the anchor's scope. Read category/gender out of
   // attributes directly — engine cards don't carry _category /
   // _gender (those are extractProductCards-side fields).
-  const cta = deriveAnchorCTA(cardsWithFacts);
+  const cta = deriveAnchorCTA(cardsWithFacts, similarResult.reference);
 
   return {
     decline: false,
