@@ -1051,6 +1051,47 @@ test("suggestion-gate — drops spec/measurement not quoted in reply", () => {
   assert.equal(v.unanswerable, true);
 });
 
+// ──────────────────────────────────────────────────────────────
+// Live 2026-06-04: Haiku suggested "What else is in the Plantar
+// Fasciitis Kit?" as a follow-up chip. Customer clicked, bot has
+// no kit-composition data, orthotic gate took the turn and
+// confused itself. Drop chips that ask what's in a kit/bundle
+// unless the assistant's last reply already enumerated contents.
+// ──────────────────────────────────────────────────────────────
+
+test("suggestion-gate — drops 'what else is in the X kit?' when reply doesn't enumerate", () => {
+  const v = isUnanswerableSuggestion(
+    "What else is in the Plantar Fasciitis Kit?",
+    { lastText: "Here are some women's sandals with arch support." },
+  );
+  assert.equal(v.unanswerable, true);
+  assert.match(v.reason, /kit\/bundle composition/i);
+});
+
+test("suggestion-gate — drops kit-composition variants generically", () => {
+  for (const q of [
+    "What comes in the Recovery Bundle?",
+    "What's included with the Starter Pack?",
+    "What's in the Comfort Box?",
+    "How many items are in the set?",
+  ]) {
+    const v = isUnanswerableSuggestion(q, { lastText: "Here are some sandals." });
+    assert.equal(v.unanswerable, true, `expected drop for "${q}"; got ${JSON.stringify(v)}`);
+  }
+});
+
+test("suggestion-gate — KEEPS kit-composition chip when reply already enumerated contents", () => {
+  // If the bot's previous reply listed kit contents, the same
+  // chunk can answer the follow-up — allow it.
+  const v = isUnanswerableSuggestion(
+    "What else is in the Plantar Fasciitis Kit?",
+    {
+      lastText: "The Plantar Fasciitis Kit includes the L1700 orthotic, a night splint, and a recovery ball.",
+    },
+  );
+  assert.equal(v.unanswerable, false);
+});
+
 test("suggestion-gate — keeps good pivots (gender / width / price)", () => {
   for (const q of ["Do you have these in women's?", "Do you have wider widths?", "Anything under $100?", "Show me sneakers instead"]) {
     const v = isUnanswerableSuggestion(q, { lastText: "Here are men's sandals." });

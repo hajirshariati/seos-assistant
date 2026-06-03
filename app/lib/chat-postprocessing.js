@@ -867,6 +867,30 @@ export function isUnanswerableSuggestion(question, { lastText = "", latestUserMe
     return { unanswerable: true, reason: "discount mechanics the bot can't verify" };
   }
 
+  // Bundle / kit composition the bot can't verify.
+  //
+  // Live 2026-06-04: Haiku suggested "What else is in the Plantar
+  // Fasciitis Kit?" — the customer clicked, the bot has no kit-
+  // composition data, and the orthotic flow grabbed the turn with
+  // a generic intro that ignored the question. Drop these chips
+  // unless the assistant's reply already enumerated the kit/bundle
+  // contents (which would let the bot answer from the same chunk).
+  //
+  // Generic detection — no merchant-specific kit names:
+  //   "What's in / what else is in / what comes in / what's
+  //    included with / how many <items> in (the/this) ... kit |
+  //    bundle | set | package | box | combo"
+  const kitCompositionRe =
+    /\b(?:what(?:'s|\s+is|\s+else\s+(?:is|comes))\s+(?:in|included(?:\s+with)?|inside)|what\s+comes\s+(?:in|with)|how\s+many\s+\w+\s+(?:are\s+)?in)\b[^?]{0,80}\b(?:kit|bundle|set|package|box|combo|pack|starter)\b/i;
+  if (kitCompositionRe.test(q)) {
+    // Allow only when the assistant's last reply already enumerated
+    // the kit contents (so the same chunk can be re-quoted).
+    const lastReplyLists = /\b(?:includes?|contains?|comes\s+with|consists?\s+of)\b/i.test(lastText);
+    if (!lastReplyLists) {
+      return { unanswerable: true, reason: "kit/bundle composition the bot can't verify" };
+    }
+  }
+
   // Color-redundancy / color-already-denied. The Haiku that drafts
   // suggestions often proposes "Do you have these in <color>?" when
   // the assistant just (a) showed products in that color or (b) said
