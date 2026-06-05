@@ -93,6 +93,7 @@ const REFINE_GENERIC_RE = /\b(?:show\s+more|more\s+like|similar|something\s+like
 // Pronouns indicating reference to the displayed set / last shown
 // product. Strong "continue" signal.
 const PRONOUN_REFERENCE_RE = /\b(?:these|those|them|it|this\s+one|that\s+one|the\s+first|the\s+second|the\s+last|the\s+top|the\s+one)\b/i;
+const DISPLAY_REFERENCE_RE = /\b(?:that|this|these|those|them|it|this\s+one|that\s+one)\b/i;
 
 // Bare color vocabulary — used to spot color-only pivots.
 const COLOR_LEX_RE =
@@ -313,11 +314,27 @@ export function resolveTurnIntent({
   // 3. Meta / fact-question — short-circuit. Scope stays; the caller's
   //    listing/contract logic should NOT force a product-list rewrite.
   // -----------------------------------------------------------------------
+  const onlyBroadFootwearCategory =
+    extracted.category === "footwear" &&
+    !extracted.color &&
+    !extracted.condition &&
+    !extracted.useCase &&
+    !extracted.modifier &&
+    !extracted.badge &&
+    extracted.onSale !== true;
   if (META_CONVERSATIONAL_RE.test(text) || COMPARE_RE.test(text)) {
     return {
       label: LABEL.META,
       confidence: 0.9,
       reason: META_CONVERSATIONAL_RE.test(text) ? "meta_conversational" : "compare_request",
+      staleKeysToDrop: [],
+    };
+  }
+  if (DISPLAY_REFERENCE_RE.test(text) && onlyBroadFootwearCategory && REFINE_PRICE_RE.test(text)) {
+    return {
+      label: LABEL.META,
+      confidence: 0.85,
+      reason: "product_fact_question",
       staleKeysToDrop: [],
     };
   }
@@ -328,6 +345,14 @@ export function resolveTurnIntent({
     // catch the live shape "do you have those for plantar fasciitis?"
     // where a yes/no question carries a fresh claim — the resolver
     // must let downstream rules (claim_refresh) clear stale color.
+    if (DISPLAY_REFERENCE_RE.test(text) && onlyBroadFootwearCategory && REFINE_PRICE_RE.test(text)) {
+      return {
+        label: LABEL.META,
+        confidence: 0.85,
+        reason: "yes_no_fact_question",
+        staleKeysToDrop: [],
+      };
+    }
     const namesNewSearchTerm =
       (extracted.category && extracted.category !== normStr(prev.category)) ||
       (extracted.color && extracted.color !== normStr(prev.color)) ||
@@ -453,7 +478,7 @@ export function resolveTurnIntent({
   const newCategory = normStr(extracted.category);
   const newUseCase = normStr(extracted.useCase);
   if (
-    !newCategory &&
+    (!newCategory || newCategory === "footwear") &&
     newUseCase &&
     prevCategory &&
     USECASE_CATEGORY_CONFLICTS[newUseCase]?.has(prevCategory)

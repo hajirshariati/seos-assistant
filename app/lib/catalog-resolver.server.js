@@ -194,6 +194,26 @@ export async function resolveCatalogTurn({
 
   const categoryByGender = facetIndex.categoryByGender || {};
   const knownCategories = new Set(Object.keys(categoryByGender));
+  const normalizedAllowedCategories = Array.isArray(allowedCategories)
+    ? allowedCategories
+        .map((value) => canonicalizeCatalogConstraints({ category: value }).category)
+        .filter(Boolean)
+    : [];
+  const hasActiveCategoryGroup = normalizedAllowedCategories.length > 0;
+  const categoryIsKnownSpecific = merged.category && knownCategories.has(merged.category);
+  const categoryIsGroupUmbrella =
+    merged.category &&
+    !categoryIsKnownSpecific &&
+    hasActiveCategoryGroup;
+
+  // Broad shopping nouns such as "shoes" / "footwear" describe the
+  // merchant's active category group, not a literal product category.
+  // Keep allowedCategories as the catalog scope and drop the fake
+  // category so stale memory (for example orthotics from the previous
+  // turn) cannot hijack a broad "pink shoes" request.
+  if (categoryIsGroupUmbrella) {
+    delete merged.category;
+  }
 
   // Category check
   if (merged.category) {
@@ -536,6 +556,7 @@ const RESOLVER_GENDER_LEX = {
   unisex: "unisex",
 };
 const RESOLVER_CATEGORY_LEX = {
+  shoes: "footwear", shoe: "footwear", footwear: "footwear",
   sneakers: "sneakers", sneaker: "sneakers", trainers: "sneakers", trainer: "sneakers",
   sandals: "sandals", sandal: "sandals", slides: "sandals",
   boots: "boots", boot: "boots", booties: "boots",

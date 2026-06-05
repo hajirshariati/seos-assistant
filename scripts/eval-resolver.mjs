@@ -113,6 +113,17 @@ await test("R0f — product-navigation quick reply extracts both requested color
   );
 });
 
+await test("R0g — broad shopping nouns become footwear umbrella scope", () => {
+  assert.deepEqual(
+    extractUserConstraints("i need pink shoes"),
+    { category: "footwear", color: "pink" },
+  );
+  assert.deepEqual(
+    extractUserConstraints("show me black footwear"),
+    { category: "footwear", color: "black" },
+  );
+});
+
 await test("R1 — navy color infers men's, gender goes in do_not_ask", async () => {
   const facetIndex = {
     categoryByGender: { sneakers: ["men", "women"], sandals: ["women"] },
@@ -588,7 +599,7 @@ await test("R21 — pink footwear scope infers women and never offers men or kid
   const out = await resolveCatalogTurn({
     shop: SHOP,
     query: "i need pink shoes",
-    userConstraints: { color: "pink" },
+    userConstraints: extractUserConstraints("i need pink shoes"),
     allowedCategories: ["Sneakers", "Sandals"],
     _testFacetIndex: facetIndex,
     _testFetchCandidates: makeFetcher([]),
@@ -620,7 +631,7 @@ await test("R22 — broad no-match alternatives stay inside the active product g
   const out = await resolveCatalogTurn({
     shop: SHOP,
     query: "i need pink shoes",
-    userConstraints: { gender: "men", color: "pink" },
+    userConstraints: { ...extractUserConstraints("i need pink shoes"), gender: "men" },
     allowedCategories: ["Sneakers", "Sandals"],
     _testFacetIndex: facetIndex,
     _testFetchCandidates: async (input) => {

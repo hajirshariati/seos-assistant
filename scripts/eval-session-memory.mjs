@@ -457,14 +457,11 @@ await test("S24 — child recipient words map to kids consistently", async () =>
   assert.equal(mem.explicit.category, "sneakers");
 });
 
-await test("S25 — incompatible use-case clears carried category + color (hiking after pink sandals)", async () => {
+await test("S25 — incompatible use-case clears stale specific category + color, keeps footwear umbrella", async () => {
   // Production failure (first-chat screenshot): customer browsed
-  // "pink sandals", then said "hiking shoes for italy". "hiking
-  // shoes" extracts useCase=hiking with NO category (the lexicon has
-  // no bare "shoes"), so the old category=sandals + color=pink
-  // silently rode along and the bot returned pink sandals for a
-  // hiking request. A use-case that's incompatible with the carried
-  // category means the need changed: drop the category-owned scope.
+  // "pink sandals", then said "hiking shoes for italy". "Shoes"
+  // now extracts the broad footwear umbrella, so the old specific
+  // category=sandals + color=pink must not ride along.
   const mem = buildSessionMemory({
     messages: [
       u("show me pink sandals"),
@@ -472,7 +469,7 @@ await test("S25 — incompatible use-case clears carried category + color (hikin
       u("actually I need hiking shoes for italy"),
     ],
   });
-  assert.equal(mem.explicit.category, undefined, `stale sandals must be cleared; got ${mem.explicit.category}`);
+  assert.equal(mem.explicit.category, "footwear", `latest broad footwear scope should replace sandals; got ${mem.explicit.category}`);
   assert.equal(mem.explicit.color, undefined, `stale pink must be cleared; got ${mem.explicit.color}`);
   assert.equal(mem.explicit.useCase, "hiking", "new use-case takes hold");
   assert.ok(mem.stale.category === "sandals" || mem.stale.color === "pink", "prior scope preserved in stale for debugging");
@@ -587,8 +584,10 @@ await test("S10 — inferred-gender + explicit-new-gender pivot drops carried su
   });
   assert.equal(mem.explicit.gender, "men",
     `explicit gender must pivot to men; got ${JSON.stringify(mem.explicit)}`);
+  assert.equal(mem.explicit.category, "footwear",
+    `latest "dress shoes" should keep broad footwear scope; got ${JSON.stringify(mem.explicit)}`);
   // The whole point: stale must record the previous category/color/condition.
-  for (const key of ["category", "color", "condition"]) {
+  for (const key of ["color", "condition"]) {
     assert.equal(mem.explicit[key], undefined,
       `${key} must be cleared from explicit on pivot; got ${JSON.stringify(mem.explicit)}`);
   }
@@ -604,8 +603,8 @@ await test("S11 — kids orthotics then first-person hiking shoe request drops k
   });
   assert.equal(mem.explicit.gender, undefined,
     `kids gender must not carry into first-person adult hiking request; got ${JSON.stringify(mem.explicit)}`);
-  assert.equal(mem.explicit.category, undefined,
-    `orthotics category must not carry into first-person shoe request; got ${JSON.stringify(mem.explicit)}`);
+  assert.equal(mem.explicit.category, "footwear",
+    `latest shoe request should become broad footwear scope; got ${JSON.stringify(mem.explicit)}`);
   assert.equal(mem.explicit.useCase, "hiking",
     `latest hiking use-case should apply after stale drop; got ${JSON.stringify(mem.explicit)}`);
   assert.ok(mem.latestTurnIntent?.staleKeysToDrop?.includes("gender"),
@@ -652,6 +651,21 @@ await test("S14 — category pivot from new sandals to white sneakers clears sta
   assert.equal(mem.explicit.color, "white");
   assert.equal(mem.explicit.modifier, undefined, `new modifier should not leak into sneaker-finding; got ${JSON.stringify(mem.explicit)}`);
   assert.equal(mem.explicit.badge, undefined, `new badge should not leak into sneaker-finding; got ${JSON.stringify(mem.explicit)}`);
+});
+
+await test("S15 — broad shoes request replaces stale orthotics category", async () => {
+  const mem = buildSessionMemory({
+    messages: [
+      u("show me men's orthotics"),
+      a("Here are men's orthotics."),
+      u("i need pink shoes"),
+    ],
+  });
+  assert.equal(mem.explicit.category, "footwear",
+    `latest broad shoes request must become footwear scope, not stale orthotics; got ${JSON.stringify(mem.explicit)}`);
+  assert.equal(mem.explicit.color, "pink");
+  assert.equal(mem.explicit.gender, "men",
+    `gender can carry until catalog says no exact match, but category must not; got ${JSON.stringify(mem.explicit)}`);
 });
 
 console.log("");

@@ -179,13 +179,6 @@ function staleAllSubjectBound(memory) {
   }
 }
 
-const FOOTWEAR_UMBRELLA_REJECTIONS = [
-  "shoes", "shoe", "footwear",
-  "sandals", "sneakers", "boots", "clogs", "loafers", "slippers",
-  "oxfords", "wedges heels", "wedges", "heels", "flats", "mules",
-  "mary janes", "slip ons",
-];
-
 function normalizeCategoryTerm(value) {
   return String(value || "").toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -194,7 +187,10 @@ function clearAcceptedCategoryRejection(rejectedSet, category) {
   const cat = normalizeCategoryTerm(category);
   if (!cat) return;
   if (cat === "footwear" || cat === "shoes" || cat === "shoe") {
-    for (const term of FOOTWEAR_UMBRELLA_REJECTIONS) rejectedSet.delete(term);
+    // A broad accepted scope ("show me shoes") should not undo a
+    // customer's specific rejection ("I don't like sandals"). Only
+    // remove rejected broad nouns for footwear itself.
+    for (const term of ["footwear", "shoes", "shoe"]) rejectedSet.delete(term);
     return;
   }
   rejectedSet.delete(cat);

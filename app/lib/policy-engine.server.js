@@ -140,6 +140,7 @@ export async function runPolicyTurn(ctx = {}, options = {}) {
     supportUrl: ctx.supportUrl || "",
     supportLabel: ctx.supportLabel || "",
     trackingPageUrl: ctx.trackingPageUrl || "",
+    returnsPageUrl: ctx.returnsPageUrl || "",
     synthesizeFn: typeof options.synthesizeFn === "function" ? options.synthesizeFn : null,
   });
   diagnostics.composer = composed.reason;
@@ -267,7 +268,7 @@ function intentMatchesTitle(intentKey, lowerTitle) {
 }
 
 export async function composePolicyAnswer({
-  intent, relevant, supportUrl = "", supportLabel = "", trackingPageUrl = "",
+  intent, relevant, supportUrl = "", supportLabel = "", trackingPageUrl = "", returnsPageUrl = "",
   latestUserMessage = "", synthesizeFn = null,
 }) {
   // Contact-support CTA (rendered as a button by the widget).
@@ -310,22 +311,36 @@ export async function composePolicyAnswer({
     };
   }
 
+  const returnsUrl = String(returnsPageUrl || "").trim();
+  const returnPortalIntents = new Set(["return_policy", "return_fee", "exchanges"]);
+  const returnPortalCta = returnsUrl && returnPortalIntents.has(intent?.primary)
+    ? {
+        kind: "external_link",
+        label: intent.primary === "exchanges" ? "Start exchange or return" : "Start a return",
+        url: returnsUrl,
+        scopeSource: "policy_returns_page_url",
+      }
+    : null;
+  const primaryCta = returnPortalCta || contactCta;
+
   // No relevant chunks → honest "I don't have that specific
   // detail" line. Avoid putting the raw URL in the body when a CTA
   // button is emitted — duplicate URLs look broken. When CTA
   // exists, just refer to the button; otherwise fall back to a
   // generic "contact support" line.
   if (!relevant || relevant.length === 0) {
-    const supportSuffix = contactCta
-      ? ` For an authoritative answer, please use the contact button below.`
-      : ` For an authoritative answer, please contact support directly.`;
+    const supportSuffix = returnPortalCta
+      ? ` For an authoritative answer, please use the button below.`
+      : contactCta
+        ? ` For an authoritative answer, please use the contact button below.`
+        : ` For an authoritative answer, please contact support directly.`;
     const topic = humanizeIntent(intent.primary);
     return {
       text:
         `I don't have the specific ${topic} detail in my notes.` +
         supportSuffix,
       reason: "no_relevant_knowledge",
-      cta: contactCta,
+      cta: primaryCta,
     };
   }
 
@@ -347,14 +362,14 @@ export async function composePolicyAnswer({
         latestUserMessage,
         intent,
         relevantChunks: relevant,
-        haveContactButton: !!contactCta,
+        haveContactButton: !!primaryCta,
       });
       const synthText = String(synth || "").trim();
       if (synthText && synthText.length >= 20) {
         return {
           text: synthText,
           reason: confident ? "knowledge_synthesized" : "knowledge_synthesized_weak",
-          cta: contactCta,
+          cta: primaryCta,
         };
       }
     } catch (err) {
@@ -378,7 +393,7 @@ export async function composePolicyAnswer({
   return {
     text,
     reason: confident ? "knowledge_confident" : "knowledge_weak_match",
-    cta: contactCta,
+    cta: primaryCta,
   };
 }
 

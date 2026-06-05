@@ -599,6 +599,53 @@ await test("PE-31 — tracking without trackingPageUrl can still use tracking-sp
   assert.match(out.answerText, /tracking number we email/i);
 });
 
+await test("PE-31b — returns/exchanges prefer configured returns portal over support CTA", async () => {
+  const returnsPageUrl = "https://example.com/returns";
+  const cases = [
+    { msg: "what is your return policy?", label: "Start a return", intent: "return_policy" },
+    { msg: "do you charge a return fee?", label: "Start a return", intent: "return_fee" },
+    { msg: "can I exchange for a different size?", label: "Start exchange or return", intent: "exchanges" },
+  ];
+  for (const c of cases) {
+    const out = await runPolicyTurn(
+      { ...ctxBase, returnsPageUrl, latestUserMessage: c.msg },
+      {
+        forceEnable: true,
+        retrievedChunks: [
+          chunk({
+            similarity: 0.72,
+            fileType: "faqs",
+            sectionTitle: "RETURNS & EXCHANGES",
+            content: "Returns and exchanges are handled through our self-serve portal.",
+          }),
+        ],
+      },
+    );
+    assert.ok(!out.decline);
+    assert.equal(out.intent.primary, c.intent);
+    assert.equal(out.cta?.kind, "external_link");
+    assert.equal(out.cta?.label, c.label);
+    assert.equal(out.cta?.url, returnsPageUrl);
+    assert.notEqual(out.cta?.url, ctxBase.supportUrl, "returns/exchanges should not fall back to generic support when returnsPageUrl exists");
+  }
+});
+
+await test("PE-31c — returns portal admit path avoids raw URL and still emits button", async () => {
+  const out = await runPolicyTurn(
+    {
+      ...ctxBase,
+      returnsPageUrl: "https://example.com/returns",
+      latestUserMessage: "how long do I have to return?",
+    },
+    { forceEnable: true, retrievedChunks: [] },
+  );
+  assert.ok(!out.decline);
+  assert.equal(out.cta?.label, "Start a return");
+  assert.equal(out.cta?.url, "https://example.com/returns");
+  assert.doesNotMatch(out.answerText, /https?:\/\//);
+  assert.match(out.answerText, /button below/i);
+});
+
 // Customer feedback 2026-06-03 (Daisy Sunflower screenshot):
 // "instead of copy pasting the return policy, can you have AI make
 //  it better and related to person question? no matter what i ask
