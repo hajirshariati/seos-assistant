@@ -124,6 +124,11 @@ export async function runProductTurn(ctx = {}, options = {}) {
   if (browseClarification) {
     diagnostics.rungs.push(`clarifier:${browseClarification.reason}`);
     diagnostics.composer = "browse_clarifier";
+    console.log(
+      `[product-turn-engine] clarifier diag reason=${browseClarification.reason} ` +
+        `choicesLen=${Array.isArray(browseClarification.choices) ? browseClarification.choices.length : "nil"} ` +
+        `choices=${JSON.stringify((browseClarification.choices || []).slice(0, 5))}`,
+    );
     return {
       decline: false,
       scope,
