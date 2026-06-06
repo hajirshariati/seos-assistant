@@ -945,8 +945,34 @@ async function runResolverNoMatchDispatch({ ctx, controller, encoder }) {
   const text = String(exactNoMatch?.text || "").trim();
   if (!text) return null;
 
+  // Sales-associate behaviour: when the no-match is because the
+  // customer pivoted to a gender that doesn't carry the requested
+  // category (e.g. "how about mens?" after women's loafers), offer
+  // the categories that DO exist for that gender in the active
+  // merchant group as chips. Bot says "no men's loafers — but in
+  // men's we have..." and the chips let them keep shopping.
+  //
+  // Owned by the same engine that emits browse-clarifier chips, so
+  // chip generation, umbrella filtering, and gender grounding all
+  // flow through one helper. No second source of authority.
+  const impossible = Array.isArray(ctx.resolverState?.impossible_constraints)
+    ? ctx.resolverState.impossible_constraints
+    : [];
+  const genderMiss = impossible.find((c) => c?.field === "gender" && c?.value);
+  let alternativeChoices = [];
+  if (genderMiss) {
+    const { buildAlternativeCategoryChoices } = await import("../lib/product-turn-engine.server");
+    alternativeChoices = buildAlternativeCategoryChoices(ctx, genderMiss.value);
+  }
+
   controller.enqueue(encoder.encode(sseChunk({ type: "text", text })));
   controller.enqueue(encoder.encode(sseChunk({ type: "products", products: [] })));
+  if (alternativeChoices.length >= 2) {
+    controller.enqueue(encoder.encode(sseChunk({
+      type: "choices",
+      options: alternativeChoices,
+    })));
+  }
   controller.enqueue(encoder.encode(sseChunk({ type: "done" })));
 
   return {
@@ -954,7 +980,8 @@ async function runResolverNoMatchDispatch({ ctx, controller, encoder }) {
     answerText: text,
     diagnostics: {
       reason: exactNoMatch.reason || "exact_catalog_no_match",
-      impossible: ctx.resolverState?.impossible_constraints || [],
+      impossible,
+      alternativeChoices: alternativeChoices.length,
     },
   };
 }

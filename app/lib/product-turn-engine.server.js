@@ -597,12 +597,45 @@ function catalogBackedGenderChoicesForGroup(ctx = {}, group) {
   return order.filter((g) => found.has(g)).map(genderChoiceLabel);
 }
 
+// Compute catalog-grounded category chips for the customer's
+// active merchant group, restricted to a specific gender. Used by:
+//   1. the engine's browse_clarifier ("what type of women's
+//      footwear are you looking for?" → chips)
+//   2. the resolver no-match dispatcher (customer pivoted to a
+//      gender that doesn't carry the requested category — offer
+//      categories that DO exist for that gender in the same group,
+//      so the bot acts like a sales associate instead of dead-ending)
+//
+// activeCategoryGroup comes from chat.jsx ctx; reusing it here keeps
+// the chip list grounded in the same merchant configuration both
+// owners already trust.
+export function buildAlternativeCategoryChoices(ctx = {}, gender = "") {
+  const group = ctx?.activeCategoryGroup || ctx?.contextCategoryGroup;
+  if (!group?.name || !Array.isArray(group?.categories) || group.categories.length === 0) {
+    return [];
+  }
+  return catalogBackedCategoryChoicesForGroup(ctx, group, gender);
+}
+
 function catalogBackedCategoryChoicesForGroup(ctx = {}, group, gender = "") {
-  const out = [];
+  // Two-pass: collect every catalog-backed category, then drop the
+  // umbrella only when narrower siblings exist. A category whose
+  // name matches its group (e.g. "Footwear" inside the Footwear
+  // group) is the catch-all bucket — offering it alongside
+  // Sneakers/Sandals/Boots is redundant and reads as a dumb bot
+  // loop. But when a group has ONLY the umbrella (Orthotics group
+  // = ["Orthotics"]), keeping it is the only way the group can
+  // surface at all.
+  const groupKey = normalizeCategoryKey(group?.name);
+  const backed = [];
   for (const category of group?.categories || []) {
     if (!categoryHasCatalogEvidence(ctx, category, gender)) continue;
-    out.push(displayCategoryLabel(ctx, category));
+    backed.push({ category, isUmbrella: groupKey && normalizeCategoryKey(category) === groupKey });
   }
+  const hasNarrower = backed.some((entry) => !entry.isUmbrella);
+  const out = backed
+    .filter((entry) => !(entry.isUmbrella && hasNarrower))
+    .map((entry) => displayCategoryLabel(ctx, entry.category));
   return uniqueLabels(out);
 }
 
