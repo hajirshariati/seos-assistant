@@ -436,6 +436,8 @@ export function ensureHeaderLineBreaks(text) {
 // bold header into a tight bulleted list. The widget renders adjacent
 // bullets with less vertical space.
 const FACT_LINE_RE = /^\s*([A-Z][A-Za-z][\w ]{1,30}):\s+([^\n]{2,180})\s*$/;
+// Existing bullet line: starts with "- " or "* " then content.
+const BULLET_LINE_RE = /^\s*[-*][ \t]+([^\n]+)\s*$/;
 export function tightenSequentialFactLines(text) {
   if (!text || typeof text !== "string") return text;
   // Normalize line endings and any blank-line whitespace so the
@@ -460,6 +462,11 @@ export function tightenSequentialFactLines(text) {
     }
     const isHeader = /^\*\*[A-Z][^*\n]{2,}\*\*$/.test(block);
     const factMatch = block.match(FACT_LINE_RE);
+    // Bullet detection: single-line bullet OR a block where ALL lines
+    // are bullets (multi-line bullet block from prior turn). When the
+    // LLM emits "- item\n\n- item\n\n- item" each item lands in its
+    // own \n\n-split block. Promote to a tight bullet block.
+    const bulletMatch = block.match(BULLET_LINE_RE);
     if (isHeader) {
       out.push(block);
       lastWasHeader = true;
@@ -467,8 +474,16 @@ export function tightenSequentialFactLines(text) {
     } else if (factMatch && (lastWasHeader || factsInRow > 0)) {
       const label = factMatch[1].trim();
       const value = factMatch[2].trim();
-      // Mark with sentinel — final pass will join sentinels with \n
       out.push(`__FACT__- **${label}:** ${value}`);
+      factsInRow += 1;
+      lastWasHeader = false;
+    } else if (bulletMatch && (lastWasHeader || factsInRow > 0)) {
+      // Adjacent bullet under a section — collapse \n\n separator
+      // to single \n so the widget renders a tight bullet list, not
+      // paragraph-spaced items. Live trace 2026-06-08: BioRocker vs
+      // UltraSky rendered bullets as wide paragraphs because the LLM
+      // emitted "- item\n\n- item" with blank lines between.
+      out.push(`__FACT__- ${bulletMatch[1].trim()}`);
       factsInRow += 1;
       lastWasHeader = false;
     } else {
@@ -477,7 +492,7 @@ export function tightenSequentialFactLines(text) {
       factsInRow = 0;
     }
   }
-  // Join: facts separated by single \n; everything else by \n\n.
+  // Join: facts/bullets separated by single \n; everything else by \n\n.
   let result = "";
   for (let i = 0; i < out.length; i++) {
     const cur = out[i];

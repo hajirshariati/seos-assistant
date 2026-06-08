@@ -548,7 +548,17 @@ async function runProductTurnDispatch({ ctx, controller, encoder, claimConfig, a
     const latestMsg = String(ctx.latestUserMessage || "");
     if (latestMsg && /\b[A-Z][a-z]{3,}\b/.test(latestMsg)) {
       try {
-        const namedHandle = await detectSpecificProduct(ctx.shop, latestMsg);
+        // Strict resolver first (token must be unique to one product).
+        // Live trace 2026-06-08: "Reagan" appears in BOTH reagan-black-ah600w
+        // AND reagan-red-ah609w → strict resolver returns null (token isn't
+        // unique). Fall back to findProductHandleForSimilarAnchor which
+        // accepts any handle from a style family.
+        let namedHandle = await detectSpecificProduct(ctx.shop, latestMsg);
+        if (!namedHandle) {
+          const { findProductHandleForSimilarAnchor } =
+            await import("../lib/catalog-resolver.server");
+          namedHandle = await findProductHandleForSimilarAnchor(ctx.shop, latestMsg);
+        }
         if (namedHandle) {
           const details = await dispatchTool("get_product_details", { handle: namedHandle }, ctx);
           const namedCards = extractProductCards("get_product_details", details, ctx);

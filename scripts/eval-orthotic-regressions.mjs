@@ -1330,6 +1330,28 @@ await test("23m — tightenSequentialFactLines preserves regular prose paragraph
   assert.equal(out, text, "regular prose paragraphs must not be touched");
 });
 
+await test("23o — tightenSequentialFactLines collapses paragraph-spaced bullets", () => {
+  // Live trace 2026-06-08: BioRocker vs UltraSky comparison rendered
+  // with wide gaps between bullets because the LLM emitted blank lines
+  // between each "- item". The widget treats each as a paragraph.
+  const text =
+    "**BioRocker™ Technology**\n\n" +
+    "- A rocker-style midsole\n\n" +
+    "- Reduces joint stress\n\n" +
+    "- Found in sandal styles\n\n" +
+    "**UltraSKY™ Technology**\n\n" +
+    "- Lightweight EVA foam\n\n" +
+    "- Extreme cushioning";
+  const out = tightenSequentialFactLines(text);
+  assert.ok(/- A rocker-style midsole\n- Reduces joint stress\n- Found in sandal styles/.test(out),
+    `bullets under BioRocker must be joined with single \\n. Output:\n${out}`);
+  assert.ok(/- Lightweight EVA foam\n- Extreme cushioning/.test(out),
+    `bullets under UltraSKY must be joined too. Output:\n${out}`);
+  // Headers still separated by blank line
+  assert.ok(/styles\n\n\*\*UltraSKY/.test(out),
+    `headers between sections must keep \\n\\n. Output:\n${out}`);
+});
+
 await test("23n — tightenSequentialFactLines normalizes CRLF before splitting", () => {
   // Live trace 2026-06-08: even after deploying tightenSequentialFactLines,
   // the user's screenshot showed paragraph-spaced specs instead of tight
