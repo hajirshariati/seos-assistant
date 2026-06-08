@@ -365,7 +365,13 @@ const SECTION_HEADER_KEYWORD_RE = /\b(?:Technology|Method|System|Feature|Approac
 
 export function ensureHeaderLineBreaks(text) {
   if (!text || typeof text !== "string") return text;
-  let next = text;
+  // Normalize line endings up front. \r\n inputs make the patterns
+  // miss because [^\n] still matches \r, and downstream string-splits
+  // on \n\n produce garbage on CRLF documents.
+  let next = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n[ \t]+\n/g, "\n\n");
   // Pattern 1: After a colon ("compare:" / "summary:" / etc.) →
   // promote same-line bold to a fresh paragraph.
   next = next.replace(/(:)[ \t]+(\*\*[A-Z][^*\n]{2,}\*\*)/g, "$1\n\n$2");
@@ -432,7 +438,16 @@ export function ensureHeaderLineBreaks(text) {
 const FACT_LINE_RE = /^\s*([A-Z][A-Za-z][\w ]{1,30}):\s+([^\n]{2,180})\s*$/;
 export function tightenSequentialFactLines(text) {
   if (!text || typeof text !== "string") return text;
-  const blocks = text.split(/\n{2,}/);
+  // Normalize line endings and any blank-line whitespace so the
+  // \n\n splitter sees real paragraph boundaries. Without this, \r\n
+  // inputs or " \n " whitespace-only "blank" lines break the splitter
+  // and the function returns garbage (header stripped, items spaced
+  // wrong).
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n[ \t]+\n/g, "\n\n");
+  const blocks = normalized.split(/\n{2,}/);
   if (blocks.length < 4) return text;
   const out = [];
   let factsInRow = 0;

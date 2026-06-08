@@ -1330,6 +1330,24 @@ await test("23m — tightenSequentialFactLines preserves regular prose paragraph
   assert.equal(out, text, "regular prose paragraphs must not be touched");
 });
 
+await test("23n — tightenSequentialFactLines normalizes CRLF before splitting", () => {
+  // Live trace 2026-06-08: even after deploying tightenSequentialFactLines,
+  // the user's screenshot showed paragraph-spaced specs instead of tight
+  // bullets. Suspected cause: certain LLM output paths emit \r\n line
+  // endings, which broke the \n{2,} block-splitter (previously) and
+  // returned garbage (header dropped, items mis-separated).
+  const crlf =
+    "**Jillian — \$139.95**\r\n\r\n" +
+    "Category: Sandal\r\n\r\n" +
+    "Closure: Hook & loop\r\n\r\n" +
+    "Upper: Leather\r\n\r\n" +
+    "Heel: 1.1\"";
+  const out = tightenSequentialFactLines(crlf);
+  assert.ok(/- \*\*Category:\*\* Sandal\n- \*\*Closure:\*\*/.test(out),
+    `CRLF input must normalize and tighten correctly. Output:\n${out}`);
+  assert.ok(/\*\*Jillian/.test(out), "header must survive normalization");
+});
+
 await test("23h — reflowInlineList leaves single-mention text untouched", () => {
   // Only one ` - **Label** — ` in the text → not a list, don't reflow.
   const text = "We offer the Vania - **Premium** — a comfortable platform sandal.";
