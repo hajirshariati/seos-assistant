@@ -27,6 +27,12 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  // Online tokens give authenticate.admin a user-scoped session whose
+  // onlineAccessInfo carries the logged-in staff member (first name →
+  // personalised home-page greeting). The token-exchange strategy STILL
+  // acquires and stores the offline token first on every (re)auth, so
+  // webhooks and the storefront app proxy keep working unchanged.
+  useOnlineTokens: true,
   future: {
     expiringOfflineAccessTokens: true,
   },

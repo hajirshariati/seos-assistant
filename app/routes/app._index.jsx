@@ -75,10 +75,16 @@ export const loader = async ({ request }) => {
   const recommenderActive =
     config.decisionTreeEnabled === true && enabledRecommenderCount > 0;
 
+  // With useOnlineTokens enabled, the admin session is user-scoped and
+  // carries the logged-in staff member — first name personalises the
+  // home-page greeting ("Good morning, John.").
+  const userFirstName = String(session?.onlineAccessInfo?.associated_user?.first_name || "").trim();
+
   return {
     hasApiKey: config.anthropicApiKey !== "",
     fileCount: files.length,
     shop: session.shop,
+    userFirstName,
     themeEditorUrl: `https://${session.shop}/admin/themes/current/editor?context=apps`,
     widgetEnabled,
     productsCount: syncState.productsCount || 0,
@@ -1285,7 +1291,7 @@ export default function Home() {
     conversionCount, conversionRevenue, conversionCurrency,
     catalogSyncStatus, lastSyncedAt, hoursSinceSync,
     recommenderActive, enabledRecommenderCount,
-    dailySeries, conversionSeries,
+    dailySeries, conversionSeries, userFirstName,
   } = useLoaderData();
 
   // Server renders with server-clock greeting; correct to the merchant's
@@ -1395,7 +1401,8 @@ export default function Home() {
   const rateDismissed = rateFetcher.state !== "idle" || rateFetcher.data?.dismissed;
   const showRateLimit = rateLimitHits > 0 && !rateDismissed;
 
-  const greetWords = `${greeting}.`.split(" ");
+  const greetName = String(userFirstName || "").trim();
+  const greetWords = `${greeting}${greetName ? `, ${greetName}` : ""}.`.split(" ");
 
   return (
     <Page>

@@ -733,16 +733,26 @@ function Globe({ size = 820, points = 1700, theme = "light", boostRef = null }) 
     let raf;
     let last = 0;
     let rot = 0.6;
+    // Easter-egg boost: five lightning-fast full rotations over ~4s.
+    // easeInOutCubic has zero slope at both ends, so the sphere
+    // accelerates smoothly out of its glacial cruise, blurs through
+    // the middle, and glides back to cruise with no visible snap —
+    // and because the extra rotation is an exact multiple of 2π, the
+    // hand-off back to the base rotation is seamless.
+    const BOOST_TURNS = 5;
+    const BOOST_MS = 4200;
+    const easeInOutCubic = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
     const loop = (t) => {
       const dt = last ? Math.min(t - last, 100) : 16;
       last = t;
-      // Glacial spin — one rotation every ~3.5 minutes — unless the
-      // easter egg kicked the engine, in which case it sprints for a
-      // few seconds and settles back down.
-      const boostedAgo = boostRef ? t - (boostRef.current || -1e9) : Infinity;
-      const speed = boostedAgo < 4000 ? 1 + 11 * (1 - boostedAgo / 4000) : 1;
-      rot += dt * 0.00003 * speed;
-      drawFrame(rot, t);
+      // Glacial cruise — one rotation every ~3.5 minutes.
+      rot += dt * 0.00003;
+      let extra = 0;
+      if (boostRef) {
+        const p = (t - (boostRef.current || -1e9)) / BOOST_MS;
+        if (p >= 0 && p < 1) extra = BOOST_TURNS * 2 * Math.PI * easeInOutCubic(p);
+      }
+      drawFrame(rot + extra, t);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
