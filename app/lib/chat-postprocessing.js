@@ -579,13 +579,25 @@ export function containsInternalLanguageLeak(text) {
   return FORBIDDEN_INTERNAL_TERMS_RE.test(text);
 }
 
+// History annotation the server appends to past assistant turns so the
+// model can resolve "the first one" — e.g. "[Product cards displayed
+// with this reply: Charlotte Lace-Up Sneaker ($159.95)]". The model
+// occasionally imitates the bracket in its own reply (seen live
+// 2026-06-10); it is internal bookkeeping and must never reach the
+// customer.
+const CARD_NOTE_RE = /\[\s*Product\s+cards?\s+displayed\s+with\s+this\s+reply\s*:[^\]]*\]/gi;
+
 export function stripInternalLeaks(text, { fallback = INTERNAL_LEAK_FALLBACK } = {}) {
   if (!text || typeof text !== "string") return { text: text || "", changed: false, replaced: false };
   const original = text;
 
+  // Stage 0: remove echoed card-display annotations wholesale, plus a
+  // dangling "here's/here are X:" colon left pointing at nothing.
+  let cleaned = text.replace(CARD_NOTE_RE, "").replace(/:\s*(?=[.!?])/g, "");
+
   // Stage 1: strip lead-in phrases, then capitalize the resulting
   // sentence start so "there are no men's options" → "There are…".
-  let out = text.replace(RESOLVER_LEAD_IN_RE, "").replace(/\s{2,}/g, " ").trim();
+  let out = cleaned.replace(RESOLVER_LEAD_IN_RE, "").replace(/\s{2,}/g, " ").trim();
   out = out.replace(/(^|[.!?]\s+|\n)([a-z])/g, (_, lead, ch) => lead + ch.toUpperCase());
 
   // Stage 2: if any forbidden term still remains, the reply isn't

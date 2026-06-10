@@ -897,6 +897,17 @@ test("free-text 'do you have anything good?' → does NOT fire (no category)", (
 // lead-in phrases when it can; if a forbidden term still remains,
 // the whole reply is replaced with a neutral clarification line.
 
+test("internal-leak — strips echoed '[Product cards displayed…]' annotation", () => {
+  // Live leak 2026-06-10: the model imitated the history card-note in
+  // its own reply. The marker must be removed; surrounding text stays.
+  const before = "Here's the yellow sneaker we carry: [Product cards displayed with this reply: Charlotte Lace-Up Sneaker - Butter] This cushioned sneaker features a lightweight midsole.";
+  const r = stripInternalLeaks(before);
+  assert.equal(r.changed, true, "must mark changed");
+  assert.equal(r.replaced, false, "must not nuke the whole reply");
+  assert.ok(!/Product cards displayed/i.test(r.text), `marker must be gone: ${r.text}`);
+  assert.ok(/cushioned sneaker/i.test(r.text), `real content must survive: ${r.text}`);
+});
+
 test("internal-leak — strips 'The resolver state indicates...' lead-in", () => {
   const before = "The resolver state indicates there are currently no men's orthotics matching in the catalog right now.";
   const r = stripInternalLeaks(before);
