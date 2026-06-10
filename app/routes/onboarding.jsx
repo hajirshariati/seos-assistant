@@ -124,7 +124,7 @@ const STYLES = `
     opacity: 0;
     animation: rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   }
-  .hero-brand img { display: block; height: 26px; width: auto; }
+  .hero-brand img { display: block; height: 26px; width: auto; cursor: pointer; }
   .hero-brand-name {
     font-size: 11.5px;
     font-weight: 650;
@@ -160,7 +160,7 @@ const STYLES = `
     position: relative;
     color: var(--accent);
     font-weight: 700;
-    cursor: help;
+    cursor: pointer;
   }
   .seos::after {
     content: "";
@@ -305,11 +305,6 @@ const STYLES = `
   .phase-tab[aria-selected="true"] .num {
     background: rgba(255,255,255,0.22);
     color: var(--accent-on);
-  }
-  .phase-tab .count {
-    font-size: 12px;
-    opacity: 0.55;
-    font-variant-numeric: tabular-nums;
   }
 
   /* ── Phase intro — text left, illustration right. ─────────── */
@@ -581,9 +576,60 @@ const STYLES = `
   }
   footer.foot a:hover { color: var(--accent); }
 
+  /* ── Easter-egg chat bubble — a miniature of the storefront
+        widget, popping up bottom-right when the logo is
+        triple-clicked. Click to dismiss; auto-hides. ───────────── */
+  .egg-chat {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 50;
+    width: 290px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+    overflow: hidden;
+    cursor: pointer;
+    animation: egg-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+  @keyframes egg-pop {
+    from { opacity: 0; transform: translateY(16px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .egg-chat-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--accent);
+  }
+  .egg-chat-head img { height: 18px; width: auto; display: block; }
+  .egg-chat-head span:first-of-type {
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--accent-on);
+    letter-spacing: 0.2px;
+    flex: 1;
+  }
+  .egg-chat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #7CF2AE;
+    box-shadow: 0 0 0 3px rgba(124,242,174,0.25);
+  }
+  .egg-chat-body {
+    padding: 13px 14px 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .hero-brand, .hero h1, .hero p, .phase-nav { animation: none; opacity: 1; transform: none; }
     .phase-tab, .step, .theme-toggle { transition: none; }
+    .egg-chat { animation: none; }
   }
 `;
 
@@ -601,12 +647,16 @@ const THEME_INIT_SCRIPT = `
 `;
 
 // ---------------------------------------------------------------------------
-// Globe — the same slow-spinning dotted sphere as the admin home, pinned to
-// the viewport's top-right corner behind the content. Light theme renders
-// mostly-white dots with a sage-green sprinkle; dark theme renders glowing
-// green dots. Respects prefers-reduced-motion with a single static frame.
+// Globe — the slow-spinning dotted sphere, pinned to the viewport's
+// top-right corner behind the content. Single-colour dots (white on light,
+// green glow on dark) plus a "setup mode" network layer: a few dozen
+// short links between neighbouring dots fade in and out on independent
+// rhythms, so the sphere looks like nodes connecting and disconnecting
+// while the system wires itself up. `boostRef` lets the page trigger a
+// brief hyper-spin (easter egg). Respects prefers-reduced-motion with a
+// single static frame.
 // ---------------------------------------------------------------------------
-function Globe({ size = 820, points = 1700, theme = "light" }) {
+function Globe({ size = 820, points = 1700, theme = "light", boostRef = null }) {
   const ref = useRef(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -625,8 +675,31 @@ function Globe({ size = 820, points = 1700, theme = "light" }) {
       const y = 1 - (i / (N - 1)) * 2;
       const r = Math.sqrt(Math.max(0, 1 - y * y));
       const th = golden * i;
-      pts.push([Math.cos(th) * r, y, Math.sin(th) * r, i % 3 === 0]);
+      pts.push([Math.cos(th) * r, y, Math.sin(th) * r]);
     }
+
+    // Connection pairs for the setup-mode link effect: sample points
+    // across the sphere, pair each with its nearest neighbour in a
+    // local window, and give every pair its own blink phase + speed so
+    // links connect and disconnect out of sync.
+    const pairs = [];
+    const stride = Math.max(7, Math.floor(N / 110));
+    for (let i = 0; i < N - 1; i += stride) {
+      let best = -1;
+      let bestD = 0.34; // max chord length on the unit sphere
+      const end = Math.min(N, i + stride * 3);
+      for (let j = i + 1; j < end; j++) {
+        const dx = pts[i][0] - pts[j][0];
+        const dy = pts[i][1] - pts[j][1];
+        const dz = pts[i][2] - pts[j][2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (best >= 0) {
+        pairs.push([i, best, Math.random() * Math.PI * 2, 0.35 + Math.random() * 0.7]);
+      }
+    }
+
     const R = size / 2 - 10;
     const cx = size / 2;
     const cy = size / 2;
@@ -634,8 +707,12 @@ function Globe({ size = 820, points = 1700, theme = "light" }) {
     const cosT = Math.cos(tilt);
     const sinT = Math.sin(tilt);
     const dark = theme === "dark";
+    // Per-frame projected coordinates, reused by the link pass.
+    const px = new Float32Array(N);
+    const py = new Float32Array(N);
+    const pd = new Float32Array(N);
 
-    const drawFrame = (rot) => {
+    const drawFrame = (rot, tSec) => {
       ctx.clearRect(0, 0, size, size);
       const grad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.35, R * 0.1, cx, cy, R);
       if (dark) {
@@ -655,7 +732,8 @@ function Globe({ size = 820, points = 1700, theme = "light" }) {
       const cosR = Math.cos(rot);
       const sinR = Math.sin(rot);
       const dotScale = Math.max(1, size / 280) * 0.75;
-      for (const [x, y, z] of pts) {
+      for (let i = 0; i < N; i++) {
+        const [x, y, z] = pts[i];
         const xr = x * cosR + z * sinR;
         const zr = -x * sinR + z * cosR;
         const yr = y * cosT - zr * sinT;
@@ -663,6 +741,7 @@ function Globe({ size = 820, points = 1700, theme = "light" }) {
         const depth = (zt + 1) / 2;
         const sx = cx + xr * R;
         const sy = cy + yr * R;
+        px[i] = sx; py[i] = sy; pd[i] = depth;
         // Single colour per theme — green glow on dark, pure white on light.
         ctx.fillStyle = dark
           ? `rgba(74,222,128,${0.05 + depth * 0.24})`
@@ -671,22 +750,50 @@ function Globe({ size = 820, points = 1700, theme = "light" }) {
         ctx.arc(sx, sy, (0.6 + depth * 1.25) * dotScale, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Setup-mode links — each pair blinks on its own rhythm; only
+      // front-facing links draw, and brightness follows depth so the
+      // network sits ON the sphere instead of floating over it.
+      ctx.lineWidth = 1;
+      for (const [i, j, phase, speed] of pairs) {
+        const blink = Math.sin(tSec * speed + phase);
+        if (blink < 0.2) continue; // disconnected right now
+        const vis = Math.min(pd[i], pd[j]);
+        if (vis < 0.5) continue; // back of the sphere
+        const a = (blink - 0.2) * 1.1 * (vis - 0.4);
+        ctx.strokeStyle = dark
+          ? `rgba(74,222,128,${a * 0.55})`
+          : `rgba(255,255,255,${a * 0.95})`;
+        ctx.beginPath();
+        ctx.moveTo(px[i], py[i]);
+        ctx.lineTo(px[j], py[j]);
+        ctx.stroke();
+      }
     };
 
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     if (reduced) {
-      drawFrame(0.6);
+      drawFrame(0.6, 1.2);
       return undefined;
     }
     let raf;
+    let last = 0;
+    let rot = 0.6;
     const loop = (t) => {
-      // Glacial spin — one rotation every ~3.5 minutes. Ambience, not a show.
-      drawFrame(t * 0.00003);
+      const dt = last ? Math.min(t - last, 100) : 16;
+      last = t;
+      // Glacial spin — one rotation every ~3.5 minutes — unless the
+      // easter egg kicked the engine, in which case it sprints for a
+      // few seconds and settles back down.
+      const boostedAgo = boostRef ? t - (boostRef.current || -1e9) : Infinity;
+      const speed = boostedAgo < 4000 ? 1 + 11 * (1 - boostedAgo / 4000) : 1;
+      rot += dt * 0.00003 * speed;
+      drawFrame(rot, t / 1000);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [size, points, theme]);
+  }, [size, points, theme, boostRef]);
 
   return (
     <canvas
@@ -986,22 +1093,52 @@ export default function Onboarding() {
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   // ── Hidden surface for the curious ───────────────────────────
-  // Three subtle eggs, none visible without poking around:
+  // Four subtle eggs, none visible without poking around:
   //   1. Console boot banner with ASCII "SEoS" + the acronym + a
   //      welcome line. Stripe-style — only devs who open DevTools
   //      ever see it.
   //   2. Konami code → triggers a glow pulse on "SEoS" and a
   //      console message. Click on the SEoS word does the same so
   //      keyboard-less users can stumble onto it too.
-  //   3. Tab title swap when the page is hidden — title becomes
-  //      "🔍 Don't leave the engine running…" and reverts on focus.
+  //   3. Type the word "steroids" anywhere on the page → the globe
+  //      sprints for a few seconds (the engine literally gets a shot
+  //      of steroids), the SEoS word pulses, and the console confirms.
+  //   4. Triple-click the logo in the header → a miniature chat
+  //      bubble pops up bottom-right, the assistant introducing
+  //      itself the way it does to shoppers on the storefront.
   const [boosted, setBoosted] = useState(false);
+  const globeBoostRef = useRef(-1e9);
   useEffect(() => {
     if (boosted) {
       const t = setTimeout(() => setBoosted(false), 1700);
       return () => clearTimeout(t);
     }
   }, [boosted]);
+
+  // Egg 4 state — the pop-up assistant bubble.
+  const EGG_LINES = [
+    "Hi, I'm SEoS 👋 I help shoppers find the right product before they finish typing.",
+    "Three clicks? You'd make a great QA tester. Everything I say is fact-checked against the live catalog first.",
+    "I never guess. If a product fact isn't in the catalog, it doesn't leave my mouth.",
+  ];
+  const [eggMsg, setEggMsg] = useState(null);
+  const logoClicks = useRef({ n: 0, t: 0 });
+  const onLogoClick = () => {
+    const now = Date.now();
+    if (now - logoClicks.current.t > 1500) logoClicks.current.n = 0;
+    logoClicks.current.t = now;
+    logoClicks.current.n += 1;
+    if (logoClicks.current.n >= 3) {
+      logoClicks.current.n = 0;
+      setEggMsg(EGG_LINES[Math.floor(Math.random() * EGG_LINES.length)]);
+    }
+  };
+  useEffect(() => {
+    if (eggMsg) {
+      const t = setTimeout(() => setEggMsg(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [eggMsg]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1021,9 +1158,11 @@ export default function Onboarding() {
     // eslint-disable-next-line no-console
     console.log(banner, "color:#4ade80;font-family:ui-monospace,monospace;font-size:11px;line-height:1.3");
 
-    // Egg 2 — Konami code listener. ↑↑↓↓←→←→ B A
+    // Egg 2 — Konami code. ↑↑↓↓←→←→ B A
+    // Egg 3 — typing "steroids" hyper-spins the globe.
     const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
     let pos = 0;
+    let typed = "";
     const onKey = (e) => {
       const k = e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key;
       if (k === KONAMI[pos]) {
@@ -1031,27 +1170,28 @@ export default function Onboarding() {
         if (pos === KONAMI.length) {
           pos = 0;
           setBoosted(true);
+          globeBoostRef.current = performance.now();
           // eslint-disable-next-line no-console
           console.log("%c💪 Steroids engaged — search engine boosted.", "color:#4ade80;font-weight:700;font-size:13px");
         }
       } else {
         pos = k === KONAMI[0] ? 1 : 0;
       }
+      if (e.key && e.key.length === 1) {
+        typed = (typed + e.key.toLowerCase()).slice(-12);
+        if (typed.endsWith("steroids")) {
+          typed = "";
+          setBoosted(true);
+          globeBoostRef.current = performance.now();
+          // eslint-disable-next-line no-console
+          console.log("%c🌍 You said the magic word. Engine spinning at full search speed.", "color:#4ade80;font-weight:700;font-size:13px");
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
 
-    // Egg 3 — tab-title swap when the page goes to background.
-    const original = document.title;
-    const onVis = () => {
-      if (document.hidden) document.title = "🔍 Don't leave the engine running…";
-      else document.title = original;
-    };
-    document.addEventListener("visibilitychange", onVis);
-
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("visibilitychange", onVis);
-      document.title = original;
     };
   }, []);
 
@@ -1061,7 +1201,7 @@ export default function Onboarding() {
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
       <div className="globe-bg" aria-hidden="true">
-        <Globe size={820} points={1700} theme={theme} />
+        <Globe size={820} points={1700} theme={theme} boostRef={globeBoostRef} />
       </div>
 
       <button
@@ -1090,7 +1230,7 @@ export default function Onboarding() {
         <header className="hero">
           <div className="hero-inner">
             <div className="hero-brand">
-              <img src={seosLogo} alt="SEoS" />
+              <img src={seosLogo} alt="SEoS" onClick={onLogoClick} />
               <span className="hero-brand-name">SEoS Assistant · Setup guide</span>
             </div>
             <h1>
@@ -1100,7 +1240,7 @@ export default function Onboarding() {
                 onClick={() => setBoosted(true)}
               >
                 SEoS
-                <span className="seos-tip">Search engine on steroids</span>
+                <span className="seos-tip">SEoS Assistant — Search Engine on Steroids</span>
               </span>
               {" Assistant."}
             </h1>
@@ -1126,7 +1266,6 @@ export default function Onboarding() {
                 >
                   <span className="num">{idx + 1}</span>
                   <span>{phase.name}</span>
-                  <span className="count">· {phase.steps.length}</span>
                 </button>
               ))}
             </nav>
@@ -1249,6 +1388,17 @@ export default function Onboarding() {
           <div>© HajirAi · SEoS Assistant</div>
         </footer>
       </div>
+
+      {eggMsg ? (
+        <div className="egg-chat" role="status" onClick={() => setEggMsg(null)}>
+          <div className="egg-chat-head">
+            <img src={seosLogo} alt="" aria-hidden="true" />
+            <span>SEoS Assistant</span>
+            <span className="egg-chat-dot" aria-hidden="true" />
+          </div>
+          <div className="egg-chat-body">{eggMsg}</div>
+        </div>
+      ) : null}
     </>
   );
 }
