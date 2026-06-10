@@ -363,6 +363,7 @@ function DetailChart({ metric }) {
       </div>
       <div className="seos-detail-axis">
         <span>{series.length > 0 ? fmtDay(series[0].date) : ""}</span>
+        <Link to="/app/analytics" className="seos-detail-link">View detailed analytics →</Link>
         <span>{series.length > 0 ? fmtDay(series[series.length - 1].date) : ""}</span>
       </div>
     </div>
@@ -370,26 +371,51 @@ function DetailChart({ metric }) {
 }
 
 // ---------------------------------------------------------------------------
-// MetricStrip — the Shopify-style stats bar. Hovering a cell smoothly
-// expands a detail panel underneath with the full 30-day chart. The panel
-// keeps rendering the last active metric while collapsing so the close
-// animation doesn't snap.
+// MetricStrip — Shopify-style compact stats bar pinned to the top of the
+// page: small label over value + tiny sparkline, no card chrome. Hovering
+// a metric opens a floating dropdown OVERLAY with the full 30-day chart —
+// it doesn't push page content, so an accidental open never reflows the
+// page — and a 160ms hover-intent delay means brushing the mouse across
+// the strip doesn't trigger it. The dropdown keeps rendering the last
+// active metric while fading out so the close animation doesn't snap.
 // ---------------------------------------------------------------------------
 function MetricStrip({ metrics }) {
   const [active, setActive] = useState(null);
   const [lastActive, setLastActive] = useState(0);
+  const openTimer = useRef(null);
   const closeTimer = useRef(null);
 
-  const open = (i) => {
+  const clearTimers = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
     if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+  const requestOpen = (i) => {
+    clearTimers();
+    // Panel already open → switch metrics instantly; the delay only
+    // guards the initial open against drive-by hovers.
+    if (active !== null) {
+      setActive(i);
+      setLastActive(i);
+      return;
+    }
+    openTimer.current = setTimeout(() => {
+      setActive(i);
+      setLastActive(i);
+    }, 160);
+  };
+  const openNow = (i) => {
+    clearTimers();
     setActive(i);
     setLastActive(i);
   };
-  const scheduleClose = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setActive(null), 220);
+  const cancelPendingOpen = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
   };
-  useEffect(() => () => closeTimer.current && clearTimeout(closeTimer.current), []);
+  const scheduleClose = () => {
+    clearTimers();
+    closeTimer.current = setTimeout(() => setActive(null), 200);
+  };
+  useEffect(() => () => clearTimers(), []);
 
   return (
     <div
@@ -402,25 +428,25 @@ function MetricStrip({ metrics }) {
           <button
             key={m.label}
             type="button"
+            title={`${m.label} — last 30 days`}
             className={"seos-metric" + (active === i ? " is-active" : "")}
-            onMouseEnter={() => open(i)}
-            onFocus={() => open(i)}
-            onClick={() => open(i)}
+            onMouseEnter={() => requestOpen(i)}
+            onMouseLeave={cancelPendingOpen}
+            onFocus={() => openNow(i)}
+            onClick={() => openNow(i)}
           >
             <span className="seos-metric-label">{m.label}</span>
-            <span className="seos-metric-value">{m.value}</span>
-            <span className="seos-metric-spark">
-              <Sparkline points={(m.series || []).map((p) => p.value)} id={i} />
+            <span className="seos-metric-row">
+              <span className="seos-metric-value">{m.value}</span>
+              <Sparkline points={(m.series || []).map((p) => p.value)} width={52} height={18} id={i} />
             </span>
           </button>
         ))}
       </div>
       <div className={"seos-metric-detail" + (active !== null ? " is-open" : "")} aria-hidden={active === null}>
-        <div className="seos-metric-detail-clip">
-          {metrics[active !== null ? active : lastActive] ? (
-            <DetailChart metric={metrics[active !== null ? active : lastActive]} />
-          ) : null}
-        </div>
+        {metrics[active !== null ? active : lastActive] ? (
+          <DetailChart metric={metrics[active !== null ? active : lastActive]} />
+        ) : null}
       </div>
     </div>
   );
@@ -1229,87 +1255,86 @@ export default function Home() {
           50%      { box-shadow: 0 0 0 5px rgba(215,44,13,0.12), 0 0 16px rgba(215,44,13,0.6); }
         }
 
-        /* Metric strip. */
+        /* Metric strip — compact, no card chrome, centered at the very
+           top of the page like the Shopify admin home. */
         .seos-metrics-wrap {
-          border-radius: 14px;
-          border: 1px solid rgba(0,0,0,0.08);
-          background: #fff;
-          overflow: hidden;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+          position: relative;
+          z-index: 40;
         }
         .seos-metrics {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-        }
-        @media (max-width: 900px) {
-          .seos-metrics { grid-template-columns: repeat(2, 1fr); }
-          .seos-metrics .seos-metric:last-child { grid-column: span 2; }
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 2px 6px;
         }
         .seos-metric {
           appearance: none;
           font: inherit;
-          text-align: left;
+          text-align: center;
           display: flex;
           flex-direction: column;
-          gap: 6px;
-          padding: 16px 18px 14px;
+          align-items: center;
+          gap: 3px;
+          padding: 7px 14px 8px;
           background: transparent;
           border: none;
-          border-right: 1px solid rgba(0,0,0,0.06);
+          border-radius: 10px;
           cursor: pointer;
-          position: relative;
-          transition: background 0.18s ease;
+          transition: background 0.15s ease;
         }
-        .seos-metric:last-child { border-right: none; }
-        .seos-metric::before {
-          content: "";
-          position: absolute;
-          top: 0; left: 0; right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, #2D6B4F, #3a8a66);
-          opacity: 0;
-          transition: opacity 0.18s ease;
-        }
-        .seos-metric:hover, .seos-metric.is-active { background: rgba(45,107,79,0.045); }
-        .seos-metric.is-active::before { opacity: 1; }
+        .seos-metric:hover, .seos-metric.is-active { background: rgba(45,107,79,0.06); }
         .seos-metric:focus-visible {
           outline: 2px solid rgba(45,107,79,0.5);
           outline-offset: -2px;
         }
         .seos-metric-label {
-          font-size: 11.5px;
+          font-size: 11px;
           font-weight: 600;
-          letter-spacing: 0.2px;
-          color: rgba(26,46,38,0.6);
+          letter-spacing: 0.1px;
+          color: rgba(26,46,38,0.55);
           white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+        }
+        .seos-metric-row {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
         }
         .seos-metric-value {
-          font-size: 20px;
-          font-weight: 650;
-          letter-spacing: -0.3px;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: -0.2px;
           color: #1a2e26;
           font-variant-numeric: tabular-nums;
         }
-        .seos-metric-spark { margin-top: 2px; }
 
-        /* Hover-expanding detail panel — the grid-rows trick gives a
-           true smooth height animation without measuring content. */
+        /* Detail dropdown — a floating overlay below the strip. It never
+           pushes page content, so an accidental open doesn't reflow the
+           page; it just fades/slides in above it. */
         .seos-metric-detail {
-          display: grid;
-          grid-template-rows: 0fr;
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          right: 0;
+          background: #fff;
+          border: 1px solid rgba(0,0,0,0.08);
+          border-radius: 14px;
+          box-shadow: 0 18px 44px rgba(26,46,38,0.16), 0 2px 8px rgba(26,46,38,0.08);
           opacity: 0;
-          transition: grid-template-rows 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease;
-          border-top: 1px solid rgba(0,0,0,0);
+          transform: translateY(-6px) scale(0.99);
+          transform-origin: top center;
+          pointer-events: none;
+          visibility: hidden;
+          transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+                      visibility 0s linear 0.24s;
         }
         .seos-metric-detail.is-open {
-          grid-template-rows: 1fr;
           opacity: 1;
-          border-top-color: rgba(0,0,0,0.06);
+          transform: none;
+          pointer-events: auto;
+          visibility: visible;
+          transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
-        .seos-metric-detail-clip { overflow: hidden; min-height: 0; }
-        .seos-detail-inner { padding: 18px 20px 14px; }
+        .seos-detail-inner { padding: 16px 20px 12px; }
         .seos-detail-head {
           display: flex;
           align-items: flex-start;
@@ -1324,7 +1349,7 @@ export default function Home() {
           color: rgba(26,46,38,0.6);
         }
         .seos-detail-value {
-          font-size: 24px;
+          font-size: 20px;
           font-weight: 650;
           letter-spacing: -0.3px;
           color: #1a2e26;
@@ -1344,22 +1369,22 @@ export default function Home() {
         .seos-detail-readout-date { font-size: 12px; color: rgba(26,46,38,0.6); }
         .seos-detail-readout-value { font-size: 15px; font-weight: 650; color: #2D6B4F; font-variant-numeric: tabular-nums; }
         .seos-detail-readout-hint { font-size: 12px; color: rgba(26,46,38,0.45); background: transparent; border-color: transparent; }
-        .seos-detail-chart { height: 180px; cursor: crosshair; position: relative; }
+        .seos-detail-chart { height: 150px; cursor: crosshair; position: relative; }
         .seos-detail-axis {
           display: flex;
+          align-items: baseline;
           justify-content: space-between;
           font-size: 11px;
           color: rgba(26,46,38,0.45);
           padding-top: 4px;
         }
-
-        /* Section headings. */
-        .seos-section-head {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 12px;
+        .seos-detail-link {
+          font-size: 12px;
+          font-weight: 600;
+          color: #2D6B4F !important;
+          text-decoration: none !important;
         }
+        .seos-detail-link:hover { text-decoration: underline !important; }
 
         /* Card grid — Shopify-home-style illustrated cards. */
         .seos-card-grid {
@@ -1465,6 +1490,8 @@ export default function Home() {
       `}</style>
       <div className="seos-home">
         <BlockStack gap="500">
+          {hasApiKey ? <MetricStrip metrics={metrics} /> : null}
+
           <div className="seos-hero">
             <div className="seos-globe-slot">
               <Globe size={300} />
@@ -1503,26 +1530,6 @@ export default function Home() {
               </Text>
             </Banner>
           )}
-
-          {hasApiKey ? (
-            <BlockStack gap="300">
-              <div className="seos-section-head">
-                <Text as="h2" variant="headingMd">Last 30 days</Text>
-                <Button url="/app/analytics" variant="plain">View detailed analytics</Button>
-              </div>
-              <MetricStrip metrics={metrics} />
-            </BlockStack>
-          ) : null}
-
-          <SetupChecklist
-            hasApiKey={hasApiKey}
-            widgetEnabled={widgetEnabled}
-            fileCount={fileCount}
-            categoryGroupsCount={categoryGroupsCount}
-            semanticEnabled={semanticEnabled}
-            semanticProvider={semanticProvider}
-            themeEditorUrl={themeEditorUrl}
-          />
 
           <BlockStack gap="300">
             <Text as="h2" variant="headingMd">Explore</Text>
@@ -1575,6 +1582,16 @@ export default function Home() {
               />
             </div>
           </BlockStack>
+
+          <SetupChecklist
+            hasApiKey={hasApiKey}
+            widgetEnabled={widgetEnabled}
+            fileCount={fileCount}
+            categoryGroupsCount={categoryGroupsCount}
+            semanticEnabled={semanticEnabled}
+            semanticProvider={semanticProvider}
+            themeEditorUrl={themeEditorUrl}
+          />
 
           <Card>
             <BlockStack gap="300">
