@@ -16,8 +16,18 @@ is enough.
 2. You fill in the **static fields** (the values that don't exist in the TikTok
    file — account number, ship method, etc.). They're saved in your browser, so
    you only set them once.
-3. You click **Convert & Download** and get a `|`-delimited CSV ready to import
+3. *(Optional)* You paste **Order IDs into the filter box** to export only those
+   orders. Leave it empty to convert the whole sheet.
+4. You click **Convert & Download** and get a `|`-delimited CSV ready to import
    into the ERP.
+
+### Filtering by Order ID (optional)
+
+Leave the **Filter by Order ID** box empty and the whole sheet is converted.
+Paste one or more TikTok Order IDs (one per line, or separated by spaces/commas)
+and only those orders are kept in the final file — all of each order's line
+items come along. The box shows how many orders matched and warns if an ID
+isn't found in the uploaded file.
 
 The converter automatically:
 

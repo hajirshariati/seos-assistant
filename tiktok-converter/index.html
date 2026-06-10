@@ -62,6 +62,12 @@
         <input id="appendVariation" type="checkbox" checked />
         Append the variation (color / size) to the Product Name
       </label>
+
+      <label class="full">Filter by Order ID <span class="opt">(optional)</span>
+        <textarea id="orderFilter" rows="4"
+          placeholder="Leave empty to convert the whole sheet.&#10;Or paste Order IDs to keep ONLY those orders, e.g.&#10;577417743586136130&#10;577417750335427461&#10;577423742562046088"></textarea>
+        <small id="filterInfo">One per line, or separated by spaces/commas. Empty = keep all orders.</small>
+      </label>
     </section>
 
     <!-- STEP 3: EXPORT -->

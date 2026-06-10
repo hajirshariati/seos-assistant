@@ -65,6 +65,18 @@ input[type=text] {
   font-size: 14px;
 }
 input[type=text]:focus { outline: none; border-color: var(--accent2); }
+textarea {
+  background: #11141a;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+textarea:focus { outline: none; border-color: var(--accent2); }
+.full { margin-top: 16px; }
 .checkrow { flex-direction: row; align-items: center; gap: 9px; margin-top: 16px; font-weight: 500; }
 .checkrow input { width: 17px; height: 17px; }
 

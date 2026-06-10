@@ -208,6 +208,22 @@ function readConfig() {
   return cfg;
 }
 
+// ---- Order ID filter -----------------------------------------------------
+// Empty box -> keep everything. Otherwise keep only the listed Order IDs.
+// Accepts IDs separated by new lines, spaces, commas, tabs or semicolons.
+function parseFilterIds() {
+  const raw = document.getElementById("orderFilter").value;
+  const ids = raw.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+  return new Set(ids);
+}
+
+function getFilteredRows() {
+  if (!parsedRows) return [];
+  const ids = parseFilterIds();
+  if (ids.size === 0) return parsedRows;
+  return parsedRows.filter(r => ids.has(g(r, "Order ID")));
+}
+
 // ---- App wiring ----------------------------------------------------------
 let parsedRows = null;
 
@@ -255,7 +271,9 @@ function handleFile(file) {
 function renderPreview() {
   if (!parsedRows || !parsedRows.length) return;
   const cfg = readConfig();
-  const sample = parsedRows.slice(0, 8);
+  const rows = getFilteredRows();
+  updateFilterInfo();
+  const sample = rows.slice(0, 8);
   const table = document.getElementById("preview");
   let html = "<thead><tr>" + COLUMNS.map(c => "<th>" + esc(c[0]) + "</th>").join("") + "</tr></thead>";
   html += "<tbody>";
@@ -266,8 +284,28 @@ function renderPreview() {
   html += "</tbody>";
   table.innerHTML = html;
   document.getElementById("rowcount").textContent =
-    "(showing " + sample.length + " of " + parsedRows.length + " rows)";
+    "(showing " + sample.length + " of " + rows.length + " rows)";
   document.getElementById("previewWrap").hidden = false;
+}
+
+// Show how many orders matched the filter (and warn about IDs not in the file).
+function updateFilterInfo() {
+  const info = document.getElementById("filterInfo");
+  if (!parsedRows) return;
+  const ids = parseFilterIds();
+  if (ids.size === 0) {
+    info.textContent = "One per line, or separated by spaces/commas. Empty = keep all orders.";
+    info.style.color = "";
+    return;
+  }
+  const present = new Set(parsedRows.map(r => g(r, "Order ID")));
+  const matched = [...ids].filter(id => present.has(id));
+  const missing = [...ids].filter(id => !present.has(id));
+  const lineItems = getFilteredRows().length;
+  let msg = matched.length + " of " + ids.size + " order(s) found → " + lineItems + " line item(s) will be exported.";
+  if (missing.length) msg += "  ⚠ Not in file: " + missing.join(", ");
+  info.textContent = msg;
+  info.style.color = missing.length ? "#ffb547" : "var(--ok)";
 }
 
 function esc(s) {
@@ -281,11 +319,19 @@ FIELD_IDS.forEach(id => document.getElementById(id).addEventListener("input", ()
 document.getElementById("appendVariation").addEventListener("change", () => {
   if (parsedRows) renderPreview();
 });
+document.getElementById("orderFilter").addEventListener("input", () => {
+  if (parsedRows) renderPreview();
+});
 
 exportBtn.addEventListener("click", () => {
   if (!parsedRows || !parsedRows.length) return;
   const cfg = readConfig();
-  const out = buildOutput(parsedRows, cfg);
+  const rows = getFilteredRows();
+  if (!rows.length) {
+    statusEl.textContent = "Nothing to export — no orders matched the filter.";
+    return;
+  }
+  const out = buildOutput(rows, cfg);
   const blob = new Blob([out], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -296,7 +342,7 @@ exportBtn.addEventListener("click", () => {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  statusEl.textContent = "Exported " + parsedRows.length + " rows ✓";
+  statusEl.textContent = "Exported " + rows.length + " rows ✓";
 });
 
 loadConfig();
