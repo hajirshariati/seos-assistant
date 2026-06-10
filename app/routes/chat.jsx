@@ -3740,10 +3740,49 @@ export const loader = async () => {
 
 export const action = async ({ request }) => {
   try {
-    const { session } = await authenticate.public.appProxy(request);
-    if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    // Two front doors, one engine. The storefront widget arrives through
+    // the Shopify app proxy (HMAC query signature); the admin home page's
+    // test chat arrives from the embedded admin with an App Bridge session
+    // token in the Authorization header. Both run the exact same handler —
+    // same prompt, same tools, same grounding validator.
+    const authHeader = request.headers.get("authorization") || "";
+    let shop;
+    let sessionAccessToken;
+    if (authHeader.startsWith("Bearer ")) {
+      const { session } = await authenticate.admin(request);
+      shop = session.shop;
+      sessionAccessToken = session.accessToken;
+    } else {
+      const { session } = await authenticate.public.appProxy(request);
+      if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      shop = session.shop;
+      sessionAccessToken = session.accessToken;
+    }
+    return await handleChatPost({ shop, sessionAccessToken, request });
+  } catch (e) {
+    // authenticate.admin signals auth failures by throwing Responses —
+    // pass those through to the framework untouched.
+    if (e instanceof Response) throw e;
+    // Server-side log keeps the detail; the storefront only ever sees the
+    // friendly message. Leaking e.message to the public widget can expose
+    // upstream API errors, internal paths, or library stack hints.
+    console.error("[chat] error:", e);
+    return Response.json(
+      {
+        error: "action_failed",
+        message: "I'm having trouble right now. Please try again in a moment.",
+      },
+      { status: 500 },
+    );
+  }
+};
 
-    const rate = checkIpShopRate(session.shop, clientIp(request));
+// Shared chat handler — everything after authentication. Module-private
+// on purpose: exporting it would put a non-route export on this route
+// file and drag server modules into the client bundle. Both front doors
+// in the action above funnel here.
+async function handleChatPost({ shop, sessionAccessToken, request }) {
+    const rate = checkIpShopRate(shop, clientIp(request));
     if (!rate.ok) {
       return Response.json(
         { error: "rate_limited", retryAfter: rate.retryAfter },
@@ -3751,7 +3790,7 @@ export const action = async ({ request }) => {
       );
     }
 
-    const config = await getShopConfig(session.shop);
+    const config = await getShopConfig(shop);
     if (!config.anthropicApiKey) {
       return Response.json(
         { error: "AI engine API key not configured. Set it in the app admin under Settings." },
@@ -3759,7 +3798,7 @@ export const action = async ({ request }) => {
       );
     }
 
-    const quota = await canSendMessage(session.shop);
+    const quota = await canSendMessage(shop);
     if (!quota.ok) {
       return Response.json(
         {
@@ -3778,7 +3817,7 @@ export const action = async ({ request }) => {
     // count is reached for the UTC day. Counts come from ChatUsage so the
     // limit is enforced consistently across multiple server instances.
     if (config.dailyCapEnabled && config.dailyCapMessages > 0) {
-      const todayCount = await getTodayMessageCount(session.shop);
+      const todayCount = await getTodayMessageCount(shop);
       if (todayCount >= config.dailyCapMessages) {
         return Response.json(
           {
@@ -3923,13 +3962,13 @@ export const action = async ({ request }) => {
     }
 
     let [knowledge, attrMappings, catalogProductTypes, allCatalogCategories, categoryGenderMap, categoryAttributeCoverage, activeCampaigns, claimConfig, catalogFacetIndex] = await Promise.all([
-      getKnowledgeFilesWithContent(session.shop),
-      getAttributeMappings(session.shop),
-      getCatalogCategories(session.shop, { gender: sessionGender }),
-      getAllCatalogCategories(session.shop),
-      getCategoryGenderAvailability(session.shop),
-      getCategoryAttributeCoverage(session.shop),
-      getActiveCampaigns(session.shop),
+      getKnowledgeFilesWithContent(shop),
+      getAttributeMappings(shop),
+      getCatalogCategories(shop, { gender: sessionGender }),
+      getAllCatalogCategories(shop),
+      getCategoryGenderAvailability(shop),
+      getCategoryAttributeCoverage(shop),
+      getActiveCampaigns(shop),
       // Merchant-data-driven claim rules / category groups / color
       // families. Loaded once per request and parked on ctx so every
       // emit path (extractProductCards, the Product Turn Engine, the
@@ -3939,13 +3978,13 @@ export const action = async ({ request }) => {
       // trying to follow the prisma-touching module chain into the
       // client build.
       import("../lib/merchant-claim-config.server")
-        .then((m) => m.getMerchantClaimConfig(session.shop))
+        .then((m) => m.getMerchantClaimConfig(shop))
         .catch((err) => {
-          console.warn(`[chat] claim-config load failed for ${session.shop}: ${err?.message || err}`);
+          console.warn(`[chat] claim-config load failed for ${shop}: ${err?.message || err}`);
           return null;
         }),
-      getCatalogFacetIndex(session.shop).catch((err) => {
-        console.warn(`[chat] catalog-facet-index load failed for ${session.shop}: ${err?.message || err}`);
+      getCatalogFacetIndex(shop).catch((err) => {
+        console.warn(`[chat] catalog-facet-index load failed for ${shop}: ${err?.message || err}`);
         return null;
       }),
     ]);
@@ -3976,7 +4015,7 @@ export const action = async ({ request }) => {
       allCatalogCategories.length !== beforeFullCount
     ) {
       console.log(
-        `[chat] ${session.shop} suppressed categories from allow-list: ` +
+        `[chat] ${shop} suppressed categories from allow-list: ` +
           `[${[...SUPPRESSED_CATEGORIES].join(", ")}] ` +
           `(scoped: ${beforeScopedCount}→${catalogProductTypes.length}, ` +
           `full: ${beforeFullCount}→${allCatalogCategories.length})`,
@@ -4057,7 +4096,7 @@ export const action = async ({ request }) => {
       });
     }
 
-    console.log(`[chat] ${session.shop} gender=${sessionGender || "any"} scoped-categories=${catalogProductTypes.length} full-catalog-categories=${allCatalogCategories.length}${groupFilterApplied ? ` group=${groupFilterApplied}` : ""}${categoryIntent.contextGroup ? ` contextGroup=${categoryIntent.contextGroup.name}` : ""}${categoryIntent.ambiguous ? " group=ambiguous" : ""}`);
+    console.log(`[chat] ${shop} gender=${sessionGender || "any"} scoped-categories=${catalogProductTypes.length} full-catalog-categories=${allCatalogCategories.length}${groupFilterApplied ? ` group=${groupFilterApplied}` : ""}${categoryIntent.contextGroup ? ` contextGroup=${categoryIntent.contextGroup.name}` : ""}${categoryIntent.ambiguous ? " group=ambiguous" : ""}`);
     const attributeNames = attrMappings.map((m) => m.attribute);
 
     let categoryExclusions = [];
@@ -4112,13 +4151,13 @@ export const action = async ({ request }) => {
     const url = new URL(request.url);
     const loggedInCustomerId = url.searchParams.get("logged_in_customer_id") || null;
 
-    // session.accessToken from app proxy may be an online/proxy token; for
+    // sessionAccessToken from app proxy may be an online/proxy token; for
     // Admin API calls we need the offline token. Fall back to the Session
     // table if the proxy session's token is missing.
-    let accessToken = session.accessToken;
+    let accessToken = sessionAccessToken;
     if (!accessToken) {
       const offline = await prisma.session.findFirst({
-        where: { shop: session.shop, isOnline: false },
+        where: { shop: shop, isOnline: false },
         orderBy: { expires: "desc" },
       });
       accessToken = offline?.accessToken || null;
@@ -4127,7 +4166,7 @@ export const action = async ({ request }) => {
     let customerContext = null;
     if (loggedInCustomerId && config.vipModeEnabled === true && accessToken) {
       customerContext = await fetchCustomerContext({
-        shop: session.shop,
+        shop: shop,
         accessToken,
         customerId: loggedInCustomerId,
         orderLimit: 5,
@@ -4164,7 +4203,7 @@ export const action = async ({ request }) => {
       if (ragQuery) {
         try {
           retrievedChunks = await retrieveRelevantChunks(prisma, {
-            shop: session.shop,
+            shop: shop,
             query: ragQuery,
             config,
             limit: 5,
@@ -4181,7 +4220,7 @@ export const action = async ({ request }) => {
       config,
       knowledge,
       retrievedChunks,
-      shop: session.shop,
+      shop: shop,
       attributeNames,
       categoryExclusions,
       querySynonyms,
@@ -4208,7 +4247,7 @@ export const action = async ({ request }) => {
     const kidsCoverage = buildKidsCoveragePrompt({ sessionGender, catalogProductTypes });
     if (kidsCoverage.prompt) {
       console.log(
-        `[chat] ${session.shop} kids-coverage: no kids footwear in catalog ` +
+        `[chat] ${shop} kids-coverage: no kids footwear in catalog ` +
         `(scoped=${catalogProductTypes.join("|") || "none"}; alternatives=${kidsCoverage.diagnostics.availableNonFootwear?.join("|") || "none"}); injecting honesty note`,
       );
       systemPrompt += kidsCoverage.prompt;
@@ -4228,7 +4267,7 @@ export const action = async ({ request }) => {
 
     const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
     const ctx = {
-      shop: session.shop,
+      shop: shop,
       deduplicateColors: config.deduplicateColors,
       sessionGender,
       categoryExclusions,
@@ -4322,7 +4361,7 @@ export const action = async ({ request }) => {
           // the chat is unchanged.
           let recommenderTrees = [];
           try {
-            const built = await buildRecommenderTools(session.shop, {
+            const built = await buildRecommenderTools(shop, {
               decisionTreeEnabled: config.decisionTreeEnabled === true,
             });
             if (built.tools.length > 0) {
@@ -4330,7 +4369,7 @@ export const action = async ({ request }) => {
               recommenderTrees = built.trees;
               ctx.recommenderTrees = built.trees;
               console.log(
-                `[recommender] registered ${built.tools.length} tool(s) for ${session.shop}: ` +
+                `[recommender] registered ${built.tools.length} tool(s) for ${shop}: ` +
                   built.tools.map((t) => t.name).join(", "),
               );
             }
@@ -4353,7 +4392,7 @@ export const action = async ({ request }) => {
               classifiedIntent = await classifyOrthoticTurn({
                 messages,
                 anthropic,
-                shop: session.shop,
+                shop: shop,
               });
               ctx.classifiedIntent = classifiedIntent;
             } catch (clsErr) {
@@ -4425,7 +4464,7 @@ export const action = async ({ request }) => {
                 ...(isOrthoticTurn && classifiedAttrs.useCase ? { useCase: classifiedAttrs.useCase } : {}),
               };
               try {
-                const handle = await detectSpecificProduct(session.shop, latestMsg);
+                const handle = await detectSpecificProduct(shop, latestMsg);
                 if (handle) userConstraints.specificProduct = handle;
               } catch (sErr) {
                 console.error("[resolver] specific-product detection failed:", sErr?.message || sErr);
@@ -4452,7 +4491,7 @@ export const action = async ({ request }) => {
                 sessionMemory.explicit.gender = sessionGender;
               }
               const resolverState = await resolveCatalogTurn({
-                shop: session.shop,
+                shop: shop,
                 query: latestMsg,
                 userConstraints,
                 sessionMemory,
@@ -4521,7 +4560,7 @@ export const action = async ({ request }) => {
               const gate = await maybeRunOrthoticFlow({
                 messages,
                 tree: orthoticTree,
-                shop: session.shop,
+                shop: shop,
                 controller,
                 encoder,
                 anthropic,
@@ -4853,7 +4892,7 @@ export const action = async ({ request }) => {
             // recorded — under LLM_OWNS_ALL_TURNS the dashboard showed
             // zero cost/messages and the daily cap could never trigger.
             recordChatUsage({
-              shop: session.shop,
+              shop: shop,
               model: cleanResult.model || pickModel(0),
               usage,
               toolCalls: cleanResult.toolCallCount || 0,
@@ -5121,7 +5160,7 @@ export const action = async ({ request }) => {
           }
 
           recordChatUsage({
-            shop: session.shop,
+            shop: shop,
             model: result.model,
             usage: result.totalUsage,
             toolCalls: result.toolCallCount,
@@ -5134,7 +5173,7 @@ export const action = async ({ request }) => {
           // for the customer-facing message.
           const classified = classifyAnthropicError(err);
           if (classified.kind === "rate_limit") {
-            incrementRateLimitHits(session.shop).catch(() => {});
+            incrementRateLimitHits(shop).catch(() => {});
           }
           const userMsg = customerFacingFailureMessage(classified.kind);
           controller.enqueue(
@@ -5153,17 +5192,4 @@ export const action = async ({ request }) => {
         Connection: "keep-alive",
       },
     });
-  } catch (e) {
-    // Server-side log keeps the detail; the storefront only ever sees the
-    // friendly message. Leaking e.message to the public widget can expose
-    // upstream API errors, internal paths, or library stack hints.
-    console.error("[chat] error:", e);
-    return Response.json(
-      {
-        error: "action_failed",
-        message: "I'm having trouble right now. Please try again in a moment.",
-      },
-      { status: 500 },
-    );
-  }
-};
+}

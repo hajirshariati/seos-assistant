@@ -477,11 +477,11 @@ function MetricStrip({ metrics }) {
 }
 
 // ---------------------------------------------------------------------------
-// StatusCluster — the engine's gauge cluster. One segmented instrument bar
-// (not six separate buttons, which read as repeated navigation) plus a
-// one-line verdict above it: "All systems running" when healthy, or
-// "N systems need attention" in amber/red when not. Each segment still
-// links to the page that manages it; the tooltip carries the detail.
+// StatusCluster — the engine's gauge cluster. One segmented instrument bar;
+// each segment links to the page that manages it and the tooltip carries
+// the detail. A verdict line appears ONLY when something needs attention —
+// when every gauge is green, the gauges say it and an extra "all systems
+// running" line would just be noise.
 // ---------------------------------------------------------------------------
 function StatusCluster({ items }) {
   const TONE = {
@@ -492,21 +492,20 @@ function StatusCluster({ items }) {
   };
   const attention = items.filter((it) => it.tone === "warning" || it.tone === "critical");
   const hasCritical = items.some((it) => it.tone === "critical");
-  const summary = attention.length === 0
-    ? "All systems running"
-    : `${attention.length} system${attention.length > 1 ? "s" : ""} need${attention.length > 1 ? "" : "s"} attention`;
   return (
     <div className="seos-status-wrap">
-      <div className="seos-status-summary">
-        <span
-          aria-hidden="true"
-          className={
-            "seos-status-summary-dot" +
-            (attention.length > 0 ? (hasCritical ? " is-crit" : " is-warn") : "")
-          }
-        />
-        <span>{summary}</span>
-      </div>
+      {attention.length > 0 ? (
+        <div className="seos-status-summary">
+          <span
+            aria-hidden="true"
+            className={"seos-status-summary-dot" + (hasCritical ? " is-crit" : " is-warn")}
+          />
+          <span>
+            {attention.length} system{attention.length > 1 ? "s" : ""} need
+            {attention.length > 1 ? "" : "s"} attention
+          </span>
+        </div>
+      ) : null}
       <div role="group" aria-label="System status" className="seos-status-bar">
         {items.map((it) => {
           const t = TONE[it.tone] || TONE.subdued;
@@ -539,6 +538,199 @@ function StatusCluster({ items }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TestChat — Shopify-style "ask anything" box in the centre of the home
+// page. It talks to the EXACT engine customers get: the input posts to
+// /chat with an App Bridge session token, and the action runs the same
+// shared handler as the storefront widget (same prompt, same tools,
+// same grounding validator). The conversation panel expands above the
+// input on first send and streams the reply token by token.
+// ---------------------------------------------------------------------------
+function TestChat({ shop }) {
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const listRef = useRef(null);
+  const sessionIdRef = useRef(`admin-test-${Math.random().toString(36).slice(2)}`);
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [msgs]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || streaming) return;
+    setInput("");
+    // History mirrors the widget contract: assistant turns carry their
+    // displayed product cards so the engine can resolve "the first one".
+    const history = msgs
+      .filter((m) => !m.error)
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.role === "assistant" && m.products?.length
+          ? {
+              products: m.products.slice(0, 10).map((p) => ({
+                handle: p.handle || "",
+                title: p.title || "",
+                url: p.url || "",
+                image: p.image || "",
+                price: p.price || "",
+                price_formatted: p.price_formatted || "",
+              })),
+            }
+          : {}),
+      }))
+      .slice(-20);
+    setMsgs((prev) => [
+      ...prev,
+      { role: "user", content: text },
+      { role: "assistant", content: "", products: [], pending: true },
+    ]);
+    setStreaming(true);
+
+    const setLast = (patch) =>
+      setMsgs((prev) => {
+        const next = prev.slice();
+        next[next.length - 1] = { ...next[next.length - 1], ...patch };
+        return next;
+      });
+
+    try {
+      // /chat authenticates the admin via an App Bridge session token in
+      // the Authorization header (the storefront widget uses the app
+      // proxy instead). Ask App Bridge for the token explicitly so this
+      // works regardless of its fetch-patching behaviour.
+      const headers = { "Content-Type": "application/json", Accept: "text/event-stream" };
+      try {
+        if (window.shopify?.idToken) {
+          headers.Authorization = `Bearer ${await window.shopify.idToken()}`;
+        }
+      } catch { /* fall through — App Bridge fetch patching may still cover us */ }
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionIdRef.current,
+          shop_domain: shop,
+          history,
+        }),
+      });
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || !ct.includes("text/event-stream")) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.message || d.error || "The assistant couldn't reply. Please try again.");
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let full = "";
+      let prods = [];
+      let finished = false;
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6);
+          if (data === "[DONE]") { finished = true; break; }
+          let p;
+          try { p = JSON.parse(data); } catch { continue; }
+          if (p.type === "text" || p.type === "content_block_delta") {
+            full += p.text || p.delta?.text || "";
+          } else if (p.type === "products" && p.products) {
+            prods = prods.concat(p.products);
+          } else if (p.type === "error") {
+            throw new Error(p.message || "The assistant hit an error.");
+          } else if (p.type === "done") {
+            finished = true;
+            break;
+          }
+        }
+        setLast({ content: full, products: prods });
+      }
+      setLast({ content: full || "(no reply)", products: prods, pending: false });
+    } catch (err) {
+      setLast({
+        content: err?.message || "Something went wrong. Please try again.",
+        pending: false,
+        error: true,
+      });
+    } finally {
+      setStreaming(false);
+    }
+  };
+
+  return (
+    <div className="seos-testchat">
+      {msgs.length > 0 ? (
+        <div className="seos-testchat-panel" ref={listRef}>
+          {msgs.map((m, i) => (
+            <div key={i} className={"seos-testchat-row " + (m.role === "user" ? "is-user" : "is-bot")}>
+              <div className={"seos-testchat-bubble" + (m.error ? " is-error" : "")}>
+                {m.pending && !m.content ? (
+                  <span className="seos-testchat-typing" aria-label="Assistant is typing">
+                    <span /><span /><span />
+                  </span>
+                ) : (
+                  m.content
+                )}
+                {m.products?.length > 0 ? (
+                  <div className="seos-testchat-prods">
+                    {m.products.slice(0, 6).map((p) => (
+                      <a
+                        key={p.handle || p.title}
+                        href={p.url || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="seos-testchat-prod"
+                      >
+                        {p.image ? <img src={p.image} alt="" /> : null}
+                        <span className="seos-testchat-prod-title">{p.title}</span>
+                        {p.price_formatted ? (
+                          <span className="seos-testchat-prod-price">{p.price_formatted}</span>
+                        ) : null}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <form
+        className="seos-testchat-input"
+        onSubmit={(e) => { e.preventDefault(); send(); }}
+      >
+        <img src={seosLogo} alt="" aria-hidden="true" className="seos-testchat-avatar" />
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Test your assistant — ask anything, just like a customer…"
+          aria-label="Test your assistant"
+        />
+        <button type="submit" disabled={!input.trim() || streaming} aria-label="Send">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+            <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </form>
+      {msgs.length > 0 ? (
+        <div className="seos-testchat-note">
+          Live engine — same answers your customers get on the storefront.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1061,13 +1253,13 @@ export default function Home() {
     // Errors surface on the pip itself rather than a separate banner
     // above, per the "everything lives in the cluster" UX rule.
     if (!hasApiKey) {
-      items.push({ label: "AI", value: "Missing key", tone: "critical", url: "/app/api-keys", tooltip: "Add your Anthropic API key to enable the chat." });
+      items.push({ label: "AI Engine", value: "Missing key", tone: "critical", url: "/app/api-keys", tooltip: "Add your Anthropic API key to enable the chat." });
     } else if (rateLimitHits >= 10) {
-      items.push({ label: "AI", value: `${rateLimitHits} rate-limited`, tone: "critical", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Your Anthropic tier is too low — upgrade at console.anthropic.com.` });
+      items.push({ label: "AI Engine", value: `${rateLimitHits} rate-limited`, tone: "critical", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Your Anthropic tier is too low — upgrade at console.anthropic.com.` });
     } else if (rateLimitHits > 0) {
-      items.push({ label: "AI", value: `${rateLimitHits} rate-limited`, tone: "warning", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Consider upgrading your Anthropic tier if this keeps growing.` });
+      items.push({ label: "AI Engine", value: `${rateLimitHits} rate-limited`, tone: "warning", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Consider upgrading your Anthropic tier if this keeps growing.` });
     } else {
-      items.push({ label: "AI", value: "Connected", tone: "success", url: "/app/api-keys", tooltip: "Anthropic API key configured." });
+      items.push({ label: "AI Engine", value: "Connected", tone: "success", url: "/app/api-keys", tooltip: "Anthropic API key configured." });
     }
     items.push(
       widgetEnabled
@@ -1085,8 +1277,8 @@ export default function Home() {
     }
     items.push(
       semanticEnabled
-        ? { label: "Semantic", value: semanticProvider === "voyage" ? "Voyage AI" : "OpenAI", tone: "success", url: "/app/api-keys", tooltip: "Semantic search active. Customers find products by meaning, not just keywords." }
-        : { label: "Semantic", value: "Off", tone: "subdued", url: "/app/api-keys", tooltip: "Optional. Add a Voyage AI or OpenAI key to enable meaning-based product matching." }
+        ? { label: "Smart Search", value: semanticProvider === "voyage" ? "Voyage AI" : "OpenAI", tone: "success", url: "/app/api-keys", tooltip: "Semantic search active. Customers find products by meaning, not just keywords." }
+        : { label: "Smart Search", value: "Off", tone: "subdued", url: "/app/api-keys", tooltip: "Optional. Add a Voyage AI or OpenAI key to enable meaning-based product matching." }
     );
     items.push(
       recommenderActive
@@ -1228,6 +1420,163 @@ export default function Home() {
         }
         @media (max-width: 760px) {
           .seos-greet { font-size: 26px; }
+        }
+        .seos-subline {
+          margin: 10px 0 0;
+          font-size: 15px;
+          color: rgba(26,46,38,0.6);
+          opacity: 0;
+          animation: seos-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s forwards;
+        }
+
+        /* Test chat — the centred "ask anything" box. Same engine as
+           the storefront widget, embedded right in the home page. */
+        .seos-testchat {
+          width: min(640px, 100%);
+          margin-top: 22px;
+          position: relative;
+          z-index: 2;
+          opacity: 0;
+          animation: seos-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s forwards;
+        }
+        .seos-testchat-panel {
+          text-align: left;
+          background: #fff;
+          border: 1px solid rgba(26,46,38,0.10);
+          border-radius: 16px;
+          box-shadow: 0 10px 30px rgba(26,46,38,0.08), 0 1px 3px rgba(26,46,38,0.06);
+          padding: 16px;
+          margin-bottom: 12px;
+          max-height: 380px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .seos-testchat-row { display: flex; }
+        .seos-testchat-row.is-user { justify-content: flex-end; }
+        .seos-testchat-row.is-bot { justify-content: flex-start; }
+        .seos-testchat-bubble {
+          max-width: 86%;
+          padding: 10px 14px;
+          border-radius: 14px;
+          font-size: 13.5px;
+          line-height: 1.55;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .is-user .seos-testchat-bubble {
+          background: #2D6B4F;
+          color: #fff;
+          border-bottom-right-radius: 5px;
+        }
+        .is-bot .seos-testchat-bubble {
+          background: #f2f5f3;
+          color: #1a2e26;
+          border-bottom-left-radius: 5px;
+        }
+        .seos-testchat-bubble.is-error {
+          background: #FFF6F4;
+          color: #8C1F11;
+          border: 1px solid rgba(215,44,13,0.25);
+        }
+        .seos-testchat-typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+        .seos-testchat-typing span {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: rgba(45,107,79,0.55);
+          animation: seos-typing 1.1s ease-in-out infinite;
+        }
+        .seos-testchat-typing span:nth-child(2) { animation-delay: 0.18s; }
+        .seos-testchat-typing span:nth-child(3) { animation-delay: 0.36s; }
+        @keyframes seos-typing {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+          30% { transform: translateY(-4px); opacity: 1; }
+        }
+        .seos-testchat-prods {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .seos-testchat-prod {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 11px 6px 7px;
+          border-radius: 10px;
+          background: #fff;
+          border: 1px solid rgba(45,107,79,0.25);
+          text-decoration: none !important;
+          color: #1a2e26 !important;
+          font-size: 12px;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+        }
+        .seos-testchat-prod:hover {
+          border-color: rgba(45,107,79,0.55);
+          box-shadow: 0 3px 10px rgba(26,46,38,0.10);
+          transform: translateY(-1px);
+        }
+        .seos-testchat-prod img {
+          width: 28px; height: 28px;
+          border-radius: 6px;
+          object-fit: cover;
+          display: block;
+        }
+        .seos-testchat-prod-title {
+          font-weight: 600;
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .seos-testchat-prod-price { color: #2D6B4F; font-weight: 650; }
+        .seos-testchat-input {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: #fff;
+          border: 1px solid rgba(26,46,38,0.12);
+          border-radius: 999px;
+          padding: 8px 8px 8px 16px;
+          box-shadow: 0 4px 16px rgba(26,46,38,0.08), 0 1px 2px rgba(26,46,38,0.05);
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .seos-testchat-input:focus-within {
+          border-color: rgba(45,107,79,0.5);
+          box-shadow: 0 6px 22px rgba(26,46,38,0.12), 0 0 0 3px rgba(45,107,79,0.10);
+        }
+        .seos-testchat-avatar { height: 22px; width: auto; flex-shrink: 0; }
+        .seos-testchat-input input {
+          flex: 1;
+          min-width: 0;
+          border: none;
+          outline: none;
+          background: transparent;
+          font: inherit;
+          font-size: 14px;
+          color: #1a2e26;
+        }
+        .seos-testchat-input input::placeholder { color: rgba(26,46,38,0.45); }
+        .seos-testchat-input button {
+          flex-shrink: 0;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          border: none;
+          background: #2D6B4F;
+          color: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .seos-testchat-input button:hover:not(:disabled) { background: #245a42; transform: translateY(-1px); }
+        .seos-testchat-input button:disabled { background: rgba(26,46,38,0.18); cursor: default; }
+        .seos-testchat-note {
+          margin-top: 8px;
+          font-size: 11.5px;
+          color: rgba(26,46,38,0.45);
         }
 
         /* Status — the engine's gauge cluster. A one-line verdict
@@ -1566,7 +1915,8 @@ export default function Home() {
         .seos-card:hover .seos-card-arrow { transform: translateX(4px); }
 
         @media (prefers-reduced-motion: reduce) {
-          .seos-greet .seos-word, .seos-hero-brand, .seos-status-wrap { animation: none; opacity: 1; transform: none; }
+          .seos-greet .seos-word, .seos-hero-brand, .seos-status-wrap, .seos-subline, .seos-testchat { animation: none; opacity: 1; transform: none; }
+          .seos-testchat-typing span { animation: none; }
           .seos-status-summary-dot { animation: none; }
           .seos-pip, .seos-card, .seos-card-arrow, .seos-metric, .seos-metric-detail { transition: none; }
           .seos-pip-pulse { animation: none; }
@@ -1591,6 +1941,8 @@ export default function Home() {
                 </span>
               ))}
             </h1>
+            <p className="seos-subline">Let’s turn browsers into buyers.</p>
+            {hasApiKey ? <TestChat shop={shop} /> : null}
             <StatusCluster items={statusItems} />
           </div>
 
