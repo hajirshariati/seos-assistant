@@ -916,9 +916,8 @@ function ArtSetup() {
         <rect x="112" y="156" width="132" height="9" rx="4.5" fill="#E4ECE8" />
       </g>
       <g filter="url(#su-sh)">
-        <rect x="240" y="22" width="80" height="32" rx="16" fill="#2D6B4F" />
-        <path d="M254 38 l4.5 4.5 L268 32.5" stroke="#fff" strokeWidth="2.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <text x="277" y="43" fontSize="13" fontWeight="700" fill="#fff">Live</text>
+        <rect x="272" y="22" width="48" height="32" rx="16" fill="#2D6B4F" />
+        <path d="M289 38 l4.5 4.5 L303 32.5" stroke="#fff" strokeWidth="2.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
   );
@@ -962,8 +961,9 @@ function ArtAnalytics() {
         <rect x="64" y="81" width="44" height="7" rx="3.5" fill="#E7EEEA" />
       </g>
       <g filter="url(#an-sh)">
-        <rect x="232" y="16" width="80" height="32" rx="16" fill="#fff" />
-        <text x="272" y="37" textAnchor="middle" fontSize="13" fontWeight="700" fill="#2D6B4F">+24%</text>
+        <rect x="252" y="16" width="60" height="32" rx="16" fill="#fff" />
+        <path d="M266 38 l9 -9 5 4 8 -8" stroke="#2D6B4F" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M281 24 h7 v7" stroke="#2D6B4F" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
   );
@@ -1000,10 +1000,10 @@ function ArtKnowledge() {
       </g>
       <g filter="url(#kn-sh)">
         <rect x="206" y="148" width="112" height="36" rx="12" fill="#fff" />
-        <rect x="218" y="157" width="36" height="18" rx="5" fill="#2D6B4F" />
-        <text x="236" y="170" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">CSV</text>
-        <path d="M264 166 l4 4 L276 161" stroke="#3a8a66" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="284" y="162" width="22" height="7" rx="3.5" fill="#D8E2DD" />
+        <rect x="218" y="157" width="30" height="18" rx="5" fill="#2D6B4F" />
+        <path d="M222 163 h22 M222 169 h22 M229 159.5 v11 M240 159.5 v11" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M258 166 l4 4 L270 161" stroke="#3a8a66" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="280" y="162" width="26" height="7" rx="3.5" fill="#D8E2DD" />
       </g>
     </svg>
   );
@@ -1095,9 +1095,9 @@ function ArtCatalog() {
         <path d="M282 38 l4 4 L294 33.5" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </g>
       <g filter="url(#ca-sh)">
-        <rect x="24" y="92" width="92" height="32" rx="16" fill="#fff" />
-        <circle cx="42" cy="108" r="5" fill="#3a8a66" />
-        <text x="54" y="113" fontSize="12" fontWeight="650" fill="#2D6B4F">Synced</text>
+        <rect x="36" y="92" width="48" height="32" rx="16" fill="#fff" />
+        <path d="M54 102 a7 7 0 0 1 11.5 2.5 M66 114 a7 7 0 0 1 -11.5 -2.5" stroke="#2D6B4F" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M66.5 100.5 v5 h-5 M53.5 115.5 v-5 h5" stroke="#2D6B4F" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
   );

@@ -872,9 +872,8 @@ function IllInstall() {
         <rect x="58" y="110" width="86" height="9" rx="4.5" fill="#EDF3F0" />
       </g>
       <g filter="url(#oi-sh)">
-        <rect x="176" y="22" width="68" height="28" rx="14" fill="#2D6B4F" />
-        <path d="M188 36 l4 4 L200 31" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        <text x="206" y="40.5" fontSize="11.5" fontWeight="700" fill="#fff">Live</text>
+        <rect x="200" y="22" width="44" height="28" rx="14" fill="#2D6B4F" />
+        <path d="M215 36 l4 4 L227 31" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
   );
