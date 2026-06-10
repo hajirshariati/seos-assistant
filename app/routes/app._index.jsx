@@ -561,8 +561,8 @@ function TestChat({ shop }) {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [msgs]);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (forcedText) => {
+    const text = String(forcedText ?? input).trim();
     if (!text || streaming) return;
     setInput("");
     // History mirrors the widget contract: assistant turns carry their
@@ -631,6 +631,7 @@ function TestChat({ shop }) {
       let buf = "";
       let full = "";
       let prods = [];
+      let eventChoices = [];
       let finished = false;
       while (!finished) {
         const { done, value } = await reader.read();
@@ -649,6 +650,8 @@ function TestChat({ shop }) {
             full += p.text || p.delta?.text || "";
           } else if (p.type === "products" && p.products) {
             prods = prods.concat(p.products);
+          } else if (p.type === "choices" && Array.isArray(p.options)) {
+            eventChoices = p.options;
           } else if (p.type === "error") {
             throw new Error(p.message || "The assistant hit an error.");
           } else if (p.type === "done") {
@@ -658,7 +661,7 @@ function TestChat({ shop }) {
         }
         setLast({ content: full, products: prods });
       }
-      setLast({ content: full || "(no reply)", products: prods, pending: false });
+      setLast({ content: full || "(no reply)", products: prods, choices: eventChoices, pending: false });
     } catch (err) {
       setLast({
         content: err?.message || "Something went wrong. Please try again.",
@@ -674,7 +677,21 @@ function TestChat({ shop }) {
     <div className="seos-testchat">
       {msgs.length > 0 ? (
         <div className="seos-testchat-panel" ref={listRef}>
-          {msgs.map((m, i) => (
+          {msgs.map((m, i) => {
+            // The engine embeds quick-reply options as <<Label>> markers in
+            // the text (the widget renders them as chips). Same here: strip
+            // them from the bubble and render as tappable chips.
+            const inline = [];
+            const cleanContent = String(m.content || "").replace(/<<([^<>]+)>>/g, (_, label) => {
+              const t = label.trim();
+              if (t) inline.push(t);
+              return "";
+            }).replace(/[ \t]+\n/g, "\n").trim();
+            const choices = m.role === "assistant" && !m.pending
+              ? [...new Set([...inline, ...(m.choices || [])])]
+              : inline;
+            const isLastBot = m.role === "assistant" && i === msgs.length - 1;
+            return (
             <div key={i} className={"seos-testchat-row " + (m.role === "user" ? "is-user" : "is-bot")}>
               <div className={"seos-testchat-bubble" + (m.error ? " is-error" : "")}>
                 {m.pending && !m.content ? (
@@ -682,8 +699,23 @@ function TestChat({ shop }) {
                     <span /><span /><span />
                   </span>
                 ) : (
-                  m.content
+                  cleanContent
                 )}
+                {choices.length > 0 ? (
+                  <div className="seos-testchat-choices">
+                    {choices.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className="seos-testchat-choice"
+                        disabled={streaming || !isLastBot}
+                        onClick={() => send(c)}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {m.products?.length > 0 ? (
                   <div className="seos-testchat-prods">
                     {m.products.slice(0, 6).map((p) => (
@@ -705,7 +737,8 @@ function TestChat({ shop }) {
                 ) : null}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
       <form
@@ -1492,6 +1525,31 @@ export default function Home() {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
           30% { transform: translateY(-4px); opacity: 1; }
         }
+        .seos-testchat-choices {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .seos-testchat-choice {
+          appearance: none;
+          font: inherit;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #2D6B4F;
+          background: #fff;
+          border: 1px solid rgba(45,107,79,0.35);
+          border-radius: 999px;
+          padding: 7px 13px;
+          cursor: pointer;
+          transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .seos-testchat-choice:hover:not(:disabled) {
+          background: rgba(45,107,79,0.07);
+          border-color: rgba(45,107,79,0.6);
+          transform: translateY(-1px);
+        }
+        .seos-testchat-choice:disabled { opacity: 0.5; cursor: default; }
         .seos-testchat-prods {
           display: flex;
           flex-wrap: wrap;
@@ -1627,11 +1685,6 @@ export default function Home() {
           flex-wrap: wrap;
           justify-content: center;
           align-items: stretch;
-          background: #fff;
-          border: 1px solid rgba(26,46,38,0.10);
-          border-radius: 999px;
-          box-shadow: 0 1px 2px rgba(26,46,38,0.05);
-          padding: 4px;
         }
         .seos-pip {
           display: inline-flex;
@@ -1660,7 +1713,7 @@ export default function Home() {
           width: 1px;
           background: rgba(26,46,38,0.09);
         }
-        .seos-pip:hover { background: rgba(45,107,79,0.07); }
+        .seos-pip:hover { background: rgba(45,107,79,0.08); }
         .seos-pip:hover::before, .seos-pip:hover + .seos-pip::before { background: transparent; }
         .seos-pip:focus-visible {
           box-shadow: inset 0 0 0 2px rgba(45,107,79,0.4);
@@ -1683,9 +1736,7 @@ export default function Home() {
           0%, 100% { box-shadow: 0 0 0 3px rgba(215,44,13,0.25), 0 0 10px rgba(215,44,13,0.45); }
           50%      { box-shadow: 0 0 0 5px rgba(215,44,13,0.12), 0 0 16px rgba(215,44,13,0.6); }
         }
-        @media (max-width: 640px) {
-          .seos-status-bar { border-radius: 22px; }
-        }
+
 
         /* Metric strip — compact, no card chrome, centered at the very
            top of the page like the Shopify admin home. */

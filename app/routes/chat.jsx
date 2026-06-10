@@ -2308,7 +2308,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  if (!productAuthorityModeEnabled() && productSearchAttempted && allProductPool.size > 0 && allProductPool.size <= 2) {
+  if (!llmOwnsTurnActive() && !productAuthorityModeEnabled() && productSearchAttempted && allProductPool.size > 0 && allProductPool.size <= 2) {
     const userT = String(ctx.userText || "").toLowerCase();
     const namesCategory = Array.isArray(ctx.catalogCategories) && ctx.catalogCategories.some((c) => {
       const norm = String(c || "").trim().toLowerCase().replace(/s$/, "");
@@ -2354,9 +2354,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // previous clarifier already asked (and we have no products to show),
   // stop asking and show products instead — honoring any scope the
   // customer already established so we don't regress into a generic browse.
+  // LEGACY ONLY: under llm-owns-turn the model owns its clarifying
+  // questions; this escape was observed (2026-06-10, admin test chat)
+  // hijacking an orthotics question and force-showing generic shoe
+  // starter cards — exactly the kind of text/card mutation the new
+  // engine forbids.
   const currentClarifyingType = detectClarifyingQuestionType(fullResponseText);
   const lastClarifyingType = ctx.sessionMemory?.lastClarifyingQuestion?.type || null;
-  if (currentClarifyingType && currentClarifyingType === lastClarifyingType && allProductPool.size === 0) {
+  if (!llmOwnsTurnActive() && currentClarifyingType && currentClarifyingType === lastClarifyingType && allProductPool.size === 0) {
     try {
       const scoped = scopedProductSearchInput(ctx);
       const hasScope = !!(scoped.scope.gender || scoped.scope.category || scoped.scope.color);

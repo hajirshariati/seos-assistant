@@ -691,7 +691,7 @@ function Globe({ size = 820, points = 1700, theme = "light", boostRef = null }) 
         // soft green on dark.
         ctx.fillStyle = dark
           ? `rgba(74,222,128,${0.05 + depth * 0.24})`
-          : `rgba(101,117,109,${0.07 + depth * 0.26})`;
+          : `rgba(101,117,109,${0.04 + depth * 0.15})`;
         ctx.beginPath();
         ctx.arc(sx, sy, (0.6 + depth * 1.25) * dotScale, 0, Math.PI * 2);
         ctx.fill();
