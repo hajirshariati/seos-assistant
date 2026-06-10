@@ -595,6 +595,13 @@ export function filterProductCardsToCatalogScope(pool = [], ctx = {}, { strict =
   if (products.length === 0) {
     return { products: [], dropped: 0, scope: currentCatalogScopeFromContext(ctx), enforcedColor: false };
   }
+  // Under llm-owns, the model already filtered to what it wants to show — stale
+  // session memory (e.g. color=pink from a prior turn) must not silently drop
+  // a fresh search result the model just decided to mention. The grounding
+  // validator polices accuracy instead.
+  if (isLlmOwnsTurnActive()) {
+    return { products, dropped: 0, scope: currentCatalogScopeFromContext(ctx), enforcedColor: false };
+  }
   const originalProductCount = products.length;
 
   const scope = currentCatalogScopeFromContext(ctx);

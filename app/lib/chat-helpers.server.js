@@ -439,6 +439,13 @@ export function ensureHeaderLineBreaks(text) {
     (m, header, inner, next2) =>
       SECTION_HEADER_KEYWORD_RE.test(inner) ? `${header}\n\n${next2}` : m,
   );
+  // Strip orphan bullet markers: a line containing only "-" (or "*")
+  // between blank lines renders as a literal floating dash. Live trace
+  // 2026-06-10: Reagan/Jillian compare emitted "**Reagan Ankle Boot**\n\n-\n\n**Category:** ..."
+  // producing dashes between every spec line.
+  next = next.replace(/\n\n[ \t]*[-*][ \t]*\n\n/g, "\n\n");
+  // Collapse 3+ blank lines back to one blank line.
+  next = next.replace(/\n{3,}/g, "\n\n");
   return next;
 }
 
