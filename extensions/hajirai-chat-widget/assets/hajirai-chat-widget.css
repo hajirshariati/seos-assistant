@@ -718,6 +718,21 @@ a.ai-chat-welcome__hint--link:hover {
           mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 100%);
 }
 
+/* When a row is marked stale (a newer assistant message has arrived
+   or the user typed something), its chips fade to a quiet ghost state
+   and can no longer be tapped. The visible history stays readable so
+   you can scroll back and see what was offered. */
+.ai-chat-choices.is-stale,
+.ai-chat-suggestions.is-stale,
+.ai-chat-welcome__qps.is-stale,
+.ai-chat-welcome__ctas.is-stale,
+.ai-chat-dead-end.is-stale {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: saturate(0.6);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
 .ai-chat-choice-btn {
   display: inline-block;
   flex-shrink: 0;

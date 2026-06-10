@@ -1054,9 +1054,9 @@ export default function Onboarding() {
   //   2. Konami code → triggers a glow pulse on "SEoS" and a
   //      console message. Click on the SEoS word does the same so
   //      keyboard-less users can stumble onto it too.
-  //   3. Type the word "steroids" anywhere on the page → the globe
+  //   3. Type the word "hajir" anywhere on the page → the globe
   //      sprints for a few seconds (the engine literally gets a shot
-  //      of steroids), the SEoS word pulses, and the console confirms.
+  //      of hajir energy), the SEoS word pulses, and the console confirms.
   //   4. Triple-click the logo in the header → a miniature chat
   //      bubble pops up bottom-right, the assistant introducing
   //      itself the way it does to shoppers on the storefront.
@@ -1113,7 +1113,7 @@ export default function Onboarding() {
     console.log(banner, "color:#4ade80;font-family:ui-monospace,monospace;font-size:11px;line-height:1.3");
 
     // Egg 2 — Konami code. ↑↑↓↓←→←→ B A
-    // Egg 3 — typing "steroids" hyper-spins the globe.
+    // Egg 3 — typing "hajir" hyper-spins the globe.
     const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
     let pos = 0;
     let typed = "";
@@ -1133,12 +1133,12 @@ export default function Onboarding() {
       }
       if (e.key && e.key.length === 1) {
         typed = (typed + e.key.toLowerCase()).slice(-12);
-        if (typed.endsWith("steroids")) {
+        if (typed.endsWith("hajir")) {
           typed = "";
           setBoosted(true);
           globeBoostRef.current = performance.now();
           // eslint-disable-next-line no-console
-          console.log("%c🌍 You said the magic word. Engine spinning at full search speed.", "color:#4ade80;font-weight:700;font-size:13px");
+          console.log("%c🌍 Hajir would be proud. Engine spinning at full search speed.", "color:#4ade80;font-weight:700;font-size:13px");
         }
       }
     };

@@ -687,10 +687,28 @@ function TestChat({ shop }) {
               if (t) inline.push(t);
               return "";
             }).replace(/[ \t]+\n/g, "\n").trim();
+            // Tiny markdown — **bold** and *italic*. The widget renders
+            // these too; without this the admin chat shows raw asterisks.
+            const renderRich = (text) => {
+              const parts = [];
+              const re = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)/g;
+              let last = 0;
+              let m2;
+              let k = 0;
+              while ((m2 = re.exec(text)) !== null) {
+                if (m2.index > last) parts.push(text.slice(last, m2.index));
+                if (m2[2] !== undefined) parts.push(<strong key={k++}>{m2[2]}</strong>);
+                else parts.push(<em key={k++}>{m2[4]}</em>);
+                last = m2.index + m2[0].length;
+              }
+              if (last < text.length) parts.push(text.slice(last));
+              return parts;
+            };
             const choices = m.role === "assistant" && !m.pending
               ? [...new Set([...inline, ...(m.choices || [])])]
               : inline;
             const isLastBot = m.role === "assistant" && i === msgs.length - 1;
+            const isStale = m.role === "assistant" && !isLastBot;
             return (
             <div key={i} className={"seos-testchat-row " + (m.role === "user" ? "is-user" : "is-bot")}>
               <div className={"seos-testchat-bubble" + (m.error ? " is-error" : "")}>
@@ -699,10 +717,10 @@ function TestChat({ shop }) {
                     <span /><span /><span />
                   </span>
                 ) : (
-                  cleanContent
+                  renderRich(cleanContent)
                 )}
                 {choices.length > 0 ? (
-                  <div className="seos-testchat-choices">
+                  <div className={"seos-testchat-choices" + (isStale ? " is-stale" : "")}>
                     {choices.map((c) => (
                       <button
                         key={c}
@@ -718,7 +736,7 @@ function TestChat({ shop }) {
                 ) : null}
                 {m.products?.length > 0 ? (
                   <div className="seos-testchat-prods">
-                    {m.products.slice(0, 6).map((p) => (
+                    {m.products.map((p) => (
                       <a
                         key={p.handle || p.title}
                         href={p.url || "#"}
@@ -1480,11 +1498,25 @@ export default function Home() {
           box-shadow: 0 10px 30px rgba(26,46,38,0.08), 0 1px 3px rgba(26,46,38,0.06);
           padding: 16px;
           margin-bottom: 12px;
-          max-height: 380px;
+          /* Fixed conversation window: ~one user + one assistant bubble
+             with chips. Anything older scrolls inside the panel instead
+             of pushing the rest of the home page down. */
+          height: 340px;
           overflow-y: auto;
+          overscroll-behavior: contain;
           display: flex;
           flex-direction: column;
           gap: 10px;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(45,107,79,0.35) transparent;
+        }
+        .seos-testchat-panel::-webkit-scrollbar { width: 8px; }
+        .seos-testchat-panel::-webkit-scrollbar-thumb {
+          background: rgba(45,107,79,0.30);
+          border-radius: 4px;
+        }
+        .seos-testchat-panel::-webkit-scrollbar-thumb:hover {
+          background: rgba(45,107,79,0.5);
         }
         .seos-testchat-row { display: flex; }
         .seos-testchat-row.is-user { justify-content: flex-end; }
@@ -1498,6 +1530,8 @@ export default function Home() {
           white-space: pre-wrap;
           word-break: break-word;
         }
+        .seos-testchat-bubble strong { font-weight: 700; }
+        .seos-testchat-bubble em { font-style: italic; }
         .is-user .seos-testchat-bubble {
           background: #2D6B4F;
           color: #fff;
@@ -1525,11 +1559,25 @@ export default function Home() {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
           30% { transform: translateY(-4px); opacity: 1; }
         }
+        /* Chips row: horizontal scroll, hidden scrollbar (like the
+           storefront widget). Bleed the row to the bubble's edges so
+           the overflow is obvious. */
         .seos-testchat-choices {
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           gap: 8px;
-          margin-top: 10px;
+          margin: 10px -14px 0;
+          padding: 2px 14px 4px;
+          overflow-x: auto;
+          scroll-snap-type: x proximity;
+          scrollbar-width: none;
+        }
+        .seos-testchat-choices::-webkit-scrollbar { display: none; }
+        .seos-testchat-choices.is-stale {
+          opacity: 0.45;
+          filter: saturate(0.6);
+          pointer-events: none;
+          transition: opacity 0.2s ease, filter 0.2s ease;
         }
         .seos-testchat-choice {
           appearance: none;
@@ -1542,6 +1590,9 @@ export default function Home() {
           border-radius: 999px;
           padding: 7px 13px;
           cursor: pointer;
+          flex-shrink: 0;
+          white-space: nowrap;
+          scroll-snap-align: start;
           transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
         }
         .seos-testchat-choice:hover:not(:disabled) {
@@ -1550,12 +1601,18 @@ export default function Home() {
           transform: translateY(-1px);
         }
         .seos-testchat-choice:disabled { opacity: 0.5; cursor: default; }
+        /* Product rail — same horizontal scroll treatment. */
         .seos-testchat-prods {
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           gap: 8px;
-          margin-top: 10px;
+          margin: 10px -14px 0;
+          padding: 2px 14px 4px;
+          overflow-x: auto;
+          scroll-snap-type: x proximity;
+          scrollbar-width: none;
         }
+        .seos-testchat-prods::-webkit-scrollbar { display: none; }
         .seos-testchat-prod {
           display: inline-flex;
           align-items: center;
@@ -1567,6 +1624,8 @@ export default function Home() {
           text-decoration: none !important;
           color: #1a2e26 !important;
           font-size: 12px;
+          flex-shrink: 0;
+          scroll-snap-align: start;
           transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         }
         .seos-testchat-prod:hover {

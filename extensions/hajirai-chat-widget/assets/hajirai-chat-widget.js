@@ -750,6 +750,11 @@ var text=inputEl.value.trim();
 if(!text||isStreaming)return;
 var w=$('.ai-chat-welcome',msgsEl);
 if(w)w.remove();
+/* Deactivate any prior choice/suggestion chip rows so chips from
+   earlier turns can no longer be tapped — the visible history stays
+   readable, but only the latest assistant turn's chips are live. */
+var stale=msgsEl.querySelectorAll('.ai-chat-choices, .ai-chat-suggestions, .ai-chat-welcome__qps, .ai-chat-welcome__ctas, .ai-chat-dead-end');
+for(var si=0;si<stale.length;si++){stale[si].classList.add('is-stale')}
 lastUserMessage=text;
 messages.push({role:'user',content:text});
 appendMsg('user',text);
