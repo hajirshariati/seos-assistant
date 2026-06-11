@@ -2420,7 +2420,11 @@ export default function Home() {
           border: none;
           text-align: left;
           cursor: pointer;
-          position: relative;
+          /* Stretch to the full card height so the bottom-anchored CTA
+             pill (which targets the card via .seos-card's position:
+             relative) lands on the same baseline as the neighbours
+             when the grid row equalises card heights. */
+          flex: 1 1 auto;
           /* Flex column overrides the browser's default vertical
              centring of button contents, so the body/art stack lays
              out exactly like every other Explore card. */
