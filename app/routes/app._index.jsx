@@ -340,7 +340,7 @@ function DetailChart({ metric }) {
       <div className="seos-detail-head">
         <div>
           <div className="seos-detail-label">{metric.label} · last 30 days</div>
-          <div className="seos-detail-value">{metric.value}</div>
+          <div className="seos-detail-value">{metric.totalValue ?? metric.value}</div>
           {metric.sublabel ? <div className="seos-detail-sub">{metric.sublabel}</div> : null}
         </div>
         {hovered ? (
@@ -453,12 +453,16 @@ function MetricStrip({ metrics }) {
       onMouseLeave={scheduleClose}
       onMouseEnter={() => closeTimer.current && clearTimeout(closeTimer.current)}
     >
-      <div className="seos-metrics" role="group" aria-label="Last 30 days at a glance">
+      <div className="seos-metrics-caption" aria-hidden="true">
+        <span className="seos-metrics-live" />
+        Today
+      </div>
+      <div className="seos-metrics" role="group" aria-label="Today at a glance">
         {metrics.map((m, i) => (
           <button
             key={m.label}
             type="button"
-            title={`${m.label} — last 30 days`}
+            title={`${m.label} — today. Hover for the 30-day trend.`}
             className={"seos-metric" + (active === i ? " is-active" : "")}
             onMouseEnter={() => requestOpen(i)}
             onMouseLeave={cancelPendingOpen}
@@ -1521,44 +1525,56 @@ export default function Home() {
 
   // Metric strip definitions. Each metric carries its 30-day daily
   // series (date + value) for the sparkline and the hover detail chart.
+  // Strip shows TODAY's live numbers (the last row of the zero-filled
+  // daily series is the current UTC day); the hover dropdown keeps the
+  // 30-day trend chart with the 30-day total for context.
   const metrics = useMemo(() => {
     const days = Array.isArray(dailySeries) ? dailySeries : [];
     const conv = Array.isArray(conversionSeries) ? conversionSeries : [];
+    const today = days[days.length - 1] || { messages: 0, cost: 0, up: 0, down: 0 };
+    const convToday = conv[conv.length - 1] || { count: 0, revenue: 0 };
+    const votesToday = (today.up || 0) + (today.down || 0);
+    const satToday = votesToday > 0 ? Math.round(((today.up || 0) / votesToday) * 100) : null;
     const fmtInt = (v) => String(Math.round(v));
     return [
       {
         label: "Chat-driven revenue",
-        value: conversionCount > 0 ? formatRevenue(conversionRevenue, conversionCurrency) : "—",
+        value: convToday.count > 0 ? formatRevenue(convToday.revenue, conversionCurrency) : "—",
+        totalValue: conversionCount > 0 ? formatRevenue(conversionRevenue, conversionCurrency) : "—",
         sublabel: conversionCount > 0
-          ? `${conversionCount} order${conversionCount === 1 ? "" : "s"} attributed to chat (tagged "SEoS")`
+          ? `${conversionCount} order${conversionCount === 1 ? "" : "s"} attributed to chat (tagged "SEoS") in 30 days`
           : 'Tracked via the SEoS order tag — awaiting first chat-attributed order',
         series: conv.map((d) => ({ date: d.date, value: d.revenue })),
         format: (v) => formatRevenue(v, conversionCurrency),
       },
       {
         label: "Chat-driven orders",
-        value: String(conversionCount || 0),
+        value: String(convToday.count || 0),
+        totalValue: String(conversionCount || 0),
         sublabel: conversionCount > 0 ? 'Orders tagged "SEoS" in Shopify' : "Awaiting first chat-attributed order",
         series: conv.map((d) => ({ date: d.date, value: d.count })),
         format: fmtInt,
       },
       {
         label: "AI requests",
-        value: String(totalMessages),
+        value: String(today.messages || 0),
+        totalValue: String(totalMessages),
         sublabel: totalMessages > 0 ? `Avg ${formatCost(avgCostPerMessage)} per request` : "Awaiting first chat",
         series: days.map((d) => ({ date: d.date, value: d.messages })),
         format: fmtInt,
       },
       {
         label: "Satisfaction",
-        value: feedbackTotal > 0 ? `${satisfactionRate}%` : "—",
-        sublabel: feedbackTotal > 0 ? `${feedbackTotal} customer ratings · chart shows 👍 per day` : "Awaiting first customer rating",
+        value: satToday !== null ? `${satToday}%` : "—",
+        totalValue: feedbackTotal > 0 ? `${satisfactionRate}%` : "—",
+        sublabel: feedbackTotal > 0 ? `${feedbackTotal} ratings in 30 days · chart shows 👍 per day` : "Awaiting first customer rating",
         series: days.map((d) => ({ date: d.date, value: d.up })),
         format: fmtInt,
       },
       {
         label: "AI cost",
-        value: formatCost(totalCost),
+        value: formatCost(today.cost || 0),
+        totalValue: formatCost(totalCost),
         sublabel: "Anthropic API spend, billed pay-as-you-go",
         series: days.map((d) => ({ date: d.date, value: d.cost })),
         format: (v) => formatCost(v),
@@ -2020,6 +2036,25 @@ export default function Home() {
         .seos-metrics-wrap {
           position: relative;
           z-index: 40;
+        }
+        .seos-metrics-caption {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 10px;
+          font-weight: 650;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          color: rgba(26,46,38,0.45);
+          padding-bottom: 4px;
+        }
+        .seos-metrics-live {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #2D6B4F;
+          animation: seos-breathe 2.8s ease-in-out infinite;
         }
         .seos-metrics {
           display: flex;
