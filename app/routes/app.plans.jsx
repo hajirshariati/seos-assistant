@@ -412,7 +412,7 @@ export default function PlansPage() {
           .seos-pl * { transition: none !important; }
         }
       `}</style>
-      <BrandHeader title="Plan & Support" gutter={false} />
+      <BrandHeader title="Plan & Support" />
       <div className="seos-pl">
 
         {actionData?.message ? (
