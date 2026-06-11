@@ -30,6 +30,24 @@ export function startCatalogSyncScheduler() {
   }
   started = true;
 
+  // A deploy/restart kills any in-flight sync, leaving its state stuck on
+  // "running" forever (the process that owned it is gone). One instance
+  // serves the app, so at boot anything still marked running is dead —
+  // flag it as interrupted so the admin shows the truth and the nightly
+  // run (or a manual refresh) takes it from there.
+  prisma.catalogSyncState
+    .updateMany({
+      where: { status: { in: ["running", "stopping"] } },
+      data: {
+        status: "error",
+        lastError: "Sync interrupted by a server restart — it will retry at the next nightly run, or use Refresh on the Catalog page.",
+      },
+    })
+    .then((r) => {
+      if (r.count > 0) console.log(`[sync-scheduler] reset ${r.count} sync(s) stuck in 'running' after restart`);
+    })
+    .catch(() => {});
+
   const runAll = async () => {
     try {
       // Dynamic imports avoid a module cycle: shopify.server starts this

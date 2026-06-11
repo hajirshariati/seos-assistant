@@ -109,6 +109,7 @@ export const loader = async ({ request }) => {
     })(),
     // Status-cluster fields
     catalogSyncStatus: syncState.status || "idle",
+    catalogLastError: syncState.lastError || "",
     lastSyncedAt,
     hoursSinceSync,
     recommenderActive,
@@ -1475,7 +1476,7 @@ export default function Home() {
     feedbackTotal, satisfactionRate, modelStrategy, rateLimitHits,
     semanticEnabled, semanticProvider, categoryGroupsCount,
     conversionCount, conversionRevenue, conversionCurrency,
-    catalogSyncStatus, lastSyncedAt, hoursSinceSync,
+    catalogSyncStatus, catalogLastError, lastSyncedAt, hoursSinceSync,
     recommenderActive, enabledRecommenderCount,
     dailySeries, conversionSeries, userFirstName,
   } = useLoaderData();
@@ -1511,6 +1512,16 @@ export default function Home() {
     );
     if (catalogSyncStatus === "running") {
       items.push({ label: "Catalog", value: "Syncing…", tone: "subdued", url: "/app/catalog", tooltip: "Catalog sync in progress — products are being indexed in the background." });
+    } else if (catalogSyncStatus === "error") {
+      items.push({
+        label: "Catalog",
+        value: "Sync failed",
+        tone: "warning",
+        url: "/app/catalog",
+        tooltip: catalogLastError
+          ? `Last sync failed: ${catalogLastError.slice(0, 160)}`
+          : "Last sync failed — open Catalog and hit Refresh to retry.",
+      });
     } else if (productsCount === 0) {
       items.push({ label: "Catalog", value: "Not synced", tone: "critical", url: "/app/catalog", tooltip: "No products synced yet. Run a manual sync." });
     } else if (hoursSinceSync !== null && hoursSinceSync > 168) {

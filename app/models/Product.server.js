@@ -222,6 +222,7 @@ export async function syncCatalog(admin, shop) {
 
     let cursor = null;
     let totalSeen = 0;
+    let throttleRetries = 0;
     while (true) {
       const current = await prisma.catalogSyncState.findUnique({ where: { shop } });
       if (current?.status === "stopping") {
@@ -232,18 +233,33 @@ export async function syncCatalog(admin, shop) {
 
       const resp = await admin.graphql(query, { variables: { cursor } });
       const json = await resp.json();
+
+      // Surface real GraphQL errors instead of dying with a generic
+      // "no products data". Shopify cost-throttling mid-pagination is
+      // the common one — back off and retry the same page.
+      if (Array.isArray(json?.errors) && json.errors.length > 0) {
+        const throttled = json.errors.some(
+          (e) => e?.extensions?.code === "THROTTLED" || /throttl/i.test(e?.message || ""),
+        );
+        if (throttled && throttleRetries < 5) {
+          throttleRetries += 1;
+          const waitMs = 2000 * throttleRetries;
+          console.log(`[syncCatalog] ${shop}: throttled, retry ${throttleRetries}/5 in ${waitMs}ms`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        throw new Error("GraphQL: " + json.errors.map((e) => e?.message || "unknown").join("; "));
+      }
+      throttleRetries = 0;
+
       const page = json?.data?.products;
       if (!page) throw new Error("No products data in GraphQL response");
-      console.log("[syncCatalog] page size:", page.nodes?.length || 0);
+      console.log(`[syncCatalog] ${shop}: page of ${page.nodes?.length || 0}, total ${totalSeen}`);
 
-  for (const node of page.nodes) {
-  console.log("[syncCatalog] upserting:", node.handle);
-  await upsertProduct(shop, node, mappings);
-  totalSeen += 1;
-
-  const countNow = await prisma.product.count({ where: { shop } });
-  console.log("[syncCatalog] count now:", countNow);
-}
+      for (const node of page.nodes) {
+        await upsertProduct(shop, node, mappings);
+        totalSeen += 1;
+      }
 
       await setSyncState(shop, { syncedSoFar: totalSeen });
 
