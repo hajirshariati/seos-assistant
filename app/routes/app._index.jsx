@@ -1237,6 +1237,21 @@ function CostEstimator({ avgCostPerMessage, totalMessages }) {
     setSessionsRaw(digits ? Number(digits).toLocaleString("en-US") : "");
   };
 
+  // Switching the period converts the typed number (25,000/mo ↔ 300,000/yr)
+  // so the toggle changes how you read the field — never the estimate.
+  const onPeriod = (next) => {
+    if (next === period) return;
+    const current = parseInt(sessionsRaw.replace(/[^\d]/g, ""), 10) || 0;
+    if (current > 0) {
+      const converted = Math.min(
+        next === "year" ? current * 12 : Math.round(current / 12),
+        999999999,
+      );
+      setSessionsRaw(converted.toLocaleString("en-US"));
+    }
+    setPeriod(next);
+  };
+
   const sessions = parseInt(sessionsRaw.replace(/[^\d]/g, ""), 10) || 0;
   const monthlySessions = period === "year" ? sessions / 12 : sessions;
   const turns = CALC_DEPTHS.find((d) => d.key === depth).turns;
@@ -1265,8 +1280,8 @@ function CostEstimator({ avgCostPerMessage, totalMessages }) {
             <div className="seos-calc-labelrow">
               <label className="seos-calc-label" htmlFor="seos-calc-sessions">Store sessions</label>
               <div className="seos-calc-seg" role="group" aria-label="Sessions period">
-                <button type="button" className={period === "month" ? "is-on" : ""} onClick={() => setPeriod("month")}>Monthly</button>
-                <button type="button" className={period === "year" ? "is-on" : ""} onClick={() => setPeriod("year")}>Yearly</button>
+                <button type="button" className={period === "month" ? "is-on" : ""} onClick={() => onPeriod("month")}>Monthly</button>
+                <button type="button" className={period === "year" ? "is-on" : ""} onClick={() => onPeriod("year")}>Yearly</button>
               </div>
             </div>
             <input
@@ -1279,7 +1294,10 @@ function CostEstimator({ avgCostPerMessage, totalMessages }) {
               onChange={onSessions}
               placeholder="25,000"
             />
-            <div className="seos-calc-hint">Find this in Shopify admin under Analytics &rarr; Sessions.</div>
+            <div className="seos-calc-hint">
+              Pre-filled with an example — replace it with your real number from
+              Shopify admin &rarr; Analytics &rarr; Sessions.
+            </div>
           </div>
 
           <div className="seos-calc-field">
