@@ -2445,6 +2445,16 @@ export default function Home() {
           color: #fff;
           border-color: #2D6B4F;
         }
+        /* Open state: the card spans the row and the checklist takes
+           over — the illustration steps aside and the CTA pill leaves
+           its bottom anchor to sit in the flow right under the title,
+           where the thumb just was. */
+        .seos-card-setup.is-open .seos-card-art { display: none; }
+        .seos-card-setup.is-open .seos-card-btn {
+          position: static;
+          align-self: flex-start;
+          margin: 4px 0 14px 18px;
+        }
         .seos-card-plusminus {
           display: inline-flex;
           color: #2D6B4F;
