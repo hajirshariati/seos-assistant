@@ -65,6 +65,20 @@ test("M2 — color existence honors gender/category tuple scope", () => {
   assert.equal(colorExistsInCatalogScope("Red", "Women", "Sandals", facetIndex), true);
 });
 
+test("M2b — zero color facts in scope is UNPROVEN (null), never an impossibility claim", () => {
+  // A tuple only carries a color when extraction found one; a real
+  // product with an untagged color contributes color:null. A scope
+  // with no color data must not let the resolver assert "no <color>
+  // products" (the unnamed-search half of the false-denial class).
+  const colorlessIndex = {
+    categoryByGender: { sandals: ["women"] },
+    colorByGenderCategory: {},
+  };
+  assert.equal(colorExistsInCatalogScope("Pink", "Women", "Sandals", colorlessIndex), null);
+  // But a scope WITH color facts still proves absence.
+  assert.equal(colorExistsInCatalogScope("Red", "Men", "Sneakers", facetIndex), false);
+});
+
 test("M3 — domain inference uses the shared tuple space", () => {
   const domains = computeCatalogConstraintDomains({ color: "red", category: "sandals" }, facetIndex);
   assert.equal(domains.gender.inferred, "women");

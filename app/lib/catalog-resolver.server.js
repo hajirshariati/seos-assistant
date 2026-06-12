@@ -697,7 +697,11 @@ function pickCustomerColor(message) {
   if (matches.length === 0) return null;
   // Prefer a color directly modifying a footwear noun ("red sandals").
   const footwearAdj = matches.find((m) => m.attachedToFootwear);
-  return (footwearAdj || matches[0]).canonical;
+  if (footwearAdj) return footwearAdj.canonical;
+  // Otherwise the FIRST color the customer typed wins — matches were
+  // collected in lexicon key order, not message order.
+  matches.sort((a, b) => a.index - b.index);
+  return matches[0].canonical;
 }
 
 export function extractUserConstraints(message) {

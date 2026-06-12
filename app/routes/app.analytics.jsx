@@ -7,6 +7,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { getUsageSummary, getDailySeries } from "../models/ChatUsage.server";
+import { getShopPlan } from "../lib/billing.server";
 import { getFeedbackSummary, cleanupOldFeedback, getRecentQuestions } from "../models/ChatFeedback.server";
 import {
   getTopProducts, getProductsByTool, getInterestBreakdown, cleanupOldMentions,
@@ -47,6 +48,18 @@ function parseRange(searchParams) {
   return { startDate: start, endDate: end, preset, label: { "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days", ytd: "Year to date" }[preset] || "Last 30 days" };
 }
 
+// Clamp any requested window to the plan's analytics retention — a
+// custom range must not read further back than the plan advertises.
+function clampToRetention(range, retentionDays) {
+  const days = Number(retentionDays);
+  if (!Number.isFinite(days) || days <= 0) return range;
+  const floor = new Date(Date.now() - days * 86400000);
+  if (range.startDate < floor) {
+    return { ...range, startDate: floor };
+  }
+  return range;
+}
+
 function daysBetween(a, b) {
   return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000));
 }
@@ -54,7 +67,10 @@ function daysBetween(a, b) {
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
-  const { startDate, endDate, preset, label } = parseRange(url.searchParams);
+  const parsed = parseRange(url.searchParams);
+  const planForRetention = await getShopPlan(session.shop);
+  const { startDate, endDate } = clampToRetention(parsed, planForRetention.analyticsRetentionDays);
+  const { preset, label } = parsed;
   const rangeArg = { startDate, endDate };
 
   const spanDays = daysBetween(startDate, endDate);

@@ -314,14 +314,23 @@ export function colorExistsInCatalogScope(color, gender, category, facetIndex, {
   const canonical = canonicalizeCatalogConstraints({ color, gender, category });
   if (!canonical.color || !facetIndex) return null;
   const tuples = restrictCatalogTuples(buildCatalogTupleSpace(facetIndex), allowedCategories);
-  const constraints = { color: canonical.color };
-  if (canonical.gender) constraints.gender = canonical.gender;
-  if (canonical.category) constraints.category = canonical.category;
+  const scopeConstraints = {};
+  if (canonical.gender) scopeConstraints.gender = canonical.gender;
+  if (canonical.category) scopeConstraints.category = canonical.category;
+  // Absence of color FACTS is not proof of color absence: a tuple only
+  // carries a color when extraction found one, so a real product with
+  // an untagged color contributes color:null. If the scope has zero
+  // color data, return null (unproven) — the resolver must ask, not
+  // assert "no <color> products" about a catalog it can't see colors
+  // for (the unnamed-search half of the false-denial class).
+  let sawColorFact = false;
   for (const t of tuples) {
     if (t.color == null) continue;
-    if (catalogTupleMatches(t, constraints) && t.color === canonical.color) return true;
+    if (!catalogTupleMatches(t, scopeConstraints)) continue;
+    sawColorFact = true;
+    if (t.color === canonical.color) return true;
   }
-  return false;
+  return sawColorFact ? false : null;
 }
 
 export function readAttributeCI(bag, keyOrAliases) {

@@ -1,4 +1,5 @@
 import { authenticate } from "../shopify.server";
+import { getShopPlan } from "../lib/billing.server";
 import { getDailySeries, getUsageSummary } from "../models/ChatUsage.server";
 import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.server";
@@ -30,6 +31,18 @@ function parseRange(searchParams) {
   else start = new Date(now.getTime() - 30 * 86400000);
 
   return { startDate: start, endDate: end };
+}
+
+// Clamp any requested window to the plan's analytics retention — a
+// custom range must not read further back than the plan advertises.
+function clampToRetention(range, retentionDays) {
+  const days = Number(retentionDays);
+  if (!Number.isFinite(days) || days <= 0) return range;
+  const floor = new Date(Date.now() - days * 86400000);
+  if (range.startDate < floor) {
+    return { ...range, startDate: floor };
+  }
+  return range;
 }
 
 async function buildCsv(shop, section, rangeArg, vote = "") {
@@ -127,7 +140,11 @@ export const loader = async ({ request }) => {
     return new Response("Missing 'section' query parameter", { status: 400 });
   }
 
-  const { startDate, endDate } = parseRange(url.searchParams);
+  const planForRetention = await getShopPlan(session.shop);
+  const { startDate, endDate } = clampToRetention(
+    parseRange(url.searchParams),
+    planForRetention.analyticsRetentionDays,
+  );
   const rangeArg = { startDate, endDate };
 
   const vote = url.searchParams.get("vote") || "";

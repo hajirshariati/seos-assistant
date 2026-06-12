@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAPPING_PATH = path.join(__dirname, "orthotic-mapping.json");
 const OUT_PATH = path.join(__dirname, "regenerated-masterindex.json");
-const ADMIN_API_VERSION = "2024-10";
+import { ADMIN_API_VERSION } from "../app/lib/admin-api-version.js";
 
 const args = process.argv.slice(2);
 const arg = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(`--${name}=`.length);

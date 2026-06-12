@@ -85,7 +85,15 @@ export const loader = async ({ request }) => {
     fileCount: files.length,
     shop: session.shop,
     userFirstName,
-    themeEditorUrl: `https://${session.shop}/admin/themes/current/editor?context=apps`,
+    // Deep link with activateAppId pre-selects and toggles our app
+    // embed in the theme editor (App Store req 5.1.3) — without it the
+    // merchant lands on the generic editor and has to find the embed
+    // manually. The id is the theme extension's uid from
+    // extensions/hajirai-chat-widget/shopify.extension.toml + the
+    // embed block's filename handle.
+    themeEditorUrl:
+      `https://${session.shop}/admin/themes/current/editor` +
+      `?context=apps&activateAppId=678052ad-1f00-ade1-148e-c0076d6cf6a3793b2723/hajirai_chat`,
     widgetEnabled,
     productsCount: syncState.productsCount || 0,
     enrichmentCount,

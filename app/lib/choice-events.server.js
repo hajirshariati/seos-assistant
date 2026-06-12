@@ -102,22 +102,32 @@ export function mapChoiceToMemoryFact(label, question = "") {
   if (/^women(?:['’]s?|s)?(?:\s|$)/.test(lc) || lc === "female") return { key: "gender", value: "women" };
   if (/^kids?['’]?s?(?:\s|$)/.test(lc)) return { key: "gender", value: "kids" };
 
-  if (/flat\s*\/\s*low|low\s+arch|flat\s+feet/i.test(lc)) return { key: "arch", value: "low" };
+  // "Overpronation / flat feet" is the CONDITION chip — don't let the
+  // arch rule's "flat feet" alternation claim it first.
+  if (/flat\s*\/\s*low|low\s+arch|flat\s+feet/i.test(lc) && !/overpronat|pronation/i.test(lc)) return { key: "arch", value: "low" };
   if (/medium\s*\/\s*high|medium\s+arch|high\s+arch/i.test(lc)) return { key: "arch", value: lc.includes("high") ? "high" : "medium" };
   if (/^(?:low|medium|high)(?:\s+arch)?$/.test(lc)) return { key: "arch", value: lc.replace(/\s+arch$/, "") };
 
+  // Condition/useCase values are the TREE's enum vocabulary
+  // (scripts/seeds/aetrex-orthotic-tree.json → resolver.masterIndex).
+  // This mapper previously emitted phantom enums (heel_spur,
+  // flat_feet, comfort_walking_everyday, …) that exist nowhere in the
+  // tree, silently polluting generic session memory with values no
+  // downstream consumer could ever match.
   if (/plantar/i.test(lc)) return { key: "condition", value: "plantar_fasciitis" };
   if (/ball[- ]?of[- ]?foot|metatarsalgia/i.test(lc)) return { key: "condition", value: "metatarsalgia" };
   if (/morton/i.test(lc)) return { key: "condition", value: "mortons_neuroma" };
-  if (/heel\s+spur/i.test(lc)) return { key: "condition", value: "heel_spur" };
-  if (/bunion/i.test(lc)) return { key: "condition", value: "bunions" };
-  if (/flat\s*feet|low\s*arch/i.test(lc)) return { key: "condition", value: "flat_feet" };
-  if (/high\s*arch/i.test(lc)) return { key: "condition", value: "high_arch" };
-  if (/general\s+comfort/i.test(lc)) return { key: "condition", value: "general_comfort" };
+  if (/heel\s+spur/i.test(lc)) return { key: "condition", value: "heel_spurs" };
+  if (/flat\s*feet|overpronation/i.test(lc)) return { key: "condition", value: "overpronation_flat_feet" };
+  if (/diabetic/i.test(lc)) return { key: "condition", value: "diabetic" };
+  if (/general\s+comfort|none\s*[—-]/i.test(lc)) return { key: "condition", value: "none" };
 
-  if (/walking|everyday|comfort/i.test(lc)) return { key: "useCase", value: "comfort_walking_everyday" };
-  if (/running|training|athletic|sport/i.test(lc)) return { key: "useCase", value: "athletic_training_sports" };
-  if (/work|standing/i.test(lc)) return { key: "useCase", value: "standing_all_day" };
+  if (/running/i.test(lc)) return { key: "useCase", value: "athletic_running" };
+  if (/gym|training/i.test(lc)) return { key: "useCase", value: "athletic_training" };
+  if (/athletic|sport|court/i.test(lc)) return { key: "useCase", value: "athletic_general" };
+  if (/work|standing|on\s+my\s+feet/i.test(lc)) return { key: "useCase", value: "work_all_day" };
+  if (/walking|everyday|casual/i.test(lc)) return { key: "useCase", value: "casual" };
+  if (/comfort|relief/i.test(lc)) return { key: "useCase", value: "comfort" };
 
   if ((lc === "yes" || lc === "no") && /overpronat|roll inward|pronation/i.test(q)) {
     return { key: "overpronation", value: lc };

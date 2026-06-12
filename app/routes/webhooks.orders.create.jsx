@@ -72,7 +72,12 @@ export const action = async ({ request }) => {
     await recordChatConversion({
       shop,
       orderId: payload.id,
-      orderName: payload.name || payload.order_number ? `#${payload.order_number || payload.name}` : null,
+      // payload.name already arrives formatted ("#1001"); only build a
+      // "#" prefix from the bare order_number. (The old `a || b ? ...`
+      // precedence produced "##1001" when name was present.)
+      orderName: payload.order_number
+        ? `#${payload.order_number}`
+        : (payload.name || null),
       totalAmount: payload.total_price ? Number(payload.total_price) : null,
       currency: payload.currency || payload.presentment_currency || null,
       customerId: payload.customer?.id ? String(payload.customer.id) : null,

@@ -90,6 +90,22 @@ test("C7 — context-carrying gender chip still maps the gender fact", () => {
   assert.deepEqual(mapChoiceToMemoryFact("Kids' orthotics"), { key: "gender", value: "kids" });
 });
 
+test("C8 — condition/useCase facts use the TREE's enum vocabulary, never phantom values", () => {
+  // The mapper previously emitted enums that exist nowhere in
+  // aetrex-orthotic-tree.json (heel_spur, flat_feet,
+  // comfort_walking_everyday, …) — values no downstream consumer
+  // could ever match. Every emitted value must be a real tree enum.
+  assert.deepEqual(mapChoiceToMemoryFact("Heel spurs"), { key: "condition", value: "heel_spurs" });
+  assert.deepEqual(mapChoiceToMemoryFact("Overpronation / flat feet"), { key: "condition", value: "overpronation_flat_feet" });
+  assert.deepEqual(mapChoiceToMemoryFact("Diabetic feet"), { key: "condition", value: "diabetic" });
+  assert.deepEqual(mapChoiceToMemoryFact("None — just want comfort"), { key: "condition", value: "none" });
+  assert.deepEqual(mapChoiceToMemoryFact("Athletic — running"), { key: "useCase", value: "athletic_running" });
+  assert.deepEqual(mapChoiceToMemoryFact("Athletic — gym / training"), { key: "useCase", value: "athletic_training" });
+  assert.deepEqual(mapChoiceToMemoryFact("Work / on my feet all day"), { key: "useCase", value: "work_all_day" });
+  assert.deepEqual(mapChoiceToMemoryFact("Everyday / casual shoes"), { key: "useCase", value: "casual" });
+  assert.deepEqual(mapChoiceToMemoryFact("Just want comfort / relief"), { key: "useCase", value: "comfort" });
+});
+
 if (failed > 0) {
   console.error("\nFailures:");
   for (const f of failures) console.error(`- ${f.name}: ${f.err.stack || f.err.message}`);

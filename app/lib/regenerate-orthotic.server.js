@@ -14,7 +14,7 @@
 // the merchant's saved mapping. The CLI script uses the same two
 // functions, so behavior stays identical between terminal and admin.
 
-const ADMIN_API_VERSION = "2024-10";
+import { ADMIN_API_VERSION } from "./admin-api-version.js";
 
 const PRODUCT_QUERY = `
   query OrthoticProducts($cursor: String) {

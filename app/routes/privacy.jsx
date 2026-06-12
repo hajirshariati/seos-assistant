@@ -158,9 +158,10 @@ export default function PrivacyPolicy() {
         <p>When a shopper uses the chat widget on the storefront:</p>
         <ul>
           <li>Chat messages are sent to our server for the sole purpose of generating AI responses.</li>
-          <li>We do not store shopper names, emails, addresses, or any personally identifiable information (PII) in our database.</li>
+          <li>We do not store shopper names, emails, addresses, or chat content keyed to a shopper&apos;s identity. The one customer-linked record we keep is described below: when a chat-assisted session leads to an order, we store that order&apos;s Shopify customer ID for conversion reporting.</li>
           <li>Anonymous usage metrics (message count, AI model used, token usage, cost, tool calls) are recorded per store for billing and analytics. Test conversations run by the merchant from the app&apos;s admin are flagged internal and are not recorded in analytics or counted against plan usage.</li>
           <li>If the shopper rates a response thumbs-up or thumbs-down, the conversation up to that point is stored alongside the rating so the merchant can review what the AI got right or wrong. The stored conversation is keyed only by a hashed source-IP identifier — never by customer ID, email, or any other PII — and is automatically deleted after 90 days.</li>
+          <li>When an order is attributed to a chat session, we record the order ID, order name, amount, currency, and the Shopify customer ID so the merchant&apos;s dashboard can report chat-driven revenue. The customer ID is removed automatically when Shopify sends a customer-redaction request, and all conversion records are deleted on store redaction or uninstall.</li>
           <li>If the merchant enables VIP Mode and the shopper is logged in, the assistant fetches the shopper&apos;s first name, order history, loyalty balance (Yotpo), and segment data (Klaviyo) per conversation to personalize replies. This data is used in-memory for the response and is not stored in our database.</li>
           <li>Shoppers should not enter sensitive personal information (such as health, financial, or government-ID details) into the chat. Messages are processed only to generate a reply and are not used for any other purpose.</li>
         </ul>

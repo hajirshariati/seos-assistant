@@ -58,6 +58,7 @@ import {
 } from "./orthotic-flow.server.js";
 import { executeRecommenderTool } from "./recommender-tools.server.js";
 import { buildStorefrontSearchCTA } from "./storefront-search-cta.server.js";
+import { scrubInternalEnums } from "./chat-postprocessing.js";
 
 // Format a recommender-returned product the same way chat-tools'
 // extractProductCards does. Inlined (rather than imported) to keep
@@ -87,6 +88,16 @@ function formatRecommenderCard(product) {
 const ORTHOTIC_INTENT = "orthotic";
 
 function sseChunk(obj) {
+  // Gate-rendered turns bypass chat.jsx's emit-finalize chain, so this
+  // is the last line of defense for customer-visible text: any future
+  // interpolation of an unmapped enum value (the gate's humanize* maps
+  // are a SECOND humanization table that can drift from the canonical
+  // ORTHOTIC_ENUM_LABELS) gets scrubbed here. Idempotent and cheap.
+  if (obj && obj.type === "text" && typeof obj.text === "string") {
+    const scrubbed = scrubInternalEnums(obj.text);
+    const next = typeof scrubbed === "string" ? scrubbed : scrubbed?.text;
+    if (next) obj = { ...obj, text: next };
+  }
   return `data: ${JSON.stringify(obj)}\n\n`;
 }
 
@@ -1537,7 +1548,23 @@ export async function maybeRunOrthoticFlow({
         lastOrthoticPivotIdx = i;
       }
     }
-    if (lastFootwearCommitIdx >= 0 && lastOrthoticPivotIdx <= lastFootwearCommitIdx) {
+    // A latest turn that is EXACTLY one of the flow's chip labels is
+    // the customer actively answering the questionnaire — a stale
+    // footwear commit earlier in a mixed conversation must not kill
+    // the flow mid-answer (the bare chip carries no orthotic noun, so
+    // it can't register as a pivot and the watermark comparison alone
+    // would veto it).
+    const latestHistoryMsg = messages[messages.length - 1];
+    const latestIsFlowChipAnswer =
+      latestHistoryMsg &&
+      latestHistoryMsg.role === "user" &&
+      typeof latestHistoryMsg.content === "string" &&
+      isExactOrthoticChipLabel(latestHistoryMsg.content);
+    if (
+      lastFootwearCommitIdx >= 0 &&
+      lastOrthoticPivotIdx <= lastFootwearCommitIdx &&
+      !latestIsFlowChipAnswer
+    ) {
       console.log(
         `[orthotic-flow] footwear-commit veto (history): customer committed to footwear ` +
           `on a prior turn and never pivoted; falling through to LLM`,

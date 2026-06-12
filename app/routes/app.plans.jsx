@@ -27,6 +27,15 @@ export const loader = async ({ request }) => {
 
 export const action = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
+  // Server-side comp guard: the disabled plan button is client-side
+  // only. A direct POST from a comped shop must never reach
+  // appSubscriptionCreate (test:false in production = a REAL charge).
+  if (isCompedShop(session.shop)) {
+    return data(
+      { ok: false, message: "Your store is on complimentary Pro — no billing changes needed." },
+      { status: 403 },
+    );
+  }
   const form = await request.formData();
   const intent = form.get("intent");
   const planId = String(form.get("planId") || "");
@@ -486,10 +495,15 @@ export default function PlansPage() {
                   <Form method="post" onSubmit={() => setPendingPlan(id)}>
                     <input type="hidden" name="intent" value="select" />
                     <input type="hidden" name="planId" value={id} />
+                    {/* Both directions are self-service: Shopify's
+                        appSubscriptionCreate REPLACES the active
+                        subscription, so a downgrade is the same call
+                        (App Store req 1.2.3 — plan changes without
+                        reinstall or support tickets). */}
                     <button
                       type="submit"
                       className={`seos-pl-tier-cta ${isUpgrade && !comped ? "is-primary" : ""}`}
-                      disabled={isCurrent || submitting || comped || !isUpgrade}
+                      disabled={isCurrent || submitting || comped}
                     >
                       {comped
                         ? "Included"
@@ -499,7 +513,7 @@ export default function PlansPage() {
                             ? "One moment…"
                             : isUpgrade
                               ? "Upgrade"
-                              : "Contact support to switch"}
+                              : "Switch to this plan"}
                     </button>
                   </Form>
                 </div>

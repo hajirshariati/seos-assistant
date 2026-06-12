@@ -7,7 +7,7 @@
 // cryptographically bound to the current request — a visitor cannot forge it.
 // Nothing is persisted to our DB; every fetch is live from Shopify.
 
-const ADMIN_API_VERSION = "2024-10";
+import { ADMIN_API_VERSION } from "./admin-api-version.js";
 
 const CUSTOMER_QUERY = `
   query GetCustomerContext($id: ID!, $orderLimit: Int!) {

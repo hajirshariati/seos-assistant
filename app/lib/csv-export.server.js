@@ -1,6 +1,11 @@
 function escapeCell(value) {
   if (value == null) return "";
-  const s = String(value);
+  let s = String(value);
+  // Formula-injection guard: customer-typed chat text flows into these
+  // exports verbatim, and spreadsheet apps execute cells starting with
+  // = + - @ (or tab/CR) when the merchant opens the file. Prefix a
+  // single quote so the cell renders as text. (OWASP CSV injection.)
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

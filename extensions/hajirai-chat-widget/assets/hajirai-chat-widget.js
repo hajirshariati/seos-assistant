@@ -136,7 +136,13 @@ var HK='hajirai_chat_history';
 
 function $(s,c){return(c||document).querySelector(s)}
 function el(t,cl,h){var e=document.createElement(t);if(cl)e.className=cl;if(h)e.innerHTML=h;return e}
-function esc(s){var d=document.createElement('div');d.appendChild(document.createTextNode(s));return d.innerHTML}
+/* esc() output is interpolated into double- AND single-quoted HTML
+   attributes throughout this file (data-message, alt, aria-label,
+   src), so it must escape quotes too — text-node serialization only
+   covers & < >, and a product title like `10" Boot` (or any server
+   string containing a quote) would otherwise break out of the
+   attribute and inject markup. */
+function esc(s){var d=document.createElement('div');d.appendChild(document.createTextNode(s));return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function fmt(c){return'$'+(c/100).toFixed(2)}
 function safeUrl(u){var s=String(u||'').trim();return /^(https?:\/\/|\/)/i.test(s)?s.replace(/"/g,'&quot;'):''}
 function md(t){if(!t)return'';return t.replace(/^\s*\|[\s\-:|]+\|\s*$/gm,'').replace(/\|[\s\-:|]{3,}\|/g,'').replace(/\|([^|\n]+(?:\|[^|\n]+)+)\|/g,function(_,row){var cells=row.split('|').map(function(s){return s.trim()}).filter(Boolean);if(cells.length<2)return cells.join('');return '\n- **'+cells[0]+'** — '+cells.slice(1).join(' — ')}).replace(/([^\n])[ \t]+(\*\*[^*\n]+?:\*\*)/g,'$1\n\n$2').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){var u=safeUrl(url);return u?'<a href="'+u+'" target="_blank" rel="noopener">'+txt+'</a>':txt}).replace(/^[-*] (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')}
@@ -149,8 +155,8 @@ function addToCart(vid,qty){
 return fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})}).then(function(r){return r.json()}).then(function(d){document.dispatchEvent(new CustomEvent('cart:refresh'));return fetch('/cart.js').then(function(r){return r.json()}).then(function(cart){document.querySelectorAll('[data-cart-count],.cart-count,.header__cart-count').forEach(function(e){e.textContent=cart.item_count});return d})})
 }
 
-var avatarImg=AVATAR?'<img src="'+AVATAR+'" alt="'+esc(NAME)+'">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-var assistantBubbleAvatar=AVATAR?'<img src="'+AVATAR+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+var avatarImg=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 /* Build launcher */
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
@@ -340,7 +346,7 @@ function buildWelcome(){
 var h='<div class="ai-chat-welcome">';
 if(SHOWBAN){
   h+='<div class="ai-chat-welcome__banner">';
-  if(BANNER)h+='<img src="'+BANNER+'" alt="Welcome banner">';
+  if(BANNER)h+='<img src="'+safeUrl(BANNER)+'" alt="Welcome banner">';
   h+='</div>';
 }
 h+='<div class="ai-chat-welcome__avatar">'+avatarImg+'</div>';

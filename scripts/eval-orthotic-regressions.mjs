@@ -1002,6 +1002,30 @@ await test("20a — 'show me Vania in red' drops category AND gender filter (nam
     "the named product must stay the leading query term");
 });
 
+await test("20a2 — size/width hard filters relax on named-product searches too", () => {
+  // Same erasure class as color: "do you have the Vania in size 9?"
+  // with a size hard filter drops the Vania (no size-9 variant) while
+  // OTHER size-9 products survive the wipeout-recovery check, so the
+  // bot answers about the wrong products. Size/width become soft query
+  // terms; the named product always surfaces.
+  const toolCall = {
+    name: "search_products",
+    input: {
+      query: "Vania",
+      filters: { size: "9", width: "wide" },
+    },
+  };
+  const ctx = { latestUserMessage: "do you have the vania in size 9 wide?" };
+  const result = relaxCategoryOnNamedProduct(toolCall, ctx);
+  assert.equal(result.input.filters?.size, undefined,
+    "size filter must be dropped so the named product still surfaces without that size");
+  assert.equal(result.input.filters?.width, undefined,
+    "width filter must be dropped so the named product still surfaces without that width");
+  assert.match(result.input.query, /^Vania\b/, "named product stays the leading query term");
+  assert.match(result.input.query, /size 9/i, "size intent survives as a query term");
+  assert.match(result.input.query, /wide/i, "width intent survives as a query term");
+});
+
 await test("20b — generic category-only query keeps the category filter (no false positive)", () => {
   // Customer says "show me heels" — no proper-noun product name.
   // Category lock must remain in place.

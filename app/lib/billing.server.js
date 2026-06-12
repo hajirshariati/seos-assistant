@@ -60,6 +60,11 @@ export async function canSendMessage(shop) {
 }
 
 export async function createSubscription({ admin, shop, planId, host }) {
+  // Defense in depth alongside the route-action guard: a comped shop
+  // must never reach appSubscriptionCreate from ANY caller.
+  if (isCompedShop(shop)) {
+    throw new Error(`Comped shop ${shop} cannot create a subscription`);
+  }
   const plan = getPlan(planId);
   if (!plan || plan.price === 0) {
     throw new Error(`Cannot create subscription for plan: ${planId}`);

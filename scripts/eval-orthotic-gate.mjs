@@ -707,6 +707,30 @@ await test("regression (2026-06-12): condition + 'what shoes do you recommend?' 
   assert.equal(events.length, 0);
 });
 
+await test("history veto does NOT fire on an exact flow-chip answer mid-flow (stale footwear commit)", async () => {
+  // Mixed conversation: the customer asked for shoes early on, then
+  // genuinely pivoted to orthotics and entered the flow. A bare chip
+  // answer ("Plantar fasciitis") carries no orthotic noun, so it can't
+  // register as a pivot — the watermark comparison alone would let the
+  // stale footwear commit veto the flow mid-answer. The exact-chip
+  // guard must keep the flow alive.
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: [
+      { role: "user", content: "show me black sneakers" },
+      { role: "assistant", content: "Here are some black sneakers." },
+      { role: "user", content: "actually I want orthotic inserts instead" },
+      { role: "assistant", content: "Happy to help with orthotics. Any of these conditions apply?\n\n<<Plantar fasciitis>><<Heel spurs>><<None — just want comfort>>" },
+      { role: "user", content: "Plantar fasciitis" },
+    ],
+    tree,
+    shop: "test.myshopify.com",
+    controller,
+    encoder,
+  });
+  assert.notEqual(out.case, "footwear_commit_history", "exact chip answer must not be vetoed by stale commit history");
+});
+
 await test("regression: 'best summer sandal for my mom under $50' must NOT engage (post-19:27 prod trace)", async () => {
   // Production trace at 19:27 UTC. Earlier turns asked about
   // 'sneakers with lace-up styles' and 'wider widths' — Layer 2

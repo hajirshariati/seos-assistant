@@ -150,7 +150,7 @@ export function relaxCategoryOnNamedProduct(toolCall, ctx) {
   // color moves into the QUERY text instead (soft ranking signal), so the
   // named product always surfaces and the model can answer honestly:
   // "the Tamara comes in black and tan — not red. Want these red ones?"
-  if (!filters || (!filters.category && !filters.gender && !filters.color && !filters.color_family)) return toolCall;
+  if (!filters || (!filters.category && !filters.gender && !filters.color && !filters.color_family && !filters.size && !filters.width)) return toolCall;
 
   const query = String(toolCall.input?.query || "").trim();
   if (!query) return toolCall;
@@ -181,11 +181,21 @@ export function relaxCategoryOnNamedProduct(toolCall, ctx) {
   const droppedCategory = filters.category;
   const droppedGender = filters.gender;
   const droppedColor = filters.color || filters.color_family;
+  // Size/width hard filters have the same erasure failure as color: a
+  // named product with no size-9 variant vanishes while OTHER size-9
+  // products survive the wipeout-recovery check (filtered.length > 0),
+  // so the bot answers about the wrong products. Drop them as filters,
+  // keep them as soft query terms, and the model answers honestly
+  // ("it comes in 7-10, not 9").
+  const droppedSize = filters.size;
+  const droppedWidth = filters.width;
   const {
     category: _dropCat,
     gender: _dropGen,
     color: _dropColor,
     color_family: _dropColorFamily,
+    size: _dropSize,
+    width: _dropWidth,
     ...remainingFilters
   } = filters;
   // Gender: live trace 2026-06-08 — "how many points to buy Jillian for
@@ -198,6 +208,8 @@ export function relaxCategoryOnNamedProduct(toolCall, ctx) {
   if (droppedCategory) droppedFields.push(`category="${droppedCategory}"`);
   if (droppedGender) droppedFields.push(`gender="${droppedGender}"`);
   if (droppedColor) droppedFields.push(`color="${droppedColor}"`);
+  if (droppedSize) droppedFields.push(`size="${droppedSize}"`);
+  if (droppedWidth) droppedFields.push(`width="${droppedWidth}"`);
   console.log(
     `[chat] named-product detected: "${namedProduct}" — dropping ${droppedFields.join(", ")} so search can find it across the catalog`,
   );
@@ -206,6 +218,12 @@ export function relaxCategoryOnNamedProduct(toolCall, ctx) {
   let nextQuery = query;
   if (droppedColor && !query.toLowerCase().includes(String(droppedColor).toLowerCase())) {
     nextQuery = `${query} ${droppedColor}`.trim();
+  }
+  if (droppedSize && !nextQuery.toLowerCase().includes(`size ${String(droppedSize).toLowerCase()}`)) {
+    nextQuery = `${nextQuery} size ${droppedSize}`.trim();
+  }
+  if (droppedWidth && !nextQuery.toLowerCase().includes(String(droppedWidth).toLowerCase())) {
+    nextQuery = `${nextQuery} ${droppedWidth} width`.trim();
   }
   return {
     ...toolCall,
