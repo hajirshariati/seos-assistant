@@ -1099,7 +1099,11 @@ export function stripUnsafeInlineChips(text, { hasProducts = false } = {}) {
   // greeting with no question and no chips. A pure gender set must
   // survive even without a question sentence in front of it (unless
   // the text is an answer-with-menu denial).
-  const GENDER_CHIP_LABEL_RE = /^(?:men|women|kids?)(?:['\u2019]s?)?(?:\s+[\w'-]+){0,2}$/i;
+  // Accepts the apostrophe-less spellings too ("Mens", "Womens") \u2014 the
+  // gender detectors and choice-events fact regexes treat those as
+  // gender labels, so the gate must as well or the dead-end recurs for
+  // a sibling spelling of the same chip.
+  const GENDER_CHIP_LABEL_RE = /^(?:men|women|kids?)(?:['\u2019]s?|s)?(?:\s+[\w'-]+){0,2}$/i;
   if (chips.every((c) => GENDER_CHIP_LABEL_RE.test(c)) && !ANSWER_WITH_MENU_RE.test(before)) {
     return { text: value, changed: false, reason: "" };
   }
@@ -1117,6 +1121,16 @@ export function stripUnsafeInlineChips(text, { hasProducts = false } = {}) {
   }
 
   const next = stripInlineChipMarkup(value);
+  // Dead-end guard, generalized from the gender exemption above: if
+  // stripping the chips would leave a reply with NO question, the chips
+  // were the only thing the customer could answer — stripping converts
+  // a recoverable reply into a dead end (the 2026-06-12 failure shape,
+  // for any clarifier chip set, not just gender). The one shape that
+  // must still strip is the answer-with-menu denial, which is an
+  // ANSWER, not a question — that's the failure this guard exists for.
+  if (!/\?/.test(next) && !ANSWER_WITH_MENU_RE.test(before)) {
+    return { text: value, changed: false, reason: "" };
+  }
   return {
     text: next,
     changed: next !== value.trim(),

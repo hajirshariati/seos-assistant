@@ -264,7 +264,12 @@ export function filterContradictingGenderChips(text, conversationText, categoryG
 // No-ops when categoryNoun is falsy or when a chip is already
 // compound (more than the bare gender token). Gender + ONE noun,
 // never more.
-const BARE_GENDER_CHIP_RE = /^(men|women)(?:['’]s)?$/i;
+// Matches every bare gender-chip spelling the gender detectors and
+// choice-events fact regexes accept: Men / Men's / Mens, Women /
+// Women's / Womens, Kid / Kids / Kids' / Kid's. An undecorated
+// <<Kids>> (or <<Mens>>) chip loses its category context on tap
+// exactly like the bare men/women chips did (audit 2026-06-12).
+const BARE_GENDER_CHIP_RE = /^(men|women|kids?)(?:['’]s?|s)?$/i;
 
 export function decorateGenderNavigationChips(text, { categoryNoun = "" } = {}) {
   if (!text || typeof text !== "string") return { text: text || "", decorated: [] };
@@ -275,8 +280,16 @@ export function decorateGenderNavigationChips(text, { categoryNoun = "" } = {}) 
   const out = text.replace(/<<([^<>|]+)>>/g, (match, inner) => {
     const m = String(inner).trim().match(BARE_GENDER_CHIP_RE);
     if (!m) return match; // not a bare gender chip (already compound, or not gender)
-    const gender = m[1].toLowerCase() === "men" ? "Men" : "Women";
-    const label = `${gender}'s ${noun}`;
+    const base = m[1].toLowerCase();
+    // Kids takes the plural possessive ("Kids' shoes"), men/women the
+    // singular ("Men's shoes") — same forms decorateGenderChipLabel
+    // emits in the guided flow, so taps round-trip through the same
+    // fact regexes.
+    const label = base === "men"
+      ? `Men's ${noun}`
+      : base === "women"
+        ? `Women's ${noun}`
+        : `Kids' ${noun}`;
     decorated.push(label);
     return `<<${label}>>`;
   });

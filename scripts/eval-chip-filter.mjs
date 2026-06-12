@@ -427,11 +427,21 @@ await test("C21 — no-op without a categoryNoun", () => {
   assert.equal(out2.text, text);
 });
 
-await test("C22 — no-op on already-compound chips and non-gender chips (gender + ONE noun, never more)", () => {
+await test("C22 — no-op on already-compound chips and non-gender chips; bare <<Kids>> decorates (contract changed 2026-06-12: an undecorated Kids chip loses its category context on tap exactly like bare men/women chips did)", () => {
   const text = "Pick one: <<Men's shoes>><<Women's sneakers>><<Sneakers>><<Kids>>";
   const out = decorateGenderNavigationChips(text, { categoryNoun: "boots" });
-  assert.equal(out.text, text, "compound and non-Men/Women chips must pass through untouched");
-  assert.deepEqual(out.decorated, []);
+  assert.equal(
+    out.text,
+    "Pick one: <<Men's shoes>><<Women's sneakers>><<Sneakers>><<Kids' boots>>",
+    "compound and non-gender chips pass through; bare Kids decorates with the plural possessive",
+  );
+  assert.deepEqual(out.decorated, ["Kids' boots"]);
+});
+
+await test("C22b — apostrophe-less spellings decorate too (<<Mens>>/<<Womens>>)", () => {
+  const out = decorateGenderNavigationChips("Which? <<Mens>><<Womens>>", { categoryNoun: "shoes" });
+  assert.equal(out.text, "Which? <<Men's shoes>><<Women's shoes>>");
+  assert.deepEqual(out.decorated, ["Men's shoes", "Women's shoes"]);
 });
 
 await test("C23 — decorated output passes filterCatalogScopedNavigationChips with the group umbrella term", () => {

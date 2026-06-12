@@ -1345,6 +1345,49 @@ test("inline-chip gate — 'pick from / let me know' clarifier keeps chips", () 
   assert.equal(r.changed, false, `must keep chips; got: ${r.text}`);
 });
 
+test("inline-chip gate — apostrophe-less gender spellings survive (<<Mens>>/<<Womens>>)", () => {
+  // The gender detectors and choice-events fact regexes accept the
+  // apostrophe-less spellings; the gate exemption must too, or the
+  // 2026-06-12 dead-end recurs for a sibling spelling of the same chip.
+  const r = stripUnsafeInlineChips(
+    "Hi! Welcome to the store. <<Mens>> <<Womens>>",
+    { hasProducts: false },
+  );
+  assert.equal(r.changed, false, `apostrophe-less gender chips must survive; got: ${r.text}`);
+});
+
+test("inline-chip gate — dead-end guard: clarifier chips with NO question survive (chips ARE the question)", () => {
+  // Generalization of the gender exemption: when an upstream strip has
+  // eaten the question sentence, the chips are the only thing the
+  // customer can answer. Stripping them produces a dead-end greeting
+  // (the 2026-06-12 failure, for any clarifier chip set).
+  const r = stripUnsafeInlineChips(
+    "Welcome to the store. <<Sneakers>> <<Sandals>> <<Boots>>",
+    { hasProducts: false },
+  );
+  assert.equal(r.changed, false, `question-less clarifier chips must survive; got: ${r.text}`);
+});
+
+test("inline-chip gate — dead-end guard does NOT keep chips when a question survives elsewhere", () => {
+  // When the stripped text still asks something, the reply remains
+  // answerable without the unsafe chips — the gate strips as before.
+  const r = stripUnsafeInlineChips(
+    "Can I help with anything else? <<Maybe>>",
+    { hasProducts: false },
+  );
+  assert.equal(r.changed, true, `unsafe chip beside a surviving question must strip; got: ${r.text}`);
+  assert.match(r.text, /\?/);
+});
+
+test("inline-chip gate — dead-end guard does NOT protect a denial menu (failure mode preserved)", () => {
+  const r = stripUnsafeInlineChips(
+    "We don't carry slippers — closest alternatives below. <<Sneakers>> <<Sandals>>",
+    { hasProducts: false },
+  );
+  assert.equal(r.changed, true, `denial-with-menu must still strip; got: ${r.text}`);
+  assert.equal(/<</.test(r.text), false);
+});
+
 test("inline-chip gate — keeps foot-pain domain disambiguation", () => {
   const r = stripUnsafeInlineChips(
     "Are you looking for footwear with built-in arch support, or an orthotic insole that goes inside your existing shoes? <<Footwear with arch support>> <<Orthotic insole>>",
