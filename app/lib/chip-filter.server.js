@@ -249,6 +249,41 @@ export function filterContradictingGenderChips(text, conversationText, categoryG
   };
 }
 
+// Context-carrying gender navigation chips. The LLM asks "men's or
+// women's?" with bare <<Men's>><<Women's>> chips; when the customer
+// already named a category, a tapped bare chip round-trips as a
+// context-free "Women's" the engine has to re-anchor. Rewrite ONLY
+// bare gender chips (a single gender token — "Men", "Men's",
+// "Women", "Women's"; case-insensitive) into the possessive
+// compound: <<Men's shoes>> / <<Women's shoes>>. Composed
+// server-side from engine data (the caller derives categoryNoun
+// from the current catalog scope) — the LLM never invents the
+// compound, and the result still flows through
+// filterCatalogScopedNavigationChips for catalog validation.
+//
+// No-ops when categoryNoun is falsy or when a chip is already
+// compound (more than the bare gender token). Gender + ONE noun,
+// never more.
+const BARE_GENDER_CHIP_RE = /^(men|women)(?:['’]s)?$/i;
+
+export function decorateGenderNavigationChips(text, { categoryNoun = "" } = {}) {
+  if (!text || typeof text !== "string") return { text: text || "", decorated: [] };
+  const noun = String(categoryNoun || "").trim();
+  if (!noun) return { text, decorated: [] };
+
+  const decorated = [];
+  const out = text.replace(/<<([^<>|]+)>>/g, (match, inner) => {
+    const m = String(inner).trim().match(BARE_GENDER_CHIP_RE);
+    if (!m) return match; // not a bare gender chip (already compound, or not gender)
+    const gender = m[1].toLowerCase() === "men" ? "Men" : "Women";
+    const label = `${gender}'s ${noun}`;
+    decorated.push(label);
+    return `<<${label}>>`;
+  });
+
+  return { text: out, decorated };
+}
+
 function categoryFromChip(inner, catalogCategories) {
   const text = String(inner || "").toLowerCase().replace(/[_-]+/g, " ");
   const direct = normalizeCategory(inner);

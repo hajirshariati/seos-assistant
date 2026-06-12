@@ -1,5 +1,8 @@
 {
   "rootNodeId": "q_gender",
+  "vocabulary": {
+    "genderChipContextNoun": "orthotics"
+  },
   "nodes": [
     {
       "id": "q_use_case",

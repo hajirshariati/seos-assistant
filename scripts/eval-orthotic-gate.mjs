@@ -162,6 +162,47 @@ await test("still advances the flow on a plain chip answer with no question", as
   assert.equal(out.handled, true);
 });
 
+await test("advances on a tapped DECORATED gender chip ('Women's orthotics')", async () => {
+  // The gate now emits context-carrying gender chips; the tapped
+  // label round-trips as the customer's whole message and must map
+  // via the decorated Layer-1 lookup.
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: [
+      { role: "user", content: "I need orthotics for heel pain" },
+      { role: "assistant", content: "Who are these orthotics for? <<Men's orthotics>> <<Women's orthotics>> <<Kids' orthotics>>" },
+      { role: "user", content: "Women's orthotics" },
+    ],
+    tree,
+    shop: "test.myshopify.com",
+    controller,
+    encoder,
+  });
+  assert.equal(out.handled, true);
+  assert.match(events[0].text, /orthotics go in/i, "gender mapped → next question is q_use_case");
+});
+
+await test("back-compat: OLD bare-chip history + bare 'Women' reply still continues the flow", async () => {
+  // Conversations that predate context-carrying chips have bare
+  // '<<Men>><<Women>><<Kids>>' assistant text and bare 'Women'
+  // replies — both must keep working (bare labels stay in the
+  // lookup alongside the decorated ones).
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: [
+      { role: "user", content: "I need orthotics for heel pain" },
+      { role: "assistant", content: "Who are these orthotics for? <<Men>><<Women>><<Kids>>" },
+      { role: "user", content: "Women" },
+    ],
+    tree,
+    shop: "test.myshopify.com",
+    controller,
+    encoder,
+  });
+  assert.equal(out.handled, true);
+  assert.match(events[0].text, /orthotics go in/i, "bare chip answer still advances to q_use_case");
+});
+
 await test("looksLikeTransactionalQuestion catches ordering / buying intent post-recommendation", () => {
   // Hunter trace (foot-pain-orthotic): after a recommendation, customer
   // said "this mens active posted one sounds good — how do i order it?"
@@ -384,9 +425,10 @@ await test("emits next seed question on chip click (Layer 1)", async () => {
   assert.equal(events.length, 3);
   assert.equal(events[0].type, "text");
   assert.match(events[0].text, /Who are these orthotics for/);
-  assert.match(events[0].text, /<<Men>>/);
-  assert.match(events[0].text, /<<Women>>/);
-  assert.match(events[0].text, /<<Kids>>/);
+  // Context-carrying gender chips: labels carry the domain noun.
+  assert.match(events[0].text, /<<Men's orthotics>>/);
+  assert.match(events[0].text, /<<Women's orthotics>>/);
+  assert.match(events[0].text, /<<Kids' orthotics>>/);
   assert.equal(events[1].type, "products");
   assert.deepEqual(events[1].products, []);
   assert.equal(events[2].type, "done");
@@ -542,10 +584,11 @@ await test("bootstrap: 'I need orthotics' → emits q_gender (no prior assistant
   assert.equal(out.handled, true);
   assert.equal(events[0].type, "text");
   assert.match(events[0].text, /Who are these orthotics for/i);
-  // Seed-byte-exact chips so the next turn's chip click maps via Layer 1.
-  assert.match(events[0].text, /<<Men>>/);
-  assert.match(events[0].text, /<<Women>>/);
-  assert.match(events[0].text, /<<Kids>>/);
+  // Decorated seed chips (context-carrying) so the next turn's chip
+  // click maps via Layer 1's decorated lookup.
+  assert.match(events[0].text, /<<Men's orthotics>>/);
+  assert.match(events[0].text, /<<Women's orthotics>>/);
+  assert.match(events[0].text, /<<Kids' orthotics>>/);
 });
 
 await test("bootstrap: pre-fills useCase + gender from rich first message", async () => {

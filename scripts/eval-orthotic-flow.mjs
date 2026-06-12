@@ -26,6 +26,11 @@ import {
   looksLikeRecommendationRequest,
   looksLikeInformationalQuestion,
   looksLikeAvailabilityQuestion,
+  decorateGenderChipLabel,
+  getGenderChipContextNoun,
+  messageCommitsToFootwear,
+  messagePivotsToOrthotic,
+  mentionsNonOrthoticFootwear,
 } from "../app/lib/orthotic-flow.server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -628,6 +633,122 @@ test("'recommend one for me' → false (recommendation request)", () => {
 });
 test("empty → false", () => {
   assert.equal(looksLikeAvailabilityQuestion(""), false);
+});
+
+section("context-carrying gender chips (decorate + match)");
+
+test("decorateGenderChipLabel possessive join: Men/Women → 's, Kids → s'", () => {
+  assert.equal(decorateGenderChipLabel("Men", "orthotics"), "Men's orthotics");
+  assert.equal(decorateGenderChipLabel("Women", "orthotics"), "Women's orthotics");
+  assert.equal(decorateGenderChipLabel("Kids", "orthotics"), "Kids' orthotics");
+});
+
+test("decorateGenderChipLabel: empty noun / label are no-ops", () => {
+  assert.equal(decorateGenderChipLabel("Women", ""), "Women");
+  assert.equal(decorateGenderChipLabel("Women", null), "Women");
+  assert.equal(decorateGenderChipLabel("", "orthotics"), "");
+});
+
+test("decorateGenderChipLabel: already-possessive label just appends the noun", () => {
+  assert.equal(decorateGenderChipLabel("Men's", "shoes"), "Men's shoes");
+  assert.equal(decorateGenderChipLabel("Kids'", "orthotics"), "Kids' orthotics");
+});
+
+test("getGenderChipContextNoun defaults to 'orthotics' when vocabulary absent", () => {
+  assert.equal(getGenderChipContextNoun({}), "orthotics");
+  assert.equal(getGenderChipContextNoun(null), "orthotics");
+  assert.equal(
+    getGenderChipContextNoun({ vocabulary: { genderChipContextNoun: "insoles" } }),
+    "insoles",
+  );
+});
+
+test("buildChipLookup with context noun accepts BOTH bare and decorated labels", () => {
+  const node = findNodeById(tree, "q_gender");
+  const lookup = buildChipLookup(node, "orthotics");
+  // Bare labels keep working (typed answers, old histories).
+  assert.equal(lookup.get("women"), "Women");
+  assert.equal(lookup.get("men"), "Men");
+  assert.equal(lookup.get("kids"), "Kids");
+  // Decorated labels (tapped chips) map to the same enum values.
+  assert.equal(lookup.get("women's orthotics"), "Women");
+  assert.equal(lookup.get("men's orthotics"), "Men");
+  assert.equal(lookup.get("kids' orthotics"), "Kids");
+});
+
+test("buildChipLookup does NOT decorate non-gender nodes", () => {
+  const node = findNodeById(tree, "q_use_case");
+  const lookup = buildChipLookup(node, "orthotics");
+  assert.equal(lookup.get("dress shoes / heels orthotics"), undefined);
+});
+
+test("Layer 1: tapped decorated chip 'Women's orthotics' maps to gender=Women", async () => {
+  const node = findNodeById(tree, "q_gender");
+  const r = await mapAnswerToEnum("Women's orthotics", node, tree);
+  assert.equal(r.value, "Women");
+  assert.equal(r.layer, 1);
+});
+
+test("Layer 1: tapped decorated chip 'Kids' orthotics' maps to gender=Kids", async () => {
+  const node = findNodeById(tree, "q_gender");
+  const r = await mapAnswerToEnum("Kids' orthotics", node, tree);
+  assert.equal(r.value, "Kids");
+  assert.equal(r.layer, 1);
+});
+
+test("findNodeByChipsInText identifies q_gender from DECORATED emitted chips", () => {
+  const node = findNodeByChipsInText(
+    "Who are these orthotics for? <<Men's orthotics>><<Women's orthotics>><<Kids' orthotics>>",
+    tree,
+  );
+  assert.equal(node?.id, "q_gender");
+});
+
+test("detectFlowState advances on decorated emit + decorated tap", () => {
+  const messages = [
+    { role: "user", content: "I need orthotics" },
+    { role: "assistant", content: "Who are these orthotics for? <<Men's orthotics>><<Women's orthotics>><<Kids' orthotics>>" },
+    { role: "user", content: "Women's orthotics" },
+  ];
+  const state = detectFlowState(messages, tree);
+  assert.equal(state.answers.gender, "Women");
+  assert.equal(state.currentNodeId, "q_use_case");
+});
+
+test("detectFlowState back-compat: bare emit + bare tap still advances (old history)", () => {
+  const messages = [
+    { role: "user", content: "I need orthotics" },
+    { role: "assistant", content: "Who are these orthotics for? <<Men>><<Women>><<Kids>>" },
+    { role: "user", content: "Women" },
+  ];
+  const state = detectFlowState(messages, tree);
+  assert.equal(state.answers.gender, "Women");
+  assert.equal(state.currentNodeId, "q_use_case");
+});
+
+test("preExtractAnswers: 'Women's orthotics' → gender=Women (Layer-1 decorated)", () => {
+  const out = preExtractAnswers("Women's orthotics", tree);
+  assert.equal(out.gender, "Women");
+});
+
+test("accumulateAnswers harvests gender from a decorated tapped chip in history", () => {
+  const messages = [
+    { role: "user", content: "I have plantar fasciitis" },
+    { role: "assistant", content: "Who are these orthotics for? <<Men's orthotics>><<Women's orthotics>><<Kids' orthotics>>" },
+    { role: "user", content: "Women's orthotics" },
+  ];
+  const out = accumulateAnswers(messages, tree);
+  assert.equal(out.gender, "Women");
+  assert.equal(out.condition, "plantar_fasciitis");
+});
+
+test("'Women's orthotics' is NOT a footwear commit (no footwear noun)", () => {
+  assert.equal(messageCommitsToFootwear("Women's orthotics"), false);
+  assert.equal(mentionsNonOrthoticFootwear("Women's orthotics"), false);
+  // Bonus: the orthotic noun in the tapped text marks the turn as
+  // orthotic-domain for the latest-message detectors.
+  assert.equal(detectOrthoticIntent("Women's orthotics"), true);
+  assert.equal(messagePivotsToOrthotic("Women's orthotics"), true);
 });
 
 async function run() {

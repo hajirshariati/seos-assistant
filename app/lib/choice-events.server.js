@@ -94,9 +94,13 @@ export function mapChoiceToMemoryFact(label, question = "") {
   const lc = String(label).toLowerCase().trim();
   const q = String(question || "").toLowerCase();
 
-  if (/^men'?s?$/.test(lc) || lc === "male") return { key: "gender", value: "men" };
-  if (/^women'?s?$/.test(lc) || lc === "female") return { key: "gender", value: "women" };
-  if (lc === "kids" || lc === "kid") return { key: "gender", value: "kids" };
+  // Gender chips may carry a context noun ("Men's shoes",
+  // "Women's orthotics", "Kids' orthotics") — the leading gender
+  // token decides the fact; the trailing noun is scope the
+  // constraint extractor already picks up from the raw tapped text.
+  if (/^men(?:['’]s?|s)?(?:\s|$)/.test(lc) || lc === "male") return { key: "gender", value: "men" };
+  if (/^women(?:['’]s?|s)?(?:\s|$)/.test(lc) || lc === "female") return { key: "gender", value: "women" };
+  if (/^kids?['’]?s?(?:\s|$)/.test(lc)) return { key: "gender", value: "kids" };
 
   if (/flat\s*\/\s*low|low\s+arch|flat\s+feet/i.test(lc)) return { key: "arch", value: "low" };
   if (/medium\s*\/\s*high|medium\s+arch|high\s+arch/i.test(lc)) return { key: "arch", value: lc.includes("high") ? "high" : "medium" };

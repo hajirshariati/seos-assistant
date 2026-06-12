@@ -61,6 +61,53 @@ export function normalizeText(s) {
     .trim();
 }
 
+// ──────────────────────────────────────────────────────────────
+// Context-carrying gender chips.
+//
+// A bare gender chip label ("Women") tapped by the customer
+// round-trips as a context-free message the engine then has to
+// re-anchor ("women's WHAT?"). Decorating the gender question's
+// chips with the active domain noun ("Women's orthotics") makes
+// every tapped chip self-contained. ONE shared decorate function
+// is the single source of truth for BOTH the emit path (the gate
+// renders decorated labels into the SSE text) and the match path
+// (lookups accept the decorated label alongside the bare one).
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Possessive-join a gender chip label with the domain noun.
+ *   "Men"   + "orthotics" → "Men's orthotics"
+ *   "Women" + "orthotics" → "Women's orthotics"
+ *   "Kids"  + "orthotics" → "Kids' orthotics"   (label ends in s)
+ * Labels that already carry a possessive ("Men's") just get the
+ * noun appended. Pure function — no I/O, no tree access.
+ */
+export function decorateGenderChipLabel(label, noun) {
+  const l = String(label || "").trim();
+  const n = String(noun || "").trim();
+  if (!l || !n) return l;
+  if (/['’]s?$/.test(l)) return `${l} ${n}`; // already possessive ("Men's", "Kids'")
+  if (/s$/i.test(l)) return `${l}' ${n}`; // plural → trailing apostrophe ("Kids' orthotics")
+  return `${l}'s ${n}`; // "Men's orthotics", "Women's orthotics"
+}
+
+/**
+ * The domain noun gender chips carry. Merchant-configurable via
+ * the tree definition's `vocabulary.genderChipContextNoun`;
+ * defaults to "orthotics" — this repo is the Aetrex-specific app
+ * and the production DB tree predates the key, so the default
+ * makes decoration live without re-seeding.
+ */
+export function getGenderChipContextNoun(treeDefinition) {
+  const noun = treeDefinition?.vocabulary?.genderChipContextNoun;
+  if (typeof noun === "string" && noun.trim()) return noun.trim();
+  return "orthotics";
+}
+
+function isGenderQuestionNode(node) {
+  return !!node && node.type === "question" && node.attribute === "gender";
+}
+
 /**
  * Build a chip-label → chip-value lookup for one tree node.
  * Returns a Map keyed by normalized label, valued by the raw
@@ -70,18 +117,32 @@ export function normalizeText(s) {
  * arch question maps both "Medium" and "High" to the same
  * "Medium / High Arch" enum). Both go in the map.
  *
+ * For GENDER nodes, when `contextNoun` is provided the lookup
+ * also accepts the decorated label ("women's orthotics" →
+ * "Women") alongside the bare one — same decorate function as
+ * the emit path, so emitted chips always round-trip. Bare labels
+ * always stay in the map (typed "women" / old histories keep
+ * working).
+ *
  * Returns null if the node isn't a question or has no chips —
  * the caller decides what to do (resolve nodes have no chips).
  */
-export function buildChipLookup(node) {
+export function buildChipLookup(node, contextNoun) {
   if (!node || node.type !== "question") return null;
   if (!Array.isArray(node.chips) || node.chips.length === 0) return null;
+  const decorate = contextNoun && isGenderQuestionNode(node);
   const map = new Map();
   for (const chip of node.chips) {
     if (!chip || typeof chip.label !== "string" || chip.value === undefined) continue;
     const key = normalizeText(chip.label);
     if (key && !map.has(key)) {
       map.set(key, chip.value);
+    }
+    if (decorate) {
+      const decoratedKey = normalizeText(decorateGenderChipLabel(chip.label, contextNoun));
+      if (decoratedKey && !map.has(decoratedKey)) {
+        map.set(decoratedKey, chip.value);
+      }
     }
   }
   return map.size > 0 ? map : null;
@@ -143,11 +204,12 @@ export function extractChipLabelsFromText(text) {
 export function findNodeByChipsInText(text, tree) {
   const labels = extractChipLabelsFromText(text);
   if (labels.length === 0 || !tree || !Array.isArray(tree.nodes)) return null;
+  const contextNoun = getGenderChipContextNoun(tree);
   const labelSet = new Set(labels);
   let best = null;
   let bestOverlap = 0;
   for (const node of tree.nodes) {
-    const lookup = buildChipLookup(node);
+    const lookup = buildChipLookup(node, contextNoun);
     if (!lookup) continue;
     let overlap = 0;
     for (const key of lookup.keys()) {
@@ -256,7 +318,7 @@ export function detectFlowState(messages, tree) {
     const askedNode = findNodeByChipsInText(prevAssistant.content, tree);
     if (!askedNode) continue; // assistant message wasn't a tree question turn
 
-    const chipLookup = buildChipLookup(askedNode);
+    const chipLookup = buildChipLookup(askedNode, getGenderChipContextNoun(tree));
     if (!chipLookup) continue;
     const normalizedAnswer = normalizeText(msg.content);
     const enumValue = chipLookup.get(normalizedAnswer);
@@ -576,9 +638,11 @@ const KEYWORD_PATTERNS = {
 /**
  * Layer 1 — exact chip-label match.
  * Returns the enum value, or undefined if no exact normalized match.
+ * `contextNoun` (optional) lets gender nodes also match the
+ * decorated label ("Women's orthotics" → Women).
  */
-function matchChipExact(rawAnswer, node) {
-  const lookup = buildChipLookup(node);
+function matchChipExact(rawAnswer, node, contextNoun) {
+  const lookup = buildChipLookup(node, contextNoun);
   if (!lookup) return undefined;
   const norm = normalizeText(rawAnswer);
   if (!norm) return undefined;
@@ -637,8 +701,9 @@ export async function mapAnswerToEnum(rawAnswer, node, tree, opts = {}) {
     return { value: null, layer: "no-question-node" };
   }
 
-  // Layer 1 — exact chip-label match.
-  const exact = matchChipExact(rawAnswer, node);
+  // Layer 1 — exact chip-label match (decorated gender labels
+  // accepted via the tree's context noun).
+  const exact = matchChipExact(rawAnswer, node, getGenderChipContextNoun(tree));
   if (exact !== undefined) return { value: exact, layer: 1 };
 
   // Layer 2 — keyword enrichment.
@@ -1169,9 +1234,10 @@ export function preExtractAnswers(rawText, tree) {
   const out = {};
   if (!tree || !Array.isArray(tree.nodes)) return out;
   if (!rawText || typeof rawText !== "string") return out;
+  const contextNoun = getGenderChipContextNoun(tree);
   for (const node of tree.nodes) {
     if (!node || node.type !== "question" || !node.attribute) continue;
-    const exact = matchChipExact(rawText, node);
+    const exact = matchChipExact(rawText, node, contextNoun);
     if (exact !== undefined) {
       out[node.attribute] = exact;
       continue;

@@ -18,6 +18,7 @@ import {
   filterForbiddenCategoryChips,
   narrowChipAllowListForGroup,
   looksLikeShoeTypeQuestion,
+  decorateGenderNavigationChips,
 } from "../app/lib/chip-filter.server.js";
 import { catalogScopedNavigationQuestionVerdict } from "../app/lib/catalog-matcher.server.js";
 
@@ -392,6 +393,106 @@ await test("C18 — umbrella base scope from memory no longer strips gender chip
   assert.deepEqual(out.stripped, []);
   assert.match(out.text, /<<Men's>>/);
   assert.match(out.text, /<<Women's>>/);
+});
+
+// ─── context-carrying gender navigation chips ───────────────────
+
+await test("C19 — decorateGenderNavigationChips rewrites bare gender chips with the category noun", () => {
+  const out = decorateGenderNavigationChips(
+    "Got it — let me help you find the right fit. Are you shopping for men's or women's?\n\n<<Men's>><<Women's>>",
+    { categoryNoun: "shoes" },
+  );
+  assert.match(out.text, /<<Men's shoes>>/);
+  assert.match(out.text, /<<Women's shoes>>/);
+  assert.doesNotMatch(out.text, /<<Men's>>/);
+  assert.doesNotMatch(out.text, /<<Women's>>/);
+  assert.deepEqual(out.decorated.sort(), ["Men's shoes", "Women's shoes"].sort());
+});
+
+await test("C20 — decorates bare non-possessive tokens too (<<Men>>/<<women>>) into the possessive compound", () => {
+  const out = decorateGenderNavigationChips(
+    "Which would you like? <<Men>><<women>>",
+    { categoryNoun: "sneakers" },
+  );
+  assert.match(out.text, /<<Men's sneakers>>/);
+  assert.match(out.text, /<<Women's sneakers>>/);
+});
+
+await test("C21 — no-op without a categoryNoun", () => {
+  const text = "Are you shopping for men's or women's? <<Men's>><<Women's>>";
+  const out = decorateGenderNavigationChips(text, { categoryNoun: "" });
+  assert.equal(out.text, text);
+  assert.deepEqual(out.decorated, []);
+  const out2 = decorateGenderNavigationChips(text, {});
+  assert.equal(out2.text, text);
+});
+
+await test("C22 — no-op on already-compound chips and non-gender chips (gender + ONE noun, never more)", () => {
+  const text = "Pick one: <<Men's shoes>><<Women's sneakers>><<Sneakers>><<Kids>>";
+  const out = decorateGenderNavigationChips(text, { categoryNoun: "boots" });
+  assert.equal(out.text, text, "compound and non-Men/Women chips must pass through untouched");
+  assert.deepEqual(out.decorated, []);
+});
+
+await test("C23 — decorated output passes filterCatalogScopedNavigationChips with the group umbrella term", () => {
+  // The compound chip is catalog-validated downstream: "shoes" is the
+  // Footwear group's trigger word (umbrella term), so <<Men's shoes>> /
+  // <<Women's shoes>> must survive the catalog-scoped boundary the
+  // same way the 2026-06-12 umbrella fix lets bare scope values pass.
+  const facetIndex = {
+    categoryByGender: {
+      sneakers: ["men", "women"],
+      sandals: ["men", "women"],
+    },
+    colorByGenderCategory: {
+      "men:sneakers": ["black"],
+      "women:sneakers": ["white"],
+    },
+  };
+  const decorated = decorateGenderNavigationChips(
+    "Are you shopping for men's or women's? <<Men's>><<Women's>>",
+    { categoryNoun: "shoes" },
+  );
+  const out = filterCatalogScopedNavigationChips(decorated.text, {
+    constraints: { category: "footwear", condition: "plantar_fasciitis" },
+    facetIndex,
+    allowedCategories: ["Sneakers", "Sandals"],
+    catalogCategories: ["Sneakers", "Sandals"],
+    umbrellaCategoryTerms: ["footwear", "shoes", "shoe"],
+  });
+  assert.deepEqual(out.stripped, []);
+  assert.match(out.text, /<<Men's shoes>>/);
+  assert.match(out.text, /<<Women's shoes>>/);
+});
+
+await test("C24 — compound with a REAL category validates as a true conjunction (<<Men's sneakers>>)", () => {
+  // When the noun is a tuple category (not an umbrella), the compound
+  // must be validated as gender+category conjunction — and stripped
+  // when the catalog can't prove it.
+  const facetIndex = {
+    categoryByGender: {
+      sneakers: ["men", "women"],
+      sandals: ["women"],
+    },
+    colorByGenderCategory: {
+      "men:sneakers": ["black"],
+      "women:sneakers": ["white"],
+      "women:sandals": ["pink"],
+    },
+  };
+  const decorated = decorateGenderNavigationChips(
+    "Are you shopping for men's or women's? <<Men's>><<Women's>>",
+    { categoryNoun: "sandals" },
+  );
+  const out = filterCatalogScopedNavigationChips(decorated.text, {
+    constraints: {},
+    facetIndex,
+    allowedCategories: ["Sneakers", "Sandals"],
+    catalogCategories: ["Sneakers", "Sandals"],
+  });
+  // Men's sandals don't exist in this catalog → stripped; Women's survive.
+  assert.deepEqual(out.stripped, ["Men's sandals"]);
+  assert.match(out.text, /<<Women's sandals>>/);
 });
 
 // ──────────────────────────────────────────────────────────────

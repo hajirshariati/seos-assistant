@@ -53,6 +53,8 @@ import {
   looksLikeTransactionalQuestion,
   messageCommitsToFootwear,
   messagePivotsToOrthotic,
+  decorateGenderChipLabel,
+  getGenderChipContextNoun,
 } from "./orthotic-flow.server.js";
 import { executeRecommenderTool } from "./recommender-tools.server.js";
 import { buildStorefrontSearchCTA } from "./storefront-search-cta.server.js";
@@ -128,8 +130,10 @@ const GENDER_GATE_ASK_CUE_RE = /\?|\b(?:shopping\s+for|are\s+you|which|would\s+y
 export function isGenderGateAsk(content) {
   const t = String(content || "");
   if (!t.trim()) return false;
-  const menChip = /<<\s*(?:Men|Boys?)(?:['’]?s)?\s*>>/i.test(t);
-  const womenChip = /<<\s*(?:Women|Girls?)(?:['’]?s)?\s*>>/i.test(t);
+  // Chips may carry a context noun ("<<Men's shoes>>" /
+  // "<<Men's orthotics>>") — allow trailing words inside the marker.
+  const menChip = /<<\s*(?:Men|Boys?)(?:['’]?s)?(?:\s+[^<>]*)?>>/i.test(t);
+  const womenChip = /<<\s*(?:Women|Girls?)(?:['’]?s)?(?:\s+[^<>]*)?>>/i.test(t);
   if (menChip && womenChip) return true;
   const mentionsMen = /\bmen(?:['’]?s)?\b/i.test(t);
   const mentionsWomen = /\bwomen(?:['’]?s)?\b/i.test(t);
@@ -504,7 +508,19 @@ function renderQuestionText(node, answers, tree, context = null) {
   }
 
   const originalChipCount = Array.isArray(node.chips) ? node.chips.length : 0;
-  const chipLabels = chips.map((c) => String(c.label).trim()).filter(Boolean);
+  let chipLabels = chips.map((c) => String(c.label).trim()).filter(Boolean);
+
+  // Context-carrying gender chips: the GENDER question's chips carry
+  // the domain noun ("Men's orthotics" / "Women's orthotics" /
+  // "Kids' orthotics") so a tapped chip is self-contained when it
+  // round-trips as the customer's next message. Composed server-side
+  // via the SAME decorate function the match path uses — emit and
+  // match can never drift. Only the gender-attribute node; every
+  // other node's chips are unchanged.
+  if (node.attribute === "gender") {
+    const contextNoun = getGenderChipContextNoun(tree?.definition);
+    chipLabels = chipLabels.map((l) => decorateGenderChipLabel(l, contextNoun));
+  }
 
   // Safety: if the node originally had chips but every one was
   // filtered out, every path forward dead-ends given the customer's
@@ -1349,7 +1365,9 @@ export async function maybeRunOrthoticFlow({
     // customer's footwear-commit happens via a chip answer to the
     // "Footwear or orthotic?" disambig — the LLM treats the chip as
     // a footwear request and skips ahead. Hard-force gender first.
-    const GENDER_CHIP_RE = /<<\s*Men(?:'?s)?\s*>>|<<\s*Women(?:'?s)?\s*>>/i;
+    // Decorated gender chips ("<<Men's shoes>>") count as a prior
+    // gender ask too — allow a trailing context noun in the marker.
+    const GENDER_CHIP_RE = /<<\s*Men(?:['’]?s)?(?:\s+[^<>]*)?>>|<<\s*Women(?:['’]?s)?(?:\s+[^<>]*)?>>/i;
     const alreadyAskedGender = priorMessages.some(
       (m) =>
         m &&
@@ -1456,12 +1474,19 @@ export async function maybeRunOrthoticFlow({
     const isExactOrthoticChipLabel = (text) => {
       const norm = stripForChipMatch(text);
       if (!norm || !Array.isArray(tree?.definition?.nodes)) return false;
+      const contextNoun = getGenderChipContextNoun(tree.definition);
       for (const node of tree.definition.nodes) {
         if (!node || node.type !== "question" || !Array.isArray(node.chips)) continue;
         for (const chip of node.chips) {
           const lbl = stripForChipMatch(chip?.label);
           const val = stripForChipMatch(chip?.value);
           if ((lbl && norm === lbl) || (val && norm === val)) return true;
+          // Gender chips are emitted decorated ("Women's orthotics");
+          // accept the decorated label as a seed chip answer too.
+          if (node.attribute === "gender") {
+            const dec = stripForChipMatch(decorateGenderChipLabel(chip?.label, contextNoun));
+            if (dec && norm === dec) return true;
+          }
         }
       }
       return false;

@@ -245,7 +245,7 @@ const SCENARIOS = [
       {
         user: "I need an orthotic",
         classifier: C({ attributes: {} }),
-        expect: { questionMatches: /Who are these orthotics for/i, chipsExact: ["Men", "Women", "Kids"] },
+        expect: { questionMatches: /Who are these orthotics for/i, chipsExact: ["Men's orthotics", "Women's orthotics", "Kids' orthotics"] },
       },
       {
         user: "Women",
@@ -270,6 +270,25 @@ const SCENARIOS = [
             masterSkuPattern: /^PFK[WMU]?$|^L[0-9]+W$/, // PF kit OR a Women's L-series SKU
           },
         },
+      },
+    ],
+  },
+
+  {
+    name: "Context-carrying chips: tapped decorated q_gender chip round-trips (Layer-1 decorated match)",
+    turns: [
+      {
+        user: "I need an orthotic",
+        classifier: C({ attributes: {} }),
+        expect: { questionMatches: /Who are these orthotics for/i, chipsExact: ["Men's orthotics", "Women's orthotics", "Kids' orthotics"] },
+      },
+      {
+        // The customer taps the decorated chip — the whole label is
+        // the message. No classifier attribute extraction here, so the
+        // gender MUST come from the decorated Layer-1 chip lookup.
+        user: "Women's orthotics",
+        classifier: C({ attributes: {} }),
+        expect: { questionMatches: /What kind of shoes/i, chipsContain: ["Everyday / casual shoes"] },
       },
     ],
   },
@@ -351,7 +370,7 @@ const SCENARIOS = [
       {
         user: "I need an orthotic",
         classifier: C({ attributes: {} }),
-        expect: { chipsContain: ["Kids"] },
+        expect: { chipsContain: ["Kids' orthotics"] },
       },
       {
         user: "Kids",
@@ -541,7 +560,7 @@ const SCENARIOS = [
         classifier: C({ attributes: {} }),
         expect: {
           questionMatches: /Who are these orthotics for/i,
-          chipsExact: ["Men", "Women", "Kids"],
+          chipsExact: ["Men's orthotics", "Women's orthotics", "Kids' orthotics"],
         },
       },
     ],
@@ -656,7 +675,7 @@ const SCENARIOS = [
       classifier: C({ attributes: {} }),
       expect: {
         questionMatches: /Who are these orthotics for/i,
-        chipsContain: ["Men", "Women"],
+        chipsContain: ["Men's orthotics", "Women's orthotics"],
       },
     }],
   },
@@ -679,7 +698,7 @@ const SCENARIOS = [
       user: "orthotic",
       classifier: C({ attributes: {} }),
       expect: {
-        chipsContain: ["Men", "Women"],
+        chipsContain: ["Men's orthotics", "Women's orthotics"],
         // Kids may or may not be present depending on merchant data;
         // don't assert on it here.
       },

@@ -75,6 +75,21 @@ test("C6 — later affirmative mention can override earlier negation of same opt
   assert.equal(events[0].answer, "Women's");
 });
 
+test("C7 — context-carrying gender chip still maps the gender fact", () => {
+  // Decorated navigation/flow chips ("Women's shoes", "Men's
+  // orthotics", "Kids' orthotics") must keep producing the keyed
+  // gender fact — the leading gender token decides.
+  const events = extractChoiceEvents([
+    { role: "assistant", content: "Are you shopping for men's or women's? <<Men's shoes>> <<Women's shoes>>" },
+    { role: "user", content: "Women's shoes" },
+  ]);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].answer, "Women's shoes");
+  assert.deepEqual(events[0].fact, { key: "gender", value: "women" });
+  assert.deepEqual(mapChoiceToMemoryFact("Men's orthotics"), { key: "gender", value: "men" });
+  assert.deepEqual(mapChoiceToMemoryFact("Kids' orthotics"), { key: "gender", value: "kids" });
+});
+
 if (failed > 0) {
   console.error("\nFailures:");
   for (const f of failures) console.error(`- ${f.name}: ${f.err.stack || f.err.message}`);

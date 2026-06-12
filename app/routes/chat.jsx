@@ -11,6 +11,7 @@ import {
   filterCatalogScopedNavigationChips,
   filterForbiddenCategoryChips,
   filterContradictingGenderChips,
+  decorateGenderNavigationChips,
   narrowChipAllowListForGroup,
 } from "../lib/chip-filter.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -520,6 +521,36 @@ function productFacetConstraintsFromText(text, ctx = {}) {
   );
   if (category) extracted.category = category;
   return canonicalizeCatalogConstraints(extracted);
+}
+
+// Display noun for context-carrying gender chips, derived from the
+// SAME scope the catalog-scoped chip validator uses. Data-driven:
+//   - the scope's explicit category fact, when present;
+//   - if that value is a merchant category-GROUP name (an umbrella
+//     like "Footwear"), display the group's first trigger word
+//     instead ("shoes") — group names aren't customer vocabulary;
+//   - otherwise the category value lowercased, dashes → spaces.
+// No scope category → empty string → no decoration.
+function genderChipCategoryNounFromContext(ctx = {}) {
+  const scope = {
+    ...currentCatalogScopeFromContext(ctx),
+    ...productFacetConstraintsFromText(ctx.latestUserMessage, ctx),
+  };
+  const category = String(scope.category || "").trim();
+  if (!category) return "";
+  const groups = Array.isArray(ctx.merchantGroups) ? ctx.merchantGroups : [];
+  const group = groups.find(
+    (g) => String(g?.name || "").trim().toLowerCase() === category.toLowerCase(),
+  );
+  if (group) {
+    const trigger = String(
+      (Array.isArray(group.triggers) ? group.triggers : []).find(
+        (t) => String(t || "").trim(),
+      ) || "",
+    ).trim().toLowerCase();
+    if (trigger) return trigger;
+  }
+  return category.toLowerCase().replace(/-+/g, " ");
 }
 
 function resolverRequiresCatalogProof(ctx = {}) {
@@ -2794,6 +2825,28 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         console.log(`[chat] ${ctx.shop} stripped contradicting-gender chips:`, genderFiltered.stripped);
       }
       fullResponseText = genderFiltered.text;
+    }
+
+    // Context-carrying gender chips: when a category is already in
+    // scope, rewrite bare <<Men's>>/<<Women's>> navigation chips into
+    // the self-contained compound (<<Men's shoes>>) so a tapped chip
+    // carries its own context on the next turn. Runs AFTER the
+    // contradicting-gender strip (only surviving chips get decorated)
+    // and BEFORE the catalog-scoped boundary (the compound gets
+    // catalog-validated — umbrella terms let "shoes" prove out via
+    // group triggers).
+    {
+      const categoryNoun = genderChipCategoryNounFromContext(ctx);
+      if (categoryNoun) {
+        const decorated = decorateGenderNavigationChips(fullResponseText, { categoryNoun });
+        if (decorated.decorated.length > 0) {
+          console.log(
+            `[chat] ${ctx.shop} decorated gender navigation chips with scope category:`,
+            decorated.decorated,
+          );
+        }
+        fullResponseText = decorated.text;
+      }
     }
 
     // Final product-navigation grounding boundary. Broad gender/category

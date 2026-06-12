@@ -75,6 +75,11 @@ function isRetired(sku) {
   return RETIRED_PREFIXES.some((p) => sku === p || sku.startsWith(p + "M") || sku.startsWith(p + "W") || sku.startsWith(p + "E") || sku.startsWith(p + "D"));
 }
 const definition = JSON.parse(JSON.stringify(rawSeed));
+// Mirror production: the live DB tree predates the seed's
+// `vocabulary.genderChipContextNoun` key. Context-carrying gender
+// chips must work through the code default ("orthotics") without
+// re-seeding — so this fixture deliberately drops the key.
+delete definition.vocabulary;
 if (Array.isArray(definition?.resolver?.masterIndex)) {
   definition.resolver.masterIndex = definition.resolver.masterIndex
     .filter((m) => !isRetired(m?.masterSku))
@@ -1855,6 +1860,84 @@ await test("28d — disambig pivot: footwear commit turn 1, then 'Orthotic insol
   assert.equal(sawVeto, false, "explicit orthotic pivot after the commit must clear the veto");
   assert.equal(out.handled, true, "gate must engage after the explicit orthotic pivot");
   assert.match(events[0]?.text || "", /Who are these orthotics for/i, "flow should ask q_gender next");
+});
+
+await test("28e — incident replay with the NEW decorated navigation chip: 'Women's shoes' tap → LATEST-message footwear veto, no history veto needed", async () => {
+  // Context-carrying chips change the incident's shape at the source:
+  // the LLM's gender ask now reads <<Men's shoes>><<Women's shoes>>
+  // (category in scope), so the tapped reply is "Women's shoes" — a
+  // message that carries its own footwear noun. The classifier reading
+  // that text tags the turn isFootwearRequest=true (it no longer has
+  // to reconstruct context from a bare "Women's"), and CASE D's
+  // latest-message footwear veto fires immediately — the history-level
+  // commit veto is no longer load-bearing for this trace.
+  const { events, encoder, controller } = makeMockSse();
+  const cap = captureLogs();
+  let out;
+  try {
+    out = await maybeRunOrthoticFlow({
+      messages: [
+        { role: "user", content: INCIDENT_TURN_1 },
+        {
+          role: "assistant",
+          content:
+            "Got it — let me help you find the right fit. Are you shopping for men's or women's?\n\n<<Men's shoes>><<Women's shoes>>",
+        },
+        { role: "user", content: "Women's shoes" },
+      ],
+      tree,
+      shop: "test.myshopify.com",
+      controller,
+      encoder,
+      classifiedIntent: {
+        isOrthoticRequest: false,
+        isFootwearRequest: true,
+        isRejection: false,
+        attributes: { gender: "Women", useCase: null, condition: "plantar_fasciitis" },
+        confidence: "high",
+      },
+    });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(out.handled, false, "gate must stay out of the footwear conversation");
+  assert.equal(out.case, "D_footwear_request_with_noun",
+    "the LATEST-message footwear veto (CASE D) must fire on the noun-carrying tap");
+  assert.equal(events.length, 0, "no SSE events — the orthotic flow must not emit q_use_case");
+  const sawHistoryVeto = cap.lines.some((l) => /footwear-commit veto \(history\)/.test(l));
+  assert.equal(sawHistoryVeto, false,
+    "history veto must not be needed — CASE D returns before it");
+});
+
+await test("28f — decorated tap without classifier still keeps the gate out (defense in depth)", async () => {
+  // Classifier outage path: no classifiedIntent at all. The decorated
+  // tap doesn't match CASE D (classifier-gated), but the conversation-
+  // level footwear-commit veto still holds the gate out — "Women's
+  // shoes" contains no orthotic pivot.
+  const { events, encoder, controller } = makeMockSse();
+  const cap = captureLogs();
+  let out;
+  try {
+    out = await maybeRunOrthoticFlow({
+      messages: [
+        { role: "user", content: INCIDENT_TURN_1 },
+        {
+          role: "assistant",
+          content:
+            "Got it — let me help you find the right fit. Are you shopping for men's or women's?\n\n<<Men's shoes>><<Women's shoes>>",
+        },
+        { role: "user", content: "Women's shoes" },
+      ],
+      tree,
+      shop: "test.myshopify.com",
+      controller,
+      encoder,
+    });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(out.handled, false, "gate must stay out even without the classifier");
+  assert.equal(events.length, 0);
 });
 
 // ──────────────────────────────────────────────────────────────
