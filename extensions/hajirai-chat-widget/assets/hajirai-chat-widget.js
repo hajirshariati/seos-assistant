@@ -752,10 +752,30 @@ function vizErrorHtml(msg){
    The generated image renders BELOW the card (see runVisualize). */
 function injectVizButton(card,cta){
   if(!card||card.querySelector('.ai-chat-viz-btn'))return;
+  // The card is a flex container in EITHER direction: showcase cards
+  // are column (img on top), legacy cards are row (img on the left).
+  // flex-basis:100% means 100% of the MAIN axis — in a column card
+  // that's 100% HEIGHT, which produced a giant overlapping button.
+  // So branch on the computed direction.
+  var isColumn=false;
+  try{isColumn=(getComputedStyle(card).flexDirection||'').indexOf('column')===0;}catch(e){}
+  var btnCss='box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:11px 14px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:700;color:#fff;background:linear-gradient(100deg,var(--ai-chat-primary,#2d6b4f),var(--ai-chat-accent,#3a7d5c));box-shadow:0 3px 10px rgba(45,107,79,.28);letter-spacing:.2px';
   var viz=document.createElement('span');
   viz.className='ai-chat-viz-btn';
   viz.setAttribute('role','button');viz.setAttribute('tabindex','0');
-  viz.style.cssText='flex:0 0 100%;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:2px;padding:11px 14px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:700;color:#fff;background:linear-gradient(100deg,var(--ai-chat-primary,#2d6b4f),var(--ai-chat-accent,#3a7d5c));box-shadow:0 3px 10px rgba(45,107,79,.28);box-sizing:border-box;letter-spacing:.2px';
+  if(isColumn){
+    // Column card: a plain auto-height, full-width block stacks below.
+    viz.style.cssText='flex:0 0 auto;'+btnCss;
+  }else{
+    // Row card: force wrap + a zero-height full-width spacer so the
+    // button drops onto its own full-width line at the bottom.
+    try{card.style.flexWrap='wrap';}catch(e){}
+    var brk=document.createElement('span');
+    brk.setAttribute('aria-hidden','true');
+    brk.style.cssText='flex:0 0 100%;width:100%;height:0;margin:0;padding:0';
+    card.appendChild(brk);
+    viz.style.cssText='flex:0 0 auto;'+btnCss;
+  }
   viz.innerHTML=vizSparkle()+'<span>'+esc(cta.label||'Visualize My Look')+'</span>';
   var go=function(e){if(e){e.preventDefault();e.stopPropagation();}runVisualize(cta,card)};
   viz.addEventListener('click',go);
