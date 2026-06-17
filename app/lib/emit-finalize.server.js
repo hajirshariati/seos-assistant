@@ -24,6 +24,7 @@ import {
   filterCatalogScopedNavigationChips,
   filterForbiddenCategoryChips,
   filterContradictingGenderChips,
+  stripUnsupportedGenderChips,
   decorateGenderNavigationChips,
   narrowChipAllowListForGroup,
 } from "./chip-filter.server.js";
@@ -714,6 +715,19 @@ export function finalizeOutboundReply({
     // when the mentioned category supports both, or when no category was
     // mentioned. Pure data — categoryGenderMap is computed from the
     // catalog every request.
+    // Drop non-functional "Kids"/"Boys"/"Girls" gender chips the model
+    // sometimes improvises — the catalog gender model has no kids facet,
+    // so the chip is a dead-end regardless of inventory. Runs first and
+    // unconditionally (independent of categoryGenderMap / category
+    // mention) so it fires on the bare top-level gender question too.
+    {
+      const kidsFiltered = stripUnsupportedGenderChips(fullResponseText);
+      if (kidsFiltered.stripped.length > 0) {
+        console.log(`[chat] ${ctx.shop} stripped unsupported-gender chips:`, kidsFiltered.stripped);
+      }
+      fullResponseText = kidsFiltered.text;
+    }
+
     if (ctx.categoryGenderMap) {
       const genderFiltered = filterContradictingGenderChips(
         fullResponseText,

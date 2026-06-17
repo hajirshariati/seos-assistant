@@ -499,7 +499,7 @@ run(
 );
 
 run(
-  "<<Kids>> chip decorates with the scope noun like men/women do",
+  "<<Kids>> gender chip is stripped (catalog has no kids facet); Men's/Women's survive and decorate",
   {
     text: "Who am I fitting today? <<Men's>> <<Women's>> <<Kids>>",
     pool: [],
@@ -510,7 +510,9 @@ run(
   },
   (out) => {
     const labels = chipLabels(out.text);
-    assert.ok(labels.includes("Kids' orthotics"), `Kids chip not decorated: ${JSON.stringify(labels)}`);
+    assert.ok(!labels.some((l) => /kid/i.test(l)), `Kids chip should be stripped: ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("Men's orthotics"), `Men's chip missing: ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("Women's orthotics"), `Women's chip missing: ${JSON.stringify(labels)}`);
   },
 );
 

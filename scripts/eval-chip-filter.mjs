@@ -19,6 +19,7 @@ import {
   narrowChipAllowListForGroup,
   looksLikeShoeTypeQuestion,
   decorateGenderNavigationChips,
+  stripUnsupportedGenderChips,
 } from "../app/lib/chip-filter.server.js";
 import { catalogScopedNavigationQuestionVerdict } from "../app/lib/catalog-matcher.server.js";
 
@@ -503,6 +504,36 @@ await test("C24 — compound with a REAL category validates as a true conjunctio
   // Men's sandals don't exist in this catalog → stripped; Women's survive.
   assert.deepEqual(out.stripped, ["Men's sandals"]);
   assert.match(out.text, /<<Women's sandals>>/);
+});
+
+await test("K1 — strips a bare <<Kids>> gender chip, keeps Men's/Women's", () => {
+  const out = stripUnsupportedGenderChips(
+    "Which styles are you interested in? <<Men's>><<Women's>><<Kids>>",
+  );
+  assert.deepEqual(out.stripped, ["Kids"]);
+  assert.match(out.text, /<<Men's>>/);
+  assert.match(out.text, /<<Women's>>/);
+  assert.doesNotMatch(out.text, /<<Kids>>/);
+});
+
+await test("K2 — strips Kids/Child/Children/Youth gender chips too", () => {
+  for (const label of ["Kid", "Kid's", "Children", "Child", "Youth"]) {
+    const out = stripUnsupportedGenderChips(`Pick one <<${label}>><<Women's>>`);
+    assert.deepEqual(out.stripped, [label], `should strip ${label}`);
+  }
+});
+
+await test("K3 — no kids chip → unchanged, nothing stripped", () => {
+  const text = "Which styles? <<Men's>><<Women's>>";
+  const out = stripUnsupportedGenderChips(text);
+  assert.equal(out.stripped.length, 0);
+  assert.equal(out.text, text);
+});
+
+await test("K4 — does not touch non-gender chips containing 'kid' substrings", () => {
+  // 'Slip Ons' / category chips must survive; only kids-gender chips go.
+  const out = stripUnsupportedGenderChips("Browse <<Sneakers>><<Sandals>>");
+  assert.equal(out.stripped.length, 0);
 });
 
 // ──────────────────────────────────────────────────────────────

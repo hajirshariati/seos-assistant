@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-06-15b viz-equal-height');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-06-17 strip-dangling-md');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -1133,8 +1133,23 @@ return '<div class="ai-chat-fit-card" role="region" aria-label="Size recommendat
 '</div>';
 }
 
-function finish(text,prods,md2,sugg,linkCTA,fitReport,sseChoices,vizCta){
-clearWatchdog();
+// Remove orphaned/empty markdown emphasis so stray ** or * never render
+// to the customer. Targets the cases left behind by chip removal: empty
+// runs (**, ****, ** **), a marker floating between spaces/punctuation,
+// and any line that ends up with an odd (unbalanced) count of ** or *.
+function stripDanglingMd(s){
+  s=String(s||'');
+  s=s.replace(/\*\*\s*\*\*/g,'').replace(/__\s*__/g,'');
+  s=s.replace(/(^|[\s—–-])\*\*(?=[\s.,!?;:)]|$)/g,'$1');
+  s=s.replace(/(^|[\s—–-])\*(?=[\s.,!?;:)]|$)/g,'$1');
+  s=s.split('\n').map(function(ln){
+    if(((ln.match(/\*\*/g)||[]).length)%2)ln=ln.replace(/\*\*/g,'');
+    if(((ln.match(/(?<!\*)\*(?!\*)/g)||[]).length)%2)ln=ln.replace(/(?<!\*)\*(?!\*)/g,'');
+    return ln;
+  }).join('\n');
+  return s.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+([.,!?;:])/g,'$1').replace(/([—–-])\s+([.,!?;:])/g,'$2').trim();
+}
+function finish(text,prods,md2,sugg,linkCTA,fitReport,sseChoices,vizCta){clearWatchdog();
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
 errorRetryCount=0;
 var mDiv=md2;
@@ -1143,6 +1158,11 @@ var cleanText=text||'';
 var choiceRe=/<<([^<>]+)>>/g;
 var cm;while((cm=choiceRe.exec(cleanText))!==null){choices.push(cm[1])}
 if(choices.length>0)cleanText=cleanText.replace(/\s*<<[^<>]+>>/g,'').trim();
+// Removing <<chips>> can leave orphaned markdown emphasis behind when the
+// model wrapped the chips (or words it placed them among) in ** ** — e.g.
+// "interested in — **<<Men's>><<Women's>>** styles?" becomes "— ** styles?".
+// Strip any dangling/empty bold or italic markers so they never render raw.
+cleanText=stripDanglingMd(cleanText);
 // SSE-delivered choices (engine browse-clarifier) merge into the
 // same chip set as in-text <<...>> markers. finish() owns the
 // bubble's final HTML — no other code path inserts chips.

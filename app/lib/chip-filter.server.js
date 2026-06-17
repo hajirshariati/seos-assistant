@@ -249,6 +249,34 @@ export function filterContradictingGenderChips(text, conversationText, categoryG
   };
 }
 
+// Strip "Kids" gender chips (kid/kids/child/children/youth). The
+// catalog gender model only tracks men / women / unisex
+// (getCategoryGenderAvailability collapses boy/girl into men/women and
+// has no "kids" facet), so a Kids gender chip is a non-functional
+// dead-end — the engine cannot filter by it, and tapping it just
+// re-asks. The model improvises it for a generic gender question even
+// when the store carries little or no kids inventory. Strip it
+// unconditionally; a kids-focused catalog would need kids modeled as a
+// first-class gender before the chip could mean anything. (Boys/Girls
+// are intentionally NOT stripped here — chipGender maps them to
+// men/women, matching the rest of the engine.)
+export function stripUnsupportedGenderChips(text) {
+  if (!text || typeof text !== "string") return { text: text || "", stripped: [] };
+  const stripped = [];
+  const out = text.replace(/<<([^<>|]+)>>/g, (match, inner) => {
+    if (chipGender(inner) === "kids") {
+      stripped.push(inner.trim());
+      return "";
+    }
+    return match;
+  });
+  if (stripped.length === 0) return { text, stripped };
+  return {
+    text: out.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim(),
+    stripped,
+  };
+}
+
 // Context-carrying gender navigation chips. The LLM asks "men's or
 // women's?" with bare <<Men's>><<Women's>> chips; when the customer
 // already named a category, a tapped bare chip round-trips as a
