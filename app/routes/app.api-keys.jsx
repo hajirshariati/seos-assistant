@@ -800,9 +800,11 @@ export default function ApiKeys() {
     loyaltyRounding: initLoyaltyRounding,
   });
 
-  // Reset dirty + clear secret-input fields after a successful save.
+  // Reset dirty + clear secret-input fields after a successful save, and
+  // confirm with an always-visible toast (not an out-of-view top banner).
   useEffect(() => {
     if (actionData?.success) {
+      if (typeof window !== "undefined" && window.shopify?.toast) window.shopify.toast.show("Settings saved");
       setIsDirty(false);
       setAnthropicKey("");
       setYotpoKey("");
@@ -855,9 +857,7 @@ export default function ApiKeys() {
       <Form method="post" ref={formRef} onChange={() => setIsDirty(true)}>
         <BlockStack gap="500">
           <BrandHeader title="Settings" gutter={false} />
-          {actionData?.success && (
-            <Banner title="Settings saved" tone="success" onDismiss={() => {}} />
-          )}
+          {/* Save feedback is an always-visible App Bridge toast, not a top banner. */}
 
           <Layout>
             <Layout.AnnotatedSection

@@ -119,7 +119,10 @@ export default function App() {
              banner title near-black, which is unreadable on the green/red fill. */
           .Polaris-Banner--textSuccessOnBgFill .Polaris-Text--root,
           .Polaris-Banner--textCriticalOnBgFill .Polaris-Text--root,
-          .Polaris-Banner--textInfoOnBgFill .Polaris-Text--root { color: #fff !important; }
+          .Polaris-Banner--textInfoOnBgFill .Polaris-Text--root,
+          .Polaris-Banner--textSuccessOnBgFill *,
+          .Polaris-Banner--textCriticalOnBgFill *,
+          .Polaris-Banner--textInfoOnBgFill * { color: #fff !important; }
           .Polaris-Banner--textSuccessOnBgFill svg, .Polaris-Banner--textSuccessOnBgFill path,
           .Polaris-Banner--textCriticalOnBgFill svg, .Polaris-Banner--textCriticalOnBgFill path,
           .Polaris-Banner--textInfoOnBgFill svg, .Polaris-Banner--textInfoOnBgFill path { fill: #fff !important; }
