@@ -32,14 +32,24 @@ export function buildVisualizeCtaEvent({ config, product, messages }) {
   if (!handle || !image) return null; // need a product with an image to style
 
   // "Visualize My Look" is an AI styling preview of the product being
-  // worn — it only makes sense for wearable footwear. Never offer it for
-  // accessories, shoe-care, socks, gift cards, or $0 service line items
-  // (prod trace 2026-06-23: a "VIP Processing" $0.00 SKU got the CTA on an
-  // order-status turn). Keeps real footwear (incl. orthotics) eligible.
+  // WORN — it only makes sense for wearable footwear you can see on a
+  // person. Never offer it for accessories, shoe-care, socks, gift cards,
+  // or $0 service line items (prod trace 2026-06-23: a "VIP Processing"
+  // $0.00 SKU got the CTA on an order-status turn).
   const NON_WEARABLE_RE =
     /\b(?:accessor|shoe[\s-]*care|care[\s-]*kit|cleaner|cleaning|protect|spray|sock|gift[\s-]*card|lace|freshener|deodor|processing|shipping|handling|surcharge|warranty|\bfee\b|deposit)/i;
   const category = String(product?.category || product?._category || product?.productType || "");
-  if (NON_WEARABLE_RE.test(category) || NON_WEARABLE_RE.test(String(product?.title || ""))) return null;
+  const title = String(product?.title || "");
+  if (NON_WEARABLE_RE.test(category) || NON_WEARABLE_RE.test(title)) return null;
+
+  // EXCLUDE orthotics / insoles / footbeds: they sit INSIDE a shoe, so
+  // "see it on" produces a nonsensical insole-on-a-bare-foot image (prod
+  // trace 2026-06-24: "Men's Premium Memory Foam Orthotics" got an AI
+  // image of a loose insole next to a foot). Match the CATEGORY only —
+  // never the title — because real wearable sandals carry "Orthotic" in
+  // their name (e.g. "Maui Orthotic Flip") and must stay eligible.
+  const INSERT_CATEGORY_RE = /\b(?:orthotic|insole|footbed|foot[\s-]*bed)/i;
+  if (INSERT_CATEGORY_RE.test(category)) return null;
   const priceNum = Number(product?.price);
   if (Number.isFinite(priceNum) && priceNum <= 0) return null;
 
