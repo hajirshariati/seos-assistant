@@ -699,6 +699,36 @@ export function redirectOrthoticSearchToRecommender(toolCall, ctx) {
   const matchesDomain = ORTHOTIC_DOMAIN_RE.test(latest) || ORTHOTIC_DOMAIN_RE.test(queryStr);
   if (!matchesDomain) return toolCall;
 
+  // Footwear-inclusive escape hatch. The customer asked for SHOES *or*
+  // insoles ("what shoes or insoles have worked for arch pain") — a
+  // cross-category request the orthotic GATE already falls through on
+  // (case=footwear_inclusive_request). The "insoles" mention trips
+  // matchesDomain via `latest`, but redirecting the model's FOOTWEAR search
+  // into the orthotic recommender (which then demands useCase/condition the
+  // model doesn't have) loops on "gather first" and ships ZERO product cards
+  // (prod trace 2026-06-25: "...what shoes or insoles have actually worked..."
+  // → three search_products hops all rewritten → recommender → emit pool=0,
+  // pure narration, no cards). When the request is footwear-inclusive AND the
+  // model's own query isn't orthotic-domain (it's searching shoes), let
+  // search_products run so the customer actually SEES footwear. Same
+  // shoes-or-insoles patterns the gate uses, so the two stay consistent.
+  const INSOLE_THEN_SHOE_RE =
+    /\b(?:insoles?|inserts?|orthotics?|footbeds?)\b[^.?!]{0,40}?\b(?:or|and|&|\/|,)\b[^.?!]{0,40}?\b(?:shoes?|footwear|sneakers?|boots?|sandals?|clogs?|loafers?)\b/i;
+  const SHOE_THEN_INSOLE_RE =
+    /\b(?:shoes?|footwear|sneakers?|boots?|sandals?|clogs?|loafers?)\b[^.?!]{0,40}?\b(?:or|and|&|\/|,)\b[^.?!]{0,40}?\b(?:insoles?|inserts?|orthotics?|footbeds?)\b/i;
+  const queryIsOrthoticDomain = ORTHOTIC_DOMAIN_RE.test(queryStr);
+  if (
+    !queryIsOrthoticDomain &&
+    (INSOLE_THEN_SHOE_RE.test(latest) || SHOE_THEN_INSOLE_RE.test(latest))
+  ) {
+    console.log(
+      `[chat] orthotic-routing: skipped redirect — footwear-inclusive request ` +
+        `("shoes or insoles") and the model is searching footwear ` +
+        `(query="${queryStr.slice(0, 50)}"); letting search_products run so the customer sees shoes.`,
+    );
+    return toolCall;
+  }
+
   // Classifier-aware veto. If the upstream Haiku classifier judged
   // the latest message as NOT a recommendation request (e.g. "what
   // is thinsole?" — informational/definitional), don't redirect to
