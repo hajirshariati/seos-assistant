@@ -683,6 +683,27 @@ export async function maybeRunOrthoticFlow({
   }
   if (!Array.isArray(messages) || messages.length === 0) return { handled: false };
 
+  // ── LLM-owned engage decision (ORTHOTIC_GATE_LLM_OWNED, default OFF) ──
+  // This pre-LLM regex gate decides "run the orthotic finder?" BEFORE the
+  // model sees the turn — and it over-engages: a browse hijacked into a
+  // quiz, an efficacy/value question answered with "what's your arch type?",
+  // a footwear-inclusive ask dead-ended. The model already has a
+  // recommend_orthotic TOOL and judges far better in context — it calls the
+  // tool when the customer actually wants a fitting, and the tool's
+  // needMoreInfo path then collects the clinical attributes. Deferring hands
+  // the engage decision to the model and removes that whole bug class (the
+  // "second decision-maker competing with the model" problem).
+  //
+  // Default OFF — production behavior is unchanged. Flip
+  // ORTHOTIC_GATE_LLM_OWNED=true in Railway to A/B test; flip back to roll
+  // back instantly. Tradeoff while ON: the gate's deterministic chip
+  // questionnaire becomes conversational questions the model asks one at a
+  // time (the recommend_orthotic needMoreInfo flow).
+  if (String(process.env.ORTHOTIC_GATE_LLM_OWNED || "").toLowerCase() === "true") {
+    console.log(`[orthotic-flow] LLM-owned mode — gate defers; model owns engage via recommend_orthotic tool`);
+    return { handled: false, case: "llm_owned_defer" };
+  }
+
   // ─── M1.3 ROUTER YIELD CASES (run before any gate logic) ────
   //
   // CASE C — RESOLVER_STRONG_ACTION: resolver already produced a
