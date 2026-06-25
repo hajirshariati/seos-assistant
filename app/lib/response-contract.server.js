@@ -1844,6 +1844,17 @@ function genderCategoryExistsInCatalog(ctx, gender, category) {
 }
 
 export function buildCodeOwnedExactNoMatchText({ ctx = {} } = {}) {
+  // Orthotic turns own their OWN no-match handling — the recommender either
+  // asks for the next attribute or resolves a SKU. A generic "I couldn't find
+  // <X> in our current catalog" denial here is always the wrong layer, and
+  // recurringly WRONG: the resolver mis-infers a category from a clinical word
+  // ("arch and heel PAIN" → category=wedges-heels), then a gender contradiction
+  // flips men→women→men, and this scrubber ships "I couldn't find men's"
+  // (prod trace 2026-06-25). Never deny on an orthotic-scoped turn — let the
+  // orthotic flow / recommender drive.
+  if (ctx?.classifiedIntent?.isOrthoticRequest === true) {
+    return { text: "", reason: "orthotic_turn_owns_no_match" };
+  }
   const resolver = ctx?.resolverState;
   const impossible = Array.isArray(resolver?.impossible_constraints)
     ? resolver.impossible_constraints
