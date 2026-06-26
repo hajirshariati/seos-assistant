@@ -952,6 +952,20 @@ test("raw-handle — ordinary hyphenated words survive", () => {
   assert.equal(r.changed, false, "no slug present");
 });
 
+test("internal-leak — one leaked sentence in a long answer is stripped surgically, NOT nuked", () => {
+  // Live trace 2026-06-26: a 1900-char Jillian answer with one internal
+  // sentence got replaced wholesale by the "no clean match" fallback.
+  const leaky =
+    "The Jillian has real arch support and a contoured footbed, a genuinely strong plantar-fasciitis pick. " +
+    "The resolver state shows no exact match for your budget. " +
+    "It's built on data from 50 million foot scans and is our best-selling sandal for foot conditions.";
+  const r = stripInternalLeaks(leaky);
+  assert.equal(r.replaced, false, "must NOT nuke the whole answer");
+  assert.equal(containsInternalLanguageLeak(r.text), false, "no internal terms survive");
+  assert.ok(/arch support/i.test(r.text) && /50 million/i.test(r.text), "real content survives");
+  assert.ok(r.text.length > 150, `kept the substantive answer, got ${r.text.length}`);
+});
+
 test("internal-leak — Foot Roller handle/session plumbing leak is replaced wholesale", () => {
   // Live trace 2026-06-25: a wrong resolver match made the model narrate
   // "the product handle in your session is linked to our Foot Roller

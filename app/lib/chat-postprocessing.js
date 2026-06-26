@@ -611,9 +611,8 @@ const FORBIDDEN_INTERNAL_TERMS_RE = new RegExp(
     // The customer must never hear about handles, sessions, or resolver
     // linkage; any of these → the reply is unsafe and gets replaced.
     "product\\s+handle" + "|" +
-    "(?:in\\s+)?your\\s+session" + "|" +
+    "in\\s+your\\s+session" + "|" +
     "session\\s+is\\s+linked" + "|" +
-    "resolver" + "|" +
     "search\\s+because\\s+resolver" +
   ")\\b",
   "i",
@@ -648,9 +647,20 @@ export function stripInternalLeaks(text, { fallback = INTERNAL_LEAK_FALLBACK } =
   let out = cleaned.replace(RESOLVER_LEAD_IN_RE, "").replace(/\s{2,}/g, " ").trim();
   out = out.replace(/(^|[.!?]\s+|\n)([a-z])/g, (_, lead, ch) => lead + ch.toUpperCase());
 
-  // Stage 2: if any forbidden term still remains, the reply isn't
-  // safe to ship — swap the whole thing for the neutral fallback.
+  // Stage 2: a forbidden term still present means a leak clause survived.
+  // Strip ONLY the offending sentence(s) and keep the rest of the answer —
+  // a single leaky clause must NEVER nuke a long, otherwise-good reply down
+  // to a "no clean match" fallback (live trace 2026-06-26: a 1900-char
+  // Jillian answer was replaced wholesale). Fall back to the neutral line
+  // only when nothing substantial survives.
   if (FORBIDDEN_INTERNAL_TERMS_RE.test(out)) {
+    const kept = out
+      .split(/(?<=[.!?])\s+/)
+      .filter((s) => s && !FORBIDDEN_INTERNAL_TERMS_RE.test(s));
+    const surgical = kept.join(" ").replace(/\s{2,}/g, " ").trim();
+    if (surgical.length >= 40 && !FORBIDDEN_INTERNAL_TERMS_RE.test(surgical)) {
+      return { text: surgical, changed: true, replaced: false };
+    }
     return { text: fallback, changed: true, replaced: true };
   }
 
