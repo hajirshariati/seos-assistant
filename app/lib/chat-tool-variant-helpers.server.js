@@ -4,6 +4,7 @@ import {
   normalizeVariantWidth,
   variantInventoryStatus,
   variantSatisfiesScope,
+  normalizeOptionBag,
 } from "./variant-matcher.server.js";
 
 export function productIsVisibleToChat(product) {
@@ -36,18 +37,10 @@ export function variantScopedPriceValues(product, scope = {}) {
     .filter((n) => Number.isFinite(n));
 }
 
-function safeParseJson(raw) {
-  if (!raw) return null;
-  if (typeof raw === "object") return raw;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
 function readVariantBagValue(variant, aliases) {
-  const bags = [safeParseJson(variant?.optionsJson) || {}, variant?.attributesJson || {}];
+  // normalizeOptionBag handles Shopify's selectedOptions array shape, plain
+  // objects, and JSON strings of either (optionsJson is a stringified array).
+  const bags = [normalizeOptionBag(variant?.optionsJson), normalizeOptionBag(variant?.attributesJson)];
   const wanted = aliases.map((a) => String(a).toLowerCase().replace(/[^a-z0-9]+/g, "_"));
   for (const bag of bags) {
     if (!bag || typeof bag !== "object") continue;

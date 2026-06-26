@@ -10,6 +10,7 @@ import {
   buildAvailabilityAnswer,
   resolveAvailabilityRequest,
   isAvailabilityFollowUp,
+  variantDataDiagnostics,
   AVAILABILITY_RESULT as R,
 } from "../app/lib/availability-truth.js";
 
@@ -20,11 +21,14 @@ function check(name, fn) {
   catch (err) { console.log(`  ✗ ${name} — ${err.message}`); fails.push({ name, err }); fail++; }
 }
 
-const variant = (size, color, qty, width) => ({
-  sku: `${color}-${size}${width || ""}`,
-  inventoryQty: qty,
-  optionsJson: JSON.stringify({ Size: size ? String(size) + (width === "wide" ? "W" : "") : undefined, Color: color }),
-});
+// REAL Shopify shape: optionsJson is JSON.stringify(selectedOptions) — an
+// ARRAY of { name, value }. (The earlier object-shape fixtures hid the bug.)
+const variant = (size, color, qty, width) => {
+  const opts = [{ name: "Color", value: color }];
+  if (size != null) opts.push({ name: "Size", value: String(size) });
+  if (width) opts.push({ name: "Width", value: width === "wide" ? "Wide" : width === "narrow" ? "Narrow" : "Medium" });
+  return { sku: `${color}-${size}${width || ""}`, inventoryQty: qty, optionsJson: JSON.stringify(opts) };
+};
 
 // Catalog fixture (Shopify-style products with variants).
 const JILLIAN_BLACK = {
@@ -38,7 +42,7 @@ const JILLIAN_NAVY = {
 // Savannah Champagne: variants carry NO size data (untracked) → UNKNOWN.
 const SAVANNAH_CHAMPAGNE = {
   handle: "savannah-champ", title: "Savannah Adjustable Quarter Strap Sandal - Champagne",
-  variants: [{ sku: "champ", inventoryQty: null, optionsJson: JSON.stringify({ Color: "Champagne" }) }],
+  variants: [{ sku: "champ", inventoryQty: null, optionsJson: JSON.stringify([{ name: "Color", value: "Champagne" }]) }],
 };
 const SAVANNAH_BLACK = {
   handle: "savannah-black", title: "Savannah Adjustable Quarter Strap Sandal - Black",
@@ -259,6 +263,41 @@ check("Jillian in pink → product is Jillian (never an alternative family)", ()
   const v = classify("jillian", "pink");
   assert.equal(v.result, R.UNAVAILABLE);
   assert.match(v.product.title, /Jillian/);
+});
+
+// ── Shopify selectedOptions ARRAY shape (the real sync) reads correctly ──
+import { inStockSizes, inStockWidths } from "../app/lib/variant-matcher.server.js";
+const JILLIAN_REAL = {
+  handle: "jillian-real", title: "Jillian Braided Quarter Strap Sandal - Black",
+  variants: [{
+    sku: "jil-blk-8w", inventoryQty: 3,
+    optionsJson: JSON.stringify([
+      { name: "Color", value: "Black" },
+      { name: "Size", value: "8" },
+      { name: "Width", value: "Wide" },
+    ]),
+  }],
+};
+check("array-shape: Jillian black size 8 → AVAILABLE (was UNKNOWN before fix)", () => {
+  const v = classifyAvailability({ products: [JILLIAN_REAL], family: "jillian", color: "black", size: "8" });
+  assert.equal(v.result, R.AVAILABLE);
+});
+check("array-shape: Jillian black size 8 wide → AVAILABLE", () => {
+  const v = classifyAvailability({ products: [JILLIAN_REAL], family: "jillian", color: "black", size: "8", width: "wide" });
+  assert.equal(v.result, R.AVAILABLE);
+});
+check("array-shape: inStockSizes({width:wide}) includes '8'", () => {
+  assert.ok(inStockSizes(JILLIAN_REAL, { width: "wide" }).includes("8"));
+});
+check("array-shape: inStockWidths({size:'8'}) includes 'wide'", () => {
+  assert.ok(inStockWidths(JILLIAN_REAL, { size: "8" }).includes("wide"));
+});
+check("array-shape: variantDataDiagnostics reports optionShape=array + sizes/widths", () => {
+  const d = variantDataDiagnostics([JILLIAN_REAL], "jillian");
+  assert.equal(d.optionShape, "array");
+  assert.equal(d.variants, 1);
+  assert.ok(d.sizes.includes("8"));
+  assert.ok(d.widths.includes("wide"));
 });
 
 console.log("");

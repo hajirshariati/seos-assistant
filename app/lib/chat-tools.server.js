@@ -22,6 +22,7 @@ import {
   inStockWidths,
   isSizeAvailable,
   normalizeVariantWidth,
+  normalizeOptionBag,
 } from "./variant-matcher.server.js";
 import {
   availableVariantsForScope,
@@ -129,8 +130,9 @@ function variantIsAvailableForFacts(variant) {
 }
 
 function variantColorValues(variant) {
-  const options = safeParseJson(variant?.optionsJson) || {};
-  const attrs = variant?.attributesJson || {};
+  // optionsJson is Shopify's selectedOptions array — normalize to a flat bag.
+  const options = normalizeOptionBag(variant?.optionsJson);
+  const attrs = normalizeOptionBag(variant?.attributesJson);
   return uniqueDisplayValues([
     readAttributeCI(options, ["Color", "Colour", "color", "colour", "color_family", "Color Family"]),
     readAttributeCI(attrs, ["Color", "Colour", "color", "colour", "color_family", "Color Family", "color_fallback"]),

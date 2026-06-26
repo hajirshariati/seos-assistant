@@ -285,6 +285,34 @@ await test("isSizeAvailable — width-filtered check", () => {
   assert.equal(isSizeAvailable(product, "9.5", { width: "wide" }), false);
 });
 
+// ── Shopify selectedOptions ARRAY shape (the real synced optionsJson) ──
+// optionsJson = JSON.stringify(v.selectedOptions) → [{name,value}, …]. Before
+// normalizeOptionBag, readVariantOption returned undefined for every real
+// variant (it looped the array and produced "0"/"1" keys → size 8 = UNKNOWN).
+const arrayVariant = (opts, qty) => ({ sku: "x", inventoryQty: qty, optionsJson: JSON.stringify(opts) });
+const ARRAY_PRODUCT = {
+  variants: [
+    arrayVariant([{ name: "Color", value: "Black" }, { name: "Size", value: "8" }, { name: "Width", value: "Wide" }], 3),
+    arrayVariant([{ name: "Color", value: "Black" }, { name: "Size", value: "9" }, { name: "Width", value: "Medium" }], 5),
+  ],
+};
+await test("array shape — inStockSizes reads Size from selectedOptions array", () => {
+  assert.deepEqual(inStockSizes(ARRAY_PRODUCT).sort(), ["8", "9"]);
+});
+await test("array shape — inStockSizes({width:wide}) filters by Width option", () => {
+  assert.deepEqual(inStockSizes(ARRAY_PRODUCT, { width: "wide" }), ["8"]);
+});
+await test("array shape — inStockWidths({size:'8'}) → ['wide']", () => {
+  assert.deepEqual(inStockWidths(ARRAY_PRODUCT, { size: "8" }), ["wide"]);
+});
+await test("array shape — findVariantSatisfying matches size 8 wide", () => {
+  assert.ok(findVariantSatisfying(ARRAY_PRODUCT, { size: "8", width: "wide" }).found);
+});
+await test("array shape — isSizeAvailable size 8 wide = true, size 9 wide = false", () => {
+  assert.equal(isSizeAvailable(ARRAY_PRODUCT, "8", { width: "wide" }), true);
+  assert.equal(isSizeAvailable(ARRAY_PRODUCT, "9", { width: "wide" }), false);
+});
+
 console.log("");
 if (failed === 0) {
   console.log(`PASS  ${passed} passed, 0 failed`);

@@ -24,11 +24,24 @@
 // All functions are pure — no DB calls — so the eval suite can
 // pass fixture products directly.
 
-function safeParseOpts(raw) {
-  if (!raw) return {};
-  if (typeof raw === "object") return raw;
-  if (typeof raw !== "string") return {};
-  try { return JSON.parse(raw); } catch { return {}; }
+// Normalize an option bag to a flat { name: value } object. Accepts Shopify's
+// selectedOptions ARRAY ([{name:"Size",value:"8"}, …] — the REAL synced shape,
+// written as `optionsJson: JSON.stringify(v.selectedOptions)`), a plain object
+// ({ Size:"8" }), or a JSON string of either. Before this, readBagCI looped an
+// array and produced "0"/"1" keys, so readVariantOption(v,"Size") returned
+// undefined for every real synced variant — the root of "size 8 → UNKNOWN".
+export function normalizeOptionBag(raw) {
+  let v = raw;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { return {}; } }
+  if (!v || typeof v !== "object") return {};
+  if (Array.isArray(v)) {
+    const bag = {};
+    for (const o of v) {
+      if (o && typeof o === "object" && o.name != null) bag[String(o.name)] = o.value;
+    }
+    return bag;
+  }
+  return v;
 }
 
 function readBagCI(bag, key) {
@@ -44,11 +57,9 @@ function readBagCI(bag, key) {
 // Read the variant's options bag case-insensitively under the
 // keys merchants actually use in Shopify.
 function readVariantOption(variant, key) {
-  const bag = safeParseOpts(variant?.optionsJson);
-  const fromOptions = readBagCI(bag, key);
+  const fromOptions = readBagCI(normalizeOptionBag(variant?.optionsJson), key);
   if (fromOptions != null && fromOptions !== "") return fromOptions;
-  const attrs = safeParseOpts(variant?.attributesJson);
-  return readBagCI(attrs, key);
+  return readBagCI(normalizeOptionBag(variant?.attributesJson), key);
 }
 
 // Normalize a size string. Strips a trailing W/N/M width letter

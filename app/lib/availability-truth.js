@@ -18,11 +18,22 @@
 // variant-matcher.server.js) so this module has ZERO imports — that keeps it a
 // clean, directly-importable server module (like turn-plan.server.js) and
 // fully unit-testable with fixtures.
-function safeParseOpts(raw) {
-  if (!raw) return {};
-  if (typeof raw === "object") return raw;
-  if (typeof raw !== "string") return {};
-  try { return JSON.parse(raw); } catch { return {}; }
+// Normalize an option bag to a flat { name: value } object. Accepts Shopify's
+// selectedOptions ARRAY ([{name:"Size",value:"8"}, …] — the real synced shape),
+// a plain object ({ Size:"8" }), or a JSON string of either. (Kept in lockstep
+// with variant-matcher.server.js#normalizeOptionBag.)
+function normalizeOptionBag(raw) {
+  let v = raw;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { return {}; } }
+  if (!v || typeof v !== "object") return {};
+  if (Array.isArray(v)) {
+    const bag = {};
+    for (const o of v) {
+      if (o && typeof o === "object" && o.name != null) bag[String(o.name)] = o.value;
+    }
+    return bag;
+  }
+  return v;
 }
 function readBagCI(bag, key) {
   if (!bag || typeof bag !== "object") return undefined;
@@ -34,9 +45,9 @@ function readBagCI(bag, key) {
   return undefined;
 }
 function readVariantOption(variant, key) {
-  const fromOptions = readBagCI(safeParseOpts(variant?.optionsJson), key);
+  const fromOptions = readBagCI(normalizeOptionBag(variant?.optionsJson), key);
   if (fromOptions != null && fromOptions !== "") return fromOptions;
-  return readBagCI(safeParseOpts(variant?.attributesJson), key);
+  return readBagCI(normalizeOptionBag(variant?.attributesJson), key);
 }
 function normalizeVariantSize(raw) {
   if (raw == null) return null;
@@ -266,13 +277,8 @@ export function isAvailabilityFollowUp(message) {
   return FOLLOWUP_RE.test(String(message || ""));
 }
 
-function parseBag(raw) {
-  if (!raw) return {};
-  if (typeof raw === "object") return raw;
-  try { return JSON.parse(raw); } catch { return {}; }
-}
 function variantColor(v) {
-  for (const bag of [parseBag(v?.optionsJson), parseBag(v?.attributesJson)]) {
+  for (const bag of [normalizeOptionBag(v?.optionsJson), normalizeOptionBag(v?.attributesJson)]) {
     for (const [k, val] of Object.entries(bag)) {
       if (/colou?r/i.test(k) && val) return String(val).toLowerCase().trim();
     }
@@ -311,6 +317,33 @@ export function collectFamilyColors(products = []) {
   const set = new Set();
   for (const p of products || []) for (const c of productColors(p)) if (c) set.add(c);
   return Array.from(set);
+}
+
+// Diagnostics for the [availability-truth] log so a parser bug is instantly
+// distinguishable from genuinely-missing variant data: how many variants the
+// family has, whether optionsJson is the Shopify array shape or an object, and
+// the in-stock sizes/widths the reader actually extracts.
+export function variantDataDiagnostics(products = [], family = "") {
+  const fam = String(family || "").toLowerCase();
+  const fp = (products || []).filter((p) => familyOfTitle(p?.title || "") === fam);
+  let variants = 0;
+  let optionShape = "none";
+  for (const p of fp) {
+    for (const v of p?.variants || []) {
+      variants++;
+      let raw = v?.optionsJson;
+      if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = null; } }
+      if (Array.isArray(raw)) optionShape = "array";
+      else if (raw && typeof raw === "object" && optionShape === "none") optionShape = "object";
+    }
+  }
+  const sizes = new Set();
+  const widths = new Set();
+  for (const p of fp) {
+    for (const s of inStockSizes(p)) sizes.add(s);
+    for (const w of inStockWidths(p)) widths.add(w);
+  }
+  return { variants, optionShape, sizes: Array.from(sizes), widths: Array.from(widths) };
 }
 
 // Classify availability for a single family request. `products` is the set of

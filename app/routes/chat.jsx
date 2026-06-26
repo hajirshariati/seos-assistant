@@ -6,7 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow } from "../lib/turn-plan.server";
-import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage } from "../lib/availability-truth";
+import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, variantDataDiagnostics } from "../lib/availability-truth";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -2374,6 +2374,12 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         if ((intent.size || (isFollowUp && priorIntent.size)) && !req.size) unverified.push("size");
         if ((intent.width || (isFollowUp && priorIntent.width)) && !req.width) unverified.push("width");
 
+        // Diagnostic: distinguishes a parser bug from genuinely-missing data.
+        const diag = variantDataDiagnostics(famProducts, family);
+        console.log(
+          `[availability-truth] variants=${diag.variants} optionShape=${diag.optionShape} ` +
+          `sizes=[${diag.sizes.join(",")}] widths=[${diag.widths.join(",")}]`,
+        );
         const verdict = classifyAvailability({ products: famProducts, family, color: req.color, size: req.size, width: req.width, unverifiedConstraints: unverified });
         console.log(
           `[availability-truth] family=${family} color=${req.color || "-"} size=${req.size || "-"} width=${req.width || "-"} ` +
