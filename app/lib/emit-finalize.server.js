@@ -330,15 +330,29 @@ export function alignCardsToAnswerText({ text = "", cards = [], evidencePool = [
 
   const familyOf = (c) => titleStyleFamily(String(c?.title || "")).toLowerCase();
   const inText = (fam) => Boolean(fam) && fam.length >= 4 && new RegExp(`\\b${escapeReLocal(fam)}\\b`).test(lc);
+  const named = (namedFamilies || []).map((s) => String(s || "").toLowerCase()).filter((s) => s.length >= 4);
 
-  // Families this turn references: the explicitly named families (from the
-  // latest message), the captured-search hint, and any evidence family the
-  // answer text mentions by name.
-  const referenced = new Set(
-    [...(namedFamilies || []), namedFamilyHint]
-      .map((s) => String(s || "").toLowerCase())
-      .filter((s) => s.length >= 4),
-  );
+  // Availability (keepAlternatives=false) with named families: the visible
+  // cards must be ONLY the named product family. An exact-availability check
+  // ("Do you have Savannah in champagne?") must never show Romy/Danika
+  // alternatives alongside the Savannah — drop them even when Savannah is
+  // already present.
+  if (!keepAlternatives && named.length > 0) {
+    const namedSet = new Set(named);
+    const only = cards.filter((c) => namedSet.has(familyOf(c)));
+    if (only.length > 0) {
+      return only.length < cards.length
+        ? { cards: only.slice(0, cap), changed: true, reason: "restricted-to-named" }
+        : { cards, changed: false, reason: "aligned" };
+    }
+    const recovered = (evidencePool || []).filter((c) => namedSet.has(familyOf(c)));
+    if (recovered.length > 0) return { cards: recovered.slice(0, cap), changed: true, reason: "recovered-replace" };
+    return { cards: [], changed: true, reason: "suppressed-mismatch" };
+  }
+
+  // Advisory/comparison/condition: families this turn references = the named
+  // families ∪ the captured-search hint ∪ any evidence family named in the text.
+  const referenced = new Set([...named, String(namedFamilyHint || "").toLowerCase()].filter((s) => s.length >= 4));
   for (const c of evidencePool || []) {
     const f = familyOf(c);
     if (inText(f)) referenced.add(f);
@@ -348,17 +362,17 @@ export function alignCardsToAnswerText({ text = "", cards = [], evidencePool = [
   // Aligned: a displayed card already belongs to a referenced family.
   if (cards.map(familyOf).some((f) => referenced.has(f))) return { cards, changed: false, reason: "aligned" };
 
-  // Mismatch. Recover referenced-family cards from the evidence.
+  // Mismatch. Recover referenced-family cards from the evidence and prepend
+  // them; the alternatives follow.
   const recovered = (evidencePool || []).filter((c) => referenced.has(familyOf(c)));
   if (recovered.length > 0) {
-    const ordered = keepAlternatives ? [...recovered, ...cards] : recovered;
     const seen = new Set();
     const merged = [];
-    for (const c of ordered) {
+    for (const c of [...recovered, ...cards]) {
       const key = String(c?.handle || c?.title || "").toLowerCase();
       if (key && !seen.has(key)) { seen.add(key); merged.push(c); }
     }
-    return { cards: merged.slice(0, cap), changed: true, reason: keepAlternatives ? "recovered-prepend" : "recovered-replace" };
+    return { cards: merged.slice(0, cap), changed: true, reason: "recovered-prepend" };
   }
   return { cards: [], changed: true, reason: "suppressed-mismatch" };
 }

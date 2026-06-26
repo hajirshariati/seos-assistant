@@ -134,6 +134,13 @@ const NAMED_PRODUCT_COMMON_WORDS = new Set([
   "flat", "high", "medium", "low", "ball", "foot", "feet", "metatarsal", "metatarsalgia",
   "comfort", "casual", "dress", "athletic", "walking", "running", "memory", "foam",
   "got", "okay", "sure", "yes", "no", "yeah", "hmm", "let", "looking",
+  // Question words / generic verbs — the model often capitalizes these at the
+  // start of a query ("What would you recommend") and they were matching as a
+  // "named product" ("what"). None are products.
+  "what", "which", "who", "whom", "where", "when", "why", "how",
+  "recommend", "recommendation", "suggest", "need", "want", "would", "could",
+  "should", "good", "best", "better", "something", "anything", "else",
+  "partner", "someone", "vacation", "wedding", "dinner", "support", "cushioning",
 ]);
 
 export function relaxCategoryOnNamedProduct(toolCall, ctx) {
@@ -166,11 +173,19 @@ export function relaxCategoryOnNamedProduct(toolCall, ctx) {
   if (queryTokens.size === 0) return toolCall;
 
   const userLower = latest.toLowerCase();
+  // Authoritative source of truth: the families TurnPlan actually extracted
+  // from the catalog this turn. When that list exists (every LLM-owns turn
+  // sets it), a token only counts as a named product if it's a real catalog
+  // family — never a capitalized question word like "What". The legacy
+  // user-message-substring heuristic only applies when no plan list is present.
+  const planFamilies = Array.isArray(ctx?.turnPlan?.namedFamilies) ? ctx.turnPlan.namedFamilies : null;
   let namedProduct = null;
   for (const tok of queryTokens) {
     if (NAMED_PRODUCT_COMMON_WORDS.has(tok)) continue;
     if (tok.length < 4) continue;
-    if (userLower.includes(tok)) {
+    if (planFamilies) {
+      if (planFamilies.includes(tok)) { namedProduct = tok; break; }
+    } else if (userLower.includes(tok)) {
       namedProduct = tok;
       break;
     }

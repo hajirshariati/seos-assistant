@@ -84,14 +84,29 @@ check("text=Savannah + sneaker cards (Savannah NOT in evidence) → suppress", (
   assert.equal(r.changed, true);
   assert.equal(r.cards.length, 0, "mismatched sneaker cards suppressed");
 });
-check("text=Savannah + Savannah IS in evidence → recover Savannah card", () => {
+check("text=Savannah + Savannah IS in evidence → recover Savannah card (availability)", () => {
   const r = alignCardsToAnswerText({
     text: "Yes — the Savannah comes in Champagne. Here it is.",
     cards: SNEAKER_CARDS,
     evidencePool: [...SNEAKER_CARDS, SAVANNAH_CARD],
     namedFamilyHint: "savannah",
+    namedFamilies: ["savannah"],
+    keepAlternatives: false, // availability shows only the named family
   });
   assert.equal(r.changed, true);
+  assert.equal(r.cards.length, 1);
+  assert.match(r.cards[0].title, /Savannah/);
+});
+check("availability restricts to named family even when it's already shown (drop Romy)", () => {
+  const r = alignCardsToAnswerText({
+    text: "I can't confirm that exact size/color — here's the Savannah so you can check.",
+    cards: [SAVANNAH_CARD, { title: "Romy Wedge Sandal", handle: "romy" }],
+    evidencePool: [SAVANNAH_CARD, { title: "Romy Wedge Sandal", handle: "romy" }],
+    namedFamilies: ["savannah"],
+    keepAlternatives: false,
+  });
+  assert.equal(r.changed, true);
+  assert.equal(r.reason, "restricted-to-named");
   assert.equal(r.cards.length, 1);
   assert.match(r.cards[0].title, /Savannah/);
 });

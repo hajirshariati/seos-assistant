@@ -798,6 +798,10 @@ const SPECIFIC_PRODUCT_STOPWORDS = new Set([
   // Occasion / descriptor words customers use that are not product names.
   "wedding", "dinner", "party", "vacation", "cute", "dressy", "comfy",
   "something", "anything", "recommend", "recommendation", "suggest",
+  // Question words / generic shopping verbs ("What would you recommend?").
+  "what", "which", "who", "whom", "where", "when", "why", "how",
+  "need", "want", "would", "could", "should", "have", "looking",
+  "show", "find", "good", "best", "better", "else", "partner", "someone",
 ]);
 
 function firstMeaningfulToken(title) {

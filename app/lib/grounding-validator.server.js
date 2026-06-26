@@ -575,8 +575,23 @@ export const ANSWER_WORKFLOW_BLOCKING_KINDS = new Set([
 ]);
 
 // Stock clarifier stalls — a non-answer when the plan said act-don't-ask.
-const PLAN_CLARIFIER_RE =
-  /\b(men'?s?\s+or\s+women'?s?|women'?s?\s+or\s+men'?s?|are\s+you\s+shopping\s+for|what\s+(?:style|color|colou?r|budget|kind|type)\b[^.?!]*\?|tell\s+me\s+(?:a\s+(?:little|bit)\s+)?more)\b/i;
+// Covers gender stalls, "for you or a partner / someone else", "who are these
+// for", "is this for you", and "tell me more / what style/color/budget".
+const PLAN_CLARIFIER_RE = new RegExp(
+  [
+    "\\bmen'?s?\\s+or\\s+women'?s?\\b",
+    "\\bwomen'?s?\\s+or\\s+men'?s?\\b",
+    "\\bare\\s+(?:you|these|they|this)\\s+(?:shopping\\s+)?for\\b", // are you/these for ...
+    "\\bshopping\\s+for\\s+(?:yourself|someone|a\\s+man|a\\s+woman|him|her|them)\\b",
+    "\\bfor\\s+(?:you|yourself)\\s+or\\s+(?:a\\s+)?(?:partner|someone|somebody|husband|wife|friend|spouse|else)\\b",
+    "\\b(?:who|whom)\\s+(?:are|is)\\s+(?:these|they|this|it)\\s+for\\b",
+    "\\bis\\s+(?:this|it|that)\\s+for\\s+(?:you|yourself)\\b",
+    "\\bwhat\\s+(?:style|color|colou?r|budget|kind|type|size|occasion)\\b[^.?!]*\\?",
+    "\\btell\\s+me\\s+(?:a\\s+(?:little|bit)\\s+)?more\\b",
+    "\\bcould\\s+you\\s+(?:tell|give|share)\\s+me\\s+(?:a\\s+(?:little|bit)\\s+)?more\\b",
+  ].join("|"),
+  "i",
+);
 
 function retailWordCount(text) {
   return String(text || "").trim().split(/\s+/).filter(Boolean).length;
