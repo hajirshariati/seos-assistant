@@ -7,6 +7,7 @@ import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.ser
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow } from "../lib/turn-plan.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
+import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel } from "../lib/support-handoff.server";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -2683,6 +2684,44 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
+  // ── Support-handoff safety gate ───────────────────────────────────────
+  // FINAL gate (not a random text scrubber): when the bot genuinely can't
+  // finish — explicit human request, dead-end "I can't verify" with no cards,
+  // or a partial answer that needs human confirmation — hand off to Aetrex
+  // customer service instead of dead-ending. Validator-exhausted (ok=false) is
+  // handled in the LLM-owns runner where the validation result is known. NEVER
+  // fires on a successful product/sale/comparison turn or a normal clarification
+  // (the detector excludes those).
+  {
+    const handoffPool = availabilityPinnedCards || comparisonPinnedCards || pool;
+    const handoff = detectSupportHandoffNeed({
+      text: fullResponseText,
+      ctx,
+      pool: handoffPool,
+      validation: null, // validation_failed is decided in the runner
+      qualitySignals,
+      productSearchAttempted,
+    });
+    if (handoff.mode === "hard") {
+      fullResponseText = buildSupportHandoffText({ ctx, reason: handoff.reason, partial: false });
+      pool = [];
+      availabilityPinnedCards = null;
+      comparisonPinnedCards = null;
+      genericCTA = null;
+      supportCTA = supportConfigured(ctx) ? { url: ctx.supportUrl, label: normalizedSupportLabel(ctx) } : null;
+      qualitySignals.supportHandoffApplied = true;
+      console.log(`[handoff] mode=hard reason=${handoff.reason} support=${Boolean(supportCTA)} cards=0`);
+    } else if (handoff.mode === "soft") {
+      const line = buildSupportHandoffText({ ctx, reason: handoff.reason, partial: true });
+      if (!fullResponseText.includes(line)) fullResponseText = `${fullResponseText.trim()} ${line}`.trim();
+      genericCTA = null;
+      supportCTA = supportConfigured(ctx) ? { url: ctx.supportUrl, label: normalizedSupportLabel(ctx) } : null;
+      qualitySignals.supportHandoffApplied = true;
+      const cardCount = (availabilityPinnedCards || comparisonPinnedCards || pool || []).length;
+      console.log(`[handoff] mode=soft reason=${handoff.reason} support=${Boolean(supportCTA)} cards=${cardCount}`);
+    }
+  }
+
   console.log(`[chat] emit textLen=${fullResponseText.length} poolSize=${pool.length} searchAttempted=${productSearchAttempted}`);
 
   // Cost-mode observability (no behavior change): which model handled the
@@ -4804,6 +4843,20 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 );
               },
             });
+            // FINAL SAFETY GATE — validator exhausted (ok=false after retries).
+            // Don't ship the uncertain/non-answer draft: hand off to Aetrex
+            // customer service. (Text-detectable handoffs already ran in-loop;
+            // this catches "the model never got it right".) Drop the buffered
+            // cards/links and emit empty products + the support link instead.
+            if (cleanResult.needsSupportHandoff && !cleanResult.qualitySignals?.supportHandoffApplied) {
+              const hasUrl = supportConfigured(ctx);
+              cleanResult.fullResponseText = buildSupportHandoffText({ ctx, reason: "validation_failed", partial: false });
+              attemptBuf = [encoder.encode(sseChunk({ type: "products", products: [] }))];
+              if (hasUrl) attemptBuf.push(encoder.encode(sseChunk({ type: "link", url: ctx.supportUrl, label: normalizedSupportLabel(ctx) })));
+              if (cleanResult.turnResult) cleanResult.turnResult.products = [];
+              cleanResult.finalProductCards = [];
+              console.log(`[handoff] mode=hard reason=validation_failed support=${hasUrl} cards=0`);
+            }
             // Emit the AUTHORITATIVE final text first (text emit was
             // deferred in runAgenticLoop). runWithGroundingRetry sets
             // fullResponseText to the accepted answer, a shortened recovered

@@ -16,6 +16,7 @@ to make it; everyone downstream may clean for safety but may not re-decide.**
 | **Advisory / sales language** | **LLM** | Owns the persuasive, advisory, and conversational phrasing for non-availability turns (browse, comparison, advisory, condition, clarification). Never owns a hard availability yes/no. |
 | **Factual safety** | **Grounding validator** (`app/lib/grounding-validator.server.js`) | Blocks ungrounded claims (sizes/colors/stock/policy facts not present in the evidence pool) and non-answers on answer-workflows, forcing a synthesis retry. Owns "is this claim supported by what the model actually saw." |
 | **Final safety cleanup** | **Response contract / post-processing** (`response-contract.server.js`, the in-loop guards) | May trim banned phrasing, strip a lineup-promise sentence, suppress a misleading CTA, clear stale cards. **Never selects products** and never overrides an owner's decision. |
+| **Customer-service handoff** | **Support handoff** (`app/lib/support-handoff.server.js`) | A final safety GATE (not a text scrubber). When the bot genuinely can't finish — explicit human request, dead-end with no cards, exhausted validator, weak policy answer — it replaces the dead-end with a polite handoff + the configured support CTA (HARD). When it has a card but one unconfirmable detail, it keeps the card and adds a handoff line (SOFT). Never fires on a successful product/sale/comparison/availability turn or a normal clarification. |
 
 ## Hard rules
 
@@ -67,6 +68,15 @@ to make it; everyone downstream may clean for safety but may not re-decide.**
    rewrite-only (tools off); a comparison attempt >1 that searched logs a
    `[grounding-retry] VIOLATION`. Cards: ≤4, one per named family. No broad "View
    All" CTA — the cards ARE the comparison.
+
+11. **Never dead-end — hand off.** When the bot can't confidently answer, it does
+    NOT ship "I don't know / I can't verify / I'm not finding" or a weird generic
+    fallback. The support-handoff gate replaces it with a polite "Aetrex customer
+    service can help" + the configured CTA (HARD), or keeps a partial answer's
+    card and adds a confirmation line (SOFT). Logs `[handoff] mode=… reason=…
+    support=… cards=…`. If `supportUrl` is blank, the text still names customer
+    service but no fake button is emitted. This is a safety net, NOT a substitute
+    for a real product answer.
 
 10. **Condition / advisory forced search is STRUCTURED, never the raw sentence.**
     With no named family, `buildAnswerWorkflowForcedSearch` assembles the query

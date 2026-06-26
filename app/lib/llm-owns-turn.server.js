@@ -461,6 +461,7 @@ export async function runWithGroundingRetry({
     return {
       ...applyLengthCap(bestSubstantial.result, lastWarnings, planWorkflow),
       totalUsage: { ...accUsage },
+      needsSupportHandoff: true,
       validation: { ok: false, errors: lastErrors, attempts: attempt + 1, recoveredSubstantial: true },
     };
   }
@@ -485,6 +486,7 @@ export async function runWithGroundingRetry({
       ...applyLengthCap(last, lastWarnings, planWorkflow),
       fullResponseText: honest,
       totalUsage: { ...accUsage },
+      needsSupportHandoff: true,
       validation: { ok: false, errors: lastErrors, attempts: attempt + 1, answerWorkflowExhaustion: true },
     };
   }
@@ -495,6 +497,7 @@ export async function runWithGroundingRetry({
   return {
     ...applyLengthCap(last, lastWarnings, planWorkflow),
     totalUsage: { ...accUsage },
+    needsSupportHandoff: true,
     validation: { ok: false, errors: lastErrors, attempts: attempt + 1 },
   };
 }

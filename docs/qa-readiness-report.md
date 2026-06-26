@@ -21,7 +21,8 @@ phrasing layer is verified by manual PRD live-testing, not these suites.
 | `eval-clarifier-and-detector` | 40 | 0 | clarifier blocking + specific-product detection |
 | `eval-evidence-alignment` | 19 | 0 | card/text family alignment |
 | `eval-grounding-validator` | 74 | 0 | factual-safety blocking/warning partition + comparison length cap |
-| **Total** | **447** | **0** | |
+| `eval-support-handoff` | 18 | 0 | customer-service handoff: explicit human, dead-end, partial, validation-failed; never on successful turns |
+| **Total** | **465** | **0** | |
 
 Run all: `npm run build && for s in scripts/eval-*.mjs; do node "$s"; done`
 
@@ -61,6 +62,13 @@ this pass made was driven by a QA scenario that reproduced a failure:
   STRUCTURED query (support + style + use-case + condition + category →
   "supportive cute walking sandals", category=sandals) and never inherits stale
   size/width/onSale/category.
+- **Dead-ends instead of a customer-service handoff.** The bot would ship "I
+  don't know / I can't verify / I'm not finding" or a weird fallback. Added a
+  central `support-handoff.server.js` gate: HARD handoff (replace text + support
+  CTA, drop cards) on explicit human request / dead-end-no-cards / exhausted
+  validator / weak policy; SOFT handoff (keep card + add line + CTA) on a partial
+  availability answer. Never fires on a successful product/sale/comparison turn
+  or a normal clarification; no fake CTA when `supportUrl` is blank.
 
 ## Known limitations
 
@@ -96,7 +104,7 @@ From `docs/legacy-removal-plan.md` — none removed yet:
 ## Production readiness estimate
 
 **Ready for continued PRD soak / supervised live use.** The deterministic core
-(routing, availability truth, factual safety, card ownership) is green at 447/0
+(routing, availability truth, factual safety, card ownership, support handoff) is green at 465/0
 and instrumented with the `[turn-invariant]` log + VIOLATION check for live
 monitoring. The remaining risk is concentrated in (a) LLM phrasing quality
 (monitored manually) and (b) legacy code that is inert on PRD but not yet
