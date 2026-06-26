@@ -6,7 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow } from "../lib/turn-plan.server";
-import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, variantDataDiagnostics } from "../lib/availability-truth";
+import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -2391,15 +2391,44 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           `[availability-truth] variants=${diag.variants} optionShape=${diag.optionShape} ` +
           `sizes=[${diag.sizes.join(",")}] widths=[${diag.widths.join(",")}]`,
         );
-        const verdict = classifyAvailability({ products: famProducts, family, color: req.color, size: req.size, width: req.width, unverifiedConstraints: unverified });
+        // Style disambiguation inputs: the request text (current + prior on a
+        // follow-up) and the prior focus product's style key, so "Jillian" with
+        // multiple styles asks which, and a follow-up inherits the focus style.
+        const styleQuery = `${latestMsg} ${isFollowUp ? priorUserMsg : ""}`;
+        const focusStyleKey = isFollowUp && ctx.focusProduct ? styleKeyOfTitle(ctx.focusProduct.title || "") : null;
+        const verdict = classifyAvailability({ products: famProducts, family, color: req.color, size: req.size, width: req.width, unverifiedConstraints: unverified, styleQuery, focusStyleKey });
         console.log(
           `[availability-truth] family=${family} color=${req.color || "-"} size=${req.size || "-"} width=${req.width || "-"} ` +
           `result=${verdict.result} reason=${verdict.reason || "-"}`,
         );
+        // Disambiguation diagnostic: which styles the family token covered, and
+        // which one we resolved to (or "(ask)" when we hand back a clarifier).
+        const styleCandidates = Array.from(new Set(famProducts.map((p) => styleNameOfTitle(p.title || "")).filter(Boolean)));
+        if (styleCandidates.length > 1) {
+          const selected = verdict.result === AVAILABILITY_RESULT.DISAMBIGUATION
+            ? "(ask)" : styleNameOfTitle(verdict.product?.title || "") || "-";
+          console.log(
+            `[availability-truth] family=${family} styleCandidates=[${styleCandidates.join(",")}] ` +
+            `selected=${selected} reason=${verdict.reason || "-"}`,
+          );
+        }
         fullResponseText = buildAvailabilityAnswer(verdict);
         if (verdict.result === AVAILABILITY_RESULT.NOT_FOUND) {
           pool = [];
           console.log(`[availability-truth] display=none (not found)`);
+        } else if (verdict.result === AVAILABILITY_RESULT.DISAMBIGUATION) {
+          // Show one representative card per matching style so the shopper can
+          // pick, rather than a single silently-chosen card.
+          const wantKeys = Array.from(new Set((verdict.products || []).map((p) => styleKeyOfTitle(p.title || ""))));
+          const picked = [];
+          const seen = new Set();
+          for (const c of pool) {
+            const k = styleKeyOfTitle(c.title || "");
+            if (wantKeys.includes(k) && !seen.has(k)) { picked.push(c); seen.add(k); }
+          }
+          if (picked.length > 0) pool = picked;
+          else pool = pool.filter((c) => titleStyleFamily(c.title || "").toLowerCase() === family).slice(0, Math.max(2, wantKeys.length));
+          console.log(`[availability-truth] display=disambiguation cards=${pool.length}`);
         } else {
           const famCards = pool.filter((c) => titleStyleFamily(c.title || "").toLowerCase() === family);
           if (famCards.length > 0) pool = famCards.slice(0, 1);

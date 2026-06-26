@@ -11,6 +11,8 @@ import {
   resolveAvailabilityRequest,
   isAvailabilityFollowUp,
   variantDataDiagnostics,
+  styleKeyOfTitle,
+  styleNameOfTitle,
   AVAILABILITY_RESULT as R,
 } from "../app/lib/availability-truth.js";
 
@@ -341,6 +343,67 @@ check("array-shape: variantDataDiagnostics reports optionShape=array + sizes/wid
   assert.equal(d.variants, 1);
   assert.ok(d.sizes.includes("8"));
   assert.ok(d.widths.includes("wide"));
+});
+
+// ── #1 STYLE disambiguation: "Jillian" covers multiple styles ─────────
+// Catalog carrying TWO Jillian styles (Braided + Sport). The bare family token
+// must NOT silently pick one.
+const JILLIAN_SPORT_BLACK = {
+  handle: "jillian-sport-black", title: "Jillian Sport Sandal - Black",
+  variants: [variant(7, "Black", 3), variant(8, "Black", 4)],
+};
+const JILLIAN_SPORT_ROSE = {
+  handle: "jillian-sport-rose", title: "Jillian Sport Sandal - Rose",
+  variants: [variant(8, "Rose", 2)],
+};
+const MULTI = [JILLIAN_BLACK, JILLIAN_ROSE, JILLIAN_NAVY, JILLIAN_SPORT_BLACK, JILLIAN_SPORT_ROSE];
+const classifyMulti = (color, size, width, styleQuery = "", focusStyleKey = null) =>
+  classifyAvailability({ products: MULTI, family: "jillian", color, size, width, styleQuery, focusStyleKey });
+
+check("styleKeyOfTitle distinguishes Braided vs Sport, groups same style", () => {
+  assert.equal(styleKeyOfTitle("Jillian Braided Quarter Strap Sandal - Black"), "jillian braided quarter strap");
+  assert.equal(styleKeyOfTitle("Jillian Sport Sandal - Black"), "jillian sport");
+  assert.equal(styleKeyOfTitle("Jillian Braided Quarter Strap Sandal - Rose"), styleKeyOfTitle("Jillian Braided Quarter Strap Sandal - Black"));
+  assert.equal(styleNameOfTitle("Jillian Sport Sandal - Black"), "Jillian Sport Sandal");
+});
+check("'Jillian in black size 8' w/ Braided+Sport → DISAMBIGUATION (no silent pick)", () => {
+  const v = classifyMulti("black", "8", null, "do you have jillian in black size 8?");
+  assert.equal(v.result, R.DISAMBIGUATION);
+  assert.ok(v.styles.some((s) => /Braided/.test(s)));
+  assert.ok(v.styles.some((s) => /Sport/.test(s)));
+  const txt = buildAvailabilityAnswer(v);
+  assert.match(txt, /more than one Jillian style/i);
+  assert.match(txt, /Did you mean/i);
+});
+check("'Jillian Braided in black size 8' → Braided only, AVAILABLE", () => {
+  const v = classifyMulti("black", "8", null, "do you have jillian braided in black size 8?");
+  assert.equal(v.result, R.AVAILABLE);
+  assert.match(v.product.title, /Braided/);
+});
+check("'Jillian Sport in black size 8' → Sport only, AVAILABLE", () => {
+  const v = classifyMulti("black", "8", null, "do you have jillian sport in black size 8?");
+  assert.equal(v.result, R.AVAILABLE);
+  assert.match(v.product.title, /Sport/);
+});
+check("follow-up inherits focus style (Braided) → Braided only, no disambiguation", () => {
+  const fk = styleKeyOfTitle("Jillian Braided Quarter Strap Sandal - Black");
+  const v = classifyMulti("black", "8", null, "what about size 8?", fk);
+  assert.equal(v.result, R.AVAILABLE);
+  assert.match(v.product.title, /Braided/);
+});
+check("'Jillian in pink' multi-style → DISAMBIGUATION among Rose styles, mentions Rose", () => {
+  const v = classifyMulti("pink", null, null, "do you have jillian in pink?");
+  assert.equal(v.result, R.DISAMBIGUATION);
+  assert.equal(v.softColor, true);
+  assert.equal(v.matchedColor, "rose");
+  const txt = buildAvailabilityAnswer(v);
+  assert.match(txt, /don't see a color called Pink/i);
+  assert.match(txt, /Rose/);
+  assert.match(txt, /Did you mean/i);
+});
+check("single-style family (CATALOG Jillian = Braided only) still resolves, no disambiguation", () => {
+  const v = classify("jillian", "black", "8");
+  assert.equal(v.result, R.AVAILABLE);
 });
 
 console.log("");

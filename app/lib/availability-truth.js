@@ -9,10 +9,13 @@
 // them in, so this whole module is unit-testable with fixtures.
 //
 // Results:
-//   AVAILABLE   — product + requested color + size/width exists and is in stock
-//   UNAVAILABLE — product exists, but the requested combo is known NOT available
-//   UNKNOWN     — product exists, but variant inventory isn't exposed to verify
-//   NOT_FOUND   — the named family/product isn't in the catalog
+//   AVAILABLE      — product + requested color + size/width exists and in stock
+//   UNAVAILABLE    — product exists, but the requested combo is known NOT available
+//   UNKNOWN        — product exists, but variant inventory isn't exposed to verify
+//   NOT_FOUND      — the named family/product isn't in the catalog
+//   DISAMBIGUATION — the family token ("Jillian") matches MULTIPLE distinct
+//                    styles (Jillian Braided vs Jillian Sport) and the request
+//                    didn't name one — never silently pick; ask which.
 
 // Variant normalization/inventory helpers are INLINED (kept in lockstep with
 // variant-matcher.server.js) so this module has ZERO imports — that keeps it a
@@ -156,6 +159,7 @@ export const AVAILABILITY_RESULT = {
   UNAVAILABLE: "UNAVAILABLE",
   UNKNOWN: "UNKNOWN",
   NOT_FOUND: "NOT_FOUND",
+  DISAMBIGUATION: "DISAMBIGUATION",
 };
 
 // Minimal family token (kept consistent with titleStyleFamily): the first
@@ -173,6 +177,33 @@ export function familyOfTitle(title) {
     if (w.length > 2 && !FAMILY_STOPWORDS.has(w)) return w;
   }
   return "";
+}
+
+// Generic category nouns — dropped from a STYLE key so they don't masquerade as
+// a style differentiator ("Sandal" is common to every Jillian style).
+const STYLE_CATEGORY_WORDS = new Set([
+  "sandal", "sandals", "sneaker", "sneakers", "shoe", "shoes", "boot", "boots",
+  "slide", "slides", "clog", "clogs", "flat", "flats", "loafer", "loafers",
+  "mule", "mules", "wedge", "wedges", "heel", "heels", "slipper", "slippers",
+  "bootie", "booties", "oxford", "oxfords", "moccasin", "moccasins", "sock", "socks",
+]);
+
+// A STYLE is a specific product line within a family. The family token
+// "jillian" can cover several styles — "Jillian Braided …", "Jillian Sport …".
+// styleKeyOfTitle is the normalized key used to GROUP/MATCH styles (family
+// stopwords + generic category nouns removed); styleNameOfTitle is the human
+// display name (the product title minus the trailing color suffix).
+//   "Jillian Braided Quarter Strap Sandal - Black" → key "jillian braided quarter strap"
+//   "Jillian Sport Sandal - Black"                 → key "jillian sport"
+export function styleKeyOfTitle(title) {
+  if (!title) return "";
+  const beforeDash = String(title).split(/\s[-–—]\s/)[0];
+  const words = beforeDash.toLowerCase().replace(/[^a-z0-9\s']/g, " ").split(/\s+/).filter(Boolean);
+  const kept = words.filter((w) => !STYLE_CATEGORY_WORDS.has(w) && !FAMILY_STOPWORDS.has(w));
+  return kept.join(" ");
+}
+export function styleNameOfTitle(title) {
+  return String(title || "").split(/\s[-–—]\s/)[0].trim();
 }
 
 // Built-in footwear colors so champagne/bronze/taupe parse even when the
@@ -326,8 +357,16 @@ function variantColor(v) {
 }
 function productColors(product) {
   const set = new Set();
-  const dash = String(product?.title || "").split(/\s[-–—]\s/);
-  if (dash.length > 1) set.add(dash[dash.length - 1].trim().toLowerCase());
+  const title = String(product?.title || "").toLowerCase();
+  const dash = title.split(/\s[-–—]\s/);
+  if (dash.length > 1) set.add(dash[dash.length - 1].trim());
+  // Also scan the WHOLE title for any known color word so a color that isn't a
+  // " - Color" suffix still surfaces ("Jillian Sport Rose Sandal" → rose). This
+  // is what lets the soft-color match find Rose when "pink" is requested even
+  // when the variants carry no Color option.
+  for (const c of BUILTIN_COLORS) {
+    if (new RegExp(`\\b${escapeRe(c)}\\b`).test(title)) set.add(c);
+  }
   for (const v of product?.variants || []) {
     const c = variantColor(v);
     if (c) set.add(c);
@@ -420,12 +459,53 @@ export function variantDataDiagnostics(products = [], family = "") {
   return { variants, optionShape, sizes: Array.from(sizes), widths: Array.from(widths) };
 }
 
+// Resolve which STYLE the customer means among color-filtered candidates.
+// Returns { candidates } narrowed to one style, or { ambiguous: [styleEntry] }
+// when the family token covers multiple styles and the request named none.
+// A style is "named" when one of its DISTINGUISHING words (the words unique to
+// it among the styles, excluding the family token and words common to all
+// styles) appears in the query, or when it equals the prior focus style.
+function disambiguateStyle(candidates, fam, styleQuery, focusStyleKey) {
+  const byStyle = new Map();
+  for (const p of candidates) {
+    const key = styleKeyOfTitle(p.title || "");
+    if (!byStyle.has(key)) byStyle.set(key, { key, name: styleNameOfTitle(p.title || ""), products: [] });
+    byStyle.get(key).products.push(p);
+  }
+  if (byStyle.size <= 1) return { candidates };
+
+  const entries = Array.from(byStyle.values());
+  let common = null;
+  for (const st of entries) {
+    const ws = new Set(st.key.split(/\s+/).filter(Boolean));
+    common = common == null ? ws : new Set([...common].filter((w) => ws.has(w)));
+  }
+  const famWords = new Set(String(fam).split(/\s+/).filter(Boolean));
+  const q = String(styleQuery || "").toLowerCase();
+  const fk = focusStyleKey ? String(focusStyleKey).toLowerCase() : null;
+
+  const matched = [];
+  for (const st of entries) {
+    st.extra = st.key.split(/\s+/).filter((w) => w && !common.has(w) && !famWords.has(w));
+    const named =
+      (st.extra.length > 0 && st.extra.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(q))) ||
+      (fk && st.key === fk);
+    if (named) matched.push(st);
+  }
+  if (matched.length === 1) return { candidates: matched[0].products };
+  // None named → ambiguous across all styles; several named → ambiguous across
+  // just those (e.g. "Sport" narrows to Sport Mesh + Sport Knit, then asks).
+  return { ambiguous: matched.length > 1 ? matched : entries };
+}
+
 // Classify availability for a single family request. `products` is the set of
 // catalog products (any family) — we filter to the named family ourselves so
 // the caller can pass a broad fetch. `unverifiedConstraints` is a list of
 // constraint names the customer DID request in text but we couldn't normalize
 // — when the product exists, that forces UNKNOWN (never a false AVAILABLE).
-export function classifyAvailability({ products = [], family = "", color = null, size = null, width = null, unverifiedConstraints = [] } = {}) {
+// `styleQuery` (raw request text) + `focusStyleKey` (prior focus product's
+// style key) drive style disambiguation when the family covers multiple styles.
+export function classifyAvailability({ products = [], family = "", color = null, size = null, width = null, unverifiedConstraints = [], styleQuery = "", focusStyleKey = null } = {}) {
   const fam = String(family || "").toLowerCase();
   const reqColor = color ? String(color).toLowerCase().trim() : null;
   const sz = normalizeVariantSize(size);
@@ -473,6 +553,24 @@ export function classifyAvailability({ products = [], family = "", color = null,
       }
     }
   }
+
+  // Style disambiguation — the family token may cover multiple distinct styles
+  // (Jillian Braided vs Jillian Sport). If the request didn't name one (and the
+  // prior focus doesn't pin one), ask which — never silently pick. Runs AFTER
+  // the color filter, so we only disambiguate among styles that carry the
+  // requested/soft color.
+  const dis = disambiguateStyle(candidates, fam, styleQuery, focusStyleKey);
+  if (dis.ambiguous) {
+    return {
+      result: AVAILABILITY_RESULT.DISAMBIGUATION,
+      product: dis.ambiguous[0].products[0],
+      products: dis.ambiguous.flatMap((s) => s.products),
+      styles: dis.ambiguous.map((s) => s.name),
+      family: fam, color: reqColor, size: sz, width: wd,
+      softColor, matchedColor, reason: "multiple_styles",
+    };
+  }
+  candidates = dis.candidates;
 
   // Color/family only (no size/width) — is any candidate in stock?
   if (!sz && !wd) {
@@ -539,6 +637,20 @@ function sizeWidthPhrase({ size, width }) {
 // no "tell me more", no alternatives.
 export function buildAvailabilityAnswer(verdict) {
   const name = familyName(verdict);
+
+  // Multiple styles under one family token — ask which, never pick one. Fold in
+  // the soft-color note when the requested color mapped to a catalog color.
+  if (verdict.result === AVAILABILITY_RESULT.DISAMBIGUATION) {
+    const styles = (verdict.styles || []).filter(Boolean);
+    const joined =
+      styles.length <= 1 ? (styles[0] || `${name} style`)
+      : styles.length === 2 ? `the ${styles[0]} or the ${styles[1]}`
+      : styles.slice(0, -1).map((s) => `the ${s}`).join(", ") + `, or the ${styles[styles.length - 1]}`;
+    if (verdict.softColor && verdict.matchedColor) {
+      return `I don't see a color called ${titleCase(verdict.color)}, but a few ${name} styles come in ${titleCase(verdict.matchedColor)}. Did you mean ${joined}?`;
+    }
+    return `We carry more than one ${name} style. Did you mean ${joined}?`;
+  }
 
   // Soft color match: requested color isn't carried, but a same-family catalog
   // color is. Never claim the literal requested color — surface the real one.
