@@ -85,8 +85,8 @@ scenario("bunions recommendation", { message: "I have bunions, what shoes should
   { workflow: W.CONDITION_RECOMMENDATION, searchRequired: true, clarificationAllowed: false });
 scenario("Disney 10 miles PF", { message: "I need shoes for Disney, 10 miles a day, plantar fasciitis.", attrs: { condition: "plantar_fasciitis", useCase: "walking" } },
   { workflow: W.CONDITION_RECOMMENDATION, searchRequired: true });
-scenario("condition recommendation respects stated men's gender", { message: "my husband has plantar fasciitis, what do you recommend?", attrs: { condition: "plantar_fasciitis" } },
-  { workflow: W.CONDITION_RECOMMENDATION, gender: null }); // male signal → not defaulted to women
+scenario("condition recommendation resolves husband to men", { message: "my husband has plantar fasciitis, what do you recommend?", attrs: { condition: "plantar_fasciitis" } },
+  { workflow: W.CONDITION_RECOMMENDATION, gender: "men" }); // "husband" → men
 scenario("vacation walking sandals", { message: "sandals for a hot-weather walking vacation", attrs: { useCase: "vacation" } },
   { workflow: W.CONDITION_RECOMMENDATION, searchRequired: true, clarificationAllowed: false, gender: "women" });
 
@@ -109,8 +109,8 @@ scenario("ambiguous one word", { message: "help" },
   { workflow: W.CLARIFICATION });
 
 // ── Gender-default discipline ─────────────────────────────────────
-scenario("male signal blocks women default (recommendation)", { message: "walking shoes for my dad with foot pain", attrs: { condition: "foot_pain", useCase: "walking" } },
-  { gender: null });
+scenario("dad resolves to men (recommendation)", { message: "walking shoes for my dad with foot pain", attrs: { condition: "foot_pain", useCase: "walking" } },
+  { gender: "men" });
 scenario("explicit women keeps women", { message: "women's sandals for plantar fasciitis", attrs: { gender: "women", condition: "plantar_fasciitis" } },
   { workflow: W.CONDITION_RECOMMENDATION, gender: "women" });
 
@@ -200,12 +200,20 @@ scenario("can you help (no me find)", { message: "can you help?" },
   { workflow: W.CLARIFICATION, clarificationAllowed: true });
 
 // ── Gender-default discipline (more) ──────────────────────────────
-scenario("son with flat feet blocks women default", { message: "my son has flat feet, what do you recommend?", attrs: { condition: "flat_feet" } },
-  { workflow: W.CONDITION_RECOMMENDATION, gender: null });
+scenario("son with flat feet resolves to men", { message: "my son has flat feet, what do you recommend?", attrs: { condition: "flat_feet" } },
+  { workflow: W.CONDITION_RECOMMENDATION, gender: "men" });
 scenario("explicit men attrs keeps men", { message: "sandals for plantar fasciitis", attrs: { gender: "men", condition: "plantar_fasciitis" } },
   { workflow: W.CONDITION_RECOMMENDATION, gender: "men" });
 scenario("named advisory with men attrs keeps men", { message: "is the Lloyd worth it?", namedProduct: true, attrs: { gender: "men" } },
   { workflow: W.NAMED_PRODUCT_ADVISORY, gender: "men" });
+scenario("wife resolves to women (recommendation)", { message: "shoes for my wife with bunions", attrs: { condition: "bunions" } },
+  { workflow: W.CONDITION_RECOMMENDATION, gender: "women" });
+scenario("her resolves to women (browse)", { message: "show me sandals for her" },
+  { workflow: W.BROWSE, gender: "women" });
+scenario("his resolves to men (availability)", { message: "is the Lloyd in his size 11 in stock?", namedProduct: true },
+  { workflow: W.AVAILABILITY, gender: "men" });
+scenario("husband+wife conflict stays ambiguous", { message: "sandals for my husband and my wife for plantar fasciitis", attrs: { condition: "plantar_fasciitis" } },
+  { workflow: W.CONDITION_RECOMMENDATION, gender: "women" }); // conflict → null stated → defaults to primary line
 
 // ── Extra real-world phrasings to clear the ≥75 bar ───────────────
 scenario("where is my order number", { message: "where is my order #1234?" },

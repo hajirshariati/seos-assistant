@@ -5,7 +5,7 @@ import { getAttributeMappings } from "../models/AttributeMapping.server";
 import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability, getCategoryAttributeCoverage } from "../models/Product.server";
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
-import { planTurn, buildTurnPlanPromptBlock } from "../lib/turn-plan.server";
+import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision } from "../lib/turn-plan.server";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -2234,15 +2234,24 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     recommenderAskedForMoreInfo,
     orderTrackingTurn: toolsCalledThisTurn.has("get_customer_orders"),
   });
+  // TurnPlan search authority. When the plan requires a product search and
+  // the model finished without one, we must not ship an unsearched answer —
+  // force the scoped plan-driven search (ensureProductTurnCards runs it when
+  // shouldAttach is true and the pool is empty). This makes searchRequired
+  // deterministic instead of the old warning-only missing_product_lookup.
+  const planNeedsSearch = planRequiresSearchFlag(ctx?.turnPlan);
+  if (planNeedsSearch && !productSearchAttempted) {
+    console.log(`[chat] turn-plan(${ctx.turnPlan.workflow}): searchRequired but model did not search — forcing plan-driven search`);
+  }
   const ensuredCards = await ensureProductTurnCards({
     ctx,
     allProductPool,
     dispatchTool,
     extractProductCards: (n, r) => extractProductCards(n, r, ctx),
     searchInput: scopedProductSearchInput(ctx),
-    shouldAttach: productTurnWantsCards,
+    shouldAttach: productTurnWantsCards || planNeedsSearch,
     allowRelaxedNoMatch: isCompoundPolicyProductQuestion(ctx.latestUserMessage),
-    reason: "pre-display",
+    reason: planNeedsSearch && !productTurnWantsCards ? "plan-search-required" : "pre-display",
   });
   if (ensuredCards.searchAttempted) productSearchAttempted = true;
   let pool = ensuredCards.products;
@@ -2313,6 +2322,24 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     fullResponseText = finalized.text;
     pool = finalized.pool;
     genericCTA = finalized.genericCTA;
+  }
+
+  // TurnPlan clarification authority. When the plan says act-don't-ask
+  // (clarificationAllowed=false), a generic clarifier reply ("men's or
+  // women's?", "tell me more", "what style/color/budget?") violates the
+  // contract — the turn should have searched and shown products. Repair it
+  // in place: if products are available, swap the stall for a short
+  // plan-aware framing and let the cards carry the turn. (Mutating here,
+  // before the deferred text emit, so the LLM-owns runner ships the repair.)
+  {
+    const clarGate = clarifierGateDecision(ctx?.turnPlan, fullResponseText, pool.length > 0);
+    if (clarGate.action === "repair") {
+      const repaired = buildPlanClarifierRepair(ctx.turnPlan);
+      console.log(`[chat] turn-plan(${ctx.turnPlan.workflow}): repaired disallowed clarifier ("${fullResponseText.slice(0, 60).replace(/\s+/g, " ")}…") → product framing`);
+      fullResponseText = repaired;
+    } else if (clarGate.action === "block_no_products") {
+      console.log(`[chat] turn-plan(${ctx.turnPlan.workflow}): disallowed clarifier but no products to repair with — leaving text`);
+    }
   }
 
 
@@ -2407,9 +2434,18 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     controller.enqueue(encoder.encode(sseChunk({ type: "klaviyo_form" })));
   }
 
+  // TurnPlan card-display authority. When the plan says products must be
+  // shown (availability/show_availability, comparison/show), the cards are
+  // load-bearing for the answer — never suppress them just because the text
+  // is short or carries choice buttons. The plan overrides the chip heuristic.
+  const planDisplay = ctx?.turnPlan?.productDisplayPolicy;
+  const planForcesCards = planForcesProductDisplay(ctx?.turnPlan);
+
   const hasChoiceButtonsForCards = hasChoiceButtons(fullResponseText);
   let suppressCardsForChips = false;
-  if (hasChoiceButtonsForCards && pool.length > 0) {
+  if (planForcesCards && hasChoiceButtonsForCards && pool.length > 0) {
+    console.log(`[chat] turn-plan(${ctx.turnPlan.workflow}/${planDisplay}): keeping ${pool.length} cards despite choice buttons — plan requires product display`);
+  } else if (hasChoiceButtonsForCards && pool.length > 0) {
     const firstChipIdx = fullResponseText.indexOf("<<");
     const beforeChips = firstChipIdx >= 0
       ? fullResponseText.slice(0, firstChipIdx).trim()
@@ -3567,39 +3603,12 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
         "Do not treat the whole turn as support-only, and do not drop the product request.\n";
     }
 
-    // ── Central TurnPlan ──────────────────────────────────────────────
-    // One front-of-turn brain classifies the turn into a single workflow
-    // and emits the plan (search required, clarification allowed, product
-    // display, gender) that governs it. The compact plan block is injected
-    // into the volatile prompt suffix so the LLM-owns-turn model follows it,
-    // replacing the scattered per-screenshot gates. Pure + unit-tested
-    // (scripts/eval-turn-plan.mjs); see app/lib/turn-plan.server.js.
+    // Central TurnPlan — the single front-of-turn brain. Computed INSIDE the
+    // stream callback (below) once the classifier + reconciled gender are
+    // known, then stored on ctx so search, validators, emit-finalize and the
+    // card/clarification gates all read the same plan. Declared here so the
+    // closure variable + ctx field exist before the stream starts.
     let turnPlan = null;
-    try {
-      let planNamedProduct = false;
-      try {
-        planNamedProduct = await mentionsCatalogProductFamily(shop, latestUserMessage);
-      } catch { /* family lookup best-effort; default false */ }
-      turnPlan = planTurn({
-        message: latestUserMessage,
-        attrs: { gender: sessionGender || undefined },
-        namedProduct: planNamedProduct || Boolean(focusProduct),
-        focusProduct: focusProduct ? (focusProduct.handle || focusProduct.title || true) : null,
-        hasPriorCards: Array.isArray(priorProductCards) && priorProductCards.length > 0,
-        primaryGender: "women",
-      });
-      const planBlock = buildTurnPlanPromptBlock(turnPlan);
-      if (planBlock) {
-        systemPrompt += "\n\n" + planBlock + "\n";
-        console.log(
-          `[chat] turn-plan workflow=${turnPlan.workflow} search=${turnPlan.searchRequired} ` +
-          `clarify=${turnPlan.clarificationAllowed} display=${turnPlan.productDisplayPolicy} ` +
-          `gender=${turnPlan.gender || "-"} named=${planNamedProduct}`,
-        );
-      }
-    } catch (err) {
-      console.error("[chat] turn-plan failed (non-fatal):", err?.message || err);
-    }
 
     const model = chooseModel(config, String(body.message), history);
 
@@ -3659,6 +3668,10 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
       llmNamedAnchors,
       debugChatEvents: body?.debug === true,
       messages,
+      // Set below, inside the stream callback, once the classifier and
+      // reconciled gender are known. Read by search, validators, the
+      // emit-finalize card gate, and the clarification gate.
+      turnPlan: null,
     };
     const encoder = new TextEncoder();
 
@@ -3790,6 +3803,44 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
               ctx.sessionGender = reconciledGender;
               genderAuthorityFromClassifier = true;
             }
+          }
+
+          // ── Central TurnPlan ────────────────────────────────────────────
+          // Now that the classifier ran and gender is reconciled, classify
+          // the turn into ONE workflow and store the plan on ctx so search,
+          // validators, the emit-finalize card gate and the clarification
+          // gate all read the same decision. The compact plan block is
+          // injected into the volatile prompt suffix so the model follows it.
+          try {
+            const clsAttrs = ctx.classifiedIntent?.attributes || {};
+            let planNamedProduct = Boolean(focusProduct);
+            try {
+              planNamedProduct = planNamedProduct || await mentionsCatalogProductFamily(shop, latestUserMessage);
+            } catch { /* family lookup best-effort */ }
+            turnPlan = planTurn({
+              message: latestUserMessage,
+              attrs: {
+                gender: clsAttrs.gender || sessionGender || undefined,
+                condition: clsAttrs.condition || undefined,
+                useCase: ctx.classifiedIntent?.isOrthoticRequest ? clsAttrs.useCase : undefined,
+              },
+              namedProduct: planNamedProduct,
+              focusProduct: focusProduct ? (focusProduct.handle || focusProduct.title || true) : null,
+              hasPriorCards: Array.isArray(priorProductCards) && priorProductCards.length > 0,
+              primaryGender: "women",
+            });
+            ctx.turnPlan = turnPlan;
+            const planBlock = buildTurnPlanPromptBlock(turnPlan);
+            if (planBlock) {
+              systemPrompt += "\n\n" + planBlock + "\n";
+              console.log(
+                `[chat] turn-plan workflow=${turnPlan.workflow} search=${turnPlan.searchRequired} ` +
+                `clarify=${turnPlan.clarificationAllowed} display=${turnPlan.productDisplayPolicy} ` +
+                `gender=${turnPlan.gender || "-"} named=${planNamedProduct}`,
+              );
+            }
+          } catch (planErr) {
+            console.error("[chat] turn-plan failed (non-fatal):", planErr?.message || planErr);
           }
 
           // STAGE 2: resolver preflight

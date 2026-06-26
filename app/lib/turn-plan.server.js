@@ -73,8 +73,29 @@ const BROWSE_RE =
 const RECOMMEND_RE =
   /\b(what\s+(?:would|do)\s+you\s+recommend|what\s+should\s+i\s+(?:get|buy|wear)|help\s+me\s+(?:find|pick|choose)|need\s+(?:a\s+)?(?:sandal|shoe|footwear|sneaker|boot|something))\b/i;
 
-const GENDER_STATED_RE =
-  /\b(men'?s?|male|man\b|guy|husband|boyfriend|\bdad\b|father|\bson\b|\bhis\b|\bhim\b|women'?s?|female|woman\b|wife|girlfriend|mom\b|mother|daughter|\bher\b)\b/i;
+// Gender signals, split by direction so the plan can RESOLVE men/women,
+// not merely detect "some gender was mentioned". Recipient nouns and
+// pronouns count: "my husband / dad / son / his" → men; "my wife / mom /
+// daughter / her" → women.
+const MALE_RE =
+  /\b(men'?s?|male|man|guy|boy|husband|boyfriend|dad|daddy|father|son|grandpa|grandfather|he|him|his)\b/i;
+const FEMALE_RE =
+  /\b(women'?s?|female|woman|lady|girl|wife|girlfriend|mom|mommy|mother|daughter|grandma|grandmother|she|her|hers)\b/i;
+
+// Resolve a concrete gender ("men" | "women" | null) from the classifier
+// attrs first (authoritative when present), then the message. A message
+// that names BOTH sides ("for my husband and my wife") is ambiguous → null,
+// so the caller falls back to the primary line where a default is allowed.
+function resolveStatedGender(m, attrs) {
+  const a = String(attrs?.gender || "").toLowerCase();
+  if (a === "men" || a === "man" || a === "male") return "men";
+  if (a === "women" || a === "woman" || a === "female") return "women";
+  const male = MALE_RE.test(m);
+  const female = FEMALE_RE.test(m);
+  if (male && !female) return "men";
+  if (female && !male) return "women";
+  return null; // none, or conflicting
+}
 
 function words(s) {
   return String(s || "").trim().split(/\s+/).filter(Boolean).length;
@@ -109,9 +130,15 @@ export function planTurn({
   const m = String(message || "");
   const hasNamed = Boolean(namedProduct);
   const hasProductContext = hasNamed || Boolean(focusProduct);
-  const genderStated = GENDER_STATED_RE.test(m) || Boolean(attrs?.gender);
   const condition = Boolean(attrs?.condition) || CONDITION_RE.test(m);
   const useCase = Boolean(attrs?.useCase) || USECASE_RE.test(m);
+
+  // Resolved gender direction ("men"|"women"|null) and whether the customer
+  // stated one at all. `genderFor` applies the default rule per workflow:
+  // a stated gender always wins; otherwise default to the primary line only
+  // where a default is allowed (advisory/condition/comparison-on-condition).
+  const statedGender = resolveStatedGender(m, attrs);
+  const genderFor = (allowDefault) => statedGender || (allowDefault ? primaryGender : null);
 
   // 1. Policy / order / account — never a product turn.
   if (POLICY_RE.test(m)) {
@@ -140,7 +167,7 @@ export function planTurn({
       clarificationAllowed: false,
       productDisplayPolicy: "show_availability",
       answerRequirements: reqs({ answerFirst: true, concise: true, answerInText: true }),
-      gender: genderStated ? attrs?.gender || null : null,
+      gender: genderFor(false),
       directives: [
         "Look up THIS product's live variants (sizes, colors, stock) this turn with get_product_details/lookup_sku — do NOT answer from earlier cards.",
         "Answer the availability question in TEXT (yes/no + which sizes/colors are in stock).",
@@ -161,7 +188,7 @@ export function planTurn({
       clarificationAllowed: false,
       productDisplayPolicy: "show",
       answerRequirements: reqs({ answerFirst: true, concise: true, recommendOne: true }),
-      gender: genderStated ? attrs?.gender || null : (condition || useCase ? primaryGender : null),
+      gender: genderFor(condition || useCase),
       directives: [
         "Look up both products this turn, then give a concise direct verdict (recommend one) with the key tradeoff. Show both cards.",
       ],
@@ -177,7 +204,7 @@ export function planTurn({
       clarificationAllowed: false,
       productDisplayPolicy: "show_focused",
       answerRequirements: reqs({ answerFirst: true, concise: true, honestTradeoff: true }),
-      gender: genderStated ? attrs?.gender || null : primaryGender,
+      gender: genderFor(true),
       directives: [
         "Look up the named product this turn and answer the value/suitability question directly from its real facts — answer first, one honest tradeoff, then the card. Never answer a named-product question from memory alone.",
       ],
@@ -187,7 +214,7 @@ export function planTurn({
   // 5. Condition / use-case recommendation. The key rule: do NOT ask gender
   // first — default to the primary line and SEARCH, then offer refinement.
   if (condition || useCase || RECOMMEND_RE.test(m)) {
-    const genderUnstated = !genderStated;
+    const genderUnstated = !statedGender;
     return finalize({
       workflow: WORKFLOWS.CONDITION_RECOMMENDATION,
       requiredEvidence: ["product_facts"],
@@ -195,7 +222,7 @@ export function planTurn({
       clarificationAllowed: false,
       productDisplayPolicy: "show",
       answerRequirements: reqs({ answerFirst: true, concise: true }),
-      gender: genderStated ? attrs?.gender || null : primaryGender,
+      gender: genderFor(true),
       directives: genderUnstated
         ? [
             `Gender is unstated — default to the ${primaryGender}'s line and SEARCH now. Do NOT ask "men's or women's?" first.`,
@@ -207,7 +234,7 @@ export function planTurn({
 
   // 6. Plain browse / search.
   if (BROWSE_RE.test(m) || hasNamed) {
-    const genderUnstated = !genderStated;
+    const genderUnstated = !statedGender;
     return finalize({
       workflow: WORKFLOWS.BROWSE,
       requiredEvidence: ["product_facts"],
@@ -217,7 +244,7 @@ export function planTurn({
       clarificationAllowed: genderUnstated && /\b(shoes?|footwear)\b/i.test(m) && words(m) <= 6,
       productDisplayPolicy: "show",
       answerRequirements: reqs({ concise: true }),
-      gender: genderStated ? attrs?.gender || null : (genderUnstated ? null : primaryGender),
+      gender: genderFor(false),
       directives: ["Search and show matching products with a short framing sentence."],
     });
   }
@@ -247,6 +274,71 @@ function finalize(plan) {
     gender: plan.gender ?? null,
     directives: plan.directives || [],
   };
+}
+
+// Generic-clarifier detection. When the plan says act-don't-ask
+// (clarificationAllowed=false), these stock stall replies are a contract
+// violation — the model should have searched and shown products instead.
+// Conservative: only fires on SHORT question-shaped replies so a real
+// product answer that ends with a soft refinement offer is never flagged.
+const CLARIFIER_PATTERNS = [
+  /\bmen'?s?\s+or\s+women'?s?\b/i,
+  /\bwomen'?s?\s+or\s+men'?s?\b/i,
+  /\b(are|is)\s+(you|this|it)\s+(shopping|looking)\s+for\b/i,
+  /\bshopping\s+for\s+(yourself|a\s+man|a\s+woman|him|her|men|women)\b/i,
+  /\btell\s+me\s+(a\s+(little|bit)\s+)?more\b/i,
+  /\bcould\s+you\s+(tell|give)\s+me\s+(a\s+(little|bit)\s+)?more\b/i,
+  /\b(what|which)\s+(style|color|colour|size|budget|type|kind|occasion)\b[^.?!]*\?/i,
+  /\bany\s+(particular|specific)\s+(style|color|colour|budget|type|occasion)\b/i,
+  /\bwhat'?s\s+your\s+budget\b/i,
+];
+
+// ── Executable gate deciders ──────────────────────────────────────────
+// The chat route calls these so the gates and the eval test the SAME logic.
+
+// Card-display authority: does the plan require products to be shown?
+// When true, the emit-finalize step must not suppress cards just because the
+// text is short or carries choice buttons.
+export function planForcesProductDisplay(plan) {
+  const d = plan?.productDisplayPolicy;
+  return d === "show" || d === "show_availability" || d === "show_focused";
+}
+
+// Search authority: did the plan require a product search this turn?
+export function planRequiresSearch(plan) {
+  return plan?.searchRequired === true;
+}
+
+// Clarification authority. Given the plan, the model's reply, and whether
+// products are available, decide what the caller should do:
+//   "allow"             — fine as-is (clarification permitted or not a stall)
+//   "repair"            — disallowed stall, products exist → swap in framing
+//   "block_no_products" — disallowed stall, nothing to show → cannot repair
+export function clarifierGateDecision(plan, text, hasProducts) {
+  if (!plan || plan.clarificationAllowed !== false) return { action: "allow", reason: "clarification_allowed" };
+  if (!isGenericClarifierReply(text)) return { action: "allow", reason: "not_a_clarifier" };
+  return hasProducts
+    ? { action: "repair", reason: "disallowed_clarifier_with_products" }
+    : { action: "block_no_products", reason: "disallowed_clarifier_no_products" };
+}
+
+export function isGenericClarifierReply(text) {
+  const t = String(text || "").trim();
+  if (!t || !t.includes("?")) return false;
+  // A real product presentation is longer; a stock clarifier is short.
+  if (words(t) > 32) return false;
+  return CLARIFIER_PATTERNS.some((re) => re.test(t));
+}
+
+// Plan-aware repair line used when a disallowed clarifier is replaced and
+// products are available to carry the turn. Natural, no fabricated facts.
+export function buildPlanClarifierRepair(plan) {
+  const g = plan?.gender;
+  if (g === "women" || g === "men") {
+    const other = g === "women" ? "men's" : "women's";
+    return `Here are some options I'd start with — I focused on our ${g}'s line, but just let me know if you'd like ${other} instead.`;
+  }
+  return "Here are some options that fit what you described — happy to refine by style, color, or budget if you'd like.";
 }
 
 // Render a compact, customer-invisible plan block for the system prompt.
