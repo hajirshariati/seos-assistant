@@ -5,6 +5,7 @@ import { getAttributeMappings } from "../models/AttributeMapping.server";
 import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability, getCategoryAttributeCoverage } from "../models/Product.server";
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
+import { planTurn, buildTurnPlanPromptBlock } from "../lib/turn-plan.server";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -3564,6 +3565,40 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
         "The latest customer message contains both a support/policy question and a product-shopping request. " +
         "Answer every distinct ask. Briefly answer the support/policy part, and also use search_products for the product-shopping part so product cards can render. " +
         "Do not treat the whole turn as support-only, and do not drop the product request.\n";
+    }
+
+    // ── Central TurnPlan ──────────────────────────────────────────────
+    // One front-of-turn brain classifies the turn into a single workflow
+    // and emits the plan (search required, clarification allowed, product
+    // display, gender) that governs it. The compact plan block is injected
+    // into the volatile prompt suffix so the LLM-owns-turn model follows it,
+    // replacing the scattered per-screenshot gates. Pure + unit-tested
+    // (scripts/eval-turn-plan.mjs); see app/lib/turn-plan.server.js.
+    let turnPlan = null;
+    try {
+      let planNamedProduct = false;
+      try {
+        planNamedProduct = await mentionsCatalogProductFamily(shop, latestUserMessage);
+      } catch { /* family lookup best-effort; default false */ }
+      turnPlan = planTurn({
+        message: latestUserMessage,
+        attrs: { gender: sessionGender || undefined },
+        namedProduct: planNamedProduct || Boolean(focusProduct),
+        focusProduct: focusProduct ? (focusProduct.handle || focusProduct.title || true) : null,
+        hasPriorCards: Array.isArray(priorProductCards) && priorProductCards.length > 0,
+        primaryGender: "women",
+      });
+      const planBlock = buildTurnPlanPromptBlock(turnPlan);
+      if (planBlock) {
+        systemPrompt += "\n\n" + planBlock + "\n";
+        console.log(
+          `[chat] turn-plan workflow=${turnPlan.workflow} search=${turnPlan.searchRequired} ` +
+          `clarify=${turnPlan.clarificationAllowed} display=${turnPlan.productDisplayPolicy} ` +
+          `gender=${turnPlan.gender || "-"} named=${planNamedProduct}`,
+        );
+      }
+    } catch (err) {
+      console.error("[chat] turn-plan failed (non-fatal):", err?.message || err);
     }
 
     const model = chooseModel(config, String(body.message), history);
