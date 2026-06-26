@@ -6,9 +6,10 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow } from "../lib/turn-plan.server";
-import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
+import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel } from "../lib/support-handoff";
 import { extractConstraintPlan } from "../lib/constraint-plan";
+import { buildPriorEvidenceAvailabilityText, askedConstraintLabel, titleCaseWord } from "../lib/prior-evidence";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
@@ -2389,7 +2390,9 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     extractProductCards: (n, r) => extractProductCards(n, r, ctx),
     searchInput: forcedSearchInput,
     // Rewrite-only retries never search — reuse the prior attempt's evidence.
-    shouldAttach: (productTurnWantsCards || planNeedsSearch) && !rewriteOnlyRetry,
+    // prior_evidence_availability remaps prior cards deterministically per family
+    // (below) — it must never run a broad search that surfaces unrelated products.
+    shouldAttach: (productTurnWantsCards || planNeedsSearch) && !rewriteOnlyRetry && ctx?.turnPlan?.workflow !== "prior_evidence_availability",
     allowRelaxedNoMatch: isCompoundPolicyProductQuestion(ctx.latestUserMessage),
     reason: planNeedsSearch && !productTurnWantsCards ? "plan-search-required" : "pre-display",
   });
@@ -2419,6 +2422,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // exact cards selected by deterministic per-slot search. Wins over the scorer
   // so condition/multi answers keep their current-turn evidence cards.
   let evidencePinnedCards = null;
+  // Set by the prior_evidence_availability block: the previously-displayed
+  // products remapped to a new color/size/width constraint ("do they come in
+  // black?"). Like the other pins it wins over the scorer — the cards are a
+  // subset/remap of the prior displayed families, never random alternates.
+  let priorEvidencePinnedCards = null;
   // Deterministic concise fallback text built from the pinned evidence cards.
   // When the LLM's phrasing for a multi_recommendation turn can't pass the
   // grounding validator (typically `too_long` after rewrite-only retries), the
@@ -2476,6 +2484,103 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         if (key && !seen.has(key)) { seen.add(key); merged.push(c); }
       }
       pool = merged;
+    }
+  }
+
+  // ── Prior-evidence availability ───────────────────────────────────────
+  // workflow=prior_evidence_availability: the customer applied a new
+  // color/size/width constraint to the SET of products we just showed ("do they
+  // come in black?", "what about size 8?"). There's no single named family — the
+  // ask targets EACH prior family. We remap every prior family to the new
+  // constraint deterministically (Availability Truth per family), show only the
+  // matching prior products' cards, and OWN the answer text. Never the scorer.
+  if (ctx.turnPlan?.workflow === "prior_evidence_availability") {
+    try {
+      const latestMsg = ctx.latestUserMessage || "";
+      const priorCards = Array.isArray(ctx.priorProductCards) ? ctx.priorProductCards : [];
+      // Distinct prior families, in display order, with a representative card.
+      const famOrder = [];
+      const famPriorCard = new Map();
+      for (const c of priorCards) {
+        const f = familyOfTitle(c?.title || "");
+        if (f && !famPriorCard.has(f)) { famOrder.push(f); famPriorCard.set(f, c); }
+      }
+      // Load each family's products once; union the colors so the asked color
+      // parses regardless of which family carries it.
+      const famProductsMap = new Map();
+      const unionColors = new Set();
+      for (const family of famOrder) {
+        const fps = await prisma.product.findMany({
+          where: { shop: ctx.shop, NOT: { status: { in: ["DRAFT", "ARCHIVED"] } }, title: { contains: family, mode: "insensitive" } },
+          include: { variants: true },
+          take: 50,
+        });
+        famProductsMap.set(family, fps);
+        for (const col of collectFamilyColors(fps)) unionColors.add(col);
+      }
+      const unionColorList = Array.from(unionColors);
+      // The NEW constraint the customer asked about THIS turn (color/size/width),
+      // plus any size/width inherited from earlier availability turns.
+      const asked = parseAvailabilityConstraints(latestMsg, unionColorList);
+      const priorInherit = priorAvailabilityConstraints(ctx.messages, unionColorList);
+      const reqColor = asked.color || null;
+      const reqSize = asked.size || priorInherit.size || null;
+      const reqWidth = asked.width || priorInherit.width || null;
+      const askedLabel = askedConstraintLabel({
+        reqColor,
+        askedSize: asked.size,
+        askedWidth: asked.width,
+        inheritedSize: priorInherit.size,
+        inheritedWidth: priorInherit.width,
+      });
+
+      const items = []; // { name, ok }
+      const pickedCards = [];
+      const seenHandles = new Set();
+      for (const family of famOrder) {
+        const famProducts = famProductsMap.get(family) || [];
+        const displayName = styleNameOfTitle(famPriorCard.get(family)?.title || "") || titleCaseWord(family);
+        const verdict = classifyAvailability({ products: famProducts, family, color: reqColor, size: reqSize, width: reqWidth });
+        const ok = verdict.result === AVAILABILITY_RESULT.AVAILABLE;
+        // Use the catalog's actual color (soft-match: "pink" → "Rose") for the
+        // card lookup so we surface the real variant the customer can buy.
+        const effColor = verdict.matchedColor || reqColor;
+        let card = null;
+        if (ok) {
+          // Scoped per-family remap search (NOT a broad scorer search): find this
+          // family's card in the requested color. Fall back to the prior card.
+          try {
+            const filters = {};
+            if (effColor) filters.color = effColor;
+            const cands = extractProductCards("search_products", await dispatchTool("search_products", { query: family, filters, limit: 4 }, ctx), ctx);
+            const sameFam = (cands || []).filter((c) => titleStyleFamily(c.title || "").toLowerCase() === family);
+            card = (effColor ? sameFam.find((c) => String(c.title || "").toLowerCase().includes(String(effColor).toLowerCase())) : null)
+              || sameFam[0] || null;
+          } catch (e) { console.warn(`[prior-evidence] remap search failed for "${family}":`, e?.message || e); }
+          if (!card) card = famPriorCard.get(family) || null;
+          if (card) {
+            const key = String(card.handle || card.title || "").toLowerCase();
+            if (key && !seenHandles.has(key)) { pickedCards.push(card); seenHandles.add(key); }
+          }
+        }
+        items.push({ name: displayName, ok });
+      }
+      // Seed the evidence pool with the prior + remapped cards so the grounding
+      // validator sees the product names in the deterministic answer as grounded.
+      for (const c of [...famOrder.map((f) => famPriorCard.get(f)), ...pickedCards]) {
+        if (!c) continue;
+        const key = String(c.handle || c.title || "").toLowerCase();
+        if (key && !allProductPool.has(key)) allProductPool.set(key, c);
+      }
+      priorEvidencePinnedCards = pickedCards;
+      fullResponseText = buildPriorEvidenceAvailabilityText(items, askedLabel, Boolean(reqColor));
+      answerOwner = "prior-evidence";
+      console.log(
+        `[prior-evidence] families=[${famOrder.join(",")}] asked=${askedLabel} ` +
+        `available=[${items.filter((i) => i.ok).map((i) => i.name).join(",")}] cards=${pickedCards.length}`,
+      );
+    } catch (peErr) {
+      console.error("[prior-evidence] failed (non-fatal):", peErr?.message || peErr);
     }
   }
 
@@ -2764,7 +2869,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // the carried cards + owner directly. This is the last guard that stops the
   // scorer from taking over a comparison / evidence-plan / availability turn on a
   // text-only retry.
-  if (rewriteOnlyRetry && carriedCards && !availabilityPinnedCards && !comparisonPinnedCards && !evidencePinnedCards) {
+  if (rewriteOnlyRetry && carriedCards && !availabilityPinnedCards && !comparisonPinnedCards && !evidencePinnedCards && !priorEvidencePinnedCards) {
     if (carriedCardOwner === "comparison") comparisonPinnedCards = carriedCards.slice(0, 4);
     else if (carriedCardOwner === "evidence-plan") {
       evidencePinnedCards = carriedCards.slice();
@@ -2773,7 +2878,8 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       if (!evidenceFallbackText && ctx?.carriedEvidenceFallbackText) evidenceFallbackText = ctx.carriedEvidenceFallbackText;
     }
     else if (carriedCardOwner === "availability-truth") availabilityPinnedCards = carriedCards.slice();
-    if (comparisonPinnedCards || evidencePinnedCards || availabilityPinnedCards) {
+    else if (carriedCardOwner === "prior-evidence") priorEvidencePinnedCards = carriedCards.slice();
+    if (comparisonPinnedCards || evidencePinnedCards || availabilityPinnedCards || priorEvidencePinnedCards) {
       console.log(`[rewrite-only] restored ${carriedCards.length} pinned card(s) owner=${carriedCardOwner} from prior attempt — scorer suppressed`);
     }
   }
@@ -2907,7 +3013,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // fires on a successful product/sale/comparison turn or a normal clarification
   // (the detector excludes those).
   {
-    const handoffPool = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards || pool;
+    const handoffPool = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards || priorEvidencePinnedCards || pool;
     const handoff = detectSupportHandoffNeed({
       text: fullResponseText,
       ctx,
@@ -2926,6 +3032,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       availabilityPinnedCards = null;
       comparisonPinnedCards = null;
       evidencePinnedCards = null;
+      priorEvidencePinnedCards = null;
       evidenceFallbackText = null;
       genericCTA = null;
       supportCTA = null;
@@ -3032,7 +3139,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     })));
   }
 
-  if (!supportCTA && !supportHandoffCta && genericCTA && !evidencePinnedCards && ctx.turnPlan?.workflow !== "availability" && ctx.turnPlan?.workflow !== "comparison") {
+  if (!supportCTA && !supportHandoffCta && genericCTA && !evidencePinnedCards && !priorEvidencePinnedCards && ctx.turnPlan?.workflow !== "availability" && ctx.turnPlan?.workflow !== "prior_evidence_availability" && ctx.turnPlan?.workflow !== "comparison") {
     outboundLinks.push({ url: genericCTA.url, label: genericCTA.label });
     controller.enqueue(encoder.encode(sseChunk({
       type: "link",
@@ -3088,7 +3195,18 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
   }
 
-  if (availabilityPinnedCards) {
+  if (priorEvidencePinnedCards) {
+    // Prior-evidence availability owns the final cards: the previously-shown
+    // products remapped to the new constraint (subset of the prior families).
+    // Emit verbatim, bypass the scorer. No broad CTA — these ARE the answer.
+    const { products: deduped } = prepareProductCardsForTurn(priorEvidencePinnedCards);
+    finalProductCards = deduped;
+    console.log(`[prior-evidence] finalCards=${deduped.length}`);
+    if (deduped.length > 0) {
+      controller.enqueue(encoder.encode(sseChunk({ type: "products", products: deduped })));
+    }
+    console.log(`[cta] ${ctx.shop} broad CTA suppressed: prior_evidence_availability turn (pinned remap)`);
+  } else if (availabilityPinnedCards) {
     // Availability Truth owns the final cards. Emit them verbatim — bypass the
     // scorer, group guards, alignment, and chip-suppression entirely. This is
     // the ONLY thing allowed to set finalProductCards on an availability turn.
@@ -3682,10 +3800,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // downstream mutator violated the do-not-mutate rule — logged as VIOLATION.
   {
     const workflow = ctx?.turnPlan?.workflow || "-";
-    const pinned = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards;
+    const pinned = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards || priorEvidencePinnedCards;
     const pinnedCount = pinned ? pinned.length : null;
     const finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
-    const cardOwner = availabilityPinnedCards != null ? "availability-truth"
+    const cardOwner = priorEvidencePinnedCards != null ? "prior-evidence"
+      : availabilityPinnedCards != null ? "availability-truth"
       : comparisonPinnedCards != null ? "comparison"
       : evidencePinnedCards != null ? "evidence-plan"
       : finalCount > 0 ? "scorer" : "none";
@@ -3714,6 +3833,31 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         `[turn-invariant] VIOLATION comparison cardOwner=${cardOwner} (expected comparison) ` +
         `finalCards=${finalCount} — scorer/other took over a comparison turn`,
       );
+    }
+    // Prior-evidence availability: cards are a deterministic remap of the prior
+    // displayed families. The scorer must NEVER own this turn, and every final
+    // card must belong to a previously-shown family (no random alternates).
+    if (workflow === "prior_evidence_availability") {
+      if (finalCount > 0 && cardOwner !== "prior-evidence" && cardOwner !== "availability-truth") {
+        console.warn(
+          `[turn-invariant] VIOLATION prior_evidence_availability cardOwner=${cardOwner} ` +
+          `(expected prior-evidence) finalCards=${finalCount} — scorer/other took over`,
+        );
+      }
+      const priorFams = new Set(
+        (Array.isArray(ctx?.priorProductCards) ? ctx.priorProductCards : [])
+          .map((c) => familyOfTitle(c?.title || "")).filter(Boolean),
+      );
+      const strayCard = (finalProductCards || []).find((c) => {
+        const f = familyOfTitle(c?.title || "");
+        return f && priorFams.size > 0 && !priorFams.has(f);
+      });
+      if (strayCard) {
+        console.warn(
+          `[turn-invariant] VIOLATION prior_evidence_availability stray card "${strayCard.title}" ` +
+          `not in prior families [${[...priorFams].join(",")}]`,
+        );
+      }
     }
   }
 
@@ -4577,6 +4721,14 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
               : null;
             if (deicticFamily && !namedFamilies.includes(deicticFamily)) namedFamilies = [...namedFamilies, deicticFamily];
             const planNamedProduct = namedFamilies.length > 0;
+            // Distinct families among the previously displayed cards. When the
+            // last turn showed 2+ families (an evidence-plan trio, a comparison
+            // pair), a bare color/size follow-up ("do they come in black?")
+            // targets that SET — TurnPlan routes it to prior_evidence_availability
+            // so it's remapped per family deterministically (never the scorer).
+            const priorCardFamilies = Array.isArray(priorProductCards)
+              ? Array.from(new Set(priorProductCards.map((c) => familyOfTitle(c?.title || "")).filter(Boolean)))
+              : [];
             turnPlan = planTurn({
               message: latestUserMessage,
               attrs: {
@@ -4587,6 +4739,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
               namedProduct: planNamedProduct,
               focusProduct: focusProduct ? (focusProduct.handle || focusProduct.title || true) : null,
               hasPriorCards: Array.isArray(priorProductCards) && priorProductCards.length > 0,
+              priorCardFamilies,
               primaryGender: "women",
             });
             // The named families this turn must search — the evidence lock

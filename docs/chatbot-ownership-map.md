@@ -13,6 +13,7 @@ to make it; everyone downstream may clean for safety but may not re-decide.**
 | **Workflow** (which kind of turn this is) | **TurnPlan** (`app/lib/turn-plan.server.js`, `planTurn`) | Classifies every turn into one of 11 workflows: `policy_account`, `availability`, `comparison`, `named_product_advisory`, `condition_recommendation`, `multi_recommendation`, `compatibility`, `sale_browse`, `sizing_help`, `browse`, `clarification`. Also owns `searchRequired`, `clarificationAllowed`, `productDisplayPolicy`, `gender`. |
 | **Constraint decomposition** | **ConstraintPlan / EvidencePlan** (`app/lib/constraint-plan.js`) | The structured layer between TurnPlan and search. `extractConstraintPlan` decomposes the latest message into askType + productFamilies + categories + conditions + useCases + constraints + **slots** (one per category for a multi-recommendation). Category nouns (sandal, sneaker, …) are NEVER product families. chat.jsx searches each slot deterministically and pins one card per slot (`evidencePinnedCards`). |
 | **Exact product / color / size / width availability** | **Availability Truth** (`app/lib/availability-truth.js`) | For `workflow=availability` only. Resolves family → style → variant truth and produces AVAILABLE / UNAVAILABLE / UNKNOWN / NOT_FOUND / DISAMBIGUATION, the answer **text**, and the **cards**. Its output is authoritative for that turn. |
+| **A new constraint applied to the SET just shown** | **Prior-evidence availability** (`chat.jsx` + `app/lib/prior-evidence.js`, `priorEvidencePinnedCards`) | For `workflow=prior_evidence_availability` ("do they come in black?" after a multi-product turn). Remaps EACH previously-displayed family to the new color/size/width via Availability Truth, shows only the matching prior products' cards, and OWNS the deterministic answer text ("Yes — Tamara and Danika come in black. I'm not seeing Mandy…"). Cards are a subset/remap of the prior families — **never the scorer, never random alternates**. |
 | **Comparison cards** | **Comparison pin** (`chat.jsx`, `comparisonPinnedCards`) | For `workflow=comparison`: the LLM owns the verdict text; the code pins ONE representative card per named family (max 4), bypassing the scorer so a two-product comparison shows ~2 cards, never a flooded carousel. When the pool lacks a family card the pin searches for that family independently; if NONE are found it ships text-only (`comparisonPinnedCards=[]`) — **a comparison turn never falls back to scorer cards**. |
 | **Advisory / sales language** | **LLM** | Owns the persuasive, advisory, and conversational phrasing for non-availability turns (browse, comparison, advisory, condition, clarification). Never owns a hard availability yes/no. |
 | **Factual safety** | **Grounding validator** (`app/lib/grounding-validator.server.js`) | Blocks ungrounded claims (sizes/colors/stock/policy facts not present in the evidence pool) and non-answers on answer-workflows, forcing a synthesis retry. Owns "is this claim supported by what the model actually saw." |
@@ -116,12 +117,29 @@ to make it; everyone downstream may clean for safety but may not re-decide.**
     cards survive the scorer/alignment — alignment removes hard contradictions
     only, never a 5→0 wipe on category-level answer language.
 
+14. **A new constraint on the SET just shown has a real owner.** When the last
+    turn displayed 2+ distinct families and the customer applies a bare
+    color/size/width follow-up ("do they come in black?", "what about size 8?",
+    "do all three come in wide?"), TurnPlan routes to
+    `prior_evidence_availability` (NOT normal availability with `named=false`,
+    which finds no family and leaks scorer cards). chat.jsx remaps EACH prior
+    family to the new constraint via Availability Truth, shows only the matching
+    prior products' cards (a per-family scoped search, never a broad scorer
+    search), and OWNS the deterministic answer naming which prior items match and
+    which don't. **Invariants:** `cardOwner` must be `prior-evidence` (or
+    `availability-truth`) — `scorer` is a VIOLATION; every final card must belong
+    to a previously-shown family — a stray (random alternate) is a VIOLATION. If
+    none match, it ships text-only and offers to look for alternatives — never
+    random replacement cards. A single prior family still uses the normal
+    availability path; naming a NEW product this turn routes to normal
+    availability.
+
 ## Turn invariant log
 
 Every turn emits one structured line (see `chat.jsx`, search `[turn-invariant]`):
 
 ```
-[turn-invariant] workflow=<w> answerOwner=<llm|availability-truth> cardOwner=<availability-truth|scorer|none> pinnedCards=<n|-> finalCards=<n> textCleanupChanged=<yes|no>
+[turn-invariant] workflow=<w> answerOwner=<llm|availability-truth|prior-evidence> cardOwner=<availability-truth|comparison|evidence-plan|prior-evidence|scorer|none> pinnedCards=<n|-> finalCards=<n> textCleanupChanged=<yes|no>
 ```
 
 - `answerOwner` — who produced the customer-facing text.

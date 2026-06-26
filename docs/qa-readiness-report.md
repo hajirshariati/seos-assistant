@@ -14,7 +14,7 @@ phrasing layer is verified by manual PRD live-testing, not these suites.
 | `eval-live-core-flows` | 66 | 0 | core scenarios: workflow + search/clarify/gender + availability card-count + leak/CTA/family invariants + sizing + sale + comparison card-contract (incl. pin-miss→text-only + cardOwner invariant) + same-session pivots + sale-search input |
 | `eval-availability-truth` | 51 | 0 | availability classification, soft color, style disambiguation, follow-up memory (incl. color-only follow-up size inheritance), width split |
 | `eval-variant-matcher` | 39 | 0 | size/width/SKU normalization, Aetrex labels, ranges, array-shape options |
-| `eval-turn-plan` | 112 | 0 | workflow classification across all 11 workflows (incl. multi_recommendation, compatibility, sizing_help, sale_browse; comparison outranks multi_recommendation for two named families) |
+| `eval-turn-plan` | 119 | 0 | workflow classification across all 12 workflows (incl. prior_evidence_availability, multi_recommendation, compatibility, sizing_help, sale_browse; comparison outranks multi_recommendation for two named families) |
 | `eval-turn-plan-gates` | 26 | 0 | executable gate deciders (search/display/clarifier) |
 | `eval-turn-plan-failures` | 19 | 0 | regression cases from prior PRD failures |
 | `eval-named-family-evidence` | 14 | 0 | named-family evidence requirement |
@@ -23,7 +23,8 @@ phrasing layer is verified by manual PRD live-testing, not these suites.
 | `eval-grounding-validator` | 74 | 0 | factual-safety blocking/warning partition + comparison length cap |
 | `eval-support-handoff` | 23 | 0 | customer-service handoff: explicit human, dead-end, partial, validation-failed; never on successful turns |
 | `eval-constraint-plan` | 15 | 0 | ConstraintPlan: multi-recommendation slots, compatibility, category-noun exclusion, kids gender, structured constraints |
-| **Total** | **499** | **0** | |
+| `eval-prior-evidence` | 13 | 0 | prior_evidence_availability: deterministic per-item answer text, asked-constraint label, cardOwner≠scorer invariant, no-stray-card invariant |
+| **Total** | **519** | **0** | |
 
 Run all: `npm run build && for s in scripts/eval-*.mjs; do node "$s"; done`
 
@@ -78,6 +79,23 @@ this pass made was driven by a QA scenario that reproduced a failure:
   paths behave identically. (Helper renamed `support-handoff.server.js` →
   `support-handoff.js` so the route imports it without tripping React Router's
   server-only-module resolver.)
+
+- **Prior-evidence follow-up has a real card owner.** PRD: after a turn showed 3
+  evidence-plan products (Tamara/Danika/Mandy), "are the come in black?" routed to
+  `availability named=false`, no family resolved, and the card layer fell to the
+  scorer — text answered about Tamara/Danika/Mandy while cards showed
+  Millie/Misty (text/card mismatch). Fixed with a new `prior_evidence_availability`
+  workflow: when the last turn displayed 2+ distinct families and the customer
+  applies a bare color/size/width follow-up, TurnPlan routes here (carrying the
+  prior families via `priorCardFamilies`), and chat.jsx remaps EACH prior family
+  to the new constraint via Availability Truth — a per-family scoped search (never
+  a broad scorer search), showing only the matching prior products' cards and
+  OWNING a deterministic answer ("Yes — Tamara and Danika come in black. I'm not
+  seeing Mandy…"). New invariants: `cardOwner=scorer` and any stray (non-prior)
+  card on this workflow log a `[turn-invariant] VIOLATION`. Pure logic extracted
+  to `app/lib/prior-evidence.js`; locked by `eval-prior-evidence` (text + owner +
+  stray invariants) and `eval-turn-plan` (routing, incl. the comparison→"do they
+  come in black?" case).
 
 - **Retry/card-owner stability: rewrite-only retries no longer search or cede to
   the scorer.** PRD showed a comparison turn that pinned 2 cards on attempt 0,

@@ -27,6 +27,7 @@ import { isCompatibilityAsk, isMultiRecommendationAsk } from "./constraint-plan.
 export const WORKFLOWS = {
   POLICY_ACCOUNT: "policy_account",
   AVAILABILITY: "availability",
+  PRIOR_EVIDENCE_AVAILABILITY: "prior_evidence_availability",
   COMPARISON: "comparison",
   NAMED_PRODUCT_ADVISORY: "named_product_advisory",
   CONDITION_RECOMMENDATION: "condition_recommendation",
@@ -172,6 +173,9 @@ function reqs({ answerFirst = false, concise = false, answerInText = false, reco
  * @param {boolean} [input.namedProduct] a catalog product FAMILY is named in the message
  * @param {string|null} [input.focusProduct] anchored product handle/title from a prior turn
  * @param {boolean} [input.hasPriorCards] cards were shown on a previous turn
+ * @param {string[]} [input.priorCardFamilies] distinct families of the previously
+ *   displayed cards — drives prior_evidence_availability when a color/size/width
+ *   follow-up targets a SET of products (2+ families) the customer just saw.
  * @param {string} [input.primaryGender] merchant's primary line (default "women")
  * @returns {object} plan
  */
@@ -181,6 +185,7 @@ export function planTurn({
   namedProduct = false,
   focusProduct = null,
   hasPriorCards = false,
+  priorCardFamilies = [],
   primaryGender = "women",
 } = {}) {
   const m = String(message || "");
@@ -311,7 +316,41 @@ export function planTurn({
   // an availability question, so it must not fall through to clarification.
   // Force a fresh product/variant lookup; never answer from prior cards alone.
   const isDeicticAvailFollowUp = FOLLOWUP_AVAIL_RE.test(m) && words(m) <= 5;
-  if ((SIZE_COLOR_STOCK_RE.test(m) || isDeicticAvailFollowUp) && (hasProductContext || hasPriorCards)) {
+  const isAvailFollowUpMsg = SIZE_COLOR_STOCK_RE.test(m) || isDeicticAvailFollowUp;
+
+  // 2a. PRIOR-EVIDENCE availability — a color/size/width follow-up applied to a
+  // SET of previously displayed products ("do they come in black?",
+  // "what about size 8?", "do all three come in wide?") after the last turn
+  // showed 2+ distinct product families (e.g. an evidence-plan trio or a
+  // comparison pair). The customer didn't name a NEW product — "they"/"these"
+  // refer back to what they just saw. Single-family availability can't resolve a
+  // set (it finds no family and the scorer leaks unrelated cards), so this gets
+  // its own deterministic owner that remaps EACH prior family to the new
+  // constraint. Gated to no newly-named product so "do you have the Jillian in
+  // black?" still routes to normal availability.
+  const priorFamCount = Array.isArray(priorCardFamilies)
+    ? new Set(priorCardFamilies.filter(Boolean)).size
+    : 0;
+  if (isAvailFollowUpMsg && !hasNamed && priorFamCount >= 2) {
+    return finalize({
+      workflow: WORKFLOWS.PRIOR_EVIDENCE_AVAILABILITY,
+      requiredEvidence: ["variant_facts"],
+      // Cards are remapped deterministically per prior family in chat.jsx — the
+      // model must NOT run a broad search that would surface unrelated products.
+      searchRequired: false,
+      clarificationAllowed: false,
+      productDisplayPolicy: "show_availability",
+      answerRequirements: reqs({ answerFirst: true, concise: true, answerInText: true }),
+      gender: genderFor(false),
+      directives: [
+        "The customer is asking whether the products you JUST showed come in a new color/size/width. Answer about THOSE SAME products only — never introduce new ones.",
+        "Answer briefly per item (which of the shown products are available in the requested color/size, which are not).",
+        "Show only the matching prior products' cards. If none match, show no cards and offer to look for alternatives.",
+      ],
+    });
+  }
+
+  if (isAvailFollowUpMsg && (hasProductContext || hasPriorCards)) {
     return finalize({
       workflow: WORKFLOWS.AVAILABILITY,
       requiredEvidence: ["variant_facts"],
@@ -478,6 +517,7 @@ const CLARIFIER_PATTERNS = [
 // clarifier — is a contract violation for these; it forces a synthesis retry.
 export const ANSWER_WORKFLOWS = new Set([
   WORKFLOWS.AVAILABILITY,
+  WORKFLOWS.PRIOR_EVIDENCE_AVAILABILITY,
   WORKFLOWS.COMPARISON,
   WORKFLOWS.NAMED_PRODUCT_ADVISORY,
   WORKFLOWS.CONDITION_RECOMMENDATION,
@@ -503,6 +543,7 @@ export function buildAnswerWorkflowExhaustionText(plan, pool = []) {
   const lineup = titles.length ? titles.join(titles.length === 2 ? " and " : ", ") : null;
   switch (plan?.workflow) {
     case WORKFLOWS.AVAILABILITY:
+    case WORKFLOWS.PRIOR_EVIDENCE_AVAILABILITY:
       return lineup
         ? `I can't confirm that exact size/color combination from the data I have right now — here's the ${titles[0]} so you can check current availability.`
         : "I can't confirm that exact size/color from the data I have right now — let me know the product and I'll pull what's in stock.";

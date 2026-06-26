@@ -115,6 +115,33 @@ scenario("'do you have it in wide?' follow-up → availability", { message: "do 
 scenario("bare 'what about size 9?' with NO prior cards stays non-availability", { message: "What about size 9?" },
   { workflow: W.CLARIFICATION });
 
+// ── 2a. prior-evidence availability — a new constraint applied to the SET of
+// products just shown (2+ distinct families). Must NOT route to normal
+// availability (single-family resolution can't handle a set → scorer leak).
+scenario("'Do they come in black?' after a 3-product evidence set → prior_evidence_availability",
+  { message: "Do they come in black?", priorCardFamilies: ["tamara", "danika", "mandy"], hasPriorCards: true },
+  { workflow: W.PRIOR_EVIDENCE_AVAILABILITY, searchRequired: false, clarificationAllowed: false, productDisplayPolicy: "show_availability" });
+scenario("'what about size 8?' after a 3-product set → prior_evidence_availability",
+  { message: "what about size 8?", priorCardFamilies: ["tamara", "danika", "mandy"], hasPriorCards: true },
+  { workflow: W.PRIOR_EVIDENCE_AVAILABILITY, searchRequired: false });
+scenario("'do all three come in wide?' → prior_evidence_availability",
+  { message: "do all three come in wide?", priorCardFamilies: ["tamara", "danika", "mandy"], hasPriorCards: true },
+  { workflow: W.PRIOR_EVIDENCE_AVAILABILITY });
+scenario("'and in champagne?' after a comparison pair → prior_evidence_availability (not comparison)",
+  { message: "and in champagne?", priorCardFamilies: ["jillian", "savannah"], hasPriorCards: true },
+  { workflow: W.PRIOR_EVIDENCE_AVAILABILITY });
+scenario("'are the ones you showed available in 9?' → prior_evidence_availability",
+  { message: "are the ones you showed available in 9?", priorCardFamilies: ["jillian", "savannah"], hasPriorCards: true },
+  { workflow: W.PRIOR_EVIDENCE_AVAILABILITY });
+// A SINGLE prior family resolves fine on the normal availability path.
+scenario("'do they come in black?' with ONE prior family stays normal availability",
+  { message: "do they come in black?", priorCardFamilies: ["jillian"], hasPriorCards: true },
+  { workflow: W.AVAILABILITY });
+// Naming a NEW product this turn → normal availability, not prior-evidence.
+scenario("'do you have the Jillian in black?' (named) stays availability despite prior set",
+  { message: "do you have the Jillian in black?", namedProduct: true, priorCardFamilies: ["tamara", "danika"], hasPriorCards: true },
+  { workflow: W.AVAILABILITY });
+
 // ── 3. comparison ─────────────────────────────────────────────────
 scenario("Jillian vs Savannah", { message: "Which is better for all-day walking, Jillian or Savannah?", namedProduct: true },
   { workflow: W.COMPARISON, searchRequired: true, clarificationAllowed: false, productDisplayPolicy: "show" });
