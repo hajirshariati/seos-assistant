@@ -47,6 +47,21 @@ const SIZE_COLOR_STOCK_RE = new RegExp(
   "i",
 );
 
+// Deictic color/size FOLLOW-UP after a product is already in context ("and in
+// black?", "in a 9?", "how about wide?"). These name no product and carry no
+// "size"/"stock" keyword, so SIZE_COLOR_STOCK_RE misses them — yet they clearly
+// continue an availability thread. Gated to SHORT messages (≤5 words) WITH
+// product context so it never steals a longer advisory ("is the Jillian good in
+// black?") or a plain browse ("show me shoes in black").
+const FOLLOWUP_AVAIL_RE = new RegExp(
+  "\\b(?:and\\s+)?(?:in|how\\s+about|what\\s+about)\\s+(?:an?\\s+|it\\s+in\\s+|the\\s+)?(?:" +
+  "black|white|ivory|cream|navy|blue|red|burgundy|wine|maroon|pink|blush|rose|fuchsia|coral|" +
+  "green|olive|sage|tan|beige|nude|taupe|khaki|brown|chocolate|cognac|camel|bronze|copper|gold|" +
+  "silver|pewter|grey|gray|charcoal|slate|champagne|mauve|lavender|purple|plum|yellow|mustard|orange|" +
+  "wide|narrow|\\d{1,2}(?:\\.5)?)\\b",
+  "i",
+);
+
 const COMPARISON_RE =
   /\b(?:vs\.?|versus|compare[ds]?|comparison|which\s+is\s+better|better\s+(?:for|than)|difference\s+between|which\s+(?:one\s+)?should\s+i)\b/i;
 
@@ -161,7 +176,8 @@ export function planTurn({
   // prior cards). The latter has no named product in the message but is clearly
   // an availability question, so it must not fall through to clarification.
   // Force a fresh product/variant lookup; never answer from prior cards alone.
-  if (SIZE_COLOR_STOCK_RE.test(m) && (hasProductContext || hasPriorCards)) {
+  const isDeicticAvailFollowUp = FOLLOWUP_AVAIL_RE.test(m) && words(m) <= 5;
+  if ((SIZE_COLOR_STOCK_RE.test(m) || isDeicticAvailFollowUp) && (hasProductContext || hasPriorCards)) {
     return finalize({
       workflow: WORKFLOWS.AVAILABILITY,
       requiredEvidence: ["variant_facts"],

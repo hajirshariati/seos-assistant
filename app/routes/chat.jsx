@@ -2290,6 +2290,12 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // turn: the EXACT, authoritative final card list. When non-null it wins over
   // every downstream card guard/scorer and is emitted verbatim.
   let availabilityPinnedCards = null;
+  // Ownership instrumentation (see docs/chatbot-ownership-map.md). answerOwner
+  // is who produced the customer-facing TEXT; ownedTextSnapshot is that text
+  // captured BEFORE the safety-cleanup pipeline runs, so the turn-invariant log
+  // can report whether cleanup changed it. Default: the LLM owns the answer.
+  let answerOwner = "llm";
+  let ownedTextSnapshot = null;
 
   // Required named-family evidence (#2/#3/#4). For answer workflows where the
   // customer NAMED product families (Jillian, Savannah), those families MUST be
@@ -2435,6 +2441,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           );
         }
         fullResponseText = buildAvailabilityAnswer(verdict);
+        answerOwner = "availability-truth";
         if (verdict.result === AVAILABILITY_RESULT.NOT_FOUND) {
           pool = [];
           console.log(`[availability-truth] display=none (not found)`);
@@ -2518,6 +2525,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     }
     console.log(`[chat] comparison handoff: using ${pool.length} prior displayed card(s)`);
   }
+
+  // Snapshot the owner's text BEFORE the safety-cleanup pipeline (finalize /
+  // clarifier repair / chip-strip) so the turn-invariant log can report whether
+  // cleanup changed it. Cleanup owns final safety only — never product choice.
+  ownedTextSnapshot = fullResponseText;
 
   let genericCTA = null;
   {
@@ -3248,6 +3260,31 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // when the LLM didn't name it. If the scorer drops all cards
     // now, that's because none of them actually match — the right
     // answer is text-only, not "show whatever we had."
+  }
+
+  // ── Turn invariant log (docs/chatbot-ownership-map.md) ────────────────
+  // One structured line per turn naming the answer/card owners and the card
+  // counts, plus whether the safety-cleanup pipeline changed the owner's text.
+  // For workflow=availability, Availability Truth's pinned cards are
+  // authoritative: finalCards MUST equal pinnedCards. A mismatch means a
+  // downstream mutator violated the do-not-mutate rule — logged as VIOLATION.
+  {
+    const workflow = ctx?.turnPlan?.workflow || "-";
+    const pinnedCount = availabilityPinnedCards ? availabilityPinnedCards.length : null;
+    const finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
+    const cardOwner = availabilityPinnedCards != null ? "availability-truth" : finalCount > 0 ? "scorer" : "none";
+    const textCleanupChanged = ownedTextSnapshot != null && ownedTextSnapshot !== fullResponseText;
+    console.log(
+      `[turn-invariant] workflow=${workflow} answerOwner=${answerOwner} cardOwner=${cardOwner} ` +
+      `pinnedCards=${pinnedCount == null ? "-" : pinnedCount} finalCards=${finalCount} ` +
+      `textCleanupChanged=${textCleanupChanged ? "yes" : "no"}`,
+    );
+    if (workflow === "availability" && pinnedCount != null && finalCount !== pinnedCount) {
+      console.warn(
+        `[turn-invariant] VIOLATION availability pinned=${pinnedCount} but final=${finalCount} ` +
+        `— a downstream mutator changed Availability Truth's authoritative cards`,
+      );
+    }
   }
 
   const turnResult = createTurnResult({
