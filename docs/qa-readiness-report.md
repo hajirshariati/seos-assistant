@@ -12,18 +12,18 @@ phrasing layer is verified by manual PRD live-testing, not these suites.
 | Suite | Passing | Failing | Covers |
 |---|---:|---:|---|
 | `eval-live-core-flows` | 64 | 0 | core scenarios: workflow + search/clarify/gender + availability card-count + leak/CTA/family invariants + sizing + sale + comparison card-contract + same-session pivots + sale-search input |
-| `eval-availability-truth` | 49 | 0 | availability classification, soft color, style disambiguation, follow-up memory, width split |
+| `eval-availability-truth` | 51 | 0 | availability classification, soft color, style disambiguation, follow-up memory (incl. color-only follow-up size inheritance), width split |
 | `eval-variant-matcher` | 39 | 0 | size/width/SKU normalization, Aetrex labels, ranges, array-shape options |
-| `eval-turn-plan` | 108 | 0 | workflow classification across all 11 workflows (incl. multi_recommendation, compatibility, sizing_help, sale_browse) |
+| `eval-turn-plan` | 112 | 0 | workflow classification across all 11 workflows (incl. multi_recommendation, compatibility, sizing_help, sale_browse; comparison outranks multi_recommendation for two named families) |
 | `eval-turn-plan-gates` | 26 | 0 | executable gate deciders (search/display/clarifier) |
 | `eval-turn-plan-failures` | 19 | 0 | regression cases from prior PRD failures |
 | `eval-named-family-evidence` | 14 | 0 | named-family evidence requirement |
-| `eval-clarifier-and-detector` | 40 | 0 | clarifier blocking + specific-product detection |
+| `eval-clarifier-and-detector` | 41 | 0 | clarifier blocking + specific-product detection (generic words like "weather" never a family) |
 | `eval-evidence-alignment` | 19 | 0 | card/text family alignment |
 | `eval-grounding-validator` | 74 | 0 | factual-safety blocking/warning partition + comparison length cap |
 | `eval-support-handoff` | 23 | 0 | customer-service handoff: explicit human, dead-end, partial, validation-failed; never on successful turns |
 | `eval-constraint-plan` | 15 | 0 | ConstraintPlan: multi-recommendation slots, compatibility, category-noun exclusion, kids gender, structured constraints |
-| **Total** | **490** | **0** | |
+| **Total** | **497** | **0** | |
 
 Run all: `npm run build && for s in scripts/eval-*.mjs; do node "$s"; done`
 
@@ -78,6 +78,36 @@ this pass made was driven by a QA scenario that reproduced a failure:
   paths behave identically. (Helper renamed `support-handoff.server.js` →
   `support-handoff.js` so the route imports it without tripping React Router's
   server-only-module resolver.)
+
+- **Stability pass: comparison vs multi, evidence-plan card survival, follow-up
+  size inheritance.** Three PRD blockers fixed as one pass:
+  1. *Comparison must outrank multi_recommendation.* "Compare Sydney and Rebecca
+     for standing at a wedding" (with category words like "wedge"/"heels") wrongly
+     decomposed into a category multi. Fix: when the customer uses a
+     compare/versus/which-is-better frame AND names two families, the turn stays
+     `comparison` (`turn-plan.server.js`: the multi branch now yields when
+     `hasNamed && COMPARISON_RE`).
+  2. *EvidencePlan workflows must not hard-fail on a validator exhaustion.* A
+     `multi_recommendation` pins one card per slot deterministically; when the
+     LLM's phrasing couldn't pass the validator (too_long warning + a "mismatch"
+     blocking error), the runner retried 3× then hard-handed-off and DROPPED the
+     pinned cards. Fix: cardOwner=evidence-plan retries are rewrite-only, and on
+     exhaustion the runner ships a deterministic concise fallback ("Here are
+     three strong starting points: the X for sandals, the Y for sneakers, and
+     the Z for slippers.") and KEEPS the pinned cards — no handoff
+     (`llm-owns-turn.server.js` evidence-plan exhaustion branch + `chat.jsx`
+     `evidenceFallbackText`).
+  3. *Color-only follow-up inherits the earlier size.* "…Jillian in sage?" →
+     "what about size 8?" → "and in black?" ran availability with size=- and
+     disambiguated. Fix: `priorAvailabilityConstraints` accumulates the most
+     recent size/width/color across ALL prior turns, the family is resolved by
+     scanning prior turns for the most recent one that NAMES a family (not just
+     the most recent constraint message), and the resolved family is passed to
+     `resolveAvailabilityRequest` so inheritance runs → family=jillian,
+     color=black, size=8.
+  Plus a cleanup: generic everyday words ("weather", "today", "store", …) are
+  denylisted in `catalog-resolver.server.js` so a coincidental "Weatherproof…"
+  SKU never makes "weather" a product family.
 
 - **Complex mixed requests were flattened into one broad search.** Added a
   ConstraintPlan/EvidencePlan layer (`constraint-plan.js`): multi-category asks

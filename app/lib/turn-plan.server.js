@@ -288,7 +288,9 @@ export function planTurn({
   // pain"). The turn carries 2+ distinct categories — it must be decomposed into
   // one slot per category and answered with ONE pick each, not a single broad
   // search that floods the carousel. The ConstraintPlan layer builds the slots.
-  if (isMultiRecommendationAsk(m)) {
+  // BUT a comparison of two NAMED products ("compare the Sydney wedge and the
+  // Rebecca heels") is a comparison, not a category multi — let it fall through.
+  if (isMultiRecommendationAsk(m) && !(hasNamed && COMPARISON_RE.test(m))) {
     return finalize({
       workflow: WORKFLOWS.MULTI_RECOMMENDATION,
       requiredEvidence: ["product_facts"],

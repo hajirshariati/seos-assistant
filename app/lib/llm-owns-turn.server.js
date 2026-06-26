@@ -427,6 +427,11 @@ export async function runWithGroundingRetry({
     // tools-off rewrite from existing evidence (invariant: comparison attempts
     // beyond the first are always rewrite-only).
     if (planWorkflow === "comparison") nextRewriteOnly = true;
+    // EVIDENCE-PLAN (multi_recommendation / compatibility): the cards are already
+    // pinned by deterministic per-slot search in chat.jsx — a retry must NEVER
+    // re-run tools. Force rewrite-only so the correction is a concise tools-off
+    // rewrite from the pinned evidence (exact card names + slot labels).
+    if (result?.cardOwner === "evidence-plan") nextRewriteOnly = true;
 
     // Hand the errors back to the model. The retry instruction is
     // appended as a NEW user turn so the model treats it as a
@@ -463,6 +468,25 @@ export async function runWithGroundingRetry({
       totalUsage: { ...accUsage },
       needsSupportHandoff: true,
       validation: { ok: false, errors: lastErrors, attempts: attempt + 1, recoveredSubstantial: true },
+    };
+  }
+
+  // EVIDENCE-PLAN exhaustion. A multi_recommendation / compatibility turn pins
+  // its own cards deterministically (one per slot); the cards ARE the answer.
+  // When the LLM's phrasing can't pass the validator — almost always `too_long`
+  // after rewrite-only retries — we must NOT hand off and drop those cards.
+  // Ship the deterministic concise fallback (built from the pinned card names +
+  // slot labels) and KEEP the pinned cards. No support handoff.
+  if (last?.cardOwner === "evidence-plan" && last?.evidenceFallbackText) {
+    console.log(
+      `[grounding-retry] evidence-plan(${planWorkflow}) exhausted — shipping deterministic concise fallback, keeping pinned cards`,
+    );
+    return {
+      ...applyLengthCap(last, lastWarnings, planWorkflow),
+      fullResponseText: last.evidenceFallbackText,
+      totalUsage: { ...accUsage },
+      // No needsSupportHandoff: the pinned cards must survive to the carousel.
+      validation: { ok: true, errors: [], attempts: attempt + 1, evidenceFallback: true },
     };
   }
 

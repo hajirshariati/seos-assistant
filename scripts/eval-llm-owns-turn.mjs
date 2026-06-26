@@ -273,6 +273,52 @@ test("max retries exhausted → returns last attempt with validation.ok=false", 
   assert.equal(calls, 3);
 });
 
+test("evidence-plan multi_recommendation: validator exhaustion never drops the 3 pinned cards", async () => {
+  // The model keeps writing a multi-card answer the validator rejects (here an
+  // ungrounded **Mirage Boot** the pool never contained — the "mismatch" that
+  // burned 3 retries + a hard handoff in PRD). Because cardOwner=evidence-plan
+  // and a deterministic fallback is provided, the runner must ship the concise
+  // fallback and KEEP the three pinned cards — never hand off and drop them.
+  let calls = 0;
+  const cards = [
+    { handle: "jillian-sandal", title: "Jillian Sandal" },
+    { handle: "phoenix-sneaker", title: "Phoenix Sneaker" },
+    { handle: "cozy-slipper", title: "Cozy Slipper" },
+  ];
+  const badText = "For your needs I'd reach for the **Mirage Boot** — it covers everything.";
+  const fallback =
+    "Here are three strong starting points: the Jillian Sandal for sandals, " +
+    "the Phoenix Sneaker for sneakers, and the Cozy Slipper for slippers.";
+  const runLoop = async () => {
+    calls += 1;
+    return {
+      fullResponseText: badText, // ungrounded — the model never corrects it
+      finalProductCards: cards,
+      turnResult: { products: cards },
+      cardOwner: "evidence-plan",
+      evidenceFallbackText: fallback,
+      evidencePool: cards,
+      messages: [{
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "t", content: [{ type: "text", text: JSON.stringify({ products: cards }) }] }],
+      }],
+    };
+  };
+  const out = await runWithGroundingRetry({
+    runLoop,
+    initialMessages: [{ role: "user", content: "one sandal, one sneaker, one slipper for heel pain" }],
+    maxRetries: 2,
+    turnPlan: { workflow: "multi_recommendation" },
+  });
+  assert.equal(out.validation.ok, true, "ships fallback as a clean answer (no hard handoff)");
+  assert.equal(out.validation.evidenceFallback, true);
+  assert.ok(!out.needsSupportHandoff, "must NOT request a support handoff");
+  assert.equal(out.fullResponseText, fallback, "ships the deterministic concise fallback");
+  assert.ok(out.fullResponseText.trim().length <= 500, "fallback under the retail length cap");
+  const finalCards = out.turnResult?.products || out.finalProductCards || [];
+  assert.equal(finalCards.length, 3, "all three pinned cards survive");
+});
+
 test("onAttempt callback fires per attempt with validation + sizes", async () => {
   const seen = [];
   const runLoop = async () => ({

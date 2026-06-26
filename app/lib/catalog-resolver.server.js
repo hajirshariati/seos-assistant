@@ -802,6 +802,15 @@ const SPECIFIC_PRODUCT_STOPWORDS = new Set([
   "what", "which", "who", "whom", "where", "when", "why", "how",
   "need", "want", "would", "could", "should", "have", "looking",
   "show", "find", "good", "best", "better", "else", "partner", "someone",
+  // Generic everyday / small-talk words. A catalog SKU that happens to start
+  // with one of these (e.g. a "Weatherproof…" style) must NEVER make the word a
+  // product family — "What's the weather?" logged families=[weather] (wrong).
+  "weather", "today", "tonight", "tomorrow", "yesterday", "morning",
+  "afternoon", "evening", "weekend", "week", "month", "year", "time",
+  "store", "shop", "open", "opens", "close", "closes", "closed", "hours",
+  "phone", "email", "address", "location", "directions", "website",
+  "hello", "hey", "thanks", "thank", "please", "okay", "yeah", "yes", "no",
+  "help", "question", "questions", "about", "here", "there", "this", "that",
 ]);
 
 function firstMeaningfulToken(title) {

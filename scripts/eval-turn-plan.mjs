@@ -124,6 +124,18 @@ scenario("difference between", { message: "what's the difference between the Mau
   { workflow: W.COMPARISON });
 scenario("comparison defaults gender to primary on condition", { message: "for plantar fasciitis, Jillian or Savannah?", namedProduct: true, attrs: { condition: "plantar_fasciitis" } },
   { workflow: W.COMPARISON, gender: "women" });
+// COMPARISON OUTRANKS multi_recommendation — a "compare X and Y" of two NAMED
+// families that ALSO names category words ("wedge"/"heels") must stay a
+// comparison, NOT decompose into a category multi-recommendation.
+scenario("'Compare Sydney and Rebecca for standing at a wedding' → comparison (not multi)", { message: "Compare Sydney and Rebecca for standing at a wedding", namedProduct: true },
+  { workflow: W.COMPARISON });
+scenario("'compare the Sydney wedge and the Rebecca heels' → comparison (category words don't trigger multi)", { message: "compare the Sydney wedge and the Rebecca heels for standing all day at that wedding", namedProduct: true },
+  { workflow: W.COMPARISON });
+scenario("'Which is better, Jillian or Savannah?' → comparison (not multi)", { message: "Which is better, Jillian or Savannah?", namedProduct: true },
+  { workflow: W.COMPARISON });
+// But an unnamed multi-category ask is still a multi_recommendation.
+scenario("'one sandal, one sneaker, one slipper for heel pain' stays multi (no named families)", { message: "Give me one sandal, one sneaker, and one slipper for heel pain" },
+  { workflow: W.MULTI_RECOMMENDATION });
 
 // ── 4. named-product advisory / value ─────────────────────────────
 scenario("Jillian worth it for PF", { message: "Is the Aetrex Jillian actually worth $100+ for plantar fasciitis?", namedProduct: true, attrs: { condition: "plantar_fasciitis" } },

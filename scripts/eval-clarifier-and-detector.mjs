@@ -80,6 +80,14 @@ await run("'Which is better, Jillian or Savannah?' → [jillian, savannah]", asy
 await run("'Do you have Savannah in champagne size 7 wide?' → [savannah]", async () => {
   assert.deepEqual(await families("Do you have Savannah in champagne size 7 wide?"), ["savannah"]);
 });
+// Generic everyday words must NEVER be product families — even when a SKU title
+// happens to start with one. "What's the weather?" logged families=[weather] in
+// PRD (a "Weatherproof…" style made "weather" a token). The denylist stops it.
+await run("'What's the weather?' → no family (generic word, even with a Weatherproof SKU)", async () => {
+  const factsWithWeather = [...FACTS, { title: "Weatherproof Trail Sandal" }];
+  const out = await extractCatalogProductFamilies("shop", "What's the weather?", { _testFacts: factsWithWeather });
+  assert.deepEqual(out, []);
+});
 
 // relaxCategoryOnNamedProduct must NOT fire on "What" (no real family), and
 // MUST fire on a real extracted family (Jillian).

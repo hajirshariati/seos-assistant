@@ -6,7 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow } from "../lib/turn-plan.server";
-import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
+import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel } from "../lib/support-handoff";
 import { extractConstraintPlan } from "../lib/constraint-plan";
 import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
@@ -391,6 +391,39 @@ function addUsage(acc, usage) {
 const RE_ESCAPE = /[.*+?^${}()|[\]\\]/g;
 function escapeRe(s) {
   return String(s).replace(RE_ESCAPE, "\\$&");
+}
+
+// The exact displayed product name for a pinned card (used by the deterministic
+// EvidencePlan fallback). Never invents — just the card's own title.
+function cardDisplayName(card) {
+  return String(card?.title || "").trim();
+}
+
+// Deterministic concise fallback for a multi_recommendation turn, built ONLY
+// from the pinned evidence cards + their slot categories. Shipped when the LLM's
+// phrasing can't pass the grounding validator (too_long) so the pinned cards
+// survive instead of being dropped to a support handoff. Shape:
+// "Here are three strong starting points: the X for sandals, the Y for
+// sneakers, and the Z for slippers."
+function buildMultiRecoFallbackText(pairs) {
+  const items = (pairs || [])
+    .filter((p) => p && p.card && cardDisplayName(p.card))
+    .map((p) => {
+      const name = cardDisplayName(p.card);
+      const cat = String(p.category || "").trim();
+      return cat ? `the ${name} for ${cat}` : `the ${name}`;
+    });
+  if (items.length === 0) return null;
+  const NUM = ["", "one", "two", "three", "four", "five", "six"];
+  let list;
+  if (items.length === 1) list = items[0];
+  else if (items.length === 2) list = `${items[0]} and ${items[1]}`;
+  else list = `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  const lead =
+    items.length === 1
+      ? "Here's a strong starting point:"
+      : `Here are ${NUM[items.length] || items.length} strong starting points:`;
+  return `${lead} ${list}.`;
 }
 
 async function loadMerchantColors(ctx) {
@@ -2356,6 +2389,12 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // exact cards selected by deterministic per-slot search. Wins over the scorer
   // so condition/multi answers keep their current-turn evidence cards.
   let evidencePinnedCards = null;
+  // Deterministic concise fallback text built from the pinned evidence cards.
+  // When the LLM's phrasing for a multi_recommendation turn can't pass the
+  // grounding validator (typically `too_long` after rewrite-only retries), the
+  // runner ships THIS instead of dropping the cards to a support handoff — the
+  // pinned cards are the real answer and must survive.
+  let evidenceFallbackText = null;
   // Ownership instrumentation (see docs/chatbot-ownership-map.md). answerOwner
   // is who produced the customer-facing TEXT; ownedTextSnapshot is that text
   // captured BEFORE the safety-cleanup pipeline runs, so the turn-invariant log
@@ -2426,12 +2465,24 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       //      to "Savannah champagne size 7 wide", not to an old focus card)
       //   3. the focus product / most-recent displayed card (only as fallback)
       let family = fams[0] || null;
-      const priorAvailMsg = !family && isFollowUp ? priorAvailabilityMessage(ctx.messages, []) : "";
-      if (!family && isFollowUp && priorAvailMsg) {
-        try {
-          const priorFams = await extractCatalogProductFamilies(shop, priorAvailMsg);
-          family = priorFams[0] || null;
-        } catch { /* best-effort */ }
+      // Scan PRIOR user turns backward for the most recent one that actually
+      // NAMES a family. The single most-recent availability message is often a
+      // field-only follow-up ("what about size 8?") that names no product, so
+      // relying on it alone loses the family on a later color-only follow-up
+      // ("and in black?"). Cap the scan (and DB lookups) to the last few turns.
+      if (!family && isFollowUp) {
+        const priorUserTexts = (Array.isArray(ctx.messages) ? ctx.messages : [])
+          .filter((m) => m?.role === "user")
+          .map((m) => (typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.filter((b) => b?.type === "text" && b.text).map((b) => b.text).join(" ") : ""))
+          .filter(Boolean)
+          .slice(0, -1); // exclude the current message
+        const scan = priorUserTexts.slice(-6).reverse();
+        for (const text of scan) {
+          try {
+            const priorFams = await extractCatalogProductFamilies(shop, text);
+            if (priorFams && priorFams[0]) { family = priorFams[0]; break; }
+          } catch { /* best-effort */ }
+        }
       }
       if (!family && isFollowUp && ctx.focusProduct) family = familyOfTitle(ctx.focusProduct.title || "");
       // Last resort: the dominant family among the most-recently displayed cards.
@@ -2462,10 +2513,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         // Most recent prior availability question — a size-only follow-up
         // ("what about size 9?") inherits its color/width.
         const priorUserMsg = isFollowUp ? priorAvailabilityMessage(ctx.messages, knownColors) : "";
+        // Accumulate the most-recent prior size/width/color across ALL prior
+        // availability turns so a color-only follow-up keeps an earlier size.
+        const priorConstraints = isFollowUp ? priorAvailabilityConstraints(ctx.messages, knownColors) : null;
         const req = resolveAvailabilityRequest({
           message: latestMsg,
           priorMessage: priorUserMsg,
-          namedFamilies: fams,
+          priorConstraints,
+          namedFamilies: family ? [family] : fams,
           focusProduct: consistentFocus,
           isFollowUp,
           knownColors,
@@ -2586,6 +2641,9 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       });
       const gender = ctx.turnPlan.gender === "men" || ctx.turnPlan.gender === "women" ? ctx.turnPlan.gender : (cplan.constraints.gender || null);
       const picked = [];
+      // Keep the per-slot category alongside each pinned card so the
+      // deterministic concise fallback can label "X for sandals, Y for sneakers".
+      const pickedPairs = [];
       const seenHandles = new Set();
       for (const slot of cplan.slots) {
         const filters = {};
@@ -2598,12 +2656,13 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         try { cards = extractProductCards("search_products", await dispatchTool("search_products", input, ctx), ctx); }
         catch (e) { console.warn(`[evidence-plan] slot "${slot.category}" search failed: ${e?.message || e}`); }
         const best = (cards || []).find((c) => c?.handle && !seenHandles.has(c.handle));
-        if (best) { picked.push(best); seenHandles.add(best.handle); }
+        if (best) { picked.push(best); pickedPairs.push({ card: best, category: slot.category }); seenHandles.add(best.handle); }
         console.log(`[evidence-plan] slot=${slot.category} query="${slot.query}" → ${cards?.length || 0} hit(s), picked=${best ? best.handle : "-"}`);
       }
       if (picked.length > 0) {
         evidencePinnedCards = picked;
-        console.log(`[evidence-plan] multi_recommendation pinnedFinalCards=${picked.length} slots=${cplan.slots.length}`);
+        evidenceFallbackText = buildMultiRecoFallbackText(pickedPairs);
+        console.log(`[evidence-plan] multi_recommendation pinnedFinalCards=${picked.length} slots=${cplan.slots.length} fallback="${evidenceFallbackText}"`);
       } else {
         console.log(`[evidence-plan] multi_recommendation: no slot cards found — leaving scorer cards`);
       }
@@ -2626,6 +2685,9 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           if (card) break;
         }
         evidencePinnedCards = card ? [card] : [];
+        // Keep a concise deterministic fallback so a too_long exhaustion ships a
+        // short line and KEEPS the named card rather than handing off + dropping it.
+        if (card) evidenceFallbackText = `The ${cardDisplayName(card)} is a solid match here — take a look.`;
         console.log(`[evidence-plan] compatibility family=${fams[0]} pinnedFinalCards=${evidencePinnedCards.length}`);
       } else {
         // No named product → text-only compatibility answer, no random cards.
@@ -2766,7 +2828,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // fires on a successful product/sale/comparison turn or a normal clarification
   // (the detector excludes those).
   {
-    const handoffPool = availabilityPinnedCards || comparisonPinnedCards || pool;
+    const handoffPool = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards || pool;
     const handoff = detectSupportHandoffNeed({
       text: fullResponseText,
       ctx,
@@ -2784,6 +2846,8 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       pool = [];
       availabilityPinnedCards = null;
       comparisonPinnedCards = null;
+      evidencePinnedCards = null;
+      evidenceFallbackText = null;
       genericCTA = null;
       supportCTA = null;
       supportHandoffCta = supportConfigured(ctx) ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl } : null;
@@ -3610,6 +3674,13 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // pool and burned 3 retries (~35s) on an answer that was grounded
     // all along.
     evidencePool: Array.from(allProductPool.values()),
+    // EvidencePlan ownership: when the multi_recommendation / compatibility block
+    // pinned cards this turn, cardOwner is "evidence-plan" and evidenceFallbackText
+    // is a deterministic concise line. The grounding runner uses these to (a) run
+    // any validator retry rewrite-only and (b) ship the deterministic fallback —
+    // keeping the pinned cards — instead of a support handoff that drops them.
+    cardOwner: evidencePinnedCards != null ? "evidence-plan" : null,
+    evidenceFallbackText,
   };
 }
 

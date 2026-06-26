@@ -288,6 +288,45 @@ check("priorAvailabilityMessage handles content blocks + ignores tool results", 
   assert.match(priorAvailabilityMessage(messages), /black size 8 wide/);
 });
 
+// ── Color-only follow-up inherits a SIZE set on an earlier turn ──
+// 3-turn conversation: "...Jillian non sport in sage?" → "what about size 8?"
+// → "and in black?". The color-only follow-up must keep size=8 even though the
+// immediately-prior message ("what about size 8?") restated only the size and
+// the size-bearing turn is two back from the color request.
+import { priorAvailabilityConstraints } from "../app/lib/availability-truth.js";
+check("priorAvailabilityConstraints accumulates size + color across prior turns", () => {
+  const messages = [
+    { role: "user", content: "do you have the Jillian non sport in sage?" },
+    { role: "assistant", content: "yes" },
+    { role: "user", content: "what about size 8?" },
+    { role: "assistant", content: "yes" },
+    { role: "user", content: "and in black?" },
+  ];
+  const acc = priorAvailabilityConstraints(messages, ["sage", "black"]);
+  assert.equal(acc.size, "8");
+  assert.equal(acc.color, "sage"); // most-recent prior color (overridden by current "black" downstream)
+});
+check("'and in black?' color-only follow-up → family=jillian, color=black, size=8", () => {
+  const messages = [
+    { role: "user", content: "do you have the Jillian non sport in sage?" },
+    { role: "assistant", content: "yes" },
+    { role: "user", content: "what about size 8?" },
+    { role: "assistant", content: "yes" },
+    { role: "user", content: "and in black?" },
+  ];
+  const knownColors = ["sage", "black", "rose", "tan"];
+  const req = resolveAvailabilityRequest({
+    message: "and in black?",
+    priorConstraints: priorAvailabilityConstraints(messages, knownColors),
+    namedFamilies: ["jillian"], // resolved upstream from focus / family scan
+    isFollowUp: true,
+    knownColors,
+  });
+  assert.equal(req.family, "jillian");
+  assert.equal(req.color, "black");
+  assert.equal(req.size, "8"); // inherited from "what about size 8?" two turns back
+});
+
 // ── #3 UNKNOWN wording is explicit about the data limit + names size/width ──
 check("UNKNOWN no_variant_inventory (no size data) text says can't verify + product page", () => {
   const v = classify("lina", "navy", "7"); // Lina has no size variants at all

@@ -298,7 +298,7 @@ export function parseAvailabilityConstraints(message, knownColors = []) {
 // / "what about" follow-up that names no new family inherits family + color
 // from the focus product, and inherits color/size/width it didn't restate from
 // the PRIOR availability message. Stale session memory is NEVER consulted.
-export function resolveAvailabilityRequest({ message = "", priorMessage = "", namedFamilies = [], focusProduct = null, isFollowUp = false, knownColors = [] } = {}) {
+export function resolveAvailabilityRequest({ message = "", priorMessage = "", priorConstraints = null, namedFamilies = [], focusProduct = null, isFollowUp = false, knownColors = [] } = {}) {
   const cur = parseAvailabilityConstraints(message, knownColors);
 
   let family = (namedFamilies && namedFamilies[0]) || null;
@@ -309,7 +309,11 @@ export function resolveAvailabilityRequest({ message = "", priorMessage = "", na
   let width = cur.width;
 
   if (isFollowUp && family) {
-    const prior = parseAvailabilityConstraints(priorMessage, knownColors);
+    // Prefer the ACCUMULATED prior constraints (most-recent value per field
+    // across all prior availability turns) so a color-only follow-up
+    // ("and in black?") still inherits a size set two turns back
+    // ("what about size 8?"). Fall back to the single prior message.
+    const prior = priorConstraints || parseAvailabilityConstraints(priorMessage, knownColors);
     const focusColor = focusProduct ? colorFromTitle(focusProduct.title || "") : "";
     // New explicit value replaces prior; otherwise inherit prior availability.
     if (!color) color = focusColor || prior.color || null;
@@ -318,6 +322,26 @@ export function resolveAvailabilityRequest({ message = "", priorMessage = "", na
   }
 
   return { family, color, size, width };
+}
+
+// Accumulate the most-recent prior availability constraints across ALL prior
+// user turns (most-recent value wins per field). A color-only follow-up
+// ("and in black?") must still inherit the size set two turns ago
+// ("what about size 8?") — a single-prior-message lookup loses it when the
+// immediately-prior turn restated only one field. The current (last) user
+// message is excluded.
+export function priorAvailabilityConstraints(messages = [], knownColors = []) {
+  const users = (Array.isArray(messages) ? messages : []).filter((m) => m?.role === "user").map(messageText).filter(Boolean);
+  const priors = users.slice(0, -1);
+  const acc = { color: null, size: null, width: null };
+  for (let i = priors.length - 1; i >= 0; i--) {
+    const c = parseAvailabilityConstraints(priors[i], knownColors);
+    if (!acc.color && c.color) acc.color = c.color;
+    if (!acc.size && c.size) acc.size = c.size;
+    if (!acc.width && c.width) acc.width = c.width;
+    if (acc.color && acc.size && acc.width) break;
+  }
+  return acc;
 }
 
 // Pull the customer-facing text out of a conversation message (string content
