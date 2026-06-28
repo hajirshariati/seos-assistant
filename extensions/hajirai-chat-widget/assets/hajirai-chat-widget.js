@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-06-29 see-it-styled-proportions');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-06-29 see-it-styled-hero-image');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -812,29 +812,40 @@ function injectVizButton(card,cta){
 function injectVizStyleOnce(){
   if(document.getElementById('ai-chat-viz-layout-style'))return;
   var css=
-    // Two-column grid: compact left (product card + settings), hero right
-    // (generated image). align-items:stretch makes both columns share the row
-    // height so the preview matches the left column's full height on desktop.
-    '.ai-chat-viz-expanded{display:grid;grid-template-columns:minmax(220px,260px) minmax(0,1fr);gap:18px;align-items:stretch;width:100%;margin-top:8px;box-sizing:border-box}'+
-    '@media (max-width:639px){.ai-chat-viz-expanded{grid-template-columns:1fr;align-items:start}}'+
-    '.ai-chat-viz-controls{display:flex;flex-direction:column;gap:10px;min-width:0;height:100%}'+
-    '.ai-chat-viz-preview{min-width:0;height:100%;align-self:stretch}'+
-    // The image host stretches to the column height (desktop) with a floor so
-    // the loading state never collapses; on mobile it sizes to content.
-    '.ai-chat-viz-image{height:100%;min-height:420px}'+
-    '@media (max-width:639px){.ai-chat-viz-image{height:auto;min-height:0}}'+
-    // Result/loading card: a column that fills the right side, image grows to
-    // fill, disclaimer pinned at the bottom (doesn't shrink the image awkwardly).
-    '.ai-chat-viz-result{height:100%;min-height:420px;display:flex;flex-direction:column;border:1px solid rgba(0,0,0,.08);border-radius:14px;overflow:hidden;background:#fff}'+
+    // Two-column grid: a FIXED compact left rail (product reference + quiet
+    // scene controls) and a flexible right column where the generated image is
+    // the visual hero. align-items:start — the card is NEVER stretched to the
+    // image's height; each column sizes to its own content.
+    '.ai-chat-viz-expanded{display:grid;grid-template-columns:240px minmax(0,1fr);gap:18px;align-items:start;width:100%;margin-top:10px;box-sizing:border-box}'+
+    '.ai-chat-viz-controls{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}'+
+    '.ai-chat-viz-preview{min-width:0;align-self:start}'+
+    '.ai-chat-viz-image{min-width:0}'+
+    // Compact product card — small reference content, NOT the hero. Vertical
+    // block: image on top, info below. Image is a short fixed band so a tall
+    // product photo can't blow the card up.
+    '.ai-chat-viz-controls .ai-chat-product-card{display:block!important;width:100%!important;max-width:240px!important;min-width:0!important;padding:0!important;margin:0!important;overflow:hidden!important;border:1px solid rgba(0,0,0,.08)!important;border-radius:12px!important;background:#fff!important}'+
+    '.ai-chat-viz-controls .ai-chat-product-img{width:100%!important;height:150px!important;aspect-ratio:auto!important;border-radius:0!important;overflow:hidden!important;background:#fff!important}'+
+    // Product photos MUST be object-fit:contain — cover crops shoes and looks wrong.
+    '.ai-chat-viz-controls .ai-chat-product-img img{width:100%!important;height:100%!important;object-fit:contain!important;display:block}'+
+    '.ai-chat-viz-controls .ai-chat-product-info{box-sizing:border-box;padding:12px!important;display:flex!important;flex-direction:column!important;gap:6px!important}'+
+    '.ai-chat-viz-controls .ai-chat-product-title{font-size:14px!important;line-height:1.25!important}'+
+    '.ai-chat-viz-controls .ai-chat-product-price{font-size:15px!important}'+
+    '.ai-chat-viz-controls .ai-chat-product-cta{display:inline-flex!important;align-items:center;justify-content:center;align-self:flex-start!important;width:auto!important;margin-top:2px!important;padding:9px 14px!important;background:#000!important;color:#fff!important;border-radius:8px!important;font-size:13px!important;font-weight:600!important;text-decoration:none!important}'+
+    // Generated image = the hero. A stable 4/5 portrait ratio that is NOT tied
+    // to the left column's height; bounded so it stays large but never absurd.
+    // The image fills, the disclaimer is pinned at the bottom (never shrinks it).
+    '.ai-chat-viz-result{width:100%;aspect-ratio:4/5;min-height:420px;max-height:620px;display:flex;flex-direction:column;border:1px solid rgba(0,0,0,.08);border-radius:14px;overflow:hidden;background:#fff}'+
     '.ai-chat-viz-result-img{flex:1 1 auto;width:100%;height:100%;min-height:0;object-fit:cover;display:block}'+
-    '.ai-chat-viz-disclaimer{flex:0 0 auto;padding:8px 10px;text-align:center;font-size:11px;color:#9a9a9a;line-height:1.35}'+
-    '@media (max-width:639px){.ai-chat-viz-result{min-height:320px;height:auto}.ai-chat-viz-result-img{aspect-ratio:4/5;height:auto;flex:0 0 auto}}'+
-    // Compact left product card — supporting context, not the hero.
-    '.ai-chat-viz-controls .ai-chat-product-card{display:flex!important;flex-direction:column!important;flex:0 0 auto!important;width:100%!important;max-width:100%!important;min-width:0!important;gap:0!important;padding:0!important;margin:0!important;overflow:hidden!important;border:1px solid rgba(0,0,0,.08)!important;border-radius:12px!important;background:#fff!important}'+
-    '.ai-chat-viz-controls .ai-chat-product-img{width:100%!important;height:180px!important;aspect-ratio:auto!important;border-radius:0!important;flex:0 0 auto!important;overflow:hidden!important;background:#f7f7f7!important}'+
-    '.ai-chat-viz-controls .ai-chat-product-img img{width:100%;height:100%;object-fit:contain;display:block}'+
-    '.ai-chat-viz-controls .ai-chat-product-info{width:100%!important;box-sizing:border-box;padding:12px 14px 14px!important;display:flex!important;flex-direction:column!important;gap:6px!important;justify-content:flex-start!important}'+
-    '.ai-chat-viz-controls .ai-chat-product-cta{display:inline-flex!important;align-items:center;justify-content:center;align-self:flex-start!important;width:auto!important;margin-top:2px!important;padding:9px 16px!important;background:#000!important;color:#fff!important;border-radius:8px!important;font-size:13px!important;font-weight:600!important;letter-spacing:.02em!important;text-decoration:none!important}';
+    '.ai-chat-viz-disclaimer{flex:0 0 auto;padding:7px 10px;font-size:11px;color:#9a9a9a;text-align:center;line-height:1.35}'+
+    // Quiet, Apple-style scene controls — small rounded pills, NOT CTA blocks.
+    '.ai-chat-viz-options{padding:10px!important;gap:7px!important;border-radius:12px!important}'+
+    '.ai-chat-viz-options-title{font-size:12px!important;font-weight:700!important}'+
+    '.ai-chat-viz-options-help{font-size:10.5px!important}'+
+    '.ai-chat-viz-seg{gap:6px!important}'+
+    '.ai-chat-viz-opt{min-height:32px!important;padding:6px 10px!important;font-size:12px!important;border-radius:999px!important}'+
+    // Mobile/tablet (<700px): stack card → scene controls → hero image. The card
+    // may go full-width; the preview keeps its 4/5 ratio but drops the max cap.
+    '@media (max-width:699px){.ai-chat-viz-expanded{grid-template-columns:1fr}.ai-chat-viz-controls .ai-chat-product-card{max-width:100%!important}.ai-chat-viz-result{min-height:320px;max-height:none}}';
   var st=document.createElement('style');
   st.id='ai-chat-viz-layout-style';
   st.textContent=css;
@@ -905,9 +916,11 @@ function injectVizOptions(host,cta,card){
   wrap.className='ai-chat-viz-options';
   wrap.style.cssText='display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #E7DAC1;border-radius:12px;background:#FCFAF6;box-sizing:border-box';
   var head=document.createElement('div');
+  head.className='ai-chat-viz-options-title';
   head.textContent='Style the look';
   head.style.cssText='font-size:13px;color:#5C4A2A;font-weight:700;letter-spacing:.01em';
   var help=document.createElement('div');
+  help.className='ai-chat-viz-options-help';
   help.textContent='Choose a setting';
   help.style.cssText='font-size:11px;color:#9A8A6A;margin-top:-4px';
   wrap.appendChild(head);
@@ -922,8 +935,9 @@ function injectVizOptions(host,cta,card){
     chip.setAttribute('data-scene',s.label);
     chip.setAttribute('aria-pressed','false');
     chip.textContent=s.label;
-    // Compact but tappable (≥40px tap target for mobile); wraps cleanly.
-    chip.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 15px;border:1px solid #C9A76D;border-radius:10px;background:#fff;color:#8A6632;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;box-sizing:border-box;transition:background .15s,color .15s';
+    // Quiet, Apple-style pill — small (~32px) and fully rounded, not a CTA block.
+    // Wraps cleanly. (The .ai-chat-viz-opt rule also enforces this with !important.)
+    chip.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:6px 10px;border:1px solid #C9A76D;border-radius:999px;background:#fff;color:#8A6632;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;box-sizing:border-box;transition:background .15s,color .15s';
     chip.addEventListener('click',function(e){
       if(e){e.preventDefault();e.stopPropagation();}
       var kids=seg.children;
