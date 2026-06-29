@@ -51,6 +51,23 @@ check("'can I speak to a human' / 'connect me to customer service' → hard", ()
   }
 });
 
+// ── 1c. Repeated frustration → hard repeated_frustration ──────────────
+check("frustrated + escalated → hard repeated_frustration", () => {
+  for (const m of ["are you stupid?", "you're not listening", "I already told you", "this is so annoying", "stop asking"]) {
+    const h = detectSupportHandoffNeed({ ctx: ctxOf("condition_recommendation", m), pool: [], frustrationEscalated: true });
+    assert.equal(h.mode, "hard", m);
+    assert.equal(h.reason, "repeated_frustration", m);
+  }
+});
+check("frustration on the FIRST occurrence (not escalated) does NOT hand off", () => {
+  const h = detectSupportHandoffNeed({ ctx: ctxOf("clarification", "this is annoying"), pool: [], frustrationEscalated: false });
+  assert.equal(h.mode, null);
+});
+check("explicit human request still wins over the frustration path", () => {
+  const h = detectSupportHandoffNeed({ ctx: ctxOf("browse", "this is annoying, get me a human"), pool: [], frustrationEscalated: true });
+  assert.equal(h.reason, "explicit_human_request");
+});
+
 // ── 2. Unknown policy → hard policy_no_answer ─────────────────────────
 check("unknown policy ('I don't have access') → hard policy_no_answer", () => {
   const h = detectSupportHandoffNeed({

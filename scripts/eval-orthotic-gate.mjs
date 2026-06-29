@@ -11,6 +11,10 @@ import {
   countGenderGateAsks,
   maybeRunOrthoticFlow,
   shouldSoftEscapeFootwearGenderGate,
+  isOrthoticConfusionReply,
+  isOrthoticHostileReply,
+  genderRestatement,
+  seedQuestionEmissionCount,
 } from "../app/lib/orthotic-flow-gate.server.js";
 import { looksLikeFunctionalQuestion, looksLikeTransactionalQuestion } from "../app/lib/orthotic-flow.server.js";
 
@@ -1735,6 +1739,105 @@ await test("condition-only disambig is SUPPRESSED when the customer is already m
   // The gate must NOT emit the "footwear or orthotic?" disambig.
   const disambigEmitted = events.some((e) => e?.type === "text" && /\bfootwear with arch support\b/i.test(e.text || ""));
   assert.equal(disambigEmitted, false, "mid-flow disambig must be suppressed once customer is engaged in orthotic flow");
+});
+
+// ── Conversational-repair detectors (pure) ───────────────────────────────
+await test("confusion detector: what? / huh? / what do you mean / i don't understand", () => {
+  for (const s of ["what?", "huh?", "wha?", "come again?", "what do you mean?", "i don't understand", "i'm confused", "that doesn't make sense"]) {
+    assert.equal(isOrthoticConfusionReply(s), true, `should flag confusion: ${s}`);
+  }
+  // A real chip answer is NOT confusion.
+  for (const s of ["men", "dress shoes", "for work boots", "plantar fasciitis"]) {
+    assert.equal(isOrthoticConfusionReply(s), false, `should NOT flag: ${s}`);
+  }
+});
+
+await test("hostility detector: are you stupid / not listening / i already told you", () => {
+  for (const s of ["are you stupid?", "you're not listening", "I already told you", "this is annoying", "stop asking", "wtf", "ugh this is ridiculous"]) {
+    assert.equal(isOrthoticHostileReply(s), true, `should flag hostility: ${s}`);
+  }
+  assert.equal(isOrthoticHostileReply("dress shoes"), false);
+});
+
+await test("genderRestatement: only fires on RESTATEMENT framing, not a bare chip", () => {
+  assert.equal(genderRestatement("i said i'm a man"), "men");
+  assert.equal(genderRestatement("i'm men"), "men");
+  assert.equal(genderRestatement("for me, i'm a woman"), "women");
+  // A bare "men" is a fresh chip answer, NOT a restatement.
+  assert.equal(genderRestatement("men"), null);
+  assert.equal(genderRestatement("women"), null);
+});
+
+await test("seedQuestionEmissionCount counts verbatim prior emissions", () => {
+  const node = { id: "q_use_case", question: "What kind of shoes will the orthotics go in?" };
+  const msgs = [
+    { role: "user", content: "I need orthotics" },
+    { role: "assistant", content: "What kind of shoes will the orthotics go in? <<Dress shoes>>" },
+    { role: "user", content: "huh" },
+    { role: "assistant", content: "What kind of shoes will the orthotics go in? <<Dress shoes>>" },
+  ];
+  assert.equal(seedQuestionEmissionCount(msgs, node), 2);
+  assert.equal(seedQuestionEmissionCount([], node), 0);
+});
+
+// ── Gate integration: the loop must break (no verbatim re-emit) ───────────
+// Shared mid-flow conversation: gender answered (Men), q_use_case pending.
+const useCaseQ = "What kind of shoes will the orthotics go in? <<Dress shoes>><<Everyday / casual shoes>><<Work / on my feet all day>>";
+function midUseCaseFlow(lastUserText) {
+  return [
+    { role: "user", content: "I need orthotics" },
+    { role: "assistant", content: "Who are these orthotics for? <<Men>><<Women>><<Kids>>" },
+    { role: "user", content: "men" },
+    { role: "assistant", content: useCaseQ },
+    { role: "user", content: lastUserText },
+  ];
+}
+
+await test("confusion mid-flow ('what?') defers to LLM — does NOT repeat q_use_case", async () => {
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: midUseCaseFlow("what?"), tree, shop: "test.myshopify.com", controller, encoder,
+  });
+  assert.equal(out.handled, false);
+  const repeated = events.some((e) => e?.type === "text" && /What kind of shoes will the orthotics go in/i.test(e.text || ""));
+  assert.equal(repeated, false, "must not re-emit the identical seed question");
+});
+
+await test("gender restatement mid-flow ('i said i'm a men') defers — no repeat", async () => {
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: midUseCaseFlow("i said i'm a men"), tree, shop: "test.myshopify.com", controller, encoder,
+  });
+  assert.equal(out.handled, false);
+  assert.equal(events.some((e) => /What kind of shoes will the orthotics/i.test(e?.text || "")), false);
+});
+
+await test("hostility mid-flow ('are you stupid?') defers — no repeat", async () => {
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: midUseCaseFlow("are you stupid?"), tree, shop: "test.myshopify.com", controller, encoder,
+  });
+  assert.equal(out.handled, false);
+  assert.equal(events.some((e) => /What kind of shoes will the orthotics/i.test(e?.text || "")), false);
+});
+
+await test("loop cap: the same seed question is never emitted a 3rd time", async () => {
+  // q_use_case already went out TWICE; a third turn (even plain gibberish, not a
+  // confusion/hostility trigger) must defer instead of repeating it again.
+  const { events, encoder, controller } = makeMockSse();
+  const messages = [
+    { role: "user", content: "I need orthotics" },
+    { role: "assistant", content: "Who are these orthotics for? <<Men>><<Women>><<Kids>>" },
+    { role: "user", content: "men" },
+    { role: "assistant", content: useCaseQ },
+    { role: "user", content: "blah blah" },
+    { role: "assistant", content: useCaseQ },
+    { role: "user", content: "qwerty zzz" },
+  ];
+  const out = await maybeRunOrthoticFlow({ messages, tree, shop: "test.myshopify.com", controller, encoder });
+  assert.equal(out.handled, false);
+  const thirdEmit = events.some((e) => e?.type === "text" && /What kind of shoes will the orthotics go in/i.test(e.text || ""));
+  assert.equal(thirdEmit, false, "third identical emission must be blocked by the loop cap");
 });
 
 console.log("");

@@ -49,7 +49,7 @@ import { fetchCustomerContext } from "../lib/customer-context.server";
 import { fetchKlaviyoEnrichment } from "../lib/klaviyo-enrichment.server";
 import { fetchYotpoLoyalty } from "../lib/yotpo-loyalty.server";
 import { buildRecommenderTools } from "../lib/recommender-tools.server";
-import { maybeRunOrthoticFlow } from "../lib/orthotic-flow-gate.server";
+import { maybeRunOrthoticFlow, isOrthoticHostileReply, isOrthoticConfusionReply } from "../lib/orthotic-flow-gate.server";
 import { classifyOrthoticTurn, shouldRunOrthoticClassifier } from "../lib/orthotic-classifier.server";
 import { resolveCatalogTurn, buildResolverStatePromptBlock, extractUserConstraints, detectSpecificProduct, mentionsCatalogProductFamily, extractCatalogProductFamilies } from "../lib/catalog-resolver.server";
 import { getCatalogFacetIndex } from "../lib/catalog-facts.server";
@@ -3168,6 +3168,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // (the detector excludes those).
   if (ctx.turnPlan?.workflow !== "customer_service") {
     const handoffPool = availabilityPinnedCards || comparisonPinnedCards || evidencePinnedCards || priorEvidencePinnedCards || pool;
+    // Repeated bot-directed frustration → escalate to a human instead of
+    // looping. Count user turns that read as confused/hostile across the
+    // conversation; two or more arms the handoff (the detector still requires
+    // the LATEST message to be frustrated).
+    const frustrationTurns = (Array.isArray(messages) ? messages : []).filter(
+      (m) => m?.role === "user" && typeof m.content === "string" &&
+        (isOrthoticHostileReply(m.content) || isOrthoticConfusionReply(m.content)),
+    ).length;
     const handoff = detectSupportHandoffNeed({
       text: fullResponseText,
       ctx,
@@ -3175,6 +3183,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       validation: null, // validation_failed is decided in the runner
       qualitySignals,
       productSearchAttempted,
+      frustrationEscalated: frustrationTurns >= 2,
     });
     // A handoff CTA opens LIVE CHAT (Zendesk/Intercom/Gorgias) via the widget's
     // support_cta button — the Support Hub URL is only a fallback. So we emit a

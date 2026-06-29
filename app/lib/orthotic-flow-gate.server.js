@@ -702,6 +702,65 @@ function resolveSkippableSteps(state, tree) {
  *                      run the LLM agentic loop)
  *   { handled: false } otherwise
  */
+
+// ── Conversational-repair detectors (loop breakers) ──────────────────────
+// A deterministic seed gate must not behave like a rigid form. When the
+// customer is confused, restating an answer we already have, or frustrated,
+// RE-EMITTING the same seed question verbatim is the worst possible move
+// (live trace 2026-06-29: q_use_case asked, customer typed "what?", then "i
+// said i'm a men", then "are you stupid?" — the gate repeated the identical
+// bubble all three times). These pure detectors let the gate DEFER to the LLM
+// so it can rephrase in plain language, acknowledge the correction, or
+// apologize and recover. Exported for unit tests.
+
+// "what?", "huh?", "what do you mean?", "i don't understand", "i'm confused".
+export function isOrthoticConfusionReply(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return false;
+  if (/^(?:wh?a+t?|huh+|eh|come\s+again|pardon|sorry|what\s+now)\s*\?*$/.test(t)) return true;
+  return /\b(?:what\s+do\s+you\s+mean|what\s+are\s+you\s+(?:asking|talking\s+about)|i\s+don'?t\s+(?:understand|get\s+(?:it|that)|follow)|i'?m\s+(?:confused|lost|not\s+following)|not\s+sure\s+what\s+you(?:'?re| are)\s+asking|that\s+(?:doesn'?t|does\s+not)\s+make\s+sense)\b/i.test(t);
+}
+
+// "are you stupid?", "you're not listening", "I already told you", "this is
+// annoying / ridiculous", "stop asking", "wtf", "ugh".
+export function isOrthoticHostileReply(text) {
+  const t = String(text || "");
+  return /\b(?:are\s+you\s+(?:stupid|dumb|broken|kidding\s+me|serious|even\s+(?:working|trying))|you(?:'?re| are)\s+(?:not\s+listening|useless|stupid|broken|repeating\s+yourself)|i\s+(?:already\s+)?(?:told|said)\s+(?:you|that|it)|stop\s+(?:asking|repeating|it)|this\s+is\s+(?:so\s+)?(?:annoying|ridiculous|frustrating|useless|stupid|pointless)|wtf|what\s+the\s+(?:hell|heck|f\w*)|ugh+|so\s+annoying)\b/i.test(t);
+}
+
+// A RESTATEMENT of gender ("i said i'm a man", "i'm men", "for me, a guy") —
+// distinguished from a fresh chip answer ("men") by the restatement framing.
+// Returns "men" | "women" | "kids" | null. Used only when gender is ALREADY
+// captured and a DIFFERENT attribute is pending, so a confused customer who
+// re-answers gender gets an acknowledgment instead of the same question again.
+export function genderRestatement(text) {
+  const t = String(text || "").toLowerCase().trim();
+  if (!t) return null;
+  const framed =
+    /\bi\s+(?:said|told\s+you|already\s+(?:said|told))\b/.test(t) ||
+    /^(?:i'?m|i\s+am)\s+(?:a\s+)?(?:man|men|male|woman|women|female|guy|lady|boy|girl)\b/.test(t) ||
+    /\bfor\s+me\b/.test(t);
+  if (!framed) return null;
+  if (/\b(?:men|man|male|guy|dude|husband|boyfriend|dad|father|son|brother|he|him)\b/.test(t)) return "men";
+  if (/\b(?:women|woman|female|lady|wife|girlfriend|mom|mother|daughter|sister|she|her)\b/.test(t)) return "women";
+  if (/\b(?:kid|kids|child|children|boy|girl|toddler|son|daughter)\b/.test(t)) return "kids";
+  return null;
+}
+
+// How many prior ASSISTANT turns already emitted this exact seed question
+// (verbatim text match). The same seed question must never be emitted more
+// than twice — a third time means the customer is stuck and the LLM should
+// take over with a rephrase instead.
+export function seedQuestionEmissionCount(messages, node) {
+  const q = String(node?.question || "").trim();
+  if (!q) return 0;
+  let n = 0;
+  for (const m of Array.isArray(messages) ? messages : []) {
+    if (m?.role === "assistant" && typeof m.content === "string" && m.content.includes(q)) n += 1;
+  }
+  return n;
+}
+
 export async function maybeRunOrthoticFlow({
   messages,
   tree,
@@ -1340,6 +1399,37 @@ export async function maybeRunOrthoticFlow({
         `falling through to LLM`,
     );
     return { handled: false };
+  }
+
+  // ── Conversational-repair veto (loop breaker) ───────────────────────────
+  // The prior turn asked a seed question (priorChipAttribute) and the customer
+  // did NOT answer it. If they're confused, restating a gender we already have,
+  // or frustrated, re-emitting the SAME question verbatim is the worst move
+  // (live trace 2026-06-29: q_use_case asked, customer typed "what?", then "i
+  // said i'm a men", then "are you stupid?" — the gate repeated the identical
+  // bubble three times). Defer so the LLM rephrases / acknowledges / apologizes.
+  if (priorChipAttribute && !latestExtracted?.[priorChipAttribute]) {
+    if (isOrthoticConfusionReply(rawUserText)) {
+      console.log(
+        `[orthotic-flow] confusion reply ("${rawUserText.slice(0, 60)}") on ${priorChipAttribute} — ` +
+          `deferring to LLM for a plain-language rephrase`,
+      );
+      return { handled: false, case: "confusion_repair" };
+    }
+    if (isOrthoticHostileReply(rawUserText)) {
+      console.log(
+        `[orthotic-flow] frustration ("${rawUserText.slice(0, 60)}") on ${priorChipAttribute} — ` +
+          `deferring to LLM to apologize and recover`,
+      );
+      return { handled: false, case: "frustration_repair" };
+    }
+    if (priorChipAttribute !== "gender" && accumulated?.gender && genderRestatement(rawUserText)) {
+      console.log(
+        `[orthotic-flow] gender restatement ("${rawUserText.slice(0, 60)}") while ${priorChipAttribute} pending — ` +
+          `deferring so the LLM acks gender and asks ${priorChipAttribute}`,
+      );
+      return { handled: false, case: "gender_restatement_repair" };
+    }
   }
 
   // Source-challenge / meta-question detection. When the customer
@@ -2274,16 +2364,20 @@ export async function maybeRunOrthoticFlow({
       }
     }
 
-    // Note: there used to be a "stuck-loop" detector here that fired
-    // when the same question was asked twice in a row. It was too
-    // aggressive — false-positives on legitimate corrections, fragment
-    // answers, and "ok / next / go on" keep-alives. Removed.
-    //
-    // The production trace that motivated it ('knee pain' loop) is
-    // now handled at the classifier level: the classifier prompt
-    // explicitly maps non-foot pain (knee/back/hip) to
-    // condition='none' so the resolver picks a general orthotic
-    // and the flow advances.
+    // ── Hard loop cap ───────────────────────────────────────────────────
+    // The same seed question must never be emitted more than twice. If it has
+    // already gone out twice and we're about to send a THIRD identical bubble,
+    // the customer is stuck — defer to the LLM to rephrase instead (live trace
+    // 2026-06-29: q_use_case repeated verbatim three times). This is narrower
+    // than the old "asked twice in a row" detector that was removed for being
+    // too aggressive: it allows two emissions and only blocks the third.
+    if (seedQuestionEmissionCount(messages, step.node) >= 2) {
+      console.log(
+        `[orthotic-flow] loop cap: seed question ${step.node.id} already emitted 2× — ` +
+          `deferring to LLM rather than repeating it a third time`,
+      );
+      return { handled: false, case: "seed_loop_cap" };
+    }
 
     const text = renderQuestionText(step.node, answers, tree, {
       latestExtracted,

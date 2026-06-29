@@ -80,6 +80,20 @@ const CLARIFY_WORKFLOWS = new Set(["clarification", "sizing_help"]);
 //   { mode: "hard", reason }  — no reliable answer / no useful cards → replace
 //   { mode: "soft", reason }  — partial answer with a card → keep card, add line
 //   { mode: null }            — the bot handled it; do nothing
+// Bot-directed frustration/abuse. Combined with the caller's escalation flag
+// (the customer has been frustrated more than once) this triggers a human
+// handoff instead of looping — e.g. a rigid orthotic question chain the
+// customer keeps pushing back on (live trace 2026-06-29).
+const FRUSTRATION_RE = new RegExp(
+  "\\bare\\s+you\\s+(?:stupid|dumb|broken|serious|kidding)\\b" + "|" +
+  "\\byou(?:'?re| are)\\s+(?:not\\s+listening|useless|stupid|broken|repeating\\s+yourself)\\b" + "|" +
+  "\\bthis\\s+is\\s+(?:so\\s+)?(?:annoying|ridiculous|frustrating|useless|pointless)\\b" + "|" +
+  "\\bstop\\s+(?:asking|repeating)\\b" + "|" +
+  "\\bi\\s+(?:already\\s+)?(?:told|said)\\s+(?:you|that)\\b" + "|" +
+  "\\bwtf\\b",
+  "i",
+);
+
 export function detectSupportHandoffNeed({
   text = "",
   ctx = {},
@@ -87,6 +101,7 @@ export function detectSupportHandoffNeed({
   validation = null,
   qualitySignals = {},
   productSearchAttempted = false,
+  frustrationEscalated = false,
 } = {}) {
   const msg = String(ctx?.latestUserMessage || "");
   const wf = ctx?.turnPlan?.workflow || "";
@@ -95,6 +110,14 @@ export function detectSupportHandoffNeed({
 
   // 1. Explicit human/support request — always a hard handoff, any workflow.
   if (HUMAN_REQUEST_RE.test(msg)) return { mode: "hard", reason: "explicit_human_request" };
+
+  // 1b. Repeated frustration — the customer has pushed back more than once AND
+  // the latest message is frustrated/abusive toward the bot. Stop looping and
+  // offer a human. Checked before the clarify-workflow exemption so a stuck
+  // orthotic/clarification chain can still escalate.
+  if (frustrationEscalated && FRUSTRATION_RE.test(msg)) {
+    return { mode: "hard", reason: "repeated_frustration" };
+  }
 
   // 3. Validator exhausted (ok=false after retries) — hand off rather than ship
   // a bad/uncertain answer. Checked before the clarify-workflow exemption: an
@@ -133,6 +156,9 @@ export function buildSupportHandoffText({ ctx = {}, reason = "", partial = false
   }
   if (reason === "explicit_human_request") {
     return `Of course — ${SUPPORT_TEAM} can help you directly from here.`;
+  }
+  if (reason === "repeated_frustration") {
+    return `I'm sorry — I should have been clearer. Let me get ${SUPPORT_TEAM} to help you directly so we can sort this out quickly.`;
   }
   return `I don't want to guess on that. ${SUPPORT_TEAM} can confirm it for you and help with the next step.`;
 }
