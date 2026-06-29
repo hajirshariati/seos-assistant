@@ -6,6 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool } from "../lib/turn-plan.server";
+import { recordTurnInvariantViolation } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch } from "../lib/constraint-plan";
@@ -3965,33 +3966,24 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       `textCleanupChanged=${textCleanupChanged ? "yes" : "no"}`,
     );
     if ((workflow === "availability" || workflow === "comparison") && pinnedCount != null && finalCount !== pinnedCount) {
-      console.warn(
-        `[turn-invariant] VIOLATION ${workflow} pinned=${pinnedCount} but final=${finalCount} ` +
-        `— a downstream mutator changed the pinned cards`,
-      );
+      recordTurnInvariantViolation("pinned_cards_mutated", { workflow, pinned: pinnedCount, final: finalCount });
     }
     // Two-family comparison must never flood the carousel.
     if (workflow === "comparison" && finalCount > 4) {
-      console.warn(`[turn-invariant] VIOLATION comparison finalCards=${finalCount} > 4 — carousel flooded`);
+      recordTurnInvariantViolation("comparison_carousel_flood", { final: finalCount });
     }
     // Comparison cards are owned by the comparison pin — the scorer must NEVER
     // own a comparison turn that ships cards. (cardOwner=scorer here means the
     // pin missed and the retry/finalization leaked scorer cards.)
     if (workflow === "comparison" && finalCount > 0 && cardOwner !== "comparison") {
-      console.warn(
-        `[turn-invariant] VIOLATION comparison cardOwner=${cardOwner} (expected comparison) ` +
-        `finalCards=${finalCount} — scorer/other took over a comparison turn`,
-      );
+      recordTurnInvariantViolation("comparison_scorer_takeover", { cardOwner, final: finalCount });
     }
     // Prior-evidence availability: cards are a deterministic remap of the prior
     // displayed families. The scorer must NEVER own this turn, and every final
     // card must belong to a previously-shown family (no random alternates).
     if (workflow === "prior_evidence_availability") {
       if (finalCount > 0 && cardOwner !== "prior-evidence" && cardOwner !== "availability-truth") {
-        console.warn(
-          `[turn-invariant] VIOLATION prior_evidence_availability cardOwner=${cardOwner} ` +
-          `(expected prior-evidence) finalCards=${finalCount} — scorer/other took over`,
-        );
+        recordTurnInvariantViolation("prior_evidence_scorer_takeover", { cardOwner, final: finalCount });
       }
       const priorFams = new Set(
         (Array.isArray(ctx?.priorProductCards) ? ctx.priorProductCards : [])
@@ -4002,10 +3994,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         return f && priorFams.size > 0 && !priorFams.has(f);
       });
       if (strayCard) {
-        console.warn(
-          `[turn-invariant] VIOLATION prior_evidence_availability stray card "${strayCard.title}" ` +
-          `not in prior families [${[...priorFams].join(",")}]`,
-        );
+        recordTurnInvariantViolation("prior_evidence_stray_card", { card: strayCard.title, priorFamilies: [...priorFams] });
       }
     }
     // GENERALIZED INVARIANT (#4): any TurnPlan-pinned workflow that ships cards
@@ -4013,28 +4002,19 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // multi_recommendation / compatibility / named_product_advisory leaks too,
     // not just comparison / prior_evidence above.
     if (plannedWorkflowCardOwnerViolation({ workflow, finalCards: finalCount, cardOwner })) {
-      console.warn(
-        `[turn-invariant] VIOLATION ${workflow} cardOwner=scorer finalCards=${finalCount} ` +
-        `— scorer took over a TurnPlan-pinned workflow`,
-      );
+      recordTurnInvariantViolation("pinned_workflow_scorer_takeover", { workflow, final: finalCount });
     }
     // GENERALIZED INVARIANT (#5): searchRequired + display=show must attempt a
     // search. If it didn't, a downstream gate silently refused a TurnPlan-
     // required search (the workflow never changed to text-only/suppress).
     if (plannedSearchSkippedViolation({ plan: ctx?.turnPlan, searchAttempted: productSearchAttempted })) {
-      console.warn(
-        `[turn-invariant] VIOLATION ${workflow} searchRequired+display=show but searchAttempted=false ` +
-        `— a downstream gate refused a TurnPlan-required search`,
-      );
+      recordTurnInvariantViolation("search_required_not_attempted", { workflow });
     }
     // multi_recommendation TEXT/CARD ALIGNMENT: never promise both shoes and
     // orthotics while showing only one category.
     if (workflow === "multi_recommendation" &&
         multiRecoTextCardMismatch({ text: fullResponseText, cards: finalProductCards })) {
-      console.warn(
-        `[turn-invariant] VIOLATION multi_recommendation text promises both footwear+orthotics ` +
-        `but finalCards are not one-of-each (finalCards=${finalCount})`,
-      );
+      recordTurnInvariantViolation("multi_reco_text_card_mismatch", { final: finalCount });
     }
     // INVARIANT (audit #6): every SHOWN card must be in the evidence pool. The
     // scorer picks FROM the pool, so a scorer-owned card outside it is a leak
@@ -4051,10 +4031,9 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       });
       if (stray.length > 0) {
         const strayKeys = new Set(stray.map((c) => c?.handle || c?.title));
-        console.warn(
-          `[turn-invariant] VIOLATION ${stray.length} scorer card(s) not in evidence pool ` +
-          `[${stray.map((c) => c?.handle || c?.title).join(",")}] — dropping (cannot ground)`,
-        );
+        recordTurnInvariantViolation("card_not_in_evidence_pool", {
+          count: stray.length, cards: stray.map((c) => c?.handle || c?.title), repaired: "dropped",
+        });
         finalProductCards = finalProductCards.filter((c) => !strayKeys.has(c?.handle || c?.title));
       }
     }

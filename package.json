@@ -41,6 +41,9 @@
     "eval:cost-estimator": "node scripts/eval-cost-estimator.mjs",
     "eval:orthotic-regressions": "node scripts/eval-orthotic-regressions.mjs",
     "eval:turn-scope": "node scripts/eval-turn-scope.mjs",
+    "eval:invariants": "node scripts/eval-ownership-regressions.mjs && node scripts/eval-turn-invariant.mjs",
+    "eval:ci": "node scripts/run-evals.mjs",
+    "eval:all": "node scripts/run-evals.mjs --all",
     "eval": "npm run eval:intent && npm run eval:memory && npm run eval:quality && npm run eval:classifier-gate && npm run eval:turn-scope"
   },
   "type": "module",
