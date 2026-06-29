@@ -220,7 +220,7 @@ const STYLING_RE = new RegExp(
 // condition, so it is deliberately excluded (otherwise "show me sandals
 // with arch support" misclassifies as a clinical recommendation).
 const CONDITION_RE =
-  /\b(plantar|fasciitis|bunion|bunions|neuroma|metatarsal|metatarsalgia|overpronat\w*|supinat\w*|sesamoid|capsulitis|fallen\s+arch\w*|flat\s+feet|heel\s+(?:pain|spur)|arch\s+pain|achilles|neuropathy|diabetic|foot\s+pain|ball\s+of\s+foot)\b/i;
+  /\b(plantar|fasciitis|bunion|bunions|neuroma|metatarsal|metatarsalgia|overpronat\w*|supinat\w*|sesamoid|capsulitis|fallen\s+arch\w*|high\s+arch\w*|flat\s+feet|heel\s+(?:pain|spur)|arch\s+pain|achilles|neuropathy|diabetic|foot\s+pain|ball\s+of\s+foot)\b/i;
 
 const USECASE_RE =
   /\b(walking|standing|all[-\s]?day|on\s+my\s+feet|vacation|travel|trip|hiking|running|gym|workout|wedding|work|nurse|nursing|teacher|tourism|sightseeing|theme\s+park|disney|cruise)\b/i;
@@ -655,6 +655,26 @@ export function planTurn({
   // has a category and routes to section 6 normally).
   const isGenderOnlyRefine =
     GENDER_REFINE_TOKEN_RE.test(m) && words(m) <= 5 && !GENDER_REFINE_OTHER_CONTENT_RE.test(m);
+  // A bare PRICE-DOWN refinement ("anything cheaper?", "less expensive") after a
+  // prior shopping turn re-runs the SAME search biased to lower price — also a
+  // refinement, not a clarification.
+  const isPriceDownRefine =
+    /\b(cheaper|less\s+expensive|more\s+affordable|lower(?:\s+(?:price|cost))?|anything\s+cheaper|something\s+cheaper|on\s+a\s+budget|budget[- ]friendly)\b/i.test(m) &&
+    words(m) <= 6;
+  if (isPriceDownRefine && !isGenderOnlyRefine && (hasPriorCards || hasProductContext)) {
+    return finalize({
+      workflow: WORKFLOWS.BROWSE,
+      requiredEvidence: ["product_facts"],
+      searchRequired: true,
+      clarificationAllowed: false,
+      productDisplayPolicy: "show",
+      answerRequirements: reqs({ concise: true }),
+      gender: genderFor(false),
+      directives: [
+        "The customer is REFINING the previous search to a lower price. Re-run the SAME kind of search (inherit the prior category/gender/use-case) sorted toward more affordable options and SHOW them. Do NOT ask a clarifying question.",
+      ],
+    });
+  }
   if (isGenderOnlyRefine && (hasPriorCards || hasProductContext)) {
     const refineGender =
       /\b(men'?s?|man|male|guys?|husband|boyfriend|him|his)\b/i.test(m) ? "men"
