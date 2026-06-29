@@ -762,6 +762,29 @@ export function seedQuestionEmissionCount(messages, node) {
   return n;
 }
 
+// True when the immediately-prior assistant turn was an orthotic guided-flow seed
+// question (gathering gender / use-case / condition / shoe-type). The customer's
+// next message is an ANSWER to it — so turn-scope must NOT wipe the freshly-
+// classified attribute as a "fresh ask", which would make the gate re-ask the
+// same question and loop (live trace 2026-06-29: "hoka sneakers" / "sneakers"
+// answering "What kind of shoes will the orthotics go in?" got wiped as
+// fresh_ask → q_use_case repeated 3× → seed_loop_cap → handed to the LLM).
+// Chips are stripped on the widget's history round-trip, so we match the seed
+// QUESTION TEXT (which survives) against the tree's question nodes.
+export function priorTurnWasOrthoticSeedQuestion({ messages = [], tree = null } = {}) {
+  if (!tree?.definition?.nodes || !Array.isArray(messages)) return false;
+  let prior = "";
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const mm = messages[i];
+    if (mm?.role === "assistant" && typeof mm.content === "string" && mm.content.trim()) { prior = mm.content; break; }
+  }
+  if (!prior) return false;
+  const seedQuestionTexts = tree.definition.nodes
+    .filter((n) => n && n.type === "question" && typeof n.question === "string" && n.question.trim())
+    .map((n) => n.question.trim());
+  return seedQuestionTexts.some((q) => prior.includes(q));
+}
+
 export async function maybeRunOrthoticFlow({
   messages,
   tree,

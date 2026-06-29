@@ -15,7 +15,9 @@ import {
   isOrthoticHostileReply,
   genderRestatement,
   seedQuestionEmissionCount,
+  priorTurnWasOrthoticSeedQuestion,
 } from "../app/lib/orthotic-flow-gate.server.js";
+import { scopeAttributesToTurn } from "../app/lib/turn-scope.js";
 import { looksLikeFunctionalQuestion, looksLikeTransactionalQuestion } from "../app/lib/orthotic-flow.server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -1934,6 +1936,38 @@ await test("regular condition turn STILL defers (no gender clarifier) — guided
   });
   assert.equal(out.handled, false, "a plain supportive-shoes turn must still defer to the LLM");
   assert.equal(out.case, "turn_plan_owns_condition_recommendation");
+});
+
+// ── Answering a pending seed question must not wipe the just-collected attr ───
+await test("seed-question answer ('hoka sneakers') keeps use-case — no fresh-ask wipe / loop", () => {
+  // The assistant asked the shoe-type seed question; the customer answers with a
+  // shoe brand+type the use-case regex doesn't cover. priorTurnWasOrthoticSeed
+  // must flag it so turn-scope treats it as a follow-up and KEEPS the classifier's
+  // inferred use-case (instead of wiping it → q_use_case repeats → loop cap).
+  const messages = [
+    { role: "user", content: "Women's orthotics" },
+    { role: "assistant", content: "What kind of shoes will the orthotics go in?" },
+    { role: "user", content: "hoka sneakers" },
+  ];
+  assert.equal(priorTurnWasOrthoticSeedQuestion({ messages, tree }), true);
+  // With that follow-up signal, scopeAttributesToTurn must NOT wipe the use-case
+  // the classifier extracted from "hoka sneakers" (athletic_running).
+  const attrs = { gender: "women", category: "orthotics", useCase: "athletic_running", condition: null };
+  const keptFollowUp = scopeAttributesToTurn(attrs, "hoka sneakers", { isFollowUp: true });
+  assert.equal(keptFollowUp.useCase, "athletic_running", "use-case must survive when answering the seed question");
+  // Control: WITHOUT the follow-up signal (a true fresh ask), the same message
+  // would wipe the use-case — proving the regex alone is insufficient and the
+  // pending-seed signal is what prevents the loop.
+  const wipedFresh = scopeAttributesToTurn(attrs, "hoka sneakers", { isFollowUp: false });
+  assert.equal(wipedFresh.useCase, null, "without the seed signal the regex wipes it (the original bug)");
+});
+
+await test("priorTurnWasOrthoticSeedQuestion is false after a normal product reply", () => {
+  const messages = [
+    { role: "assistant", content: "Here are some great supportive sneakers for you." },
+    { role: "user", content: "hoka sneakers" },
+  ];
+  assert.equal(priorTurnWasOrthoticSeedQuestion({ messages, tree }), false);
 });
 
 console.log("");

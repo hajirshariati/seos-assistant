@@ -49,7 +49,7 @@ import { fetchCustomerContext } from "../lib/customer-context.server";
 import { fetchKlaviyoEnrichment } from "../lib/klaviyo-enrichment.server";
 import { fetchYotpoLoyalty } from "../lib/yotpo-loyalty.server";
 import { buildRecommenderTools } from "../lib/recommender-tools.server";
-import { maybeRunOrthoticFlow, isOrthoticHostileReply, isOrthoticConfusionReply } from "../lib/orthotic-flow-gate.server";
+import { maybeRunOrthoticFlow, isOrthoticHostileReply, isOrthoticConfusionReply, priorTurnWasOrthoticSeedQuestion } from "../lib/orthotic-flow-gate.server";
 import { classifyOrthoticTurn, shouldRunOrthoticClassifier } from "../lib/orthotic-classifier.server";
 import { resolveCatalogTurn, buildResolverStatePromptBlock, extractUserConstraints, detectSpecificProduct, mentionsCatalogProductFamily, extractCatalogProductFamilies } from "../lib/catalog-resolver.server";
 import { getCatalogFacetIndex, normalizeGender } from "../lib/catalog-facts.server";
@@ -5401,10 +5401,15 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             ctx.turnScope = turnScope.scope;
             ctx.turnIsFollowUp = turnScope.scope === "follow_up";
             ctx.turnIsShortAmbiguous = isShortAmbiguousReply(latestUserMessage);
+            // ANSWERING A PENDING ORTHOTIC SEED QUESTION is a follow-up for
+            // attribute scoping — the reply ("hoka sneakers", "sneakers") is the
+            // ANSWER to "what kind of shoes?", so the just-classified use-case /
+            // condition must NOT be wiped as a fresh ask (which loops the gate).
+            const answeringOrthoticSeed = priorTurnWasOrthoticSeedQuestion({ messages, tree: orthoticTree });
             if (ctx.classifiedIntent?.attributes) {
               const before = ctx.classifiedIntent.attributes;
               const scoped = scopeAttributesToTurn(before, latestUserMessage, {
-                isFollowUp: ctx.turnIsFollowUp,
+                isFollowUp: ctx.turnIsFollowUp || answeringOrthoticSeed,
               });
               const wiped = Object.keys(scoped).filter(
                 (k) => before[k] != null && before[k] !== "" && (scoped[k] == null || scoped[k] === ""),
@@ -5415,6 +5420,8 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                   `[turn-scope] ${shop} scope=${turnScope.scope} (${turnScope.reason}) ` +
                   `wiped stale attrs=[${wiped.join(",")}] on a new independent ask`,
                 );
+              } else if (answeringOrthoticSeed && !ctx.turnIsFollowUp) {
+                console.log(`[turn-scope] ${shop} answering pending orthotic seed question — kept classified attrs (no fresh-ask wipe)`);
               }
             }
           }
