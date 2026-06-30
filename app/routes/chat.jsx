@@ -8,7 +8,7 @@ import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
 import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
-import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel } from "../lib/support-handoff";
+import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applySupportHandoffContract } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
 import { detectProcessNarration, stripProcessNarration, buildSalesVoiceFallback, SALES_JUDGMENT_WORKFLOWS } from "../lib/sales-voice";
 import { classifyTurnScope, scopeAttributesToTurn, isShortAmbiguousReply, messageStatesShoeEnvironment } from "../lib/turn-scope";
@@ -3644,6 +3644,52 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     supportCTA = null;
   }
 
+  // ── Support / policy / handoff TEXT CONTRACT (deterministic) ──────────────
+  // On a support/policy/verification/account/order handoff turn the LLM must
+  // NEVER describe widget UI ("[Support Hub button is available above]") and the
+  // real support CTA must be attached (live trace 2026-06-30: a teacher-
+  // verification answer shipped bracketed UI meta text and no reliable button).
+  //   (a) handoff_meta_text_leak fires for any bracket/UI-meta text on these
+  //       workflows — and forces the deterministic replacement below.
+  //   (b) An account/verification/order support request gets clean deterministic
+  //       copy instead of an LLM answer that invents verification steps.
+  //   (c) The live-chat support CTA is attached deterministically (Zendesk/
+  //       Intercom/Gorgias, Support Hub URL fallback) whenever support is set.
+  // A plain INFORMATIONAL policy answer ("what's your return policy?") with no
+  // UI-meta leak keeps its informative text — only its product CTAs are cleared.
+  {
+    const wf = ctx.turnPlan?.workflow;
+    const contract = applySupportHandoffContract({
+      workflow: wf,
+      msg: ctx.latestUserMessage || "",
+      text: fullResponseText,
+      ctx,
+    });
+    if (contract.applies) {
+      if (contract.metaLeak) {
+        recordTurnInvariantViolation("handoff_meta_text_leak", { workflow: wf });
+        console.log(`[handoff-contract] ${wf}: UI-meta text leak detected — replacing with deterministic handoff copy`);
+      }
+      // Always: no product cards, no product CTAs on a support/policy turn.
+      pool = [];
+      availabilityPinnedCards = null;
+      comparisonPinnedCards = null;
+      evidencePinnedCards = null;
+      priorEvidencePinnedCards = null;
+      genericCTA = null;
+      supportCTA = null;
+      // Deterministic clean text for account/verification/order handoffs (and any
+      // UI-meta leak); informational policy answers keep their text.
+      fullResponseText = contract.text;
+      if (contract.engaged) {
+        evidenceFallbackText = null;
+        supportHandoffCta = contract.supportCta;
+        qualitySignals.supportHandoffApplied = true;
+      }
+      console.log(`[handoff-contract] ${wf}: engaged=${contract.engaged} metaLeak=${contract.metaLeak} cta=${Boolean(supportHandoffCta)} (product quick replies suppressed)`);
+    }
+  }
+
   // ── Support-handoff safety gate ───────────────────────────────────────
   // FINAL gate (not a random text scrubber): when the bot genuinely can't
   // finish — explicit human request, dead-end "I can't verify" with no cards,
@@ -6024,6 +6070,15 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           const emitFollowUpSuggestions = async ({ lastText, recommenderInvoked, cardsCount = 0 }) => {
             const hasChoiceButtons = /<<[^<>]+>>/.test(lastText);
             if (config.showFollowUps === false || hasChoiceButtons || recommenderInvoked) return null;
+            // SUPPORT / POLICY / SIZING handoff turns never get product-shopping
+            // quick replies ("Show me sneakers", "What's good for standing all
+            // day?") — those are wrong on a teacher-verification / order / account
+            // answer (live trace 2026-06-30). Emit no quick replies on these turns.
+            const handoffWf = ctx?.turnPlan?.workflow;
+            if (handoffWf === "policy_account" || handoffWf === "customer_service" || handoffWf === "sizing_help") {
+              console.log(`[chat] ${ctx.shop} follow-ups suppressed: ${handoffWf} is a support/handoff turn (no product quick replies)`);
+              return null;
+            }
             // Orthotic↔sandal compatibility class: emit DETERMINISTIC Aetrex-safe
             // follow-ups and skip the LLM roundtrip. The model otherwise proposes
             // "Show me sandals with removable footbeds", which the catalog can't

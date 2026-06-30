@@ -10,7 +10,12 @@ import {
   supportConfigured,
   normalizedSupportLabel,
   supportChatLabel,
+  handoffMetaTextLeak,
+  isAccountSupportHandoffRequest,
+  buildAccountSupportHandoffText,
+  applySupportHandoffContract,
 } from "../app/lib/support-handoff.js";
+import { planTurn, WORKFLOWS } from "../app/lib/turn-plan.server.js";
 
 // Mirror of the widget's openSupportChat provider priority (Zendesk > Intercom >
 // Gorgias > fallback URL). Kept here as the documented contract — the widget IIFE
@@ -176,6 +181,130 @@ check("widget openSupportChat priority: Intercom/Gorgias before URL", () => {
 check("widget openSupportChat: falls back to URL only when no provider exists", () => {
   assert.deepEqual(pickSupportTarget({ fallbackUrl: "https://x/support" }), { url: "https://x/support" });
   assert.equal(pickSupportTarget({}), null);
+});
+
+// ── 2026-07: support/handoff TEXT CONTRACT (no UI-meta leak, real CTA) ────────
+// Bug: "verify I'm a teacher" shipped "[Support Hub button is available above]"
+// (internal UI text) and no reliable CTA. The contract makes policy_account /
+// customer_service turns deterministic: clean text, no cards, real support CTA,
+// no product quick replies.
+
+// Customer-visible text must never carry brackets / button words / UI directions.
+function assertCleanHandoffText(t, label) {
+  assert.doesNotMatch(t, /[\[\]]/, `${label}: no brackets in "${t}"`);
+  assert.doesNotMatch(t, /\bbutton\b/i, `${label}: no "button" in "${t}"`);
+  assert.doesNotMatch(t, /\bavailable\s+(?:above|below)\b/i, `${label}: no "available above/below" in "${t}"`);
+  assert.doesNotMatch(t, /\b(?:click|use|tap|press|hit)\s+the\s+(?:button|link)\b/i, `${label}: no UI instruction in "${t}"`);
+  assert.doesNotMatch(t, /\b(?:button|link|cta)\s+(?:above|below)\b/i, `${label}: no "button above/below" in "${t}"`);
+}
+
+check("handoffMetaTextLeak: flags the exact PRD leak + the whole banned list", () => {
+  for (const t of [
+    "Our team is happy to help with account verification questions. [Support Hub button is available above]",
+    "The Support Hub button is available above.",
+    "Click the button below to chat.",
+    "Use the button above to reach support.",
+    "[button] to continue",
+    "See the link above for details.",
+    "The chat button is available above to talk to us.",
+  ]) {
+    assert.equal(handoffMetaTextLeak(t), true, `should flag: "${t}"`);
+  }
+  for (const t of [
+    "Aetrex support can help confirm the exact verification requirements for teacher discounts.",
+    "Our return policy is 30 days from delivery.",
+    "I can help you find supportive sandals.",
+  ]) {
+    assert.equal(handoffMetaTextLeak(t), false, `should NOT flag: "${t}"`);
+  }
+});
+
+check("buildAccountSupportHandoffText: context-aware, clean, names Aetrex support", () => {
+  const teacher = buildAccountSupportHandoffText({ msg: "What information do I need to provide to verify I'm a teacher?" });
+  assert.match(teacher, /teacher discounts/i);
+  assert.match(teacher, /Aetrex support/i);
+  assertCleanHandoffText(teacher, "teacher");
+  const student = buildAccountSupportHandoffText({ msg: "How do I verify a student discount?" });
+  assert.match(student, /student discounts/i);
+  const order = buildAccountSupportHandoffText({ msg: "I need help with an order that says delivered but I didn't get it." });
+  assert.match(order, /order/i);
+  const account = buildAccountSupportHandoffText({ msg: "Can someone help me with my account?" });
+  assert.match(account, /account/i);
+  for (const t of [teacher, student, order, account]) assertCleanHandoffText(t, "handoff copy");
+});
+
+// The 4 required regressions. Each asserts the full deterministic contract,
+// including the case where the LLM draft LEAKED UI-meta text (the live bug).
+// Each routes to a SUPPORT workflow (policy_account or customer_service) — the
+// contract handles both identically. `accountSupport` flags the phrasing the
+// account/verification/order detector must recognize.
+const HANDOFF_CASES = [
+  { msg: "What information do I need to provide to verify I'm a teacher?", expect: /teacher/i, accountSupport: true },
+  { msg: "I need help with an order that says delivered but I didn't get it.", expect: /order/i, accountSupport: true },
+  { msg: "How do I verify a student discount?", expect: /student/i, accountSupport: true },
+  { msg: "Can someone help me with my account?", expect: /account/i, accountSupport: true },
+];
+const SUPPORT_WORKFLOWS = new Set([WORKFLOWS.POLICY_ACCOUNT, WORKFLOWS.CUSTOMER_SERVICE]);
+const SUPPORT_CTX = { supportUrl: "https://aetrex.example/support", supportLabel: "Visit Support Hub" };
+// The leaky draft an LLM might produce (the exact failure shape).
+const LEAKY_DRAFT = "Our team is happy to help with account verification questions. [Support Hub button is available above]";
+
+for (const c of HANDOFF_CASES) {
+  check(`handoff contract: "${c.msg.slice(0, 38)}…" → policy/cs route, no search`, () => {
+    const plan = planTurn({ message: c.msg });
+    assert.ok(SUPPORT_WORKFLOWS.has(plan.workflow), `workflow for "${c.msg}" must be a support workflow, got ${plan.workflow}`);
+    assert.equal(plan.searchRequired, false, "searchAttempted/searchRequired must be false");
+    assert.equal(plan.productDisplayPolicy, "suppress", "no product cards");
+  });
+
+  check(`handoff contract: "${c.msg.slice(0, 38)}…" → clean text + real CTA + no product chips (leaky draft)`, () => {
+    const workflow = planTurn({ message: c.msg }).workflow;
+    const r = applySupportHandoffContract({ workflow, msg: c.msg, text: LEAKY_DRAFT, ctx: SUPPORT_CTX });
+    assert.equal(r.applies, true);
+    assert.equal(r.engaged, true, "an account/verification/order turn must engage the contract");
+    assert.equal(r.metaLeak, true, "the leaky draft must be detected");
+    assert.deepEqual(r.cards, [], "cards.length === 0");
+    assert.equal(r.suppressProductQuickReplies, true, "no product-shopping quick replies");
+    assert.ok(r.supportCta && r.supportCta.label && r.supportCta.fallbackUrl, "actual support CTA exists");
+    assert.equal(r.supportCta.fallbackUrl, SUPPORT_CTX.supportUrl, "CTA falls back to the configured support URL");
+    assert.match(r.text, c.expect, `deterministic text mentions the topic`);
+    assertCleanHandoffText(r.text, c.msg);
+  });
+
+  check(`handoff contract: "${c.msg.slice(0, 38)}…" → clean even when the draft is already clean`, () => {
+    const cleanDraft = "Sure, I can point you in the right direction.";
+    const workflow = planTurn({ message: c.msg }).workflow;
+    const r = applySupportHandoffContract({ workflow, msg: c.msg, text: cleanDraft, ctx: SUPPORT_CTX });
+    assert.equal(r.engaged, true);
+    assert.deepEqual(r.cards, []);
+    assert.ok(r.supportCta, "CTA attached on the engaged handoff");
+    assertCleanHandoffText(r.text, c.msg);
+  });
+}
+
+check("isAccountSupportHandoffRequest: the 4 cases true; a return-policy question false", () => {
+  for (const c of HANDOFF_CASES) {
+    assert.equal(isAccountSupportHandoffRequest(c.msg), true, `account-support: "${c.msg}"`);
+  }
+  // An informational policy question is NOT an account-support handoff.
+  assert.equal(isAccountSupportHandoffRequest("What is your return policy?"), false);
+  assert.equal(isAccountSupportHandoffRequest("How long does shipping take?"), false);
+});
+
+check("contract: informational policy answer keeps its text (no leak) but still drops product chips/cards", () => {
+  const informative = "Our return policy is 30 days from the delivery date for unworn shoes.";
+  const r = applySupportHandoffContract({ workflow: WORKFLOWS.POLICY_ACCOUNT, msg: "What is your return policy?", text: informative, ctx: SUPPORT_CTX });
+  assert.equal(r.applies, true);
+  assert.equal(r.engaged, false, "a plain informational policy answer does not engage the handoff");
+  assert.equal(r.text, informative, "informational text is preserved verbatim");
+  assert.deepEqual(r.cards, [], "still no product cards on a policy turn");
+  assert.equal(r.suppressProductQuickReplies, true, "still no product quick replies on a policy turn");
+});
+
+check("contract: does NOT apply to commerce workflows (browse/availability/comparison)", () => {
+  for (const wf of ["browse", "availability", "comparison", "condition_recommendation", "sale_browse"]) {
+    assert.equal(applySupportHandoffContract({ workflow: wf, msg: "show me sandals", text: "Here are some sandals." }).applies, false, wf);
+  }
 });
 
 console.log("");

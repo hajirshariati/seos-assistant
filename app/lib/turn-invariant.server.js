@@ -70,6 +70,8 @@ export const KNOWN_INVARIANT_CODES = new Set([
   "shown_card_not_in_active_owner_pool", "pivot_search_scope_leak",
   // 2026-07 support-handoff card-leak + product-spec truth
   "support_handoff_cards_leak", "spec_question_answered_as_availability",
+  // 2026-07 support-handoff UI-meta-text leak
+  "handoff_meta_text_leak",
 ]);
 
 // INVARIANT detector (owner_fallthrough_after_required_gate): a REQUIRED gate

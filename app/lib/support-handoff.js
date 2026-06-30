@@ -51,6 +51,121 @@ export function supportConfigured(ctx) {
   return Boolean(ctx?.supportUrl && String(ctx.supportUrl).trim());
 }
 
+// ── Handoff META-TEXT leak (UI mechanics the LLM must never narrate) ──────────
+// The model sometimes describes the widget UI to the customer — "[Support Hub
+// button is available above]", "click the button below" (live trace 2026-06-30).
+// That bracketed/UI-instruction text is internal and must never ship. This pure
+// detector flags it; the chat route replaces the whole reply with deterministic
+// handoff copy, attaches the real support CTA, and fires handoff_meta_text_leak.
+const HANDOFF_META_TEXT_RE = new RegExp(
+  "\\[\\s*support\\s+hub" + "|" +                 // "[Support Hub …"
+  "\\[\\s*button" + "|" +                          // "[button …"
+  "\\bbutton\\s+is\\s+available\\b" + "|" +
+  "\\b(?:available|shown|listed|located)\\s+(?:above|below)\\b" + "|" +
+  "\\b(?:click|tap|use|press|hit|see)\\s+(?:the|this)\\s+(?:button|link|cta|chat\\s+button)\\b" + "|" +
+  "\\b(?:button|link|cta)\\s+(?:above|below)\\b" + "|" +
+  "\\[[^\\]]*\\b(?:button|link|cta|support\\s+hub|live\\s+chat)\\b[^\\]]*\\]",  // any bracketed UI ref
+  "i",
+);
+export function handoffMetaTextLeak(text) {
+  return HANDOFF_META_TEXT_RE.test(String(text || ""));
+}
+
+// A SUPPORT / VERIFICATION / ACCOUNT / ORDER request that the bot can't answer
+// from catalog or policy knowledge and must deterministically hand to a human:
+// discount-program verification/eligibility (teacher/student/nurse/military/
+// ID.me), account access/help, or an order problem. These get clean deterministic
+// copy + the real support CTA (never an LLM-authored answer that invents
+// verification steps or narrates the UI). A plain INFORMATIONAL policy question
+// ("what's your return policy?") is NOT this — it keeps its informative answer.
+const ACCOUNT_SUPPORT_RE = new RegExp(
+  // discount / program eligibility & verification
+  "\\b(?:verif\\w*|verified|prove|proof|eligib\\w*|qualif\\w*|provide|how\\s+do\\s+i\\s+(?:get|become|sign\\s+up|apply))\\b[^.?!\\n]{0,40}\\b(?:teacher|student|nurse|military|veteran|first[-\\s]?responder|senior|healthcare|educator|id\\.me|sheerid|discount)\\b" + "|" +
+  "\\b(?:teacher|student|nurse|military|veteran|first[-\\s]?responder|senior|healthcare|educator)\\b[^.?!\\n]{0,40}\\b(?:verif\\w*|verified|proof|eligib\\w*|qualif\\w*|discount|id\\.me|sheerid)\\b" + "|" +
+  // account help / access
+  "\\b(?:help|issue|problem|trouble)\\b[^.?!\\n]{0,20}\\bmy\\s+account\\b" + "|" +
+  "\\bcan\\s+(?:someone|anyone|you)\\s+help\\s+me\\b[^.?!\\n]{0,25}\\b(?:account|order)\\b" + "|" +
+  "\\b(?:log\\s*in|sign\\s*in|reset\\s+my\\s+password|forgot\\s+my\\s+password|locked\\s+out\\s+of\\s+my\\s+account)\\b" + "|" +
+  // order help / problem
+  "\\b(?:help|issue|problem|trouble|where(?:'?s| is))\\b[^.?!\\n]{0,20}\\b(?:my\\s+)?(?:order|package|shipment|delivery|refund)\\b" + "|" +
+  "\\border\\b[^.?!\\n]{0,40}\\b(?:delivered|didn'?t\\s+(?:get|arrive|receive)|never\\s+(?:arrived|came|got)|missing|wrong)\\b",
+  "i",
+);
+export function isAccountSupportHandoffRequest(text) {
+  return ACCOUNT_SUPPORT_RE.test(String(text || ""));
+}
+
+// THE deterministic support/policy/handoff TEXT CONTRACT (pure). Given the
+// workflow, the customer message, the LLM's drafted text, and ctx (for support
+// config), decides the final customer-facing shape for policy_account /
+// customer_service turns:
+//   - applies:false   → not a support/policy turn; caller leaves it alone.
+//   - cards:[]                       → these turns never show product cards.
+//   - suppressProductQuickReplies    → never "Show me sneakers" chips here.
+//   - supportCta                     → the live-chat CTA when ENGAGED + support
+//                                      is configured (else null).
+//   - text                           → deterministic handoff copy when the turn
+//     is an account/verification/order request OR the LLM leaked UI-meta text;
+//     otherwise the LLM's (informational) text is kept verbatim.
+//   - metaLeak                       → true when the draft contained bracket/UI
+//                                      meta text (caller fires handoff_meta_text_leak).
+export function applySupportHandoffContract({ workflow = "", msg = "", text = "", ctx = {} } = {}) {
+  if (workflow !== "customer_service" && workflow !== "policy_account") {
+    return { applies: false };
+  }
+  const metaLeak = handoffMetaTextLeak(text);
+  const isAccountSupport = workflow === "customer_service" || isAccountSupportHandoffRequest(msg);
+  const engaged = metaLeak || isAccountSupport;
+  // Deterministic copy when the turn is an account/verification/order handoff,
+  // OR whenever the draft leaked UI-meta text (we must replace it). A plain
+  // informational policy answer with no leak keeps its text.
+  const useDeterministicText = metaLeak || (engaged && workflow === "policy_account");
+  return {
+    applies: true,
+    engaged,
+    metaLeak,
+    isAccountSupport,
+    cards: [],
+    suppressProductQuickReplies: true,
+    supportCta: engaged && supportConfigured(ctx)
+      ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl }
+      : null,
+    text: useDeterministicText ? buildAccountSupportHandoffText({ msg }) : String(text || ""),
+  };
+}
+
+// Deterministic, customer-facing handoff copy for an account/verification/order
+// support turn. Context-aware (teacher vs student vs order vs account) but never
+// names a button or invents the actual verification mechanics — it points to
+// the human and the route attaches the live-chat CTA.
+export function buildAccountSupportHandoffText({ msg = "" } = {}) {
+  const m = String(msg).toLowerCase();
+  const team = "Aetrex support";
+  const verifyish = /\b(verif\w*|verified|eligib\w*|qualif\w*|discount|proof|prove|provide|id\.me|sheerid|requirement)\b/.test(m);
+  if (verifyish && /\b(teacher|educator)\b/.test(m)) {
+    return `${team} can help confirm the exact verification requirements for teacher discounts.`;
+  }
+  if (verifyish && /\bstudent\b/.test(m)) {
+    return `${team} can help confirm the exact verification requirements for student discounts.`;
+  }
+  if (verifyish && /\b(nurse|healthcare|medical)\b/.test(m)) {
+    return `${team} can help confirm the exact verification requirements for healthcare discounts.`;
+  }
+  if (verifyish && /\b(military|veteran|first[-\s]?responder)\b/.test(m)) {
+    return `${team} can help confirm the exact verification requirements for that discount program.`;
+  }
+  if (verifyish && /\bdiscount\b/.test(m)) {
+    return `${team} can confirm the exact verification requirements for that discount.`;
+  }
+  if (/\b(order|package|shipment|delivery|deliver\w*|refund|tracking)\b/.test(m)) {
+    return `${team} can look into your order and help sort this out.`;
+  }
+  if (/\b(account|log\s*in|sign\s*in|password|locked)\b/.test(m)) {
+    return `${team} can help you with your account directly.`;
+  }
+  return `${team} can help you with that directly.`;
+}
+
 // Normalize the support CTA label (mirrors the chat-route default): honor a
 // real custom label, otherwise the "Visit Support Hub" default. Never the
 // stale legacy "Contact customer service" string.
