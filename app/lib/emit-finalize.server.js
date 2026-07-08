@@ -84,7 +84,7 @@ export { isPivotResetTurn, pivotSearchScopeLeak } from "./effective-scope.server
 // route them through this already-imported server module so the chat route never
 // grows new direct `.server` usages the client-build DCE has to eliminate.
 export { isBroadGenderReset, broadGenderFollowUpGender } from "./turn-intent.server.js";
-export { workflowSuppressesCards, specQuestionAnsweredAsAvailability, answerSourceMatrix, isKnowledgeWorkflow, isPrivateHandoffWorkflow } from "./turn-plan.server.js";
+export { workflowSuppressesCards, specQuestionAnsweredAsAvailability, answerSourceMatrix, isKnowledgeWorkflow, isPrivateHandoffWorkflow, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner } from "./turn-plan.server.js";
 import { isAnswerWorkflow, buildAnswerWorkflowExhaustionText, planForcesProductDisplay } from "./turn-plan.server.js";
 
 // Knowledge / info questions — kept in sync with KNOWLEDGE_QUESTION_RE

@@ -197,6 +197,56 @@ export function answerSourceMatrix(workflow) {
   return { productSearch: true, rag: false, accountTool: false, handoff: "no", productCards: true };
 }
 
+// ── OWNER AUTHORIZATION REGISTRY (ownership-consolidation audit, 2026-07) ─────
+// TurnPlan is the ONLY workflow owner. Every deterministic owner (a gate, engine,
+// pin, or handoff that produces final customer-visible text/cards) may act ONLY
+// on a workflow TurnPlan assigned to it. This registry is the single source of
+// truth for "which owner may claim which workflow"; chat.jsx gates each owner's
+// engagement on it, and the finalize stage fires `unauthorized_owner_for_workflow`
+// if the recorded owner isn't authorized for the turn's workflow.
+//
+// The authorized deterministic owners map to the user's allowed set:
+//   availability truth   → availability-truth, variant-facts, prior-evidence
+//   policy/account handoff → answer-source, support-handoff, policy-engine
+//   orthotic guided flow → orthotic-gate
+//   exact variant/product facts → variant-facts, product-engine
+//   support CTA          → support-handoff, answer-source
+//   final card/evidence alignment → scorer, evidence-plan
+// Browse fallbacks (soft-browse-refine, soft-gender-browse) are demoted to
+// browse/clarification only — they may not hijack a turn TurnPlan owns elsewhere.
+const OWNER_WORKFLOWS = {
+  "availability-truth": new Set(["availability", "prior_evidence_availability"]),
+  "prior-evidence": new Set(["prior_evidence_availability"]),
+  "variant-facts": new Set(["availability", "prior_evidence_availability", "product_spec"]),
+  "comparison": new Set(["comparison"]),
+  "evidence-plan": new Set([
+    "condition_recommendation", "multi_recommendation", "compatibility",
+    "named_product_advisory", "product_focus", "cart_handoff", "display_recovery", "browse",
+  ]),
+  "scorer": new Set(["browse", "condition_recommendation", "multi_recommendation", "sale_browse", "clarification", "named_product_advisory", "product_spec"]),
+  "answer-source": new Set(["policy_knowledge", "policy_account", "account_private_handoff", "customer_service", "sizing_help"]),
+  "support-handoff": new Set(["policy_knowledge", "policy_account", "account_private_handoff", "customer_service", "sizing_help"]),
+  "orthotic-gate": new Set(["browse", "condition_recommendation", "clarification", "multi_recommendation", "compatibility", "sale_browse"]),
+  "soft-browse-refine": new Set(["browse", "clarification"]),
+  "soft-gender-browse": new Set(["browse", "clarification", "condition_recommendation"]),
+  "compatibility-truth": new Set(["compatibility", "browse", "condition_recommendation", "clarification"]),
+  "policy-engine": new Set(["policy_knowledge", "policy_account"]),
+  "product-engine": new Set(["browse", "condition_recommendation", "multi_recommendation", "sale_browse", "named_product_advisory", "comparison", "product_focus", "product_spec", "clarification"]),
+  "resolver-no-match": new Set(["browse", "condition_recommendation", "multi_recommendation", "sale_browse"]),
+};
+export function ownerAuthorizedForWorkflow(owner, workflow) {
+  const set = OWNER_WORKFLOWS[String(owner || "")];
+  if (!set) return true; // unknown/uncatalogued owner — not constrained here
+  return set.has(String(workflow || ""));
+}
+// Owners that may legitimately act on ANY workflow regardless of assignment
+// (an explicit human request or a hard validator failure is intent-driven, not
+// workflow-driven) — excluded from the unauthorized-owner invariant.
+const WORKFLOW_AGNOSTIC_OWNERS = new Set(["none", "llm", "scorer-empty"]);
+export function isWorkflowAgnosticOwner(owner) {
+  return WORKFLOW_AGNOSTIC_OWNERS.has(String(owner || ""));
+}
+
 // The single authoritative gender of a resolved NAMED family's cards, or null if
 // the cards are empty or span multiple genders. A named product's catalog gender
 // overrides a stale conversation gender for the turn (live trace 2026-06-30:

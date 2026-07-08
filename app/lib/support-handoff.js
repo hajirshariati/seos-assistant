@@ -146,7 +146,7 @@ const PRIVATE_WF = new Set(["account_private_handoff", "customer_service"]);
 //            handoff, metaLeak, ragAttempted, ragHit, handoffReason }.
 // `retrievedChunks`: the request's RAG result — null/undefined = RAG not run,
 // [] = ran but nothing relevant, [..] = relevant hits.
-export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", ctx = {}, retrievedChunks } = {}) {
+export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", ctx = {}, retrievedChunks, knowledgeText = "" } = {}) {
   const isKnowledge = KNOWLEDGE_WF.has(workflow);
   const isPrivate = PRIVATE_WF.has(workflow);
   if (!isKnowledge && !isPrivate) return { applies: false };
@@ -155,11 +155,12 @@ export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", 
   const cleaned = stripHandoffMetaText(text);
   const ragAttempted = Array.isArray(retrievedChunks);
   const ragHit = ragAttempted && retrievedChunks.length > 0;
+  const lexicalHit = isKnowledge && lexicalKnowledgeHit(msg, knowledgeText);
   const supportCta = supportConfigured(ctx)
     ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl }
     : null;
   const base = {
-    applies: true, isKnowledge, isPrivate, metaLeak, ragAttempted, ragHit,
+    applies: true, isKnowledge, isPrivate, metaLeak, ragAttempted, ragHit, lexicalHit,
     cards: [], suppressProductQuickReplies: true,
   };
 
@@ -175,26 +176,58 @@ export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", 
     };
   }
 
-  // KNOWLEDGE workflow → RAG-first. Keep the model's knowledge answer (meta
-  // stripped) when it actually answered; hand off only when it couldn't.
+  // KNOWLEDGE workflow → RAG-first, then lexical. Keep the model's knowledge
+  // answer (meta stripped) when it actually answered; hand off only when it
+  // couldn't AND neither RAG nor a lexical scan of the knowledge corpus matched.
   if (!isDeadEndAnswer(cleaned)) {
     return {
       ...base,
-      source: ragHit ? "rag" : "static_knowledge",
+      source: ragHit ? "rag" : lexicalHit ? "static_knowledge" : "static_knowledge",
       handoff: false,
       handoffReason: null,
       text: cleaned,
       supportCta: null,
     };
   }
+  // The model dead-ended. `prematureHandoff` = we're about to punt to support
+  // even though the knowledge corpus DOES contain the query's terms (RAG missed
+  // it but a lexical scan hit) — the caller fires policy_handoff_without_lexical_
+  // fallback so the missed answer is caught.
+  const prematureHandoff = !ragHit && lexicalHit;
   return {
     ...base,
     source: "support_handoff",
     handoff: true,
-    handoffReason: ragAttempted && !ragHit ? "no_knowledge_match" : "no_answer",
+    prematureHandoff,
+    handoffReason: prematureHandoff ? "lexical_hit_but_dead_end"
+      : ragAttempted && !ragHit ? "no_knowledge_match" : "no_answer",
     text: buildAccountSupportHandoffText({ msg }),
     supportCta,
   };
+}
+
+// Lexical (keyword) fallback over the merchant knowledge corpus. Used AFTER RAG
+// on a knowledge turn: if RAG retrieved nothing but the customer's content words
+// literally appear in the knowledge text, we had the answer and must not punt to
+// support without trying. Pure: content words (len≥4, minus stopwords) with ≥50%
+// overlap into the corpus counts as a hit.
+const LEX_STOPWORDS = new Set([
+  "what", "when", "where", "which", "does", "do", "did", "you", "your", "the", "and", "for",
+  "are", "is", "can", "how", "with", "that", "this", "have", "has", "about", "need", "want",
+  "provide", "information", "info", "please", "would", "should", "could", "there", "their",
+]);
+export function lexicalKnowledgeHit(msg, knowledgeText) {
+  const corpus = String(knowledgeText || "").toLowerCase();
+  if (!corpus.trim()) return false;
+  const words = String(msg || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !LEX_STOPWORDS.has(w));
+  const content = [...new Set(words)];
+  if (content.length === 0) return false;
+  const hits = content.filter((w) => corpus.includes(w)).length;
+  return hits / content.length >= 0.5;
 }
 
 // Deterministic, customer-facing handoff copy for an account/verification/order

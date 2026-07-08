@@ -74,7 +74,40 @@ export const KNOWN_INVARIANT_CODES = new Set([
   "handoff_meta_text_leak",
   // 2026-07 answer-source routing (RAG-first for knowledge turns)
   "policy_rag_skipped", "policy_rag_hit_handoff", "support_meta_text_leak", "policy_cards_leak",
+  // 2026-07 ownership-consolidation audit (TurnPlan is the only workflow owner)
+  "unauthorized_owner_for_workflow", "final_card_not_in_current_evidence",
+  "answer_names_product_not_in_evidence", "policy_handoff_without_lexical_fallback",
 ]);
+
+// INVARIANT detector (answer_names_product_not_in_evidence): the final answer
+// text names a KNOWN catalog product family that is NOT among the shown cards,
+// while cards ARE shown — i.e. the copy references a product the customer can't
+// see/click. Conservative: only fires on families the merchant's catalog
+// actually has (passed in as knownFamilies), so brand words / common nouns
+// never trip it. Returns the offending family name, or null when clean.
+// When NO cards are shown the answer may legitimately name products (a text-only
+// recommendation), so this returns null in that case.
+export function answerNamesProductNotInEvidence({ text = "", cards = [], knownFamilies = [] } = {}) {
+  const shown = Array.isArray(cards) ? cards : [];
+  if (shown.length === 0) return null; // no cards → naming products is allowed
+  const t = String(text || "").toLowerCase();
+  if (!t) return null;
+  const shownFams = new Set(
+    shown.map((c) => String(c?._family || c?.family || c?.title || "").toLowerCase()).filter(Boolean),
+  );
+  const shownTitles = shown.map((c) => String(c?.title || "").toLowerCase()).filter(Boolean);
+  for (const famRaw of Array.isArray(knownFamilies) ? knownFamilies : []) {
+    const fam = String(famRaw || "").toLowerCase().trim();
+    if (!fam || fam.length < 3) continue;
+    // Mentioned in the answer as a whole word?
+    const re = new RegExp(`\\b${fam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    if (!re.test(t)) continue;
+    // Is that family actually among the shown cards (by family or title substring)?
+    const inCards = shownFams.has(fam) || shownTitles.some((title) => title.includes(fam));
+    if (!inCards) return famRaw;
+  }
+  return null;
+}
 
 // INVARIANT detector (owner_fallthrough_after_required_gate): a REQUIRED gate
 // (e.g. the orthotic flow) was active for the turn, yet a different owner took

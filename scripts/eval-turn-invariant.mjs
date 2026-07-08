@@ -67,6 +67,8 @@ test("registry lists every new hard invariant code", () => {
     "support_handoff_cards_leak", "spec_question_answered_as_availability",
     "handoff_meta_text_leak",
     "policy_rag_skipped", "policy_rag_hit_handoff", "support_meta_text_leak", "policy_cards_leak",
+    "unauthorized_owner_for_workflow", "final_card_not_in_current_evidence",
+    "answer_names_product_not_in_evidence", "policy_handoff_without_lexical_fallback",
   ]) {
     assert.ok(KNOWN_INVARIANT_CODES.has(code), `registry must list ${code}`);
   }

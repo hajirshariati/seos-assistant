@@ -6,7 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
-import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
+import { recordTurnInvariantViolation, logTurnInvariant, answerNamesProductNotInEvidence } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
@@ -123,6 +123,8 @@ import {
   answerSourceMatrix,
   isKnowledgeWorkflow,
   isPrivateHandoffWorkflow,
+  ownerAuthorizedForWorkflow,
+  isWorkflowAgnosticOwner,
 } from "../lib/emit-finalize.server";
 import { detectConversationGoal, ANCHOR_GOALS, isBroadGenderRequest, broadGenderRequestGender } from "../lib/turn-intent.server";
 import { isOrthoticSandalCompatibilityQuestion, buildOrthoticCompatibilityAnswer, hasExplicitOrthoticCompatibleEvidence, isUnsafeCompatibilitySuggestion, SAFE_COMPATIBILITY_SUGGESTIONS } from "../lib/compatibility-truth.server";
@@ -3636,6 +3638,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       text: fullResponseText,
       ctx,
       retrievedChunks: ctx.retrievedChunks,
+      knowledgeText: ctx.knowledgeText || "",
     });
     if (contract.applies) {
       // No product cards / product CTAs on any knowledge or handoff turn.
@@ -3667,12 +3670,17 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           // A knowledge query went to support without RAG being attempted.
           recordTurnInvariantViolation("policy_rag_skipped", { workflow: wf });
         }
+        if (contract.prematureHandoff) {
+          // RAG missed but the knowledge corpus DOES contain the query terms —
+          // we punted to support without exhausting lexical fallback.
+          recordTurnInvariantViolation("policy_handoff_without_lexical_fallback", { workflow: wf });
+        }
       }
       console.log(
         `[answer-source] source=${contract.source}` +
         `${contract.handoffReason ? ` reason=${contract.handoffReason}` : ""} ` +
         `workflow=${wf} ragAttempted=${contract.ragAttempted} ragHit=${contract.ragHit} ` +
-        `metaLeak=${contract.metaLeak} cta=${Boolean(supportHandoffCta)}`,
+        `lexicalHit=${contract.lexicalHit} metaLeak=${contract.metaLeak} cta=${Boolean(supportHandoffCta)}`,
       );
     }
   }
@@ -4595,6 +4603,45 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     const activeProductCtx = ctx?.focusProduct
       ? { family: titleStyleFamily(ctx.focusProduct.title || ""), title: ctx.focusProduct.title }
       : null;
+
+    // ── OWNERSHIP-CONSOLIDATION INVARIANTS (TurnPlan is the only owner) ──────
+    // (a) The final card/answer owner must be AUTHORIZED for TurnPlan's workflow.
+    //     A rogue owner that claimed a turn TurnPlan assigned elsewhere fires
+    //     unauthorized_owner_for_workflow (observability — surfaces any owner the
+    //     gating above missed, without dropping a legitimately-pinned card).
+    for (const owner of new Set([cardOwner, answerOwner])) {
+      if (!owner || isWorkflowAgnosticOwner(owner)) continue;
+      if (!ownerAuthorizedForWorkflow(owner, workflow)) {
+        recordTurnInvariantViolation("unauthorized_owner_for_workflow", { workflow, owner });
+        firedInvariants.push("unauthorized_owner_for_workflow");
+      }
+    }
+    // (b) Every final card must be from THIS turn's evidence universe
+    //     (allProductPool accumulates every pinned/searched/re-pinned card,
+    //     including deliberate prior-evidence re-pins). Record-only for non-scorer
+    //     owners (they have their own repair); the scorer path repairs below.
+    if (finalCount > 0) {
+      const poolCards = Array.from(allProductPool.values());
+      const stray = cardsNotInEvidencePool({ finalCards: finalProductCards, evidencePool: poolCards });
+      if (stray.length > 0 && cardOwner !== "scorer") {
+        recordTurnInvariantViolation("final_card_not_in_current_evidence", {
+          workflow, cardOwner, count: stray.length, cards: stray.map((c) => c?.handle || c?.title),
+        });
+        firedInvariants.push("final_card_not_in_current_evidence");
+      }
+      // (c) The answer text must not NAME a product that was in the evidence pool
+      //     but was dropped from the final cards (copy references a product the
+      //     customer can't see). Only when cards are shown.
+      const poolFamilies = poolCards.map((c) => String(c?._family || c?.family || c?.title || "")).filter(Boolean);
+      const named = answerNamesProductNotInEvidence({
+        text: fullResponseText, cards: finalProductCards, knownFamilies: poolFamilies,
+      });
+      if (named) {
+        recordTurnInvariantViolation("answer_names_product_not_in_evidence", { workflow, family: named });
+        firedInvariants.push("answer_names_product_not_in_evidence");
+      }
+    }
+
     logTurnInvariant({
       workflow, answerOwner, cardOwner, finalCards: finalCount, path: "agentic-loop",
       activeOwner: answerOwner,
@@ -5481,6 +5528,10 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
       // whether a knowledge turn answers from RAG or hands off.
       retrievedChunks,
       knowledgeRagEnabled: config.knowledgeRagEnabled === true,
+      // Full knowledge corpus (joined) for the answer-source contract's lexical
+      // fallback: a knowledge turn must try RAG AND a keyword scan of this text
+      // before handing off to support.
+      knowledgeText: Array.isArray(knowledge) ? knowledge.map((k) => String(k?.content || "")).join("\n\n") : "",
       accessToken,
       loggedInCustomerId,
       vipModeEnabled: config.vipModeEnabled === true,
@@ -5931,7 +5982,14 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           // BEFORE the gate runs (live trace 2026-06-30: final_path=
           // soft_browse_refine, sneaker cards). When we're answering an
           // orthotic seed question, skip soft-browse and let the gate own it.
-          if (!answeringOrthoticSeedQ && shouldSoftBrowseRefine(body.message, history)) {
+          if (
+            !answeringOrthoticSeedQ && shouldSoftBrowseRefine(body.message, history) &&
+            // OWNERSHIP: soft-browse-refine is a browse fallback — it may own the
+            // turn ONLY when TurnPlan assigned a browse/clarification workflow. It
+            // must never hijack a turn TurnPlan gave to a deterministic owner
+            // (policy, availability, comparison, orthotic, …).
+            ownerAuthorizedForWorkflow("soft-browse-refine", ctx.turnPlan?.workflow)
+          ) {
             routerLog.finalPath = "soft_browse_refine";
             console.log(`[router] ${ctx.shop} ${routerLog.classifier}`);
             console.log(`[router] ${ctx.shop} ${routerLog.resolver || "resolver=skip"}`);
@@ -5942,8 +6000,18 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           }
 
           // STAGE 3: orthotic gate decision (now receives resolverState)
+          // OWNERSHIP: the orthotic guided flow is an authorized deterministic
+          // owner, but only for workflows TurnPlan routes orthotic requests to
+          // (browse / condition_recommendation / clarification / multi / compat /
+          // sale). It must DEFER when TurnPlan owns the turn elsewhere (policy,
+          // availability, comparison, product_spec, named-product, …) so it can't
+          // override another owner (audit: TurnPlan is the only workflow owner).
           let gateHandled = false;
-          if (orthoticTree) {
+          const orthoticGateAuthorized = ownerAuthorizedForWorkflow("orthotic-gate", ctx.turnPlan?.workflow);
+          if (orthoticTree && !orthoticGateAuthorized) {
+            console.log(`[router] ${ctx.shop} orthotic-gate deferred — TurnPlan workflow=${ctx.turnPlan?.workflow} owned elsewhere`);
+          }
+          if (orthoticTree && orthoticGateAuthorized) {
             try {
               const gate = await maybeRunOrthoticFlow({
                 messages,
@@ -6548,9 +6616,12 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           // retrievedChunks for this request). Engine declines
           // and falls through if no policy intent is detected.
           // ──────────────────────────────────────────────────────────
-          const variantFactResult = await runVariantFactDispatch({
-            ctx, controller, encoder,
-          });
+          // OWNERSHIP: the legacy dispatcher engines run only when LLM_OWNS is
+          // off (dead in prod). Even then, each may claim ONLY a workflow
+          // TurnPlan assigned to it — never on its own detector alone.
+          const variantFactResult = ownerAuthorizedForWorkflow("variant-facts", ctx.turnPlan?.workflow)
+            ? await runVariantFactDispatch({ ctx, controller, encoder })
+            : null;
           if (variantFactResult && variantFactResult.handled) {
             console.log(`[router] ${ctx.shop} final_path=variant_fact_engine`);
             console.log(
@@ -6572,7 +6643,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           const directProductFact = isDirectProductFactQuestion(body.message);
           const orthoticRecommendationIntent = isOrthoticRecommendationIntent(body.message);
 
-          const policyResult = compoundPolicyProduct
+          const policyResult = (compoundPolicyProduct || !ownerAuthorizedForWorkflow("policy-engine", ctx.turnPlan?.workflow))
             ? null
             : await runPolicyTurnDispatch({
                 ctx, controller, encoder, retrievedChunks, anthropic,
@@ -6610,9 +6681,9 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             );
           }
 
-          const resolverNoMatchResult = await runResolverNoMatchDispatch({
-            ctx, controller, encoder,
-          });
+          const resolverNoMatchResult = ownerAuthorizedForWorkflow("resolver-no-match", ctx.turnPlan?.workflow)
+            ? await runResolverNoMatchDispatch({ ctx, controller, encoder })
+            : null;
           if (resolverNoMatchResult && resolverNoMatchResult.handled) {
             console.log(`[router] ${ctx.shop} final_path=resolver_no_match`);
             console.log(
@@ -6631,11 +6702,12 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             return; // exact catalog no-match emitted text/products(empty)/done.
           }
 
-          const engineResult = (compoundPolicyProduct || directProductFact || orthoticRecommendationIntent)
+          const engineResult = (compoundPolicyProduct || directProductFact || orthoticRecommendationIntent || !ownerAuthorizedForWorkflow("product-engine", ctx.turnPlan?.workflow))
             ? { declined: true, diagnostics: { rungs: [
                 compoundPolicyProduct ? "declined:compound_policy_product" : null,
                 directProductFact ? "declined:direct_product_fact" : null,
                 orthoticRecommendationIntent ? "declined:orthotic_recommendation_intent" : null,
+                !ownerAuthorizedForWorkflow("product-engine", ctx.turnPlan?.workflow) ? "declined:workflow_not_authorized" : null,
               ].filter(Boolean) } }
             : await runProductTurnDispatch({
                 ctx, controller, encoder, claimConfig, anthropic,
