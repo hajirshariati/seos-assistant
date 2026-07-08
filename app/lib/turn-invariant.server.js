@@ -77,6 +77,8 @@ export const KNOWN_INVARIANT_CODES = new Set([
   // 2026-07 ownership-consolidation audit (TurnPlan is the only workflow owner)
   "unauthorized_owner_for_workflow", "final_card_not_in_current_evidence",
   "answer_names_product_not_in_evidence", "policy_handoff_without_lexical_fallback",
+  // 2026-07 owner-registry hardening (new owners can't bypass TurnPlan invisibly)
+  "unknown_owner_unregistered",
 ]);
 
 // INVARIANT detector (answer_names_product_not_in_evidence): the final answer

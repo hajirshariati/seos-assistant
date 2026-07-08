@@ -9,12 +9,14 @@
 import assert from "node:assert/strict";
 import {
   planTurn, WORKFLOWS, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner, cardsNotInEvidencePool,
+  isRegisteredOwner, registeredOwnerNames,
 } from "../app/lib/turn-plan.server.js";
 import {
   applyAnswerSourceContract, lexicalKnowledgeHit, handoffMetaTextLeak, stripHandoffMetaText, isDeadEndAnswer,
 } from "../app/lib/support-handoff.js";
 import { answerNamesProductNotInEvidence, KNOWN_INVARIANT_CODES } from "../app/lib/turn-invariant.server.js";
 import { effectiveScopeForSearch, pivotSearchScopeLeak, isPivotResetTurn } from "../app/lib/effective-scope.server.js";
+import { lexicalRetrieveChunks } from "../app/lib/knowledge-chunks.server.js";
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -34,6 +36,34 @@ check("registry: every new ownership invariant code is registered", () => {
     "unauthorized_owner_for_workflow", "final_card_not_in_current_evidence",
     "answer_names_product_not_in_evidence", "policy_handoff_without_lexical_fallback",
   ]) assert.ok(KNOWN_INVARIANT_CODES.has(c), `missing ${c}`);
+});
+
+check("registry hardening: EVERY owner string that reaches turn-invariant logging is registered", () => {
+  // The full set of answerOwner/cardOwner strings emitted to logTurnInvariant
+  // (audited from chat.jsx). A future owner added without registration fails
+  // here — the drift guard behind unknown_owner_unregistered.
+  const LOGGED_OWNERS = [
+    // dispatch / pre-LLM gates
+    "cheat-code", "orthotic-gate", "soft-gender-browse", "soft-browse-refine",
+    "variant-facts", "policy-engine", "resolver-no-match", "product-engine",
+    // runAgenticLoop finalize owners
+    "llm", "prior-evidence", "availability-truth", "compatibility-truth",
+    "evidence-plan", "scorer", "comparison", "none",
+    // answer-source / handoff
+    "answer-source", "support-handoff",
+  ];
+  for (const o of LOGGED_OWNERS) {
+    assert.equal(isRegisteredOwner(o), true, `owner "${o}" reaches logging but is UNREGISTERED`);
+  }
+});
+
+check("registry hardening: an unknown owner is NOT silently accepted", () => {
+  assert.equal(isRegisteredOwner("some-new-owner-2027"), false, "a brand-new owner must read as unregistered");
+  // registeredOwnerNames() is the source of truth the drift guard reads.
+  const names = registeredOwnerNames();
+  assert.ok(names.includes("cheat-code"), "cheat-code is now registered (workflow-agnostic admin bypass)");
+  assert.ok(names.includes("orthotic-gate"));
+  assert.ok(!names.includes("some-new-owner-2027"));
 });
 
 check("registry: browse fallbacks may NOT own a turn TurnPlan gave elsewhere", () => {
@@ -108,6 +138,40 @@ check("class=policy-knowledge: lexical fallback catches a dead-end that the corp
   assert.equal(r.prematureHandoff, true, "…but the corpus HAD it → fires policy_handoff_without_lexical_fallback");
   assert.equal(r.handoffReason, "lexical_hit_but_dead_end");
 });
+check("class=policy-knowledge: lexical fallback ANSWERS 'verify I'm a teacher' from uploaded knowledge (not just detects)", () => {
+  // The exact required regression: RAG missed, but the answer IS in faqs.txt.
+  // lexicalRetrieveChunks must surface the teacher section so the model answers
+  // from knowledge — never a generic support handoff when the answer exists.
+  const knowledge = [
+    { fileType: "faqs", content:
+      "Shipping\nWe ship within 2 business days.\n\n" +
+      "Teacher & Student Discounts\nTo verify you're a teacher, provide your school-issued ID or employment verification through SheerID at checkout. Once verified you receive 15% off.\n\n" +
+      "Returns\nReturns accepted within 30 days." },
+    { fileType: "brand", content: "Aetrex was founded in 1946 and pioneered arch-support technology." },
+  ];
+  const q = "What information do I need to provide to verify I'm a teacher?";
+  const lex = lexicalRetrieveChunks(knowledge, q, { limit: 3 });
+  assert.ok(lex.length > 0, "lexical retrieval must find the teacher section");
+  assert.match(lex[0].content, /SheerID|school-issued ID/i, "the matched section is the teacher-verification one");
+  assert.ok(lex[0].similarity >= 0.35, "synthetic score clears the policy-engine floor");
+  // Feeding those lexical chunks into the contract → answered from knowledge,
+  // NO support handoff, NO cards, source=rag.
+  const modelAnswer = "To verify as a teacher, provide your school-issued ID or employment verification through SheerID at checkout.";
+  const r = applyAnswerSourceContract({
+    workflow: W.POLICY_KNOWLEDGE, msg: q, text: modelAnswer, ctx: SUPPORT_CTX, retrievedChunks: lex, knowledgeText: knowledge.map((k) => k.content).join("\n"),
+  });
+  assert.equal(r.source, "rag", "answered from the injected knowledge, not support");
+  assert.equal(r.handoff, false, "NO generic support handoff — the answer is in knowledge");
+  assert.deepEqual(r.cards, [], "no product cards on a knowledge turn");
+  assert.match(r.text, /SheerID/i);
+});
+
+check("class=policy-knowledge: lexical fallback finds nothing → support handoff still allowed", () => {
+  const knowledge = [{ fileType: "faqs", content: "Returns accepted within 30 days. Free shipping over $75." }];
+  const q = "Do you offer lunar delivery to the moon?";
+  assert.deepEqual(lexicalRetrieveChunks(knowledge, q, { limit: 3 }), [], "no keyword overlap → no rescue");
+});
+
 check("class=policy-knowledge: genuine no-knowledge → clean handoff (no premature flag)", () => {
   const r = applyAnswerSourceContract({
     workflow: W.POLICY_KNOWLEDGE, msg: "What is your policy on lunar shipping?",

@@ -14,7 +14,7 @@ import { detectProcessNarration, stripProcessNarration, buildSalesVoiceFallback,
 import { classifyTurnScope, scopeAttributesToTurn, isShortAmbiguousReply, messageStatesShoeEnvironment } from "../lib/turn-scope";
 import { buildPriorEvidenceAvailabilityText, buildPriorEvidenceMultiColorText, askedConstraintLabel, titleCaseWord, buildWidthSizeFallbackText } from "../lib/prior-evidence";
 import { selectEvidenceCards } from "../lib/evidence-select";
-import { retrieveRelevantChunks } from "../lib/knowledge-chunks.server";
+import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../lib/knowledge-chunks.server";
 import { buildKidsCoveragePrompt } from "../lib/kids-coverage.server";
 import { analyzeCategoryIntent, cardMatchesActiveGroup, textIntentDivergesFromGroup, matchingGroupsForText } from "../lib/category-intent.server";
 import { extractAnsweredChoices } from "../lib/conversation-memory.server";
@@ -125,6 +125,7 @@ import {
   isPrivateHandoffWorkflow,
   ownerAuthorizedForWorkflow,
   isWorkflowAgnosticOwner,
+  isRegisteredOwner,
 } from "../lib/emit-finalize.server";
 import { detectConversationGoal, ANCHOR_GOALS, isBroadGenderRequest, broadGenderRequestGender } from "../lib/turn-intent.server";
 import { isOrthoticSandalCompatibilityQuestion, buildOrthoticCompatibilityAnswer, hasExplicitOrthoticCompatibleEvidence, isUnsafeCompatibilitySuggestion, SAFE_COMPATIBILITY_SUGGESTIONS } from "../lib/compatibility-truth.server";
@@ -4610,7 +4611,15 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     //     unauthorized_owner_for_workflow (observability — surfaces any owner the
     //     gating above missed, without dropping a legitimately-pinned card).
     for (const owner of new Set([cardOwner, answerOwner])) {
-      if (!owner || isWorkflowAgnosticOwner(owner)) continue;
+      if (!owner) continue;
+      // A NEW owner that was never registered must not slip past TurnPlan
+      // invisibly. Surface it (non-blocking) so it gets registered + gated.
+      if (!isRegisteredOwner(owner)) {
+        recordTurnInvariantViolation("unknown_owner_unregistered", { workflow, owner });
+        firedInvariants.push("unknown_owner_unregistered");
+        continue; // can't authorize an owner we don't know; the warning is the signal
+      }
+      if (isWorkflowAgnosticOwner(owner)) continue;
       if (!ownerAuthorizedForWorkflow(owner, workflow)) {
         recordTurnInvariantViolation("unauthorized_owner_for_workflow", { workflow, owner });
         firedInvariants.push("unauthorized_owner_for_workflow");
@@ -5395,6 +5404,24 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             (topChunk ? ` topCategory=${topChunk.fileType || "-"} topScore=${Number(topChunk.similarity).toFixed(2)}` : "") +
             ` query="${ragQuery.slice(0, 60)}"`,
           );
+          // LEXICAL FALLBACK (answer, don't just detect): semantic RAG ran but
+          // found nothing relevant (empty array) on a knowledge/policy question.
+          // Before letting the turn dead-end into a support handoff, scan the
+          // uploaded knowledge files by keyword and INJECT the matching sections
+          // so the model answers from knowledge it actually has (ownership audit
+          // 2026-07: "verify I'm a teacher" is in faqs.txt — never punt to
+          // support when the answer is uploaded). A null result (no embedded
+          // chunks) already falls back to the full knowledge dump, so only the
+          // empty-array case needs the lexical rescue.
+          if (Array.isArray(retrievedChunks) && retrievedChunks.length === 0 && isPolicyOrServiceQuestion(ragQuery)) {
+            const lex = lexicalRetrieveChunks(knowledge, ragQuery, { limit: 3 });
+            if (lex.length > 0) {
+              retrievedChunks = lex;
+              console.log(`[rag] lexical_fallback=true hits=${lex.length} topCategory=${lex[0].fileType || "-"} topScore=${lex[0].similarity.toFixed(2)} — injected knowledge sections (no support handoff)`);
+            } else {
+              console.log(`[rag] lexical_fallback=true hits=0 — no knowledge match, support handoff allowed`);
+            }
+          }
         } catch (err) {
           console.error("[rag] retrieval failed, falling back to full dump:", err?.message || err);
           retrievedChunks = null;

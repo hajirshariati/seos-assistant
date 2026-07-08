@@ -236,6 +236,56 @@ export async function retrieveRelevantChunks(prisma, { shop, query, config, limi
     .slice(0, limit);
 }
 
+// LEXICAL retrieval fallback (no DB, no embeddings). When semantic RAG returns
+// nothing for a knowledge/policy turn, scan the uploaded knowledge files by
+// KEYWORD overlap and return the best-matching sections — so the bot answers
+// from knowledge it actually has instead of punting to support (ownership audit
+// 2026-07). Pure + synchronous. `knowledge` is the getKnowledgeFilesWithContent
+// shape ([{ fileType, content }]). Returns the same shape retrieveRelevantChunks
+// does — `[{ fileType, sectionTitle, content, similarity }]` — so the injection
+// path and the policy engine consume it identically. `similarity` is a synthetic
+// score from keyword overlap (kept above the policy engine's 0.35 floor).
+const LEXICAL_STOPWORDS = new Set([
+  "what", "when", "where", "which", "does", "do", "did", "you", "your", "the", "and", "for",
+  "are", "is", "can", "how", "with", "that", "this", "have", "has", "about", "need", "want",
+  "provide", "information", "info", "please", "would", "should", "could", "there", "their",
+  "give", "get", "from", "into", "will", "any", "all", "some",
+]);
+function lexicalContentWords(text) {
+  return [...new Set(
+    String(text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !LEXICAL_STOPWORDS.has(w)),
+  )];
+}
+export function lexicalRetrieveChunks(knowledge = [], query = "", { limit = 3, minOverlap = 0.34 } = {}) {
+  const files = Array.isArray(knowledge) ? knowledge : [];
+  const qWords = lexicalContentWords(query);
+  if (qWords.length === 0) return [];
+  const scored = [];
+  for (const f of files) {
+    const fileType = String(f?.fileType || f?.type || "knowledge");
+    const chunks = chunkKnowledgeFile(String(f?.content || ""));
+    for (const c of chunks) {
+      const hay = `${String(c.sectionTitle || "")} ${String(c.content || "")}`.toLowerCase();
+      const hits = qWords.filter((w) => hay.includes(w)).length;
+      const overlap = hits / qWords.length;
+      if (overlap >= minOverlap) {
+        scored.push({
+          fileType,
+          sectionTitle: c.sectionTitle || null,
+          content: c.content,
+          similarity: Math.min(0.5 + overlap * 0.35, 0.95),
+          _lexical: true,
+        });
+      }
+    }
+  }
+  return scored.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
+}
+
 // Convenience: count how many chunks a shop has embedded. Used by
 // the backfill script and the admin UI to display progress.
 export async function countShopChunks(prisma, shop) {

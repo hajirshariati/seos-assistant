@@ -239,12 +239,28 @@ export function ownerAuthorizedForWorkflow(owner, workflow) {
   if (!set) return true; // unknown/uncatalogued owner — not constrained here
   return set.has(String(workflow || ""));
 }
-// Owners that may legitimately act on ANY workflow regardless of assignment
-// (an explicit human request or a hard validator failure is intent-driven, not
-// workflow-driven) — excluded from the unauthorized-owner invariant.
-const WORKFLOW_AGNOSTIC_OWNERS = new Set(["none", "llm", "scorer-empty"]);
+// Owners that may legitimately act on ANY workflow regardless of assignment:
+//   none / scorer-empty — no owner claimed the turn (nothing shown)
+//   llm                 — the model itself composed the answer (LLM-owns path)
+//   cheat-code          — an admin/campaign cheat-code dump that deliberately
+//                         bypasses the whole pipeline (not customer routing)
+// These are excluded from the unauthorized-owner invariant.
+const WORKFLOW_AGNOSTIC_OWNERS = new Set(["none", "llm", "scorer-empty", "cheat-code"]);
 export function isWorkflowAgnosticOwner(owner) {
   return WORKFLOW_AGNOSTIC_OWNERS.has(String(owner || ""));
+}
+// Is this owner KNOWN to the registry at all (either workflow-scoped or
+// deliberately workflow-agnostic)? An owner that is neither is a NEW owner that
+// slipped in without being registered — it must be surfaced
+// (unknown_owner_unregistered) so a future owner can't bypass TurnPlan invisibly.
+export function isRegisteredOwner(owner) {
+  const o = String(owner || "");
+  return Object.prototype.hasOwnProperty.call(OWNER_WORKFLOWS, o) || WORKFLOW_AGNOSTIC_OWNERS.has(o);
+}
+// The full set of registered owner names — exported so a test can assert every
+// owner string that reaches turn-invariant logging is registered (drift guard).
+export function registeredOwnerNames() {
+  return [...Object.keys(OWNER_WORKFLOWS), ...WORKFLOW_AGNOSTIC_OWNERS];
 }
 
 // The single authoritative gender of a resolved NAMED family's cards, or null if
