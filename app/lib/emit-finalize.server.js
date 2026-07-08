@@ -85,6 +85,9 @@ export { isPivotResetTurn, pivotSearchScopeLeak } from "./effective-scope.server
 // grows new direct `.server` usages the client-build DCE has to eliminate.
 export { isBroadGenderReset, broadGenderFollowUpGender } from "./turn-intent.server.js";
 export { workflowSuppressesCards, specQuestionAnsweredAsAvailability, answerSourceMatrix, isKnowledgeWorkflow, isPrivateHandoffWorkflow, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner, isRegisteredOwner, registeredOwnerNames } from "./turn-plan.server.js";
+// Commerce Truth root-class detectors — routed through this module so the chat
+// route consumes them without a new direct `.server` import.
+export { productTypeMismatch, filterCardsToRequestedType, variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives } from "./commerce-truth.server.js";
 import { isAnswerWorkflow, buildAnswerWorkflowExhaustionText, planForcesProductDisplay } from "./turn-plan.server.js";
 
 // Knowledge / info questions — kept in sync with KNOWLEDGE_QUESTION_RE

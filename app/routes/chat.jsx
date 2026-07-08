@@ -126,6 +126,10 @@ import {
   ownerAuthorizedForWorkflow,
   isWorkflowAgnosticOwner,
   isRegisteredOwner,
+  productTypeMismatch,
+  filterCardsToRequestedType,
+  variantTextCardMismatch,
+  cardNotInAnswerEvidence,
 } from "../lib/emit-finalize.server";
 import { detectConversationGoal, ANCHOR_GOALS, isBroadGenderRequest, broadGenderRequestGender } from "../lib/turn-intent.server";
 import { isOrthoticSandalCompatibilityQuestion, buildOrthoticCompatibilityAnswer, hasExplicitOrthoticCompatibleEvidence, isUnsafeCompatibilitySuggestion, SAFE_COMPATIBILITY_SUGGESTIONS } from "../lib/compatibility-truth.server";
@@ -4648,6 +4652,47 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       if (named) {
         recordTurnInvariantViolation("answer_names_product_not_in_evidence", { workflow, family: named });
         firedInvariants.push("answer_names_product_not_in_evidence");
+      }
+      // Commerce Truth (card_not_in_answer_evidence) — the user-named alias for
+      // the same "shown card outside this turn's evidence" truth (all owners).
+      const stray2 = cardNotInAnswerEvidence({ finalCards: finalProductCards, evidencePool: poolCards });
+      if (stray2.length > 0 && cardOwner !== "scorer") {
+        recordTurnInvariantViolation("card_not_in_answer_evidence", {
+          workflow, cardOwner, cards: stray2.map((c) => c?.handle || c?.title),
+        });
+        firedInvariants.push("card_not_in_answer_evidence");
+      }
+    }
+
+    // ── COMMERCE TRUTH: product-type + variant truth (observe + safe repair) ──
+    // Product-type mismatch: the shown cards contradict the requested product
+    // TYPE (orthotics vs footwear, or an exclusive "only sandals"). Fire the
+    // invariant AND drop the mismatched cards — a truthful answer never shows a
+    // product type the customer didn't ask for. This is a card-content repair,
+    // not an ownership change (the workflow/owner are unchanged).
+    if (finalCount > 0) {
+      const ptReason = productTypeMismatch({ message: ctx?.latestUserMessage || "", cards: finalProductCards });
+      if (ptReason) {
+        const kept = filterCardsToRequestedType({ message: ctx?.latestUserMessage || "", cards: finalProductCards });
+        recordTurnInvariantViolation("product_type_mismatch", {
+          workflow, reason: ptReason, dropped: finalCount - kept.length,
+        });
+        firedInvariants.push("product_type_mismatch");
+        console.log(`[commerce-truth] product_type_mismatch (${ptReason}) — dropped ${finalCount - kept.length} card(s)`);
+        finalProductCards = kept;
+      }
+    }
+    // Variant text↔card truth: the answer asserts a color the shown card doesn't
+    // have (Rose text over a Denim card). Availability/spec turns already run the
+    // color-truth detector; this fires the Commerce-Truth-named invariant too.
+    if (Array.isArray(finalProductCards) && finalProductCards.length > 0) {
+      const badColor = variantTextCardMismatch({
+        text: fullResponseText, cards: finalProductCards,
+        knownColors: Array.isArray(ctx?.catalogColorList) ? ctx.catalogColorList : [],
+      });
+      if (badColor) {
+        recordTurnInvariantViolation("variant_text_card_mismatch", { workflow, color: badColor });
+        firedInvariants.push("variant_text_card_mismatch");
       }
     }
 

@@ -79,6 +79,8 @@ export const KNOWN_INVARIANT_CODES = new Set([
   "answer_names_product_not_in_evidence", "policy_handoff_without_lexical_fallback",
   // 2026-07 owner-registry hardening (new owners can't bypass TurnPlan invisibly)
   "unknown_owner_unregistered",
+  // 2026-07 Commerce Truth phase (product-type / variant / card-alignment truth)
+  "product_type_mismatch", "variant_text_card_mismatch", "card_not_in_answer_evidence",
 ]);
 
 // INVARIANT detector (answer_names_product_not_in_evidence): the final answer
