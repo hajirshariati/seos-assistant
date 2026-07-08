@@ -155,12 +155,13 @@ check("class=policy-knowledge: lexical fallback ANSWERS 'verify I'm a teacher' f
   assert.match(lex[0].content, /SheerID|school-issued ID/i, "the matched section is the teacher-verification one");
   assert.ok(lex[0].similarity >= 0.35, "synthetic score clears the policy-engine floor");
   // Feeding those lexical chunks into the contract → answered from knowledge,
-  // NO support handoff, NO cards, source=rag.
+  // NO support handoff, NO cards, source=lexical (the injected chunks are the
+  // lexical fallback, not semantic RAG).
   const modelAnswer = "To verify as a teacher, provide your school-issued ID or employment verification through SheerID at checkout.";
   const r = applyAnswerSourceContract({
     workflow: W.POLICY_KNOWLEDGE, msg: q, text: modelAnswer, ctx: SUPPORT_CTX, retrievedChunks: lex, knowledgeText: knowledge.map((k) => k.content).join("\n"),
   });
-  assert.equal(r.source, "rag", "answered from the injected knowledge, not support");
+  assert.equal(r.source, "lexical", "answered from the injected LEXICAL knowledge, not support");
   assert.equal(r.handoff, false, "NO generic support handoff — the answer is in knowledge");
   assert.deepEqual(r.cards, [], "no product cards on a knowledge turn");
   assert.match(r.text, /SheerID/i);

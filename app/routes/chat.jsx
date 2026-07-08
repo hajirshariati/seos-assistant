@@ -8,7 +8,7 @@ import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
 import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
-import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract } from "../lib/support-handoff";
+import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
 import { detectProcessNarration, stripProcessNarration, buildSalesVoiceFallback, SALES_JUDGMENT_WORKFLOWS } from "../lib/sales-voice";
 import { classifyTurnScope, scopeAttributesToTurn, isShortAmbiguousReply, messageStatesShoeEnvironment } from "../lib/turn-scope";
@@ -3679,7 +3679,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         }
       }
       console.log(
-        `[answer-source] source=${contract.source}` +
+        `[answer-source] source=${normalizeAnswerSource(contract.source)}` +
         `${contract.handoffReason ? ` reason=${contract.handoffReason}` : ""} ` +
         `workflow=${wf} ragAttempted=${contract.ragAttempted} ragHit=${contract.ragHit} ` +
         `lexicalHit=${contract.lexicalHit} metaLeak=${contract.metaLeak} cta=${Boolean(supportHandoffCta)}`,
@@ -6696,6 +6696,9 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             // line — the router logs that before dispatcher runs.
             // Surface the engine win prominently for log readers.
             console.log(`[router] ${ctx.shop} final_path=policy_engine`);
+            // A deterministic policy/account engine answered — the third answer
+            // source (after rag/lexical, before support handoff).
+            console.log(`[answer-source] source=deterministic_policy workflow=${ctx.turnPlan?.workflow || "-"} intent=${policyResult.diagnostics?.intent?.primary || "-"} cta=${policyResult.diagnostics?.ctaUrl ? "yes" : "no"}`);
             console.log(
               `[policy-engine] handled shop=${ctx.shop} ` +
                 `intent=${policyResult.diagnostics?.intent?.primary || "-"} ` +

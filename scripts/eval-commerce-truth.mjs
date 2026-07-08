@@ -140,7 +140,7 @@ check("teacher verification answers from knowledge, shows no products, no premat
     text: "To verify as a teacher, upload your school-issued ID through SheerID at checkout.",
     ctx: { supportUrl: "https://x/support" }, retrievedChunks: lex, knowledgeText: knowledge[0].content,
   });
-  assert.equal(r.source, "rag", "answered from knowledge");
+  assert.ok(["rag", "lexical"].includes(r.source), "answered from knowledge (rag/lexical)");
   assert.equal(r.handoff, false, "no generic support handoff");
   assert.deepEqual(r.cards, [], "no product cards on a policy turn");
 });

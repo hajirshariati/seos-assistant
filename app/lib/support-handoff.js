@@ -51,6 +51,32 @@ export function supportConfigured(ctx) {
   return Boolean(ctx?.supportUrl && String(ctx.supportUrl).trim());
 }
 
+// The canonical answer-source taxonomy for policy/account/support turns, in the
+// order the bot must prefer them:
+//   rag                 — semantic knowledge retrieval answered it
+//   lexical             — lexical (keyword) knowledge fallback answered it
+//   deterministic_policy — a deterministic policy/account engine answered it
+//   support_handoff     — nothing answered; hand off to a human with the CTA
+// Logged per turn as `[answer-source] source=<one of these>` so the ordering is
+// auditable, and the enforcement invariants (policy_rag_hit_handoff,
+// policy_handoff_without_lexical_fallback) guarantee we never skip a source that
+// had the answer.
+export const ANSWER_SOURCES = Object.freeze({
+  RAG: "rag",
+  LEXICAL: "lexical",
+  DETERMINISTIC_POLICY: "deterministic_policy",
+  SUPPORT_HANDOFF: "support_handoff",
+});
+// Fold the contract's internal `source` values onto the 4-value taxonomy.
+// `static_knowledge` (the full-corpus-in-prompt case) is knowledge → "rag".
+export function normalizeAnswerSource(source) {
+  const s = String(source || "");
+  if (s === "lexical") return ANSWER_SOURCES.LEXICAL;
+  if (s === "deterministic_policy") return ANSWER_SOURCES.DETERMINISTIC_POLICY;
+  if (s === "support_handoff") return ANSWER_SOURCES.SUPPORT_HANDOFF;
+  return ANSWER_SOURCES.RAG; // rag | static_knowledge | anything knowledge-grounded
+}
+
 // ── Handoff META-TEXT leak (UI mechanics the LLM must never narrate) ──────────
 // The model sometimes describes the widget UI to the customer — "[Support Hub
 // button is available above]", "click the button below" (live trace 2026-06-30).
@@ -155,6 +181,10 @@ export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", 
   const cleaned = stripHandoffMetaText(text);
   const ragAttempted = Array.isArray(retrievedChunks);
   const ragHit = ragAttempted && retrievedChunks.length > 0;
+  // Were the injected chunks the LEXICAL fallback (vs semantic RAG)? The lexical
+  // retriever tags each chunk with `_lexical`, so a knowledge answer grounded in
+  // them is answer_source=lexical, not rag.
+  const lexicalChunks = ragHit && retrievedChunks.some((c) => c && c._lexical);
   const lexicalHit = isKnowledge && lexicalKnowledgeHit(msg, knowledgeText);
   const supportCta = supportConfigured(ctx)
     ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl }
@@ -182,7 +212,7 @@ export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", 
   if (!isDeadEndAnswer(cleaned)) {
     return {
       ...base,
-      source: ragHit ? "rag" : lexicalHit ? "static_knowledge" : "static_knowledge",
+      source: lexicalChunks ? "lexical" : ragHit ? "rag" : "static_knowledge",
       handoff: false,
       handoffReason: null,
       text: cleaned,

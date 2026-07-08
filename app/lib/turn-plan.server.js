@@ -385,8 +385,11 @@ const PROMO_POLICY_RE = new RegExp(
   // matched the occupation in USECASE_RE ("teacher") → condition_recommendation
   // → 3 random wedge cards. Catch it here (PROMO_POLICY_RE runs before the
   // condition/recommend branch) so it answers from policy with no product cards.
-  "\\b(?:verif\\w*|verified|prove|proof|eligib\\w*|qualify|how\\s+do\\s+i\\s+(?:get|become))\\b[^.?!\\n]{0,40}\\b(?:teacher|student|nurse|military|veteran|first[-\\s]?responder|senior|healthcare|educator|id\\.me|sheerid)\\b" + "|" +
-  "\\b(?:teacher|student|nurse|military|veteran|first[-\\s]?responder|senior|healthcare|educator)\\b[^.?!\\n]{0,40}\\b(?:verif\\w*|verified|proof|eligib\\w*|qualify|discount|id\\.me|sheerid)\\b",
+  "\\b(?:verif\\w*|verified|prove|proof|eligib\\w*|qualify|how\\s+do\\s+i\\s+(?:get|become))\\b[^.?!\\n]{0,40}\\b(?:teachers?|students?|nurses?|military|veterans?|first[-\\s]?responders?|seniors?|healthcare|educators?|id\\.me|sheerid)\\b" + "|" +
+  // Occupation → discount/verify in EITHER phrasing, plural-safe: "teacher
+  // discount", "do teachers get a discount?", "is there a discount for nurses?".
+  "\\b(?:teachers?|students?|nurses?|military|veterans?|first[-\\s]?responders?|seniors?|healthcare|educators?)\\b[^.?!\\n]{0,40}\\b(?:verif\\w*|verified|proof|eligib\\w*|qualify|discounts?|deals?|% ?off|percent\\s+off|id\\.me|sheerid)\\b" + "|" +
+  "\\b(?:discounts?|deals?)\\b[^.?!\\n]{0,25}\\bfor\\b[^.?!\\n]{0,15}\\b(?:teachers?|students?|nurses?|military|veterans?|first[-\\s]?responders?|seniors?|healthcare|educators?)\\b",
   "i",
 );
 
