@@ -25,6 +25,11 @@ import {
   detectProcessNarration,
   shouldBlockProcessNarration,
   PROCESS_NARRATION_RETRY_INSTRUCTION,
+  detectUnsupportedMedicalClaim,
+  MEDICAL_CLAIM_RETRY_INSTRUCTION,
+  detectWeakNonAnswer,
+  WEAK_NON_ANSWER_RETRY_INSTRUCTION,
+  ADVISORY_QUALITY_WORKFLOWS,
 } from "./sales-voice.js";
 import {
   containsUnsupportedCompatibilityClaim,
@@ -571,6 +576,11 @@ const BLOCKING_KINDS = new Set([
   // and forces a synthesis retry. Scoped to those workflows via the
   // `workflow` arg, so plain browse turns are unaffected.
   "answer_workflow_non_answer",
+  // Advisory quality (scoped to ADVISORY_QUALITY_WORKFLOWS): an unsupported
+  // medical cure/treat claim is a factual overreach; a "tell me more" stall when
+  // the customer already gave use case + category/condition is a non-answer.
+  "unsupported_medical_claim",
+  "advisory_weak_non_answer",
 ]);
 
 // Workflows that must answer (kept in sync with turn-plan ANSWER_WORKFLOWS).
@@ -943,6 +953,33 @@ export function validateGrounding({ text, pool = [], categoryGenderMap = null, u
         kind: "process_narration",
         claim: String(narration.sentences[0] || "").slice(0, 80),
         message: PROCESS_NARRATION_RETRY_INSTRUCTION,
+      });
+    }
+  }
+
+  // ADVISORY QUALITY (BLOCKING on advisory workflows). Two failures that make an
+  // answer read unlike a professional Aetrex associate:
+  //   1. An unsupported MEDICAL claim — promising to cure/heal/fix/relieve/treat a
+  //      foot condition. Aetrex sells comfort footwear/orthotics, not treatments,
+  //      so this is a factual overreach; force a rewrite to honest comfort language.
+  //   2. A WEAK non-answer — a "tell me more / what's the occasion" stall when the
+  //      customer already gave a use case plus a category or condition. That's
+  //      enough to recommend; another clarifier is a non-answer.
+  if (ADVISORY_QUALITY_WORKFLOWS.has(workflow)) {
+    const medical = detectUnsupportedMedicalClaim(text);
+    if (medical.hit) {
+      errors.push({
+        kind: "unsupported_medical_claim",
+        claim: String(medical.sentences[0] || "").slice(0, 80),
+        message: MEDICAL_CLAIM_RETRY_INSTRUCTION,
+      });
+    }
+    const weak = detectWeakNonAnswer({ text, message: userMessage, hasCards });
+    if (weak.hit) {
+      errors.push({
+        kind: "advisory_weak_non_answer",
+        claim: firstSentenceOf(text).slice(0, 80),
+        message: WEAK_NON_ANSWER_RETRY_INSTRUCTION,
       });
     }
   }
