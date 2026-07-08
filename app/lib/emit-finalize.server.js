@@ -87,7 +87,7 @@ export { isBroadGenderReset, broadGenderFollowUpGender } from "./turn-intent.ser
 export { workflowSuppressesCards, specQuestionAnsweredAsAvailability, answerSourceMatrix, isKnowledgeWorkflow, isPrivateHandoffWorkflow, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner, isRegisteredOwner, registeredOwnerNames } from "./turn-plan.server.js";
 // Commerce Truth root-class detectors — routed through this module so the chat
 // route consumes them without a new direct `.server` import.
-export { productTypeMismatch, filterCardsToRequestedType, variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives } from "./commerce-truth.server.js";
+export { productTypeMismatch, filterCardsToRequestedType, variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives, enforceCommerceTruth } from "./commerce-truth.server.js";
 import { isAnswerWorkflow, buildAnswerWorkflowExhaustionText, planForcesProductDisplay } from "./turn-plan.server.js";
 
 // Knowledge / info questions — kept in sync with KNOWLEDGE_QUESTION_RE

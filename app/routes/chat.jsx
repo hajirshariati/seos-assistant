@@ -6,7 +6,7 @@ import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailab
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
-import { recordTurnInvariantViolation, logTurnInvariant, answerNamesProductNotInEvidence } from "../lib/turn-invariant.server";
+import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
@@ -126,10 +126,7 @@ import {
   ownerAuthorizedForWorkflow,
   isWorkflowAgnosticOwner,
   isRegisteredOwner,
-  productTypeMismatch,
-  filterCardsToRequestedType,
-  variantTextCardMismatch,
-  cardNotInAnswerEvidence,
+  enforceCommerceTruth,
 } from "../lib/emit-finalize.server";
 import { detectConversationGoal, ANCHOR_GOALS, isBroadGenderRequest, broadGenderRequestGender } from "../lib/turn-intent.server";
 import { isOrthoticSandalCompatibilityQuestion, buildOrthoticCompatibilityAnswer, hasExplicitOrthoticCompatibleEvidence, isUnsafeCompatibilitySuggestion, SAFE_COMPATIBILITY_SUGGESTIONS } from "../lib/compatibility-truth.server";
@@ -4550,7 +4547,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // turn — no post-emission drop (which would desync emitted cards vs the
     // evidence-plan finalCards log).
 
-    const finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
+    let finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
 
     // FRAGMENT GUARD. Safety cleanup (disallowed-clarifier strip, narration
     // strips) can gut an LLM answer down to a dangling fragment that references
@@ -4629,70 +4626,44 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         firedInvariants.push("unauthorized_owner_for_workflow");
       }
     }
-    // (b) Every final card must be from THIS turn's evidence universe
-    //     (allProductPool accumulates every pinned/searched/re-pinned card,
-    //     including deliberate prior-evidence re-pins). Record-only for non-scorer
-    //     owners (they have their own repair); the scorer path repairs below.
-    if (finalCount > 0) {
+    // ── COMMERCE TRUTH ENFORCEMENT (repair/suppress before the customer sees it)
+    // The detectors observe; enforceCommerceTruth REPAIRS: it drops stray/off-
+    // type cards, reconciles variant color (swap card → rewrite text → drop +
+    // honest), reconciles a named-but-unshown product (show it → strip the
+    // sentence), and NEVER ships product-listing copy with zero cards. It records
+    // the matching invariant for every repair. Card content only — workflow and
+    // owner are unchanged (not an ownership refactor).
+    {
       const poolCards = Array.from(allProductPool.values());
-      const stray = cardsNotInEvidencePool({ finalCards: finalProductCards, evidencePool: poolCards });
-      if (stray.length > 0 && cardOwner !== "scorer") {
-        recordTurnInvariantViolation("final_card_not_in_current_evidence", {
-          workflow, cardOwner, count: stray.length, cards: stray.map((c) => c?.handle || c?.title),
-        });
-        firedInvariants.push("final_card_not_in_current_evidence");
-      }
-      // (c) The answer text must not NAME a product that was in the evidence pool
-      //     but was dropped from the final cards (copy references a product the
-      //     customer can't see). Only when cards are shown.
-      const poolFamilies = poolCards.map((c) => String(c?._family || c?.family || c?.title || "")).filter(Boolean);
-      const named = answerNamesProductNotInEvidence({
-        text: fullResponseText, cards: finalProductCards, knownFamilies: poolFamilies,
-      });
-      if (named) {
-        recordTurnInvariantViolation("answer_names_product_not_in_evidence", { workflow, family: named });
-        firedInvariants.push("answer_names_product_not_in_evidence");
-      }
-      // Commerce Truth (card_not_in_answer_evidence) — the user-named alias for
-      // the same "shown card outside this turn's evidence" truth (all owners).
-      const stray2 = cardNotInAnswerEvidence({ finalCards: finalProductCards, evidencePool: poolCards });
-      if (stray2.length > 0 && cardOwner !== "scorer") {
-        recordTurnInvariantViolation("card_not_in_answer_evidence", {
-          workflow, cardOwner, cards: stray2.map((c) => c?.handle || c?.title),
-        });
-        firedInvariants.push("card_not_in_answer_evidence");
-      }
-    }
-
-    // ── COMMERCE TRUTH: product-type + variant truth (observe + safe repair) ──
-    // Product-type mismatch: the shown cards contradict the requested product
-    // TYPE (orthotics vs footwear, or an exclusive "only sandals"). Fire the
-    // invariant AND drop the mismatched cards — a truthful answer never shows a
-    // product type the customer didn't ask for. This is a card-content repair,
-    // not an ownership change (the workflow/owner are unchanged).
-    if (finalCount > 0) {
-      const ptReason = productTypeMismatch({ message: ctx?.latestUserMessage || "", cards: finalProductCards });
-      if (ptReason) {
-        const kept = filterCardsToRequestedType({ message: ctx?.latestUserMessage || "", cards: finalProductCards });
-        recordTurnInvariantViolation("product_type_mismatch", {
-          workflow, reason: ptReason, dropped: finalCount - kept.length,
-        });
-        firedInvariants.push("product_type_mismatch");
-        console.log(`[commerce-truth] product_type_mismatch (${ptReason}) — dropped ${finalCount - kept.length} card(s)`);
-        finalProductCards = kept;
-      }
-    }
-    // Variant text↔card truth: the answer asserts a color the shown card doesn't
-    // have (Rose text over a Denim card). Availability/spec turns already run the
-    // color-truth detector; this fires the Commerce-Truth-named invariant too.
-    if (Array.isArray(finalProductCards) && finalProductCards.length > 0) {
-      const badColor = variantTextCardMismatch({
-        text: fullResponseText, cards: finalProductCards,
+      const knownFamilies = poolCards
+        .map((c) => String(c?._family || c?.family || titleStyleFamily(c?.title || "") || "").toLowerCase())
+        .filter(Boolean);
+      const enforced = enforceCommerceTruth({
+        message: ctx?.latestUserMessage || "",
+        text: fullResponseText,
+        cards: finalProductCards,
+        evidencePool: poolCards,
         knownColors: Array.isArray(ctx?.catalogColorList) ? ctx.catalogColorList : [],
+        knownFamilies,
       });
-      if (badColor) {
-        recordTurnInvariantViolation("variant_text_card_mismatch", { workflow, color: badColor });
-        firedInvariants.push("variant_text_card_mismatch");
+      if (enforced.repairs.length > 0) {
+        fullResponseText = enforced.text;
+        finalProductCards = enforced.cards;
+        finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
+        for (const r of enforced.repairs) {
+          recordTurnInvariantViolation(r.code, { workflow, cardOwner, ...r });
+          firedInvariants.push(r.code);
+          console.log(`[commerce-truth] repaired ${r.code}${r.repair ? ` (${r.repair})` : ""}${typeof r.dropped === "number" ? ` dropped=${r.dropped}` : ""} → cards=${finalCount}`);
+        }
+      }
+      // Residual safety net: after enforcement every shown card must be in the
+      // evidence pool. If this still fires, a repair path was missed.
+      if (finalCount > 0 && cardOwner !== "scorer") {
+        const residual = cardsNotInEvidencePool({ finalCards: finalProductCards, evidencePool: poolCards });
+        if (residual.length > 0) {
+          recordTurnInvariantViolation("final_card_not_in_current_evidence", { workflow, cardOwner, count: residual.length });
+          firedInvariants.push("final_card_not_in_current_evidence");
+        }
       }
     }
 

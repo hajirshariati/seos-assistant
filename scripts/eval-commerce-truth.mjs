@@ -10,12 +10,13 @@
 import assert from "node:assert/strict";
 import {
   requestedProductType, productTypeMismatch, filterCardsToRequestedType,
-  variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives,
+  variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives, enforceCommerceTruth,
 } from "../app/lib/commerce-truth.server.js";
 import { answerNamesProductNotInEvidence, KNOWN_INVARIANT_CODES } from "../app/lib/turn-invariant.server.js";
-import { planTurn, WORKFLOWS } from "../app/lib/turn-plan.server.js";
+import { planTurn, WORKFLOWS, textPresentsProducts } from "../app/lib/turn-plan.server.js";
 import { applyAnswerSourceContract } from "../app/lib/support-handoff.js";
 import { lexicalRetrieveChunks } from "../app/lib/knowledge-chunks.server.js";
+import { cardHasColor } from "../app/lib/availability-truth.js";
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -170,6 +171,119 @@ check("policy turn hands off ONLY when knowledge has no answer", () => {
   });
   assert.equal(r.handoff, true, "genuine no-knowledge → support handoff");
   assert.ok(r.supportCta, "real support CTA");
+});
+
+// ── COLOR MATCHING (no substring bugs) ───────────────────────────────────────
+check("color match is word-boundary, not substring (Tan∉Titan, Rose∉Primrose)", () => {
+  assert.equal(cardHasColor({ title: "Titan Trail Runner" }, "tan"), false, "Tan must not match Titan");
+  assert.equal(cardHasColor({ title: "Primrose Wedge" }, "rose"), false, "Rose must not match Primrose");
+  assert.equal(cardHasColor({ title: "Shredded Knit Sneaker" }, "red"), false, "red must not match shredded");
+  assert.equal(cardHasColor({ title: "Jillian Braided Sandal - Rose" }, "rose"), true);
+  assert.equal(cardHasColor({ title: "X", color: "Champagne" }, "champagne"), true);
+});
+
+// ── ENFORCEMENT — repairs actually happen (not just detection) ────────────────
+const COLORS = ["rose", "champagne", "denim", "black", "tan"];
+const JILLIAN_ROSE = { title: "Jillian Braided Sandal - Rose", category: "Sandals", handle: "jillian-rose", _family: "jillian" };
+const SAVANNAH = { title: "Savannah Quarter Strap Sandal - Tan", category: "Sandals", handle: "savannah-tan", _family: "savannah" };
+
+check("REPAIR: 'rose or champagne' — text says Rose but card is Denim → shown card becomes Rose", () => {
+  const r = enforceCommerceTruth({
+    message: "Does the Jillian come in rose or champagne?",
+    text: "Yes — the Jillian is available in Rose.",
+    cards: [SANDAL_DENIM],
+    evidencePool: [SANDAL_DENIM, JILLIAN_ROSE],
+    knownColors: COLORS,
+  });
+  assert.equal(r.cards.length, 1);
+  assert.equal(cardHasColor(r.cards[0], "rose"), true, "the shown card is now Rose");
+  assert.equal(cardHasColor(r.cards[0], "denim"), false, "no longer showing Denim");
+  assert.ok(r.repairs.some((x) => x.code === "variant_text_card_mismatch" && x.repair === "swapped_card"));
+});
+
+check("REPAIR: text says a color no pool card has → text rewritten to the shown color", () => {
+  const r = enforceCommerceTruth({
+    message: "Is the Jillian in black?",
+    text: "Yes — the Jillian is available in Black.",
+    cards: [JILLIAN_ROSE], evidencePool: [JILLIAN_ROSE], knownColors: COLORS,
+  });
+  assert.equal(cardHasColor(r.cards[0], "rose"), true, "still the Rose card (only one we have)");
+  assert.match(r.text, /Rose/i, "text rewritten to the actually-shown color");
+  assert.doesNotMatch(r.text, /available in Black/i, "no longer claims Black");
+  assert.ok(r.repairs.some((x) => x.code === "variant_text_card_mismatch" && x.repair === "rewrote_text"));
+});
+
+check("REPAIR: 'help me choose the right Aetrex orthotic' → sneaker dropped, only orthotic remains", () => {
+  const r = enforceCommerceTruth({
+    message: "Help me choose the right Aetrex orthotic",
+    text: "Here are a couple of options.", cards: [SNEAKER, ORTHOTIC], evidencePool: [SNEAKER, ORTHOTIC, INSOLE],
+  });
+  assert.deepEqual(r.cards.map((c) => c.handle), ["l700"], "only the orthotic survives");
+  assert.ok(r.repairs.some((x) => x.code === "product_type_mismatch"));
+});
+
+check("REPAIR: 'not orthotics, shoes instead' → orthotic dropped; empty → no product-listing copy", () => {
+  const r = enforceCommerceTruth({
+    message: "Wait, show me shoes instead, not orthotics",
+    text: "Here are some great orthotics for you.", cards: [ORTHOTIC], evidencePool: [ORTHOTIC],
+  });
+  assert.deepEqual(r.cards, [], "the orthotic is dropped");
+  assert.equal(textPresentsProducts(r.text), false, "no 'here are…' with zero cards");
+  assert.ok(r.repairs.some((x) => x.code === "product_type_mismatch"));
+  assert.ok(r.repairs.some((x) => x.code === "product_listing_without_cards"));
+});
+
+check("REPAIR: answer names Savannah but shows Jillian → Savannah card is shown (it's in the pool)", () => {
+  const r = enforceCommerceTruth({
+    message: "which sandal is best for walking?",
+    text: "I'd go with the Savannah for all-day walking.",
+    cards: [JILLIAN_ROSE], evidencePool: [JILLIAN_ROSE, SAVANNAH], knownFamilies: ["jillian", "savannah"],
+    knownColors: COLORS,
+  });
+  assert.ok(r.cards.some((c) => c.handle === "savannah-tan"), "the named Savannah is now shown");
+  assert.ok(r.repairs.some((x) => x.code === "answer_names_product_not_in_evidence" && x.repair === "showed_named"));
+});
+
+check("REPAIR: names a product NOT in the pool → the naming sentence is stripped", () => {
+  const r = enforceCommerceTruth({
+    message: "which sandal is best?",
+    text: "The Jillian is lovely. I'd also suggest the Savannah for support.",
+    cards: [JILLIAN_ROSE], evidencePool: [JILLIAN_ROSE], knownFamilies: ["jillian", "savannah"],
+    knownColors: COLORS,
+  });
+  assert.doesNotMatch(r.text, /Savannah/i, "the Savannah sentence is stripped (not in evidence)");
+  assert.match(r.text, /Jillian/i, "the shown product is still named");
+  assert.ok(r.repairs.some((x) => x.code === "answer_names_product_not_in_evidence" && x.repair === "stripped_sentence"));
+});
+
+check("REPAIR: a card not in the evidence pool is dropped before response", () => {
+  const ghost = { title: "Reagan Boot", handle: "reagan", category: "Boots" };
+  const r = enforceCommerceTruth({
+    message: "show me sandals", text: "Here are a couple of sandals.",
+    cards: [JILLIAN_ROSE, ghost], evidencePool: [JILLIAN_ROSE], knownColors: COLORS,
+  });
+  assert.deepEqual(r.cards.map((c) => c.handle), ["jillian-rose"], "the ghost card is dropped");
+  assert.ok(r.repairs.some((x) => x.code === "card_not_in_answer_evidence"));
+});
+
+check("REPAIR: all cards dropped → final text is not product-listing copy", () => {
+  const ghost = { title: "Reagan Boot", handle: "reagan" };
+  const r = enforceCommerceTruth({
+    message: "show me sandals", text: "Here are some great sandals for you!",
+    cards: [ghost], evidencePool: [JILLIAN_ROSE],
+  });
+  assert.deepEqual(r.cards, []);
+  assert.equal(textPresentsProducts(r.text), false, "listing copy replaced with a truthful no-card answer");
+  assert.ok(r.repairs.some((x) => x.code === "product_listing_without_cards"));
+});
+
+check("NO-OP: a clean, truthful turn is left untouched", () => {
+  const r = enforceCommerceTruth({
+    message: "show me sandals", text: "Here are a couple of sandals I found.",
+    cards: [JILLIAN_ROSE], evidencePool: [JILLIAN_ROSE, SAVANNAH], knownColors: COLORS, knownFamilies: ["jillian", "savannah"],
+  });
+  assert.deepEqual(r.repairs, [], "no repairs on a truthful turn");
+  assert.deepEqual(r.cards.map((c) => c.handle), ["jillian-rose"]);
 });
 
 console.log("");

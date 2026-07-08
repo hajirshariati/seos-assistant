@@ -275,18 +275,51 @@ export function availabilityTextCardColorMismatch({ text = "", cards = [], known
     }
   }
   if (claimed.size === 0) return null;
-  const shownHas = (color) => cardArr.some((card) => {
-    const title = String(card?.title || "").toLowerCase();
-    return (
-      colorFromTitle(card?.title || "") === color ||
-      title.includes(color) ||
-      String(card?.color || card?._color || "").toLowerCase() === color
-    );
-  });
   for (const color of claimed) {
-    if (!shownHas(color)) return color;
+    if (!cardArr.some((card) => cardHasColor(card, color))) return color;
   }
   return null;
+}
+
+// The normalized color of a card: an explicit color field first, else the color
+// the title ends with. Word-level, never a substring.
+export function cardColor(card) {
+  const explicit = String(card?.color || card?._color || "").toLowerCase().trim();
+  if (explicit) return explicit;
+  return colorFromTitle(card?.title || "");
+}
+
+// Does this card have the given color? EXACT normalized-color match OR a
+// WORD-BOUNDARY match in the title — never a substring (fixes "tan" ∈ "titan",
+// "rose" ∈ "primrose", "red" ∈ "shredded").
+export function cardHasColor(card, color) {
+  const c = String(color || "").toLowerCase().trim();
+  if (!c) return false;
+  if (cardColor(card) === c) return true;
+  return new RegExp(`\\b${escapeRe(c)}\\b`, "i").test(String(card?.title || ""));
+}
+
+// First card in the pool that has the given color (word-boundary), or null.
+export function findCardWithColor(cards, color) {
+  return (Array.isArray(cards) ? cards : []).find((card) => cardHasColor(card, color)) || null;
+}
+
+// The colors the answer text ASSERTS available (inside an "available/comes in …"
+// clause). Word-boundary tokens only. Used by the variant-truth repair to know
+// which color(s) the text promised.
+export function claimedAvailabilityColors({ text = "", knownColors = [] } = {}) {
+  const t = String(text || "");
+  if (!t.trim()) return [];
+  const colorList = [...BUILTIN_COLORS, ...(knownColors || []).map((c) => String(c).toLowerCase())];
+  const claimed = new Set();
+  AVAIL_COLOR_CLAUSE_RE.lastIndex = 0;
+  for (let cm; (cm = AVAIL_COLOR_CLAUSE_RE.exec(t)) !== null; ) {
+    const clause = cm[1] || "";
+    for (const c of colorList) {
+      if (new RegExp(`\\b${escapeRe(c)}\\b`, "i").test(clause)) claimed.add(c.toLowerCase());
+    }
+  }
+  return [...claimed];
 }
 
 // Loose intent: did the customer's message MENTION a color / size / width at
