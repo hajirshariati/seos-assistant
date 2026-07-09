@@ -6260,10 +6260,12 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           // a real business workflow that ALREADY ran above this
           // point — we honor its result.
           //
-          // Default OFF: requires LLM_OWNS_ALL_TURNS=true. When
-          // LLM_OWNS_ALL_TURNS_SHADOW=true (and the main flag is
-          // OFF), the new path runs in parallel into a discard buffer
-          // and only its diff vs. the old answer is logged.
+          // Default ON since 2026-06-10 (see isLlmOwnsTurnEnabled):
+          // this IS the production path. LLM_OWNS_ALL_TURNS=false is
+          // the kill switch that re-enables the legacy cascade below.
+          // When LLM_OWNS_ALL_TURNS_SHADOW=true (and the kill switch
+          // is set), the new path runs in parallel into a discard
+          // buffer and only its diff vs. the old answer is logged.
           // ──────────────────────────────────────────────────────────
           // Follow-up suggestion generation — shared by the LLM-owns and
           // legacy paths so the admin "Follow-up questions" toggle works
