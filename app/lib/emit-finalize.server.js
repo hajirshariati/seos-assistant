@@ -719,6 +719,7 @@ export function finalizeOutboundReply({
       }
     }
     if (truncated.length < fullResponseText.length) {
+      console.log(`[legacy-cov] path=finalize-hard-cap gate=!llmOwnsTurnActive`);
       console.log(`[chat] response-length cap: ${fullResponseText.length} → ${truncated.length} chars (pool=${pool.length})`);
       fullResponseText = truncated;
     }
@@ -738,6 +739,7 @@ export function finalizeOutboundReply({
     !isBrandOrInfoQuestion(ctx.latestUserMessage) &&
     !resolverPromisedRecommendation(ctx.resolverState)
   ) {
+    console.log(`[legacy-cov] path=finalize-empty-pool-pitch-wipe gate=!llmOwnsTurnActive`);
     console.log(`[chat] empty-pool repair: pitch text without products (searchAttempted=${productSearchAttempted})`);
     fullResponseText = "";
   }
@@ -832,6 +834,7 @@ export function finalizeOutboundReply({
     if (policyFallback && (genericShoppingFallback || lacksPolicyTerms)) {
       fullResponseText = policyFallback;
       pool = [];
+      console.log(`[legacy-cov] path=finalize-policy-contract-wipe gate=!llmOwnsTurnActive`);
       console.log("[chat] policy-contract: replaced generic/missing policy reply with deterministic support answer");
     }
   }
