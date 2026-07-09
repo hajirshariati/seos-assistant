@@ -5,12 +5,14 @@ import { getAttributeMappings } from "../models/AttributeMapping.server";
 import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability, getCategoryAttributeCoverage } from "../models/Product.server";
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
-import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes, recoveryHopAllowed } from "../lib/turn-plan.server";
+import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes, recoveryHopAllowed, recoveryHopIsLastResort } from "../lib/turn-plan.server";
 import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
-import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource, handoffOnCatalogBrowse, INTENT_DRIVEN_HANDOFF_REASONS } from "../lib/support-handoff";
+import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource, handoffOnCatalogBrowse, INTENT_DRIVEN_HANDOFF_REASONS, buildHandoffContext } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
 import { detectProcessNarration, stripProcessNarration, buildSalesVoiceFallback, SALES_JUDGMENT_WORKFLOWS } from "../lib/sales-voice";
+import { applyMedicalDisclaimer } from "../lib/medical-disclaimer";
+import { buildFootProfile, buildFootProfilePromptBlock } from "../lib/foot-profile";
 import { classifyTurnScope, scopeAttributesToTurn, isShortAmbiguousReply, messageStatesShoeEnvironment } from "../lib/turn-scope";
 import { buildPriorEvidenceAvailabilityText, buildPriorEvidenceMultiColorText, askedConstraintLabel, titleCaseWord, buildWidthSizeFallbackText } from "../lib/prior-evidence";
 import { selectEvidenceCards } from "../lib/evidence-select";
@@ -2274,6 +2276,10 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   if (
     !productAuthorityModeEnabled() &&
     recoveryHopAllowed(ctx.turnPlan) &&
+    // LAST RESORT: on the LLM-owns path, wait for the primary net (TurnPlan
+    // forced-search + grounding validator) — fire only on a retry attempt or
+    // when the plan carries no search requirement (no net exists downstream).
+    recoveryHopIsLastResort({ plan: ctx.turnPlan, attempt: ctx.groundingAttempt || 0, validatorNetActive: llmOwnsTurnActive() }) &&
     !productSearchAttempted &&
     looksLikeProductPitch(fullResponseText) &&
     allProductPool.size === 0 &&
@@ -2287,7 +2293,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // what the customer just asked.
     const intent = detectConditionOrOccasion(ctx.latestUserMessage || ctx.userText || "");
     if (intent) {
-      console.log(`[legacy-cov] path=recovery-condition-search gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"}`);
+      console.log(`[legacy-cov] path=recovery-condition-search gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"} attempt=${ctx.groundingAttempt || 0}`);
       console.log(`[chat] recovery search: AI did not call tool, forcing query="${intent.phrase}" (${intent.kind})`);
       try {
         const recovery = await dispatchTool(
@@ -2321,6 +2327,10 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   if (
     !productAuthorityModeEnabled() &&
     recoveryHopAllowed(ctx.turnPlan) &&
+    // LAST RESORT: same gate as the condition hop above — the validator's
+    // false-denial blocking kinds own the first attempt; the hop is the
+    // corrective only after a failed retry or when no net exists.
+    recoveryHopIsLastResort({ plan: ctx.turnPlan, attempt: ctx.groundingAttempt || 0, validatorNetActive: llmOwnsTurnActive() }) &&
     !productSearchAttempted &&
     fullResponseText &&
     containsAvailabilityDenial(fullResponseText) &&
@@ -2329,7 +2339,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     !hasCompetitorBrandMention(ctx.latestUserMessage) &&
     !resolverDeniedHonestly
   ) {
-    console.log(`[legacy-cov] path=denial-recovery gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"}`);
+    console.log(`[legacy-cov] path=denial-recovery gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"} attempt=${ctx.groundingAttempt || 0}`);
     console.log(`[chat] denial-recovery: AI denied availability without searching; forcing search of latest user message`);
     try {
       const denialQuery = String(ctx.latestUserMessage || "").slice(0, 200).trim();
@@ -3767,6 +3777,13 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // support_cta event, NOT the plain type:"link" anchor, and never the generic
     // CTA. Gated on supportConfigured so a blank supportUrl ships no fake button.
     if (handoff.mode === "hard") {
+      // CONTEXT TRANSFER: capture what the customer was looking at BEFORE the
+      // wipe, so the human agent picks up mid-conversation, not from zero.
+      const shownTitles = (Array.isArray(handoffPool) ? handoffPool : []).map((c) => c?.title);
+      const handoffContext = buildHandoffContext({
+        workflow: ctx.turnPlan?.workflow, reason: handoff.reason,
+        shownTitles, searchAttempted: productSearchAttempted,
+      });
       fullResponseText = buildSupportHandoffText({ ctx, reason: handoff.reason, partial: false });
       pool = [];
       availabilityPinnedCards = null;
@@ -3776,13 +3793,16 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       evidenceFallbackText = null;
       genericCTA = null;
       supportCTA = null;
-      supportHandoffCta = supportConfigured(ctx) ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl } : null;
+      supportHandoffCta = supportConfigured(ctx)
+        ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl, context: handoffContext }
+        : null;
       qualitySignals.supportHandoffApplied = true;
       // The takeover replaced the whole reply — attribute it so the invariant
       // layer sees "support-handoff", never a masquerading "llm"/"none".
       answerOwner = "support-handoff";
       supportHandoffTakeoverReason = handoff.reason;
       console.log(`[handoff] mode=hard reason=${handoff.reason} support=${Boolean(supportHandoffCta)} cards=0`);
+      console.log(`[handoff-context] ${JSON.stringify(handoffContext)}`);
     } else if (handoff.mode === "soft") {
       const line = buildSupportHandoffText({ ctx, reason: handoff.reason, partial: true });
       if (!fullResponseText.includes(line)) fullResponseText = `${fullResponseText.trim()} ${line}`.trim();
@@ -3880,6 +3900,9 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       type: "support_cta",
       label: supportHandoffCta.label,
       fallbackUrl: supportHandoffCta.fallbackUrl || "",
+      // Structured handoff context (what was shown, workflow, trigger) so the
+      // live-chat integration can hand the human agent a real summary.
+      ...(supportHandoffCta.context ? { context: supportHandoffCta.context } : {}),
     })));
   }
 
@@ -5929,6 +5952,27 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             // Expose the anchored focus product so the availability-truth flow
             // can inherit family/color on a deictic follow-up ("what about 9?").
             ctx.focusProduct = focusProduct || null;
+            // SESSION FOOT PROFILE (lightweight continuity): conditions, width,
+            // size, and previously-shown families from THIS conversation — so
+            // the associate remembers instead of re-asking. Injected only on
+            // profile-relevant workflows, and only when non-empty.
+            try {
+              const profile = buildFootProfile({
+                messages,
+                priorShownTitles: (Array.isArray(priorProductCards) ? priorProductCards : []).map((c) => c?.title),
+              });
+              const profileBlock = buildFootProfilePromptBlock(profile, turnPlan.workflow);
+              if (profileBlock) {
+                systemPrompt += "\n\n" + profileBlock + "\n";
+                console.log(
+                  `[foot-profile] injected workflow=${turnPlan.workflow} ` +
+                  `conditions=${profile.conditions.length} width=${profile.width || "-"} ` +
+                  `sizes=${profile.sizes.length} families=${profile.families.length}`,
+                );
+              }
+            } catch (profileErr) {
+              console.error("[foot-profile] failed (non-fatal):", profileErr?.message || profileErr);
+            }
             const planBlock = buildTurnPlanPromptBlock(turnPlan);
             if (planBlock) {
               systemPrompt += "\n\n" + planBlock + "\n";
@@ -6506,7 +6550,9 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 // Rewrite-only retries reuse the prior attempt's cards (no
                 // re-search). Carry them + the owner so the pin blocks restore
                 // them and the scorer never takes over the turn.
-                ctx: { ...ctx, rewriteOnlyRetry: rewriteOnly, carriedCards, carriedCardOwner, carriedEvidenceFallbackText },
+                // groundingAttempt: lets the in-loop recovery hops know whether
+                // the primary attempt already failed validation (last-resort gate).
+                ctx: { ...ctx, rewriteOnlyRetry: rewriteOnly, carriedCards, carriedCardOwner, carriedEvidenceFallbackText, groundingAttempt: attempt },
                 controller: { enqueue: (c) => attemptBuf.push(c) },
                 encoder,
                 forceNoTools: rewriteOnly,
@@ -6571,15 +6617,26 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             // cards/links and emit empty products + the support link instead.
             if (cleanResult.needsSupportHandoff && !cleanResult.qualitySignals?.supportHandoffApplied) {
               const hasUrl = supportConfigured(ctx);
+              // CONTEXT TRANSFER: the human agent sees this was a validator
+              // exhaustion (not customer intent), how many attempts ran, and
+              // what the customer had on screen before the wipe.
+              const handoffContext = buildHandoffContext({
+                workflow: ctx?.turnPlan?.workflow, reason: "validation_failed",
+                shownTitles: (cleanResult.finalProductCards || []).map((c) => c?.title),
+                searchAttempted: Boolean(cleanResult.productSearchAttempted),
+                validatorAttempts: cleanResult.validation?.attempts,
+                firstErrorKind: cleanResult.validation?.errors?.[0]?.kind,
+              });
               cleanResult.fullResponseText = buildSupportHandoffText({ ctx, reason: "validation_failed", partial: false });
               // Drop the buffered cards/links; emit empty products + a live-chat
               // support_cta button (Zendesk/Intercom/Gorgias, Support Hub URL as
               // fallback) — never the plain link anchor.
               attemptBuf = [encoder.encode(sseChunk({ type: "products", products: [] }))];
-              if (hasUrl) attemptBuf.push(encoder.encode(sseChunk({ type: "support_cta", label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl })));
+              if (hasUrl) attemptBuf.push(encoder.encode(sseChunk({ type: "support_cta", label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl, context: handoffContext })));
               if (cleanResult.turnResult) cleanResult.turnResult.products = [];
               cleanResult.finalProductCards = [];
               console.log(`[handoff] mode=hard reason=validation_failed support=${hasUrl} cards=0`);
+              console.log(`[handoff-context] ${JSON.stringify(handoffContext)}`);
             }
             // SALES VOICE — final emit scrub (backup to the validator block).
             // If any process-narration sentence survived ("I see I'm getting
@@ -6606,6 +6663,22 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                   `workflow=${wf} ${before.length}→${scrubbed.length} chars` +
                   (scrubbed === buildSalesVoiceFallback({ workflow: wf, hasCards: finalCardCount > 0 }) ? " (fallback)" : ""),
                 );
+              }
+            }
+            // MEDICAL DISCLAIMER (permanent, non-removable). Applied by CODE at
+            // the very last text-mutation point — after the validator, retries,
+            // sales-voice scrub, and every repair — so the model can never omit
+            // or rewrite it. Never on a support-handoff reply (the human owns
+            // that conversation) and idempotent (won't stack).
+            if (!cleanResult.qualitySignals?.supportHandoffApplied) {
+              const md = applyMedicalDisclaimer({
+                workflow: ctx?.turnPlan?.workflow || "",
+                message: ctx.latestUserMessage || "",
+                text: cleanResult.fullResponseText || "",
+              });
+              if (md.applied) {
+                cleanResult.fullResponseText = md.text;
+                console.log(`[medical-disclaimer] applied workflow=${ctx?.turnPlan?.workflow || "-"}`);
               }
             }
             // QA repair-budget line (Railway 2026-07-08): one greppable line per

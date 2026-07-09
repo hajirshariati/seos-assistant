@@ -1394,6 +1394,22 @@ export function recoveryHopAllowed(plan) {
   return plan?.productDisplayPolicy !== "suppress";
 }
 
+// LAST-RESORT gate: the hops may only fire when the PRIMARY path has genuinely
+// failed, never as an eager first responder. The primary path is: TurnPlan
+// forced-search (seeds the pool when searchRequired) + the grounding validator
+// (blocks false denials / non-answers and forces a retry). So:
+//   - validator net absent (legacy kill-switch path) → hop is the corrective, allow.
+//   - retry attempt (>0)  → the primary attempt already failed validation, allow.
+//   - first attempt on a search-required plan → the forced-search + validator
+//     own it; the hop must WAIT (returns false).
+//   - first attempt on a plan with NO search requirement → no forced-search net
+//     exists downstream, the hop is the only corrective, allow.
+export function recoveryHopIsLastResort({ plan = null, attempt = 0, validatorNetActive = true } = {}) {
+  if (!validatorNetActive) return true;
+  if ((Number(attempt) || 0) > 0) return true;
+  return !planRequiresSearch(plan);
+}
+
 // ── Hard ownership invariants (OBSERVE — used by the turn-invariant log) ──
 // Workflows whose final cards are owned by a DETERMINISTIC selector
 // (availability-truth / prior-evidence remap / comparison pin / evidence-plan),

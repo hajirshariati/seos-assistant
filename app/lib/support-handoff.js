@@ -361,6 +361,35 @@ export function handoffOnCatalogBrowse({ mode = null, reason = "", workflow = ""
   return CATALOG_BROWSE_WORKFLOWS.has(String(workflow || ""));
 }
 
+// ── Handoff CONTEXT (structured summary for the human agent) ──────────────────
+// When the bot hands a customer to a human, the agent should see WHY in one
+// glance: which TurnPlan workflow was active, what triggered the handoff
+// (customer intent vs validator exhaustion vs a pattern-detected dead end),
+// what products were on screen, and whether a search was even attempted.
+// Attached to the support_cta payload as `context` and logged as one
+// `[handoff-context]` JSON line. Pure + compact (titles capped, no PII).
+export function buildHandoffContext({
+  workflow = "", reason = "", shownTitles = [], searchAttempted = false,
+  validatorAttempts = null, firstErrorKind = null,
+} = {}) {
+  const r = String(reason || "-");
+  const trigger =
+    r === "validation_failed" ? "validator_exhausted"
+    : INTENT_DRIVEN_HANDOFF_REASONS.has(r) ? "customer_intent"
+    : "pattern_dead_end";
+  const ctx = {
+    workflow: String(workflow || "-"),
+    reason: r,
+    trigger,
+    shownBeforeHandoff: (Array.isArray(shownTitles) ? shownTitles : [])
+      .map((t) => String(t || "").slice(0, 60)).filter(Boolean).slice(0, 4),
+    searchAttempted: Boolean(searchAttempted),
+  };
+  if (validatorAttempts != null) ctx.validatorAttempts = Number(validatorAttempts) || 0;
+  if (firstErrorKind) ctx.firstErrorKind = String(firstErrorKind).slice(0, 60);
+  return ctx;
+}
+
 // Decide whether this turn needs a handoff, and which mode.
 //   { mode: "hard", reason }  — no reliable answer / no useful cards → replace
 //   { mode: "soft", reason }  — partial answer with a card → keep card, add line

@@ -143,13 +143,47 @@ export function shownCardsNotInActiveOwnerPool({ shownCards = [], ownerPool = []
   });
 }
 
+// ── IMPROVEMENT HOOK (violations → prompt/plan improvement items) ─────────────
+// Every violation that survives to production is a concrete improvement task,
+// not just a counter. This map routes each violation CLASS to the layer that
+// should be tuned — so a `grep '\[improvement-hook\]'` over PRD logs is a
+// ready-made backlog with owners. The rule of the system: when a violation
+// fires, fix the PROMPT/PLAN/DETECTOR that let it happen — never weaken the
+// repair layer that caught it.
+const IMPROVEMENT_HINTS = {
+  // routing / plan
+  unauthorized_owner_for_workflow: "tune=turn-plan routing or OWNER_WORKFLOWS scoping (an owner claimed a turn TurnPlan assigned elsewhere)",
+  unknown_owner_unregistered: "tune=OWNER_WORKFLOWS registry (register + scope the new owner)",
+  plan_search_skipped: "tune=turn-plan directives / forced-search (plan required a search the model skipped)",
+  // grounding / truth
+  answer_names_product_not_in_evidence: "tune=chat-prompt grounding rules (model referenced an unfetched product)",
+  advisory_named_unpinned_product: "tune=advisory directives (model discussed a product outside the pinned cards)",
+  product_type_mismatch: "tune=search scoping / classifyCatalogItemType coverage (wrong product type surfaced)",
+  variant_text_card_mismatch: "tune=variant grounding in chat-prompt (text promised a color the card lacks)",
+  availability_text_card_color_mismatch: "tune=availability-truth composer (text/card color drift)",
+  final_card_not_in_current_evidence: "tune=card pipeline (a stray card bypassed evidence gating)",
+  // knowledge / handoff
+  answer_source_misattributed: "tune=applyAnswerSourceContract attribution (source label lied)",
+  policy_handoff_without_lexical_fallback: "tune=lexical injection gate (knowledge had the answer, turn punted)",
+  policy_rag_hit_handoff: "tune=knowledge-answer keep logic (RAG hit but reply handed off)",
+  handoff_on_catalog_browse: "tune=detectSupportHandoffNeed exemptions (hard handoff answered a browse turn)",
+  support_handoff_cards_leak: "tune=card suppression on handoff turns",
+  handoff_meta_text_leak: "tune=chat-prompt UI-meta prohibition (model narrated widget mechanics)",
+};
+const IMPROVEMENT_HINT_DEFAULT = "tune=triage (unmapped class — add a hint to IMPROVEMENT_HINTS when diagnosed)";
+export function improvementHintFor(code) {
+  return IMPROVEMENT_HINTS[String(code || "")] || IMPROVEMENT_HINT_DEFAULT;
+}
+
 // Record (and log) a turn-invariant violation. `code` is a stable, low-cardinality
 // identifier (e.g. "card_not_in_evidence_pool"); `fields` is structured context.
+// Also emits the [improvement-hook] line — the self-improvement loop's input.
 export function recordTurnInvariantViolation(code, fields = {}) {
   const key = String(code || "unknown");
   counters.set(key, (counters.get(key) || 0) + 1);
   const detail = fields && Object.keys(fields).length ? " " + safeJson(fields) : "";
   console.warn(`[turn-invariant] VIOLATION ${key}${detail}`);
+  console.warn(`[improvement-hook] code=${key} ${improvementHintFor(key)}`);
 }
 
 // Snapshot of all violation counts since process start (or last reset).
