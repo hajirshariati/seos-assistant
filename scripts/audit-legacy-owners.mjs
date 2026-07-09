@@ -42,7 +42,9 @@ const FLAG_DEFAULT_ON =
 const OWNERS = [
   {
     owner: "runVariantFactDispatch",
-    guards: [{ file: "chat.jsx", src: "const variantFactResult = await runVariantFactDispatch({" }],
+    // Since the 2026-07 owner registry, the call is gated on
+    // ownerAuthorizedForWorkflow("variant-facts", …) ? await runVariantFactDispatch({…}) : null.
+    guards: [{ file: "chat.jsx", src: "? await runVariantFactDispatch({" }],
     active: false,
     flagProtected: true,
     rollback: true,
