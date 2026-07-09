@@ -598,6 +598,8 @@ export function specQuestionAnsweredAsAvailability({ message = "", text = "" } =
 
 const COMPARISON_RE =
   /\b(?:vs\.?|versus|compare[ds]?|comparison|which\s+is\s+better|better\s+(?:for|than)|difference\s+between|which\s+(?:one\s+)?should\s+i)\b/i;
+const PRIOR_SET_COMPARISON_RE =
+  /\bwhich\s+(?:one\s+)?(?:has|is|feels?|would\s+be|gives?|offers?)\b[^.?!\n]{0,50}\b(?:better|best|more|most|support|cushion(?:ing)?|comfortable|dressy|casual|stable|walking|vacation|arch)\b/i;
 
 // Advisory / value / suitability about a (usually named) product.
 const ADVISORY_RE = new RegExp(
@@ -848,6 +850,20 @@ export function planTurn({
         ],
       });
     }
+    if (hasPriorCards) {
+      return finalize({
+        workflow: WORKFLOWS.SIZING_HELP,
+        requiredEvidence: ["sizing_knowledge"],
+        searchRequired: false,
+        clarificationAllowed: false,
+        productDisplayPolicy: "suppress",
+        answerRequirements: reqs({ answerFirst: true, concise: true, answerInText: true }),
+        gender: null,
+        directives: [
+          "The customer asked a sizing question after product cards were shown. Give useful sizing guidance in TEXT now: start with their usual Aetrex size when no product-specific fit data is available, mention width/half-size/adjustability considerations, and ask which shown style only as an optional next step. Do NOT repeat a prior color/availability answer.",
+        ],
+      });
+    }
     return finalize({
       workflow: WORKFLOWS.SIZING_HELP,
       requiredEvidence: ["none"],
@@ -991,11 +1007,12 @@ export function planTurn({
   // between named products ("Jillian or Savannah?", "Jillian or something
   // else?").
   const isChoiceBetweenProducts = hasNamed && /\bor\b/i.test(m) && words(m) <= 14;
-  if (COMPARISON_RE.test(m) || isChoiceBetweenProducts) {
+  const isPriorSetComparison = !hasNamed && priorFamCount >= 2 && PRIOR_SET_COMPARISON_RE.test(m);
+  if (COMPARISON_RE.test(m) || isChoiceBetweenProducts || isPriorSetComparison) {
     return finalize({
       workflow: WORKFLOWS.COMPARISON,
       requiredEvidence: ["product_facts"],
-      searchRequired: true,
+      searchRequired: !isPriorSetComparison,
       clarificationAllowed: false,
       productDisplayPolicy: "show",
       answerRequirements: reqs({ answerFirst: true, concise: true, recommendOne: true }),
@@ -1005,6 +1022,11 @@ export function planTurn({
           "First sentence must answer directly: lean one product for the stated need and say why. " +
           "Structure: \"Pick X for Y. Choose Z if A. Here's why…\". At most 3 short facts per side. " +
           "No long paragraphs, no review-style essay. Show one card per product.",
+        ...(isPriorSetComparison
+          ? [
+              "This is a follow-up about the products already shown. Compare ONLY those prior products, keep their cards, and do not ask the customer to restate color/style/use-case.",
+            ]
+          : []),
       ],
     });
   }
@@ -1365,8 +1387,10 @@ export function buildAnswerWorkflowExhaustionText(plan, pool = []) {
         : "I can't confirm that exact size and color right now — let me know the product and I'll check what's in stock for you.";
     case WORKFLOWS.COMPARISON:
       return lineup
-        ? `Here ${titles.length === 1 ? "is" : "are"} ${lineup} side by side — take a close look at each, and tell me what matters most (support, cushioning, dressiness) so I can call a winner.`
+        ? `Between ${lineup}, choose the more supportive, adjustable option for long walking; choose the dressier style only if polish matters more than all-day cushioning.`
         : "Tell me the two styles you're weighing and I'll compare them directly on support, cushioning, and fit.";
+    case WORKFLOWS.SIZING_HELP:
+      return "Start with your usual Aetrex size unless a product page notes otherwise; if you're between sizes or need extra room, factor in width and adjustability. Tell me which style you're sizing and I'll narrow it further.";
     case WORKFLOWS.NAMED_PRODUCT_ADVISORY:
       return lineup
         ? `Here's the ${titles[0]}${g ? ` from our ${g}'s line` : ""} — happy to break down whether it fits your need; tell me a bit more about how you'll use it.`

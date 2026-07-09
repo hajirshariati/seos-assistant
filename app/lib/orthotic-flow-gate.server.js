@@ -61,7 +61,7 @@ import { buildStorefrontSearchCTA } from "./storefront-search-cta.server.js";
 import { scrubInternalEnums } from "./chat-postprocessing.js";
 import { detectConversationGoal, detectTurnGoal, INFO_QUESTION_GOALS } from "./turn-intent.server.js";
 import { isShortAmbiguousReply, detectShoeEnvironmentUseCase, messageStatesCondition, messageStatesUseCase } from "./turn-scope.js";
-import { isShoesVsOrthoticsDecision, buildShoesVsOrthoticsAnswer, isGuidedOrthoticFinderRequest } from "./compatibility-truth.server.js";
+import { isShoesVsOrthoticsDecision, buildShoesVsOrthoticsAnswer, isGuidedOrthoticFinderRequest, buildOrthoticCompatibilityAnswer } from "./compatibility-truth.server.js";
 
 // Format a recommender-returned product the same way chat-tools'
 // extractProductCards does. Inlined (rather than imported) to keep
@@ -965,6 +965,22 @@ export async function maybeRunOrthoticFlow({
         `clearing orthotic state, deferring to footwear routing`,
     );
     return { handled: false, case: "orthotic_abandoned_pivot_to_footwear" };
+  }
+
+  // ORTHOTIC↔SANDAL COMPATIBILITY FOLLOW-UP. Inside the guided orthotic flow,
+  // "Can I put those in sandals too?" refers to the orthotics under discussion.
+  // Answer the compatibility question directly instead of treating "sandals" as
+  // a shoe-environment answer and repeating the pending condition question.
+  if (
+    inOrthoticSeedFlow &&
+    /\b(?:can|could|do|does|will|would)?[^.?!\n]{0,30}\b(?:those|them|these|orthotics?|insoles?|inserts?)\b[^.?!\n]{0,50}\b(?:sandals?|slides?|open[-\s]?toe|open\s+shoes?)\b|\b(?:sandals?|slides?|open[-\s]?toe|open\s+shoes?)\b[^.?!\n]{0,30}\btoo\b/i.test(latestUserText)
+  ) {
+    const text = buildOrthoticCompatibilityAnswer();
+    controller.enqueue(encoder.encode(sseChunk({ type: "text", text })));
+    controller.enqueue(encoder.encode(sseChunk({ type: "products", products: [] })));
+    controller.enqueue(encoder.encode(sseChunk({ type: "done" })));
+    console.log(`[orthotic-flow] sandal compatibility follow-up — answered directly, no seed-loop`);
+    return { handled: true, case: "orthotic_sandal_compatibility_followup" };
   }
 
   // ── SHOES-vs-ORTHOTICS open decision ──────────────────────────────────

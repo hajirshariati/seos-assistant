@@ -150,6 +150,26 @@ check("sizing_not_addressed BLOCKS when the customer asked sizing (answer workfl
   assert.equal(v.ok, false);
   assert.ok(v.errors.some((e) => e.kind === "sizing_not_addressed"));
 });
+check("live B: sizing_help after prior cards must not ship stale color answer", () => {
+  const v = validateGrounding({
+    text: "I couldn't find champagne in our current catalog. Try a different color or style?",
+    pool: [],
+    userMessage: "What size should I get if I'm usually an 8.5?",
+    workflow: "sizing_help",
+  });
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.kind === "sizing_not_addressed" || e.kind === "fragment_non_answer"));
+});
+check("prior_evidence_availability generic fallback BLOCKS on answer workflow", () => {
+  const v = validateGrounding({
+    text: "Take a look!",
+    pool: [{ title: "Jillian Braided Quarter Strap Sandal - Champagne" }],
+    userMessage: "Does either come in champagne or rose?",
+    workflow: "prior_evidence_availability",
+  });
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.kind === "fragment_non_answer" || e.kind === "answer_workflow_non_answer"));
+});
 check("same fragment is NON-blocking on a plain browse turn (warning only)", () => {
   const v = validateGrounding({
     text: "Take a look!",

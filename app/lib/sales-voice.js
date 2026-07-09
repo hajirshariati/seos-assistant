@@ -119,10 +119,10 @@ export function buildSalesVoiceFallback({ workflow = "", hasCards = false } = {}
   if (hasCards) {
     switch (workflow) {
       case "comparison":
-        return "Here's how these compare for what you need — take a look at both, and I can go deeper on either one.";
+        return "For walking comfort, choose the more supportive, adjustable option; pick the dressier style only if polish matters more than all-day cushioning.";
       case "availability":
       case "prior_evidence_availability":
-        return "Here's what I'd point you to — take a look, and tell me the size or color you want and I'll confirm it.";
+        return "Here are the closest matching options I can verify from the styles you were looking at; tell me your size if you want me to narrow it further.";
       default:
         // condition_recommendation / named_product_advisory / multi / browse
         return "Here are a few strong options I'd start with for what you described — they're a great fit. Want me to go more polished or more casual?";

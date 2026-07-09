@@ -553,12 +553,10 @@ const COMPARISON_RE =
 const GENERIC_FALLBACK_RE =
   /^(?:take\s+a\s+look\b|here\s+are\s+the\s+(?:matching|closest)|these\s+are\s+the\s+closest|i'?m\s+not\s+finding\s+a\s+clean\s+match|tell\s+me\s+a\s+bit\s+more\b)/i;
 
-// BLOCKING vs WARNING. Only true safety/factual problems force a retry and
-// block shipping. Answer-quality rules (length, answer-first, fragment,
-// sizing, generic-fallback, missing-lookup) are observability WARNINGS for
-// now — they're logged as quality_warning but never retry or gut the reply.
-// (Stabilization: the hard-blocking quality rules were causing retry-loops
-// and "couldn't verify / tell me more" non-answers in production.)
+// BLOCKING vs WARNING. True safety/factual problems always force a retry and
+// block shipping. Answer-quality rules remain warnings on open-ended browse
+// turns, but block on answer workflows where a specific customer question is
+// owed a specific answer.
 const BLOCKING_KINDS = new Set([
   "ungrounded_product_name",
   "wrong_price",
@@ -586,9 +584,13 @@ const BLOCKING_KINDS = new Set([
 // Workflows that must answer (kept in sync with turn-plan ANSWER_WORKFLOWS).
 const ANSWER_WORKFLOW_NAMES = new Set([
   "availability",
+  "prior_evidence_availability",
   "comparison",
   "named_product_advisory",
   "condition_recommendation",
+  "multi_recommendation",
+  "compatibility",
+  "sizing_help",
 ]);
 
 // Quality kinds that are observability-only on browse turns but BLOCKING on

@@ -212,6 +212,30 @@ await test("back-compat: OLD bare-chip history + bare 'Women' reply still contin
   assert.match(events[0].text, /orthotics go in/i, "bare chip answer still advances to q_use_case");
 });
 
+await test("live C: sandal compatibility follow-up answers directly instead of looping condition question", async () => {
+  const { events, encoder, controller } = makeMockSse();
+  const out = await maybeRunOrthoticFlow({
+    messages: [
+      { role: "user", content: "I need orthotics for heel pain" },
+      { role: "assistant", content: "Who are these orthotics for? <<Men's orthotics>> <<Women's orthotics>> <<Kids' orthotics>>" },
+      { role: "user", content: "Women's orthotics" },
+      { role: "assistant", content: "What kind of shoes will the orthotics go in? <<Running shoes>> <<Casual sneakers>> <<Dress shoes>>" },
+      { role: "user", content: "They'll go in running shoes." },
+      { role: "assistant", content: "Any specific foot pain or condition we should match? <<Plantar fasciitis>> <<Ball-of-foot pain>> <<Morton's neuroma>>" },
+      { role: "user", content: "Can I put those in sandals too?" },
+    ],
+    tree,
+    shop: "test.myshopify.com",
+    controller,
+    encoder,
+  });
+  assert.equal(out.handled, true);
+  assert.equal(out.case, "orthotic_sandal_compatibility_followup");
+  assert.match(events[0].text, /closed shoes/i);
+  assert.match(events[0].text, /built-in arch support/i);
+  assert.doesNotMatch(events[0].text, /Any specific foot pain/i);
+});
+
 await test("looksLikeTransactionalQuestion catches ordering / buying intent post-recommendation", () => {
   // Hunter trace (foot-pain-orthotic): after a recommendation, customer
   // said "this mens active posted one sounds good — how do i order it?"

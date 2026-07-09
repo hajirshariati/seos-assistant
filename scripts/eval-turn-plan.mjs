@@ -146,6 +146,8 @@ scenario("generic 'help choosing the right size' → sizing_help, no search/card
   { workflow: W.SIZING_HELP, searchRequired: false, productDisplayPolicy: "suppress" });
 scenario("'what size should I get?' no context → sizing_help", { message: "What size should I get?" },
   { workflow: W.SIZING_HELP, searchRequired: false, productDisplayPolicy: "suppress" });
+scenario("sizing after shown products → sizing_help answer-now, no stale clarifier", { message: "What size should I get if I'm usually an 8.5?", hasPriorCards: true, priorCardFamilies: ["jillian", "savannah"] },
+  { workflow: W.SIZING_HELP, searchRequired: false, clarificationAllowed: false, productDisplayPolicy: "suppress" });
 scenario("'help me pick my size' → sizing_help", { message: "Help me pick my size" },
   { workflow: W.SIZING_HELP, searchRequired: false });
 scenario("'how do I know my Aetrex size?' → sizing_help", { message: "How do I know my Aetrex size?" },
@@ -314,6 +316,10 @@ scenario("'compare the Sydney wedge and the Rebecca heels' → comparison (categ
   { workflow: W.COMPARISON });
 scenario("'Which is better, Jillian or Savannah?' → comparison (not multi)", { message: "Which is better, Jillian or Savannah?", namedProduct: true },
   { workflow: W.COMPARISON });
+scenario("comparison follow-up on prior pair: better arch support → comparison", { message: "Which one has better arch support?", hasPriorCards: true, priorCardFamilies: ["jillian", "savannah"] },
+  { workflow: W.COMPARISON, searchRequired: false, clarificationAllowed: false, productDisplayPolicy: "show" });
+scenario("comparison follow-up on prior pair: more cushion for vacation → comparison", { message: "Which has more cushioning for vacation walking?", hasPriorCards: true, priorCardFamilies: ["jillian", "savannah"] },
+  { workflow: W.COMPARISON, searchRequired: false, clarificationAllowed: false });
 // But an unnamed multi-category ask is still a multi_recommendation.
 scenario("'one sandal, one sneaker, one slipper for heel pain' stays multi (no named families)", { message: "Give me one sandal, one sneaker, and one slipper for heel pain" },
   { workflow: W.MULTI_RECOMMENDATION });
