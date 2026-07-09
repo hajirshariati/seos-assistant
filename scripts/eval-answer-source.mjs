@@ -178,6 +178,53 @@ check("7. no product cards on any policy/account/support turn (planner + contrac
   }
 });
 
+// ── QA STABILIZATION (Railway 2026-07-08): source truthfulness ────────────────
+// Observed: `ragHit=false lexicalHit=true source=rag` — impossible. When
+// semantic RAG misses but the knowledge corpus lexically contains the answer,
+// the final source MUST be `lexical`, even on the full-dump prompt path where
+// no chunks were injected.
+check("8. semantic RAG missed, no chunks injected, lexical knowledge answers → source=lexical (never rag)", () => {
+  const q = "What information do I need to provide to verify I'm a teacher?";
+  const plan = planTurn({ message: q });
+  assert.equal(plan.workflow, W.POLICY_KNOWLEDGE);
+  const r = applyAnswerSourceContract({
+    workflow: W.POLICY_KNOWLEDGE, msg: q,
+    text: "To verify as a teacher, upload your school-issued ID through SheerID at checkout.",
+    ctx: CTX,
+    retrievedChunks: [],       // semantic RAG ran and MISSED; lexical was never injected
+    knowledgeText,             // …but the corpus lexically contains the answer
+  });
+  assert.equal(r.ragHit, false);
+  assert.equal(r.lexicalHit, true);
+  assert.equal(normalizeAnswerSource(r.source), ANSWER_SOURCES.LEXICAL, "the truthful source is lexical, not rag");
+  assert.equal(r.handoff, false, "answered from knowledge — no support CTA");
+  assert.deepEqual(r.cards, []);
+  assert.equal(handoffMetaTextLeak(r.text), false, "no bracket/meta text");
+});
+
+check("9. impossible state never occurs: ragHit=false && lexicalHit=true && source=rag", () => {
+  // Sweep the kept-answer contract across chunk shapes — the misattributed
+  // combination must be unrepresentable.
+  const q = "Do teachers get a discount?";
+  const shapes = [
+    { retrievedChunks: [], knowledgeText },                                  // semantic miss, lexical corpus hit
+    { retrievedChunks: lexicalRetrieveChunks(KNOWLEDGE, q, { limit: 3 }), knowledgeText }, // lexical chunks injected
+    { retrievedChunks: undefined, knowledgeText },                           // RAG never ran (full-dump path)
+  ];
+  for (const shape of shapes) {
+    const r = applyAnswerSourceContract({
+      workflow: W.POLICY_KNOWLEDGE, msg: q,
+      text: "Yes — verified teachers get 15% off through SheerID.",
+      ctx: CTX, ...shape,
+    });
+    const src = normalizeAnswerSource(r.source);
+    assert.ok(
+      !(r.ragHit === false && r.lexicalHit === true && src === "rag"),
+      `impossible state: ragHit=false lexicalHit=true source=rag (chunks=${JSON.stringify(shape.retrievedChunks?.length)})`,
+    );
+  }
+});
+
 console.log("");
 if (fail === 0) {
   console.log(`PASS  ${pass} passed, 0 failed`);

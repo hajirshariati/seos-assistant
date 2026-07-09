@@ -116,6 +116,22 @@ test("orthotic-recommender turn is NEVER visualize-eligible (structural guarante
 test("a wearable sandal whose NAME contains 'Orthotic' stays eligible", () => {
   const ev = fires({ category: "Sandals", title: "Maui Orthotic Flip" });
   assert.ok(ev && ev.type === "visualize_cta");
+  // Plural-title footwear too (Railway 2026-07-08: "Flips" missed the old noun guard).
+  const ev2 = fires({ category: "Sandals", title: "Maui Orthotic Women's Flips - Mocha" });
+  assert.ok(ev2 && ev2.type === "visualize_cta");
+});
+
+test("category-tagged Orthotics stay blocked even when the title names target footwear", () => {
+  // Adversarial-review finding (2026-07-08): real insole titles name their
+  // TARGET footwear ("for Heels, Pumps, Flats") or a condition ("Heel Spurs").
+  // Those words must never re-enable the styling CTA — an insole on a bare
+  // foot is the exact AI-image bug this guard exists to prevent.
+  assert.equal(fires({ category: "Orthotics", title: "Men's Orthotics for Heel Spurs" }), null);
+  assert.equal(fires({ category: "Orthotics", title: "Aetrex Womens Fashion Orthotics:For Heels, Pumps, Flats: Comfort & Arch Support" }), null);
+  assert.equal(fires({ category: "Orthotics", title: "Aetrex Men's Casual Memory Foam Orthotics: Plantar Fasciitis, Flat Feet Relief" }), null);
+  // Untagged variants block too.
+  assert.equal(fires({ title: "Women's Fashion Orthotics - Insole for Heels" }), null);
+  assert.equal(fires({ title: "Men's Orthotics for Heel Spurs" }), null);
 });
 
 test("an ORTHOTIC product (title 'Orthotics', no footwear noun) is blocked even when un-tagged", () => {

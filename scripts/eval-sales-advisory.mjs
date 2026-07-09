@@ -21,13 +21,18 @@ import {
   ADVISORY_QUALITY_WORKFLOWS,
 } from "../app/lib/sales-voice.js";
 import { validateGrounding } from "../app/lib/grounding-validator.server.js";
-import { planTurn, WORKFLOWS } from "../app/lib/turn-plan.server.js";
+import { runWithGroundingRetry } from "../app/lib/llm-owns-turn.server.js";
+import { planTurn, WORKFLOWS, buildTurnPlanPromptBlock } from "../app/lib/turn-plan.server.js";
 import { requestedProductType, filterCardsToRequestedType } from "../app/lib/commerce-truth.server.js";
 
 let pass = 0, fail = 0;
 const fails = [];
 function check(name, fn) {
   try { fn(); console.log(`  ✓ ${name}`); pass++; }
+  catch (err) { console.log(`  ✗ ${name} — ${err.message}`); fails.push({ name, err }); fail++; }
+}
+async function checkAsync(name, fn) {
+  try { await fn(); console.log(`  ✓ ${name}`); pass++; }
   catch (err) { console.log(`  ✗ ${name} — ${err.message}`); fails.push({ name, err }); fail++; }
 }
 
@@ -274,6 +279,95 @@ check("10. 'only show me sandals' → exclusive sandal filter, non-sandals dropp
     cards: [{ title: "Jillian Sneaker" }, { title: "Lynco Orthotic" }, { title: "Maya Sandal" }],
   });
   assert.deepEqual(kept.map((c) => c.title), ["Maya Sandal"], "only the sandal survives");
+});
+
+// ── QA STABILIZATION (Railway 2026-07-08): advisory verbosity at the source ──
+// condition_recommendation is governed to 2-3 short sentences. The prompt
+// carries the contract per-turn, and too_long BLOCKS (forces a rewrite) instead
+// of relying on a post-hoc trim layer.
+check("advisory verbosity: the turn-plan prompt carries the strict 2-3 sentence contract", () => {
+  for (const m of [
+    "I'm going on vacation and walking a lot, but still want something cute. What should I look at?",
+    "I'm on my feet 10 hours in a clinic and want something supportive but not bulky. What would you pick first?",
+  ]) {
+    const plan = planTurn({ message: m });
+    assert.equal(plan.workflow, W.CONDITION_RECOMMENDATION);
+    const block = buildTurnPlanPromptBlock(plan);
+    assert.match(block, /ADVISORY VOICE \(strict\): 2-3 short sentences/, `"${m.slice(0, 40)}…" prompt block carries the contract`);
+    assert.match(block, /never reference a product you aren't showing/i);
+  }
+});
+
+check("advisory verbosity: too_long BLOCKS a rambling condition_recommendation draft", () => {
+  const m = "I'm on my feet 10 hours in a clinic and want something supportive but not bulky. What would you pick first?";
+  const pool = [{ title: "Jillian", price: 120 }, { title: "Gabby", price: 130 }];
+  // A ~120-word advisory essay (over the 90-word governed cap) must be rejected.
+  const rambling =
+    "I'd start with the Jillian because it has fantastic contoured arch support that keeps you comfortable through " +
+    "a long clinic shift, and it also comes in several versatile colors that pair well with scrubs or casual outfits. " +
+    "Beyond that, the cushioning is genuinely impressive for the price point, and many customers with long hospital " +
+    "shifts report that their feet feel noticeably better at the end of the day compared to ordinary flats or generic " +
+    "sneakers they wore before. The Gabby is another wonderful option to consider carefully as well, offering a slightly " +
+    "dressier silhouette with the same supportive footbed technology, memory foam layering, and a secure fit that stays " +
+    "comfortable from your first patient to your last, hour after hour, without feeling bulky or clinical at all.";
+  const v = validateGrounding({ text: rambling, pool, workflow: "condition_recommendation", userMessage: m });
+  assert.equal(v.ok, false, "the rambling draft is rejected, not trimmed later");
+  assert.ok(v.errors.some((e) => e.kind === "too_long"), "blocked specifically as too_long");
+  assert.match(v.errors.find((e) => e.kind === "too_long").message, /2-3 short sentences/);
+  // The concise contract-following answer passes with NO too_long warning.
+  const concise = validateGrounding({ text: CLEAN, pool, workflow: "condition_recommendation", userMessage: m });
+  assert.equal(concise.ok, true);
+  assert.ok(!(concise.warnings || []).some((e) => e.kind === "too_long"), "no quality_warning=too_long on the concise answer");
+});
+
+check("advisory verbosity: too_long stays a WARNING (not blocking) outside condition_recommendation", () => {
+  const longBrowse = Array.from({ length: 40 }, (_, i) => `Sentence ${i} about sandals and comfort here.`).join(" ");
+  const v = validateGrounding({ text: longBrowse, pool: [{ title: "Jillian" }], workflow: "browse", userMessage: "show me sandals for walking" });
+  assert.ok(!v.errors.some((e) => e.kind === "too_long"), "browse turns are not blocked on length");
+});
+
+check("advisory verbosity: 'explain in detail' advisory turns are exempt from the cap", () => {
+  const m = "I have plantar fasciitis — explain in detail what I should look at and why.";
+  const long = Array.from({ length: 20 }, () => "The Jillian offers contoured arch support and cushioning for all-day comfort.").join(" ");
+  const v = validateGrounding({ text: long, pool: [{ title: "Jillian" }], workflow: "condition_recommendation", userMessage: m });
+  assert.ok(!v.errors.some((e) => e.kind === "too_long"), "detail requests are never length-blocked");
+});
+
+await checkAsync("exhaustion valve: a too_long-only exhaustion ships the TRIMMED draft with cards — never a handoff", async () => {
+  // Adversarial-review finding (2026-07-08): blocking too_long must not ship a
+  // WORSE answer at retry exhaustion. Mock a model that returns the same
+  // over-cap (but grounded) advisory draft on every attempt.
+  const m = "I'm going on vacation and walking a lot, but still want something cute. What should I look at?";
+  const longDraft =
+    "I'd start with the Jillian because it has fantastic contoured arch support that keeps you comfortable through " +
+    "long vacation days, and it also comes in several versatile colors that pair well with dresses or casual outfits. " +
+    "Beyond that, the cushioning is genuinely impressive for the price point, and many customers with long travel days " +
+    "report their feet feel noticeably better at the end of the day compared to ordinary flats they wore before. " +
+    "The Gabby is another wonderful option offering a dressier silhouette with the same supportive footbed technology " +
+    "and a secure fit that stays comfortable from your first mile to your last, hour after hour, without feeling bulky.";
+  const cards = [{ title: "Jillian", price: 120 }, { title: "Gabby", price: 130 }];
+  const runLoop = async () => ({
+    fullResponseText: longDraft,
+    finalProductCards: cards,
+    turnResult: { products: cards },
+    evidencePool: cards,
+    qualitySignals: {},
+    totalUsage: {},
+  });
+  const r = await runWithGroundingRetry({
+    runLoop,
+    initialMessages: [{ role: "user", content: m }],
+    userMessage: m,
+    turnPlan: { workflow: "condition_recommendation", productDisplayPolicy: "show" },
+    maxRetries: 2,
+  });
+  assert.equal(r.validation.ok, true, "the turn ships ok — not validator-exhausted");
+  assert.equal(r.validation.lengthTrimmed, true, "shipped via the too_long-only trim valve");
+  assert.ok(!r.needsSupportHandoff, "NEVER a support handoff for a length-only failure");
+  assert.ok(r.fullResponseText.length < longDraft.length, "the draft was trimmed, not discarded");
+  assert.match(r.fullResponseText, /Jillian/i, "the substantive recommendation survives");
+  assert.equal((r.turnResult?.products || r.finalProductCards).length, 2, "cards survive");
+  assert.equal(r.qualitySignals?.qualityRepairUsed, true, "the trim is counted as a quality repair");
 });
 
 console.log("");

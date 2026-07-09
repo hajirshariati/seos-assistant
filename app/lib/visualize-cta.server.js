@@ -7,6 +7,7 @@
 // on click it POSTs { productHandle, styleContext } to /visualize.
 
 import { isImageProviderSupported } from "./image-styling.server.js";
+import { classifyCatalogItemType } from "./turn-plan.server.js";
 
 // Scene presets per footwear category, shown in the style-preview panel so the
 // shopper can re-render the SAME shoe in real-life settings. `label` is what the
@@ -85,33 +86,15 @@ export function buildVisualizeCtaEvent({ config, product, messages, isInsoleReco
   const title = String(product?.title || "");
   if (NON_WEARABLE_RE.test(category) || NON_WEARABLE_RE.test(title)) return null;
 
-  // EXCLUDE orthotics / insoles / inserts / footbeds: they sit INSIDE a shoe,
-  // so "see it on" produces a nonsensical insole-on-a-bare-foot image (prod
-  // trace 2026-06-24: "Men's Premium Memory Foam Orthotics" got an AI
-  // image of a loose insole next to a foot). Match the CATEGORY only —
-  // never the title — because real wearable sandals carry "Orthotic" in
-  // their name (e.g. "Maui Orthotic Flip") and must stay eligible.
-  const INSERT_CATEGORY_RE = /\b(?:orthotic|insole|insert|footbed|foot[\s-]*bed)/i;
-  if (INSERT_CATEGORY_RE.test(category)) return null;
-  // TITLE check for STANDALONE-INSOLE words. The category check above is the
-  // primary signal, but it FAILS when the SKU is mis/under-tagged (prod trace
-  // 2026-06-29: "Men's Speed Orthotics - Insole For Running", handle l700m-m, was
-  // NOT category-tagged Orthotics, so it slipped through and got a "Style the
-  // look" preview of an insole). Unlike bare "orthotic" — which real wearable
-  // sandals carry in their name ("Maui Orthotic Flip") and must stay eligible —
-  // the words insole / insert / footbed NEVER appear in wearable footwear titles,
-  // so matching them on the TITLE is safe and catches under-tagged insoles.
-  const INSOLE_TITLE_RE = /\b(?:insole|insert|footbed|foot[\s-]*bed)s?\b/i;
-  if (INSOLE_TITLE_RE.test(title)) return null;
-  // "Orthotic(s)" in the TITLE blocks too — UNLESS it's paired with a wearable
-  // footwear noun (a real sandal can be named "Maui Orthotic Flip"). Live trace
-  // 2026-06-30: a resolver-candidate card "Men's Orthotics for Overpronation"
-  // was NOT category-tagged Orthotics, so the category check above missed it and
-  // it got a "See It Styled" preview of an insole. "Orthotics for Overpronation"
-  // has no footwear noun → block; "Maui Orthotic Flip" has "flip" → stays eligible.
-  const WEARABLE_FOOTWEAR_NOUN_RE =
-    /\b(?:sandals?|flip|flop|slides?|sneakers?|shoes?|boots?|booties|loafers?|heels?|wedges?|clogs?|mules?|flats?|pumps?|oxfords?|moccasins?|espadrilles?)\b/i;
-  if (/\borthotics?\b/i.test(title) && !WEARABLE_FOOTWEAR_NOUN_RE.test(title)) return null;
+  // EXCLUDE true orthotic INSOLES: they sit INSIDE a shoe, so "see it on"
+  // produces a nonsensical insole-on-a-bare-foot image (prod traces 2026-06-24
+  // "Men's Premium Memory Foam Orthotics", 2026-06-29 "Men's Speed Orthotics -
+  // Insole For Running", 2026-06-30 "Men's Orthotics for Overpronation"). The
+  // CENTRAL classifier decides — the same one commerce truth uses — so a real
+  // wearable sandal with "Orthotic" in its name ("Maui Orthotic Flips") stays
+  // eligible, while insole/insert/footbed titles and bare-"Orthotics" products
+  // are blocked, however the SKU is category-tagged.
+  if (classifyCatalogItemType(product) === "orthotic_insole") return null;
   const priceNum = Number(product?.price);
   if (Number.isFinite(priceNum) && priceNum <= 0) return null;
 

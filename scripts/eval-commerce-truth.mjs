@@ -13,7 +13,7 @@ import {
   variantTextCardMismatch, cardNotInAnswerEvidence, answerAllowsAlternatives, enforceCommerceTruth,
 } from "../app/lib/commerce-truth.server.js";
 import { answerNamesProductNotInEvidence, KNOWN_INVARIANT_CODES } from "../app/lib/turn-invariant.server.js";
-import { planTurn, WORKFLOWS, textPresentsProducts } from "../app/lib/turn-plan.server.js";
+import { planTurn, WORKFLOWS, textPresentsProducts, classifyCatalogItemType } from "../app/lib/turn-plan.server.js";
 import { applyAnswerSourceContract } from "../app/lib/support-handoff.js";
 import { lexicalRetrieveChunks } from "../app/lib/knowledge-chunks.server.js";
 import { cardHasColor } from "../app/lib/availability-truth.js";
@@ -284,6 +284,102 @@ check("NO-OP: a clean, truthful turn is left untouched", () => {
   });
   assert.deepEqual(r.repairs, [], "no repairs on a truthful turn");
   assert.deepEqual(r.cards.map((c) => c.handle), ["jillian-rose"]);
+});
+
+// ── QA STABILIZATION (Railway 2026-07-08) ─────────────────────────────────────
+// A sandal/flip with "Orthotic" in the title is FOOTWEAR — classification comes
+// from the central classifier (structured fields + footwear-noun override),
+// never a bare title substring.
+const MAUI_FLIPS = { title: "Maui Orthotic Women's Flips - Mocha", category: "Sandals", handle: "maui-mocha", _family: "maui" };
+
+check("classifier: 'Maui Orthotic Women's Flips' is footwear; 'Orthotics for Overpronation' is an insole", () => {
+  assert.equal(classifyCatalogItemType(MAUI_FLIPS), "footwear");
+  assert.equal(classifyCatalogItemType({ title: "Maui Orthotic Women's Flips - Mocha" }), "footwear", "footwear even with no category tag");
+  assert.equal(classifyCatalogItemType({ title: "Men's Orthotics for Overpronation" }), "orthotic_insole");
+  assert.equal(classifyCatalogItemType({ productType: "Footwear", title: "Men's Work Posted Orthotics" }), "orthotic_insole", "generic 'Footwear' section tag can't prove wearability");
+  assert.equal(classifyCatalogItemType({ title: "Men's Speed Orthotics - Insole For Running" }), "orthotic_insole");
+  assert.equal(classifyCatalogItemType({ title: "Copper Sole Socks" }), "accessory");
+});
+
+check("classifier: real insole titles with target/condition footwear words stay orthotic_insole", () => {
+  // Adversarial-review finding (2026-07-08): real Aetrex insole titles name
+  // their TARGET footwear or a foot condition — those words must never flip the
+  // classification to footwear, tagged or untagged.
+  const realInsoles = [
+    "Men's Orthotics for Heel Spurs",
+    "Aetrex Womens Fashion Orthotics:For Heels, Pumps, Flats: Comfort & Arch Support",
+    "Aetrex Men's Casual Memory Foam Orthotics: Plantar Fasciitis, Flat Feet Relief",
+    "Aetrex Mens Instyle Orthotics:Comfort For Dress Shoes with non removable insoles",
+    "Children's Dress FLAT/LOW Arch Orthotics-C045",
+    "Men's Speed Orthotics for Running Shoes",
+  ];
+  for (const title of realInsoles) {
+    assert.equal(classifyCatalogItemType({ _category: "Orthotics", title }), "orthotic_insole", `tagged: ${title}`);
+    assert.equal(classifyCatalogItemType({ title }), "orthotic_insole", `untagged: ${title}`);
+  }
+  // A DEDICATED orthotic category is decisive over any title noun; a footwear
+  // category ("Orthotic Sandals") stays footwear.
+  assert.equal(classifyCatalogItemType({ category: "Orthotic Sandals", title: "Maui" }), "footwear");
+});
+
+check("orthotic request with a heel-spurs insole card is NOT dropped as a mismatch", () => {
+  const card = { _category: "Orthotics", title: "Aetrex Men's Casual Memory Foam Orthotics: Plantar Fasciitis, Flat Feet Relief", handle: "l2305m" };
+  const m = "which orthotics do you recommend for plantar fasciitis?";
+  assert.equal(productTypeMismatch({ message: m, cards: [card] }), null, "the correct insole card is never flagged");
+  const r = enforceCommerceTruth({ message: m, text: "These memory foam orthotics are a great pick.", cards: [card], evidencePool: [card], knownColors: COLORS, knownFamilies: [] });
+  assert.equal(r.cards.length, 1, "the only correct card ships");
+  assert.ok(!r.repairs.some((x) => x.code === "product_type_mismatch"));
+});
+
+check("pivot 'shoes instead, not orthotics' keeps the Maui Flips sandal — only true insoles drop", () => {
+  const m = "Wait, show me shoes instead, not orthotics.";
+  const cards = [SNEAKER, MAUI_FLIPS, ORTHOTIC];
+  // The detector flags the TRUE insole, not the orthotic-named sandal.
+  const reason = productTypeMismatch({ message: m, cards });
+  assert.ok(reason && /orthotic_card_on_footwear_request/.test(reason), `flags the insole (${reason})`);
+  assert.doesNotMatch(String(reason), /Maui/i, "the Maui sandal is never the flagged card");
+  const kept = filterCardsToRequestedType({ message: m, cards });
+  assert.deepEqual(kept.map((c) => c.handle), ["danika", "maui-mocha"], "sneaker + orthotic-named sandal survive; insole drops");
+  // Full enforcement: no repair drops the Maui card.
+  const r = enforceCommerceTruth({ message: m, text: "Here are some great shoe options.", cards, evidencePool: cards, knownColors: COLORS, knownFamilies: [] });
+  assert.ok(r.cards.some((c) => c.handle === "maui-mocha"), "Maui Flips ships");
+});
+
+check("ADVISORY: naming an unpinned product strips the sentence — never adds a 4th card", () => {
+  const PINNED = [JILLIAN_ROSE, SAVANNAH, SANDAL_DENIM];
+  const r = enforceCommerceTruth({
+    workflow: "condition_recommendation",
+    message: "I'm going on vacation and walking a lot, but still want something cute. What should I look at?",
+    text: "The Jillian and Savannah are my top picks for all-day walking. The Danika is another cute option.",
+    cards: PINNED,
+    evidencePool: [...PINNED, SNEAKER], // the named Danika IS in the pool — advisory still must not add it
+    knownColors: COLORS,
+    knownFamilies: ["jillian", "savannah", "danika"],
+  });
+  assert.equal(r.cards.length, 3, "finalCards stays at the pinned 3 — no post-hoc expansion");
+  assert.deepEqual(r.cards.map((c) => c.handle), PINNED.map((c) => c.handle), "the pinned cards are unchanged");
+  assert.doesNotMatch(r.text, /Danika/i, "the unpinned-product sentence is stripped");
+  assert.match(r.text, /Jillian|Savannah/i, "the pinned recommendation survives");
+  assert.ok(r.repairs.some((x) => x.code === "advisory_named_unpinned_product" && x.repair === "stripped_sentence"));
+  assert.ok(!r.repairs.some((x) => x.repair === "showed_named"), "showed_named never fires on advisory turns");
+});
+
+check("non-advisory turns still repair by showing the named pool card", () => {
+  const r = enforceCommerceTruth({
+    workflow: "browse",
+    message: "which sandal is best for walking?",
+    text: "I'd go with the Savannah for all-day walking.",
+    cards: [JILLIAN_ROSE], evidencePool: [JILLIAN_ROSE, SAVANNAH], knownFamilies: ["jillian", "savannah"],
+    knownColors: COLORS,
+  });
+  assert.ok(r.cards.some((c) => c.handle === "savannah-tan"));
+  assert.ok(r.repairs.some((x) => x.code === "answer_names_product_not_in_evidence" && x.repair === "showed_named"));
+});
+
+check("registry: QA-stabilization invariant codes are registered", () => {
+  for (const c of ["advisory_named_unpinned_product", "answer_source_misattributed"]) {
+    assert.ok(KNOWN_INVARIANT_CODES.has(c), `${c} registered`);
+  }
 });
 
 console.log("");

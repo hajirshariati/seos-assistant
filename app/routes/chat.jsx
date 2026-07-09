@@ -1795,6 +1795,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     definitionalHallucination: false,
     falseDenial: false,
     emptyAfterStrips: false,
+    // QA repair-budget flags (Railway 2026-07-08): did the answer only pass
+    // because a repair layer fixed it? Golden-QA turns should ship with all
+    // three false — logged as one [qa-repair] line per turn in the runner.
+    commerceRepairUsed: false,
+    sourceRepairUsed: false,
   };
   // Set when a recommender tool returned needMoreInfo (the gate
   // detected required attributes were missing and instructed the
@@ -3660,6 +3665,10 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         // Knowledge answer kept verbatim (meta stripped) — no forced support CTA.
         supportHandoffCta = null;
       }
+      // Repair-budget: the contract REPAIRED the turn if it stripped leaked
+      // UI-meta text or replaced the model's draft with handoff copy — keeping
+      // the model's knowledge answer as-is is not a repair.
+      if (contract.metaLeak || contract.handoff) qualitySignals.sourceRepairUsed = true;
       // INVARIANTS (requirement #6).
       if (contract.metaLeak) {
         recordTurnInvariantViolation("support_meta_text_leak", { workflow: wf });
@@ -3678,8 +3687,16 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           recordTurnInvariantViolation("policy_handoff_without_lexical_fallback", { workflow: wf });
         }
       }
+      const normalizedSource = normalizeAnswerSource(contract.source);
+      // IMPOSSIBLE STATE (Railway 2026-07-08): semantic RAG missed but the
+      // knowledge corpus lexically contains the answer — the source must be
+      // "lexical", never "rag". The contract now attributes this correctly;
+      // this invariant is the backstop that catches any regression.
+      if (!contract.handoff && !contract.ragHit && contract.lexicalHit && normalizedSource === "rag") {
+        recordTurnInvariantViolation("answer_source_misattributed", { workflow: wf });
+      }
       console.log(
-        `[answer-source] source=${normalizeAnswerSource(contract.source)}` +
+        `[answer-source] source=${normalizedSource}` +
         `${contract.handoffReason ? ` reason=${contract.handoffReason}` : ""} ` +
         `workflow=${wf} ragAttempted=${contract.ragAttempted} ragHit=${contract.ragHit} ` +
         `lexicalHit=${contract.lexicalHit} metaLeak=${contract.metaLeak} cta=${Boolean(supportHandoffCta)}`,
@@ -4645,11 +4662,15 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         evidencePool: poolCards,
         knownColors: Array.isArray(ctx?.catalogColorList) ? ctx.catalogColorList : [],
         knownFamilies,
+        // Advisory workflows repair a named-but-unpinned product by stripping
+        // the sentence — never by adding a 4th card after finalization.
+        workflow,
       });
       if (enforced.repairs.length > 0) {
         fullResponseText = enforced.text;
         finalProductCards = enforced.cards;
         finalCount = Array.isArray(finalProductCards) ? finalProductCards.length : 0;
+        qualitySignals.commerceRepairUsed = true;
         for (const r of enforced.repairs) {
           recordTurnInvariantViolation(r.code, { workflow, cardOwner, ...r });
           firedInvariants.push(r.code);
@@ -5429,7 +5450,15 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
           // support when the answer is uploaded). A null result (no embedded
           // chunks) already falls back to the full knowledge dump, so only the
           // empty-array case needs the lexical rescue.
-          if (Array.isArray(retrievedChunks) && retrievedChunks.length === 0 && isPolicyOrServiceQuestion(ragQuery)) {
+          // Gate: any turn that PLANS to a knowledge workflow gets the rescue,
+          // not only the policy-regex shapes (Railway 2026-07-08: "verify I'm a
+          // teacher" plans to policy_knowledge but missed the regex, so the
+          // lexical section was never injected and the source logged as rag).
+          // planTurn is pure/cheap and only evaluated when semantic RAG missed.
+          if (
+            Array.isArray(retrievedChunks) && retrievedChunks.length === 0 &&
+            (isPolicyOrServiceQuestion(ragQuery) || isKnowledgeWorkflow(planTurn({ message: ragQuery }).workflow))
+          ) {
             const lex = lexicalRetrieveChunks(knowledge, ragQuery, { limit: 3 });
             if (lex.length > 0) {
               retrievedChunks = lex;
@@ -6473,6 +6502,9 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 console.error(`[named-product] detection failed:`, err?.message || err);
               }
             }
+            // QA repair-budget: a validator retry means the FIRST draft failed —
+            // the shipped answer only passed because the quality layer fixed it.
+            let qualityRepairUsed = false;
             const cleanResult = await runWithGroundingRetry({
               runLoop: runLoopOnce,
               initialMessages: messages,
@@ -6482,6 +6514,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
               turnPlan: ctx.turnPlan || null,
               maxRetries: 2,
               onAttempt: ({ attempt, validation, textLen, poolSize }) => {
+                if (attempt > 0 || !validation.ok) qualityRepairUsed = true;
                 console.log(
                   `[llm-owns-turn] ${ctx.shop} attempt=${attempt + 1} ` +
                     `ok=${validation.ok} errors=${validation.errors.length} ` +
@@ -6528,6 +6561,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                   scrubbed = buildSalesVoiceFallback({ workflow: wf, hasCards: finalCardCount > 0 });
                 }
                 cleanResult.fullResponseText = scrubbed;
+                qualityRepairUsed = true;
                 console.log(
                   `[sales-voice] scrubbed process narration (${narration.sentences.length} sentence(s)) ` +
                   `workflow=${wf} ${before.length}→${scrubbed.length} chars` +
@@ -6535,6 +6569,17 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 );
               }
             }
+            // QA repair-budget line (Railway 2026-07-08): one greppable line per
+            // turn saying whether the answer only passed because a repair layer
+            // fixed it. Golden-QA target: all three false.
+            console.log(
+              `[qa-repair] workflow=${ctx?.turnPlan?.workflow || "-"} ` +
+              `commerceRepairUsed=${cleanResult.qualitySignals?.commerceRepairUsed === true} ` +
+              // Validator retries, sales-voice scrub, AND deterministic trims
+              // (applyLengthCap / compactComparison flag qualitySignals) all count.
+              `qualityRepairUsed=${qualityRepairUsed || cleanResult.qualitySignals?.qualityRepairUsed === true} ` +
+              `sourceRepairUsed=${cleanResult.qualitySignals?.sourceRepairUsed === true}`,
+            );
             // Emit the AUTHORITATIVE final text first (text emit was
             // deferred in runAgenticLoop). runWithGroundingRetry sets
             // fullResponseText to the accepted answer, a shortened recovered

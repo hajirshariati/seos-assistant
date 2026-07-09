@@ -81,6 +81,14 @@ export const KNOWN_INVARIANT_CODES = new Set([
   "unknown_owner_unregistered",
   // 2026-07 Commerce Truth phase (product-type / variant / card-alignment truth)
   "product_type_mismatch", "variant_text_card_mismatch", "card_not_in_answer_evidence",
+  // 2026-07-08 QA stabilization (Railway log root classes)
+  // answer_source_misattributed: ragHit=false && lexicalHit=true must never log
+  // source=rag — a lexically-grounded knowledge answer is source=lexical.
+  "answer_source_misattributed",
+  // advisory_named_unpinned_product: on an advisory turn the answer named a
+  // product outside the pinned evidence — the repair must strip/rewrite the
+  // sentence, never expand the card set after finalization.
+  "advisory_named_unpinned_product",
 ]);
 
 // INVARIANT detector (answer_names_product_not_in_evidence): the final answer

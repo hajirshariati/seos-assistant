@@ -848,11 +848,20 @@ export function validateGrounding({ text, pool = [], categoryGenderMap = null, u
     // becomes a review essay. (A plain product turn uses the retail cap unless
     // the customer asked for depth.)
     const isComparison = workflow === "comparison";
+    // condition_recommendation is governed TIGHTER than the generic retail cap
+    // (Railway 2026-07-08: advisory turns kept shipping ~160-word drafts and
+    // leaned on post-hoc trimming). Contract: 2-3 short sentences — pick(s) by
+    // name, why they fit, one next step. ~90 words / 550 chars fits that shape
+    // even with 2-3 full product titles; the kind is BLOCKING for this workflow
+    // so the rewrite happens at the source (with a trim-and-ship valve at retry
+    // exhaustion, never a handoff). The wantsDetail exemption still applies —
+    // "explain in detail" advisory turns are not capped.
+    const isConditionReco = workflow === "condition_recommendation";
     if (isProductTurn && (!wantsDetail || isComparison)) {
       const words = retailWordCount(text);
       const chars = text.trim().length;
-      const maxWords = isComparison ? 120 : MAX_RETAIL_WORDS;
-      const maxChars = isComparison ? 700 : MAX_RETAIL_CHARS;
+      const maxWords = isComparison ? 120 : isConditionReco ? 90 : MAX_RETAIL_WORDS;
+      const maxChars = isComparison ? 700 : isConditionReco ? 550 : MAX_RETAIL_CHARS;
       if (words > maxWords || chars > maxChars) {
         errors.push({
           kind: "too_long",
@@ -862,6 +871,11 @@ export function validateGrounding({ text, pool = [], categoryGenderMap = null, u
               `words and 5 sentences: first sentence picks one product for the stated ` +
               `need and says why; then one short "choose the other if…"; at most 3 facts ` +
               `per side. No essay. Do NOT remove necessary caveats.`
+            : isConditionReco
+            ? `Your recommendation draft is ${words} words (${chars} characters) — too ` +
+              `long. Rewrite it as 2-3 short sentences: (1) your direct pick(s) by name, ` +
+              `(2) why they fit what the customer said, (3) optionally ONE next step or ` +
+              `alternative. Name at most 2-3 products — exactly the ones shown. No preamble.`
             : `Your draft is ${words} words (${chars} characters) — too long for ` +
               `the chat widget. Rewrite it as a concise retail sales answer: answer ` +
               `directly in the first sentence, give one honest tradeoff, then one ` +
@@ -1019,6 +1033,9 @@ export function validateGrounding({ text, pool = [], categoryGenderMap = null, u
   const isBlocking = (e) =>
     BLOCKING_KINDS.has(e.kind) ||
     e.kind === "process_narration" ||
+    // condition_recommendation is governed to 2-3 sentences at the SOURCE —
+    // too_long blocks (rewrite before emit) instead of relying on a trim layer.
+    (workflow === "condition_recommendation" && e.kind === "too_long") ||
     (isAnswerWf && ANSWER_WORKFLOW_BLOCKING_KINDS.has(e.kind));
   const blocking = errors.filter(isBlocking);
   const warnings = errors.filter((e) => !isBlocking(e));

@@ -209,10 +209,15 @@ export function applyAnswerSourceContract({ workflow = "", msg = "", text = "", 
   // KNOWLEDGE workflow → RAG-first, then lexical. Keep the model's knowledge
   // answer (meta stripped) when it actually answered; hand off only when it
   // couldn't AND neither RAG nor a lexical scan of the knowledge corpus matched.
+  // SOURCE TRUTHFULNESS: when semantic RAG missed (ragHit=false) but the
+  // knowledge corpus lexically contains the query terms (lexicalHit=true), the
+  // answer came from lexically-matched knowledge, NOT semantic RAG — source is
+  // "lexical" even if the chunks were never injected (full-dump prompt path).
+  // ragHit=false && lexicalHit=true && source=rag is an impossible state.
   if (!isDeadEndAnswer(cleaned)) {
     return {
       ...base,
-      source: lexicalChunks ? "lexical" : ragHit ? "rag" : "static_knowledge",
+      source: lexicalChunks ? "lexical" : ragHit ? "rag" : lexicalHit ? "lexical" : "static_knowledge",
       handoff: false,
       handoffReason: null,
       text: cleaned,

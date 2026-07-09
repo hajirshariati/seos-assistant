@@ -81,23 +81,71 @@ export function isStrippedFragmentText(text) {
   return false;
 }
 
+// ── Catalog item TYPE (THE central classifier) ────────────────────────────────
+// classifyCatalogItemType(card) → "orthotic_insole" | "footwear" | "accessory" | "unknown"
+// One place decides "is this an insole or a shoe" for commerce truth, card
+// filtering, and the See-It-Styled guard — never a bare title-substring check
+// (Railway 2026-07-08: "Maui Orthotic Women's Flips - Mocha" was dropped as an
+// orthotic because "Orthotic" appeared in the title and the footwear-noun guard
+// didn't cover the plural "Flips").
+// Precedence:
+//   1. STRUCTURED fields (category/_category/productType/tags) decide first —
+//      merchant tagging is the strongest signal, and a dedicated orthotic/insole
+//      category is DECISIVE: real Aetrex insole titles routinely name their
+//      TARGET footwear ("Fashion Orthotics: For Heels, Pumps, Flats", "Instyle
+//      Orthotics: Comfort For Dress Shoes"), so a title noun must never override
+//      a category that says Orthotics. The generic section label "Footwear" is
+//      deliberately NOT a footwear noun (it's applied to insoles too).
+//   2. TITLE fallback for under-/un-tagged SKUs: accessory words → standalone
+//      insole words (decisive) → bare "Orthotic(s)" disambiguated by whether a
+//      footwear noun names the PRODUCT itself rather than a target/condition
+//      ("Maui Orthotic Flips" is a sandal; "Orthotics for Heel Spurs" is not
+//      a heel) → plain footwear nouns.
+const INSOLE_STRONG_RE = /\b(?:insoles?|inserts?|footbeds?|foot[\s-]*beds?)\b/i;
+const CARD_ACCESSORY_RE =
+  /\b(?:accessor\w*|socks?|shoe[\s-]*care|care[\s-]*kit|cleaner|cleaning|protect(?:or|ant)s?|spray|gift[\s-]*cards?|laces?|freshener|deodor\w*|shoe[\s-]*horns?)\b/i;
+const WEARABLE_FOOTWEAR_NOUN_RE =
+  /\b(?:sandals?|flip[\s-]?flops?|flips?|flops?|slides?|sneakers?|trainers?|shoes?|boots?|booties?|loafers?|heels?|wedges?|clogs?|mules?|flats?|pumps?|oxfords?|moccasins?|espadrilles?|mary[\s-]?janes?|slippers?)\b/i;
+const BARE_ORTHOTIC_RE = /\b(?:orthotics?|arch[\s-]*supports?)\b/i;
+// Remove the parts of a title where a footwear noun does NOT name the product:
+// ":"-suffixed marketing copy and "for …" target clauses ("for Dress Shoes",
+// ": For Heels, Pumps, Flats") and foot-condition phrases ("Flat Feet",
+// "FLAT/LOW Arch", "Heel Spurs") — so only product-naming nouns remain.
+function stripTargetAndConditionPhrases(title) {
+  return String(title || "")
+    .replace(/:[\s\S]*$/, " ")
+    .replace(/\bfor\b[^:\-–—]*/gi, " ")
+    .replace(/\bflat[\w/-]*\s+(?:feet|foot|arch(?:es)?)\b/gi, " ")
+    .replace(/\bheel\s+(?:spurs?|pain)\b/gi, " ");
+}
+export function classifyCatalogItemType(card) {
+  if (!card || typeof card !== "object") return "unknown";
+  const structured = [
+    card.category, card._category, card.productType,
+    Array.isArray(card.tags) ? card.tags.join(" ") : card.tags,
+  ].filter(Boolean).join(" ");
+  const title = String(card.title || "");
+  if (structured.trim()) {
+    if (CARD_ACCESSORY_RE.test(structured)) return "accessory";
+    if (WEARABLE_FOOTWEAR_NOUN_RE.test(structured)) return "footwear";
+    if (INSOLE_STRONG_RE.test(structured) || BARE_ORTHOTIC_RE.test(structured)) return "orthotic_insole";
+  }
+  if (!title.trim()) return "unknown";
+  if (CARD_ACCESSORY_RE.test(title)) return "accessory";
+  if (INSOLE_STRONG_RE.test(title)) return "orthotic_insole";
+  if (BARE_ORTHOTIC_RE.test(title)) {
+    return WEARABLE_FOOTWEAR_NOUN_RE.test(stripTargetAndConditionPhrases(title)) ? "footwear" : "orthotic_insole";
+  }
+  if (WEARABLE_FOOTWEAR_NOUN_RE.test(title)) return "footwear";
+  return "unknown";
+}
+
 // Is this displayed card an orthotic/insole product (vs wearable footwear)? The
 // orthotic recommender only ever returns these; a footwear card under an
-// orthotic answer is a leak. Matches the category/productType OR the title — the
-// title check catches under-tagged SKUs (same shape as the visualize-CTA insole
-// guard). Bare "orthotic" in a title is allowed only when it isn't paired with a
-// wearable footwear noun (a real sandal can be "Maui Orthotic Flip").
-const ORTHOTIC_CARD_CATEGORY_RE = /\b(?:orthotic|insole|insert|footbed|foot[\s-]*bed|arch[\s-]*support)/i;
-const ORTHOTIC_CARD_TITLE_RE = /\b(?:insole|insert|footbed|foot[\s-]*bed)s?\b/i;
-const WEARABLE_FOOTWEAR_NOUN_RE = /\b(?:sandals?|flip|flop|slides?|sneakers?|shoes?|boots?|loafers?|heels?|wedges?|clogs?|mules?|flats?|pumps?)\b/i;
+// orthotic answer is a leak. Delegates to the central classifier above so title
+// substrings alone ("Orthotic" inside a sandal name) can never misclassify.
 export function isOrthoticProductCard(card) {
-  if (!card || typeof card !== "object") return false;
-  const category = String(card.category || card._category || card.productType || "");
-  if (ORTHOTIC_CARD_CATEGORY_RE.test(category)) return true;
-  const title = String(card.title || "");
-  if (ORTHOTIC_CARD_TITLE_RE.test(title)) return true;
-  if (/\borthotics?\b/i.test(title) && !WEARABLE_FOOTWEAR_NOUN_RE.test(title)) return true;
-  return false;
+  return classifyCatalogItemType(card) === "orthotic_insole";
 }
 
 // INVARIANT detector (hard_gender_fail_open): a HARD gender request must never
@@ -1033,6 +1081,7 @@ export function planTurn({
       answerRequirements: reqs({ answerFirst: true, concise: true }),
       gender: genderFor(true),
       directives: [
+        "ADVISORY VOICE (strict): 2-3 short sentences TOTAL. Sentence 1 = your direct pick(s) by name. Sentence 2 = why they fit what the customer told you. Optional sentence 3 = ONE clear next step or alternative. No preamble, no essay — a longer draft gets rejected and rewritten.",
         "Recommend 2-3 specific products (not a long list) and name each one you show. The displayed cards are exactly the products you name — never reference a product you aren't showing.",
         ...(genderUnstated
           ? [

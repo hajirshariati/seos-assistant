@@ -10,7 +10,8 @@
 //   3. card_not_in_answer_evidence — a shown card isn't in the turn's evidence
 
 import { parseCategoryConstraints } from "./chat-postprocessing.js";
-import { isOrthoticProductCard, cardsNotInEvidencePool, textPresentsProducts } from "./turn-plan.server.js";
+import { classifyCatalogItemType, cardsNotInEvidencePool, textPresentsProducts } from "./turn-plan.server.js";
+import { buildSalesVoiceFallback } from "./sales-voice.js";
 import { availabilityTextCardColorMismatch, cardColor, cardHasColor, findCardWithColor, claimedAvailabilityColors } from "./availability-truth.js";
 import { answerNamesProductNotInEvidence } from "./turn-invariant.server.js";
 
@@ -67,11 +68,18 @@ export function productTypeMismatch({ message = "", cards = [] } = {}) {
   const expectFootwear = (req.footwearPositive && !req.orthoticPositive) || (req.orthoticRejected && req.footwearPositive);
 
   if (expectOrthotic) {
-    const bad = shown.find((c) => !isOrthoticProductCard(c));
+    // Only a card the central classifier POSITIVELY calls footwear/accessory is
+    // a mismatch — "unknown" can't disprove the request.
+    const bad = shown.find((c) => {
+      const t = classifyCatalogItemType(c);
+      return t === "footwear" || t === "accessory";
+    });
     return bad ? `footwear_card_on_orthotic_request:${cardLabel(bad)}` : null;
   }
   if (expectFootwear) {
-    const orth = shown.find((c) => isOrthoticProductCard(c));
+    // A true orthotic INSOLE on a footwear request is a mismatch; a sandal with
+    // "Orthotic" in its title is footwear and must never be flagged.
+    const orth = shown.find((c) => classifyCatalogItemType(c) === "orthotic_insole");
     if (orth) return `orthotic_card_on_footwear_request:${cardLabel(orth)}`;
     // Exclusive specific footwear category ("now only sandals") — every card
     // must be that category.
@@ -93,9 +101,16 @@ export function filterCardsToRequestedType({ message = "", cards = [] } = {}) {
   const req = requestedProductType(message);
   const expectOrthotic = (req.orthoticPositive && !req.footwearPositive) || (req.footwearRejected && req.orthoticPositive);
   const expectFootwear = (req.footwearPositive && !req.orthoticPositive) || (req.orthoticRejected && req.footwearPositive);
-  if (expectOrthotic) return shown.filter((c) => isOrthoticProductCard(c));
+  // Symmetric with productTypeMismatch: only drop cards the classifier
+  // POSITIVELY identifies as the wrong type — "unknown" survives.
+  if (expectOrthotic) {
+    return shown.filter((c) => {
+      const t = classifyCatalogItemType(c);
+      return t !== "footwear" && t !== "accessory";
+    });
+  }
   if (expectFootwear) {
-    let out = shown.filter((c) => !isOrthoticProductCard(c));
+    let out = shown.filter((c) => classifyCatalogItemType(c) !== "orthotic_insole");
     if (req.exclusive && req.footwearCategories.size > 0) {
       out = out.filter((c) => [...req.footwearCategories].some((cat) => cardMatchesCategory(c, cat)));
     }
@@ -162,13 +177,25 @@ const NO_COLOR_TEXT = (color) =>
 const SAFE_NO_CARD_TEXT =
   "I'm not seeing an exact match for that right now — want me to look at some close options?";
 
+// Advisory workflows where the model must only discuss the pinned/visible
+// cards: naming an extra product is repaired by STRIPPING the sentence, never by
+// expanding the card set after finalization (Railway 2026-07-08: a vacation
+// advisory turn grew pinnedCards=3 → finalCards=4 via showed_named).
+export const ADVISORY_PINNED_WORKFLOWS = new Set([
+  "condition_recommendation",
+  "named_product_advisory",
+  "comparison",
+]);
+
 // THE commerce-truth enforcer. Returns { text, cards, repairs[] }. `repairs` is a
 // list of { code, ... } so the caller can fire the matching invariants (the
 // counters still record every repair). Order matters: drop stray/off-type cards
 // first, then reconcile variant color, then reconcile named products, then the
 // empty-card guard so we never ship product-listing copy with zero cards.
+// `workflow`: on ADVISORY_PINNED_WORKFLOWS the named-product repair never adds a
+// card — it strips/rewrites the offending sentence instead.
 export function enforceCommerceTruth({
-  message = "", text = "", cards = [], evidencePool = [], knownColors = [], knownFamilies = [], noCardText = "",
+  message = "", text = "", cards = [], evidencePool = [], knownColors = [], knownFamilies = [], noCardText = "", workflow = "",
 } = {}) {
   const repairs = [];
   let outCards = Array.isArray(cards) ? cards.slice() : [];
@@ -223,18 +250,30 @@ export function enforceCommerceTruth({
   }
 
   // 4. answer_names_product_not_in_evidence — the copy names a product not shown.
-  //    Show it if it's in the pool → else strip the sentence that names it.
+  //    ADVISORY turns (condition_recommendation / named_product_advisory /
+  //    comparison): the model must only discuss the pinned cards — STRIP the
+  //    sentence, never grow the card set after finalization. Other workflows:
+  //    show the named card if it's in the pool → else strip.
   if (outCards.length > 0 && Array.isArray(knownFamilies) && knownFamilies.length > 0) {
     const named = answerNamesProductNotInEvidence({ text: outText, cards: outCards, knownFamilies });
     if (named) {
-      const poolCard = pool.find((c) => familyOf(c) === String(named).toLowerCase());
+      const isAdvisoryPinned = ADVISORY_PINNED_WORKFLOWS.has(String(workflow || ""));
+      const poolCard = isAdvisoryPinned ? null : pool.find((c) => familyOf(c) === String(named).toLowerCase());
       if (poolCard) {
         outCards = [poolCard, ...outCards.filter((c) => cardKey(c) !== cardKey(poolCard))];
         repairs.push({ code: "answer_names_product_not_in_evidence", family: named, repair: "showed_named" });
       } else {
         const stripped = stripFamilySentences(outText, named);
-        outText = stripped.length >= 20 ? stripped : SAFE_NO_CARD_TEXT;
-        repairs.push({ code: "answer_names_product_not_in_evidence", family: named, repair: "stripped_sentence" });
+        // Gutted-strip fallback must match the UI: cards are still shown, so
+        // never say "not seeing a match" — use the card-aware sales fallback.
+        outText = stripped.length >= 20
+          ? stripped
+          : buildSalesVoiceFallback({ workflow, hasCards: outCards.length > 0 });
+        repairs.push({
+          code: isAdvisoryPinned ? "advisory_named_unpinned_product" : "answer_names_product_not_in_evidence",
+          family: named,
+          repair: "stripped_sentence",
+        });
       }
     }
   }

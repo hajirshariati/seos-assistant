@@ -241,12 +241,21 @@ export function compactComparison(text) {
 }
 function applyLengthCap(result, warnings, workflow = "") {
   if (!result?.fullResponseText) return result;
+  // QA repair-budget: a deterministic trim IS a repair — the customer gets a
+  // code-truncated answer, so the [qa-repair] line must not report the turn as
+  // repair-free (Railway 2026-07-08).
+  const markTrim = () => {
+    if (result.qualitySignals && typeof result.qualitySignals === "object") {
+      result.qualitySignals.qualityRepairUsed = true;
+    }
+  };
   // Comparison: ALWAYS compact to the bubble shape, regardless of whether the
   // validator flagged too_long (a 687-char draft is still too long for a bubble).
   if (workflow === "comparison") {
     const trimmed = compactComparison(result.fullResponseText);
     if (trimmed.length < result.fullResponseText.length) {
       console.log(`[grounding-retry] comparison compact: ${result.fullResponseText.length}→${trimmed.length} chars (${wordCount(trimmed)} words)`);
+      markTrim();
       return { ...result, fullResponseText: trimmed };
     }
     return result;
@@ -256,6 +265,7 @@ function applyLengthCap(result, warnings, workflow = "") {
   const trimmed = shortenToBudget(result.fullResponseText);
   if (trimmed.length < result.fullResponseText.length) {
     console.log(`[grounding-retry] length cap (retail): trimmed ${result.fullResponseText.length}→${trimmed.length} chars`);
+    markTrim();
     return { ...result, fullResponseText: trimmed };
   }
   return result;
@@ -522,6 +532,25 @@ export async function runWithGroundingRetry({
       ],
     });
     attempt += 1;
+  }
+
+  // TOO-LONG-ONLY exhaustion valve. The last draft is grounded and substantive —
+  // its ONLY blocking failure is length (too_long blocks on
+  // condition_recommendation). Ship it TRIMMED with its cards instead of
+  // discarding it for a generic fallback or a support handoff: a trimmed real
+  // answer beats both. The blocking retries still fix length at the source on
+  // attempts 1-2; this is the safety net when the model never complies.
+  if (
+    Array.isArray(lastErrors) && lastErrors.length > 0 &&
+    lastErrors.every((e) => e.kind === "too_long") &&
+    last?.fullResponseText
+  ) {
+    console.log(`[grounding-retry] exhausted with ONLY too_long — shipping trimmed draft, keeping cards (no handoff)`);
+    return {
+      ...applyLengthCap(last, lastErrors, planWorkflow),
+      totalUsage: { ...accUsage },
+      validation: { ok: true, errors: [], attempts: attempt + 1, lengthTrimmed: true },
+    };
   }
 
   // Blocking (safety/factual) errors exhausted retries. If we captured a
