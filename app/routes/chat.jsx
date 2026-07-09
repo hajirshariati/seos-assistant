@@ -2360,6 +2360,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         if (cat) catCounts.set(cat, (catCounts.get(cat) || 0) + 1);
       }
       const dominant = [...catCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      console.log(`[legacy-cov] path=auto-broaden gate=!llmOwnsTurnActive&&!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"}`);
       console.log(`[chat] auto-broaden trigger: pool=${allProductPool.size} dominant=${dominant || "-"} broad-need=true`);
       try {
         const broaden = await dispatchTool(
@@ -2399,6 +2400,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   const currentClarifyingType = detectClarifyingQuestionType(fullResponseText);
   const lastClarifyingType = ctx.sessionMemory?.lastClarifyingQuestion?.type || null;
   if (!llmOwnsTurnActive() && currentClarifyingType && currentClarifyingType === lastClarifyingType && allProductPool.size === 0) {
+    console.log(`[legacy-cov] path=repeated-clarifier-escape gate=!llmOwnsTurnActive workflow=${ctx.turnPlan?.workflow || "-"}`);
     try {
       const scoped = scopedProductSearchInput(ctx);
       const hasScope = !!(scoped.scope.gender || scoped.scope.category || scoped.scope.color);
@@ -6692,6 +6694,12 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             }
           }
 
+          // [legacy-cov] Anything past this point is the LEGACY cascade —
+          // reachable ONLY when the LLM_OWNS_ALL_TURNS kill switch is set to
+          // "false" (default is ON, so this line firing on PRD means the env
+          // drifted). One greppable entry line for the removal-plan soak.
+          console.log(`[legacy-cov] path=legacy-dispatch-cascade gate=LLM_OWNS_ALL_TURNS=false workflow=${ctx.turnPlan?.workflow || "-"}`);
+
           // ──────────────────────────────────────────────────────────
           // Phase 3 — Policy / Knowledge dispatcher.
           //
@@ -6711,6 +6719,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             ? await runVariantFactDispatch({ ctx, controller, encoder })
             : null;
           if (variantFactResult && variantFactResult.handled) {
+            console.log(`[legacy-cov] path=variant-fact-engine gate=LLM_OWNS_ALL_TURNS=false engaged=true`);
             console.log(`[router] ${ctx.shop} final_path=variant_fact_engine`);
             console.log(
               `[variant-facts] handled shop=${ctx.shop} ` +
@@ -6737,6 +6746,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 ctx, controller, encoder, retrievedChunks, anthropic,
               });
           if (policyResult && policyResult.handled) {
+            console.log(`[legacy-cov] path=policy-engine gate=LLM_OWNS_ALL_TURNS=false engaged=true`);
             // final_path log overrides any earlier "final_path=llm"
             // line — the router logs that before dispatcher runs.
             // Surface the engine win prominently for log readers.
@@ -6776,6 +6786,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             ? await runResolverNoMatchDispatch({ ctx, controller, encoder })
             : null;
           if (resolverNoMatchResult && resolverNoMatchResult.handled) {
+            console.log(`[legacy-cov] path=resolver-no-match gate=LLM_OWNS_ALL_TURNS=false engaged=true`);
             console.log(`[router] ${ctx.shop} final_path=resolver_no_match`);
             console.log(
               `[resolver-no-match] handled shop=${ctx.shop} ` +
@@ -6804,6 +6815,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
                 ctx, controller, encoder, claimConfig, anthropic,
               });
           if (engineResult && engineResult.handled) {
+            console.log(`[legacy-cov] path=product-turn-engine gate=LLM_OWNS_ALL_TURNS=false engaged=true`);
             console.log(`[router] ${ctx.shop} final_path=product_engine`);
             console.log(
               `[product-turn-engine] handled shop=${ctx.shop} ` +
