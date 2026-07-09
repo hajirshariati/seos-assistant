@@ -3061,9 +3061,13 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // scorer would otherwise surface. Bypasses the scorer like availability.
   if (ctx.turnPlan?.workflow === "comparison" && !availabilityPinnedCards && !comparisonPinnedCards) {
     try {
-      const fams = Array.isArray(ctx.turnPlan.namedFamilies) ? ctx.turnPlan.namedFamilies : [];
+      const namedFams = Array.isArray(ctx.turnPlan.namedFamilies) ? ctx.turnPlan.namedFamilies : [];
+      const priorFams = Array.isArray(ctx.priorProductCards)
+        ? Array.from(new Set(ctx.priorProductCards.map((c) => familyOfTitle(c?.title || "")).filter(Boolean)))
+        : [];
+      const fams = namedFams.length > 0 ? namedFams : priorFams.slice(0, 4);
       const findFamilyCard = (fam) => {
-        for (const src of [pool, Array.from(allProductPool.values())]) {
+        for (const src of [pool, Array.from(allProductPool.values()), ctx.priorProductCards]) {
           const c = (src || []).find((x) => titleStyleFamily(x.title || "").toLowerCase() === fam);
           if (c) return c;
         }

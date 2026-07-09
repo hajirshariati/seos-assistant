@@ -308,6 +308,7 @@ const COLOR_WORDS = [
   "charcoal", "khaki", "olive", "coral", "teal", "maroon", "mauve", "taupe", "camel",
   "cognac", "oat", "oatmeal", "blush", "nude", "wine", "rust", "mustard", "lavender",
   "mint", "peach", "yellow", "orange", "plum", "stone", "sand", "chestnut", "mocha",
+  "rose", "champagne",
 ];
 const COLOR_ALT = COLOR_WORDS.join("|");
 // "...doesn't come in black", "isn't available in red", "no longer made in tan".
@@ -487,6 +488,18 @@ const SIZING_ANSWERED_RE = new RegExp(
   "\\b\\d+(?:\\.5)?\\b",
   "i",
 );
+function requestedColorsInText(text = "") {
+  const t = String(text || "").toLowerCase();
+  const out = [];
+  const seen = new Set();
+  const re = new RegExp("\\b(" + COLOR_ALT + ")\\b", "gi");
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const color = String(m[1] || "").toLowerCase();
+    if (!seen.has(color)) { seen.add(color); out.push(color); }
+  }
+  return out;
+}
 // A reply that ends mid-thought on a connector/dash — the classic gutted
 // fragment ("Great question —", "I'd say —").
 const DANGLING_FRAGMENT_RE = /[—–-]\s*$|\b(?:so|but|and|or|because|with|for|to|the)\s*$/i;
@@ -600,6 +613,8 @@ export const ANSWER_WORKFLOW_BLOCKING_KINDS = new Set([
   "fragment_non_answer",
   "sizing_not_addressed",
   "generic_fallback_non_answer",
+  "multi_color_not_addressed",
+  "comparison_no_verdict",
 ]);
 
 // Stock clarifier stalls — a non-answer when the plan said act-don't-ask.
@@ -926,6 +941,45 @@ export function validateGrounding({ text, pool = [], categoryGenderMap = null, u
           "give the best safe guidance: start with their usual size, factor in " +
           "swelling/adjustable straps, mention easy returns or how it runs, or " +
           "ask whether they prefer a snug or roomy fit.",
+      });
+    }
+
+    // 13. Multi-color prior-evidence availability must address EVERY requested
+    // color. Live failure: "champagne or rose?" got an answer about champagne
+    // only, which is worse than a generic no-match because it silently ignores
+    // half the customer's question.
+    if (workflow === "prior_evidence_availability") {
+      const askedColors = requestedColorsInText(msg);
+      if (askedColors.length >= 2) {
+        const answerLc = text.toLowerCase();
+        const missing = askedColors.filter((c) => !new RegExp("\\b" + c + "\\b", "i").test(answerLc));
+        if (missing.length > 0) {
+          errors.push({
+            kind: "multi_color_not_addressed",
+            claim: missing.join(", "),
+            message:
+              `The customer asked about multiple colors (${askedColors.join(", ")}), ` +
+              `but your answer did not address ${missing.join(", ")}. Answer each ` +
+              `requested color for the shown products, even when one color is unavailable.`,
+          });
+        }
+      }
+    }
+
+    // 14. Comparison-specific stall. A comparison turn must call a winner or
+    // name the tradeoff. "Take a close look and tell me what matters so I can
+    // call a winner" is a fluent non-answer that passed older generic checks.
+    if (
+      workflow === "comparison" &&
+      /\b(?:take\s+a\s+close\s+look|tell\s+me\s+what\s+matters|so\s+i\s+can\s+call\s+a\s+winner|so\s+i\s+can\s+pick|then\s+i\s+can\s+recommend)\b/i.test(text)
+    ) {
+      errors.push({
+        kind: "comparison_no_verdict",
+        claim: firstSentenceOf(text).slice(0, 80),
+        message:
+          "This is a comparison turn, but the answer asks the customer to do the comparison. " +
+          "Call a winner for the stated need, then give the key tradeoff. Do not say " +
+          "\"take a close look\" or \"tell me what matters\" when the products are already shown.",
       });
     }
   }

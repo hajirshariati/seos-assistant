@@ -688,6 +688,35 @@ test("rule12: a color-availability question is NOT treated as sizing", () => {
   assert.equal(out.warnings.some((e) => e.kind === "sizing_not_addressed"), false);
 });
 
+test("rule13: prior-evidence multi-color answer must address every requested color", () => {
+  const pool = [
+    { title: "Jillian Braided Quarter Strap Sandal - Champagne", handle: "jillian-champagne" },
+    { title: "Savannah Adjustable Quarter Strap Sandal - Taupe", handle: "savannah-taupe" },
+  ];
+  const out = validateGrounding({
+    text: "I couldn't find champagne in our current catalog. Try a different color or style?",
+    pool,
+    userMessage: "Does either come in champagne or rose?",
+    workflow: "prior_evidence_availability",
+  });
+  assert.equal(out.ok, false);
+  assert.ok(out.errors.some((e) => e.kind === "multi_color_not_addressed" && /rose/i.test(e.claim)));
+});
+
+test("rule13: prior-evidence multi-color answer passes when both colors are addressed", () => {
+  const pool = [
+    { title: "Jillian Braided Quarter Strap Sandal - Champagne", handle: "jillian-champagne" },
+    { title: "Savannah Adjustable Quarter Strap Sandal - Taupe", handle: "savannah-taupe" },
+  ];
+  const out = validateGrounding({
+    text: "Jillian comes in Champagne, but I'm not seeing Rose. Savannah does not come in Champagne or Rose.",
+    pool,
+    userMessage: "Does either come in champagne or rose?",
+    workflow: "prior_evidence_availability",
+  });
+  assert.equal(out.ok, true);
+});
+
 // ─── Rule 8 (Fix #5): character cap + comparison stays concise ──
 
 test("rule8: an answer over ~500 chars is rejected even if under 160 words", () => {
@@ -756,6 +785,17 @@ test("workflow=comparison: a concise (<120 word) verdict does NOT warn too_long"
     workflow: "comparison",
   });
   assert.ok(!out.warnings.some((e) => e.kind === "too_long"), "concise comparison must not warn too_long");
+});
+
+test("workflow=comparison: 'take a close look / tell me what matters' stalls are blocking", () => {
+  const out = validateGrounding({
+    text: "Here are Jillian and Savannah side by side — take a close look at each, and tell me what matters most so I can call a winner.",
+    pool: [{ title: "Jillian Sandal" }, { title: "Savannah Sandal" }],
+    userMessage: "Compare the Jillian and Savannah for vacation walking.",
+    workflow: "comparison",
+  });
+  assert.equal(out.ok, false);
+  assert.ok(out.errors.some((e) => e.kind === "comparison_no_verdict"));
 });
 
 console.log("\nAll grounding-validator tests done.");
