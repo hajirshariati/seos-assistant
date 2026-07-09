@@ -443,7 +443,7 @@ export function compoundPolicyFallbackText(latestMessage = "") {
     return "For rewards, logged-in customers can view their points, VIP perks, and available rewards in their Aetrex account.";
   }
   if (/\b(return|returns|refund|exchange|exchanges)\b/i.test(latest)) {
-    return "For returns, Aetrex accepts unworn items in original packaging within 30 days of delivery.";
+    return "For returns, Aetrex lets you wear shoes or orthotics for up to 30 days from the date received; U.S. returns have a $5.95 return fee, and final sale items are non-refundable.";
   }
   if (/\b(ship|shipping|delivery)\b/i.test(latest)) {
     return "For shipping, the current delivery details are handled through the support and checkout flow.";
@@ -476,7 +476,7 @@ export function compoundPolicyClausePresent(text = "", latestMessage = "") {
     return /\b(rewards?|loyalty|points?|vip|referral|account)\b/i.test(visible);
   }
   if (/\b(return|returns|refund|exchange|exchanges)\b/i.test(latest)) {
-    return /\b(return|returns|refund|exchange|30\s+days?|unworn|packaging)\b/i.test(visible);
+    return /\b(return|returns|refund|exchange|30\s+days?|return fee|final sale|non-refundable|portal)\b/i.test(visible);
   }
   if (/\b(ship|shipping|delivery)\b/i.test(latest)) {
     return /\b(ship|shipping|delivery|checkout|support|tracking)\b/i.test(visible);
@@ -516,7 +516,7 @@ export function policyOnlyFallbackText(latestMessage = "") {
     return "Aetrex Rewards details are available in the customer's logged-in account, including points, VIP perks, referrals, and redeemable rewards when configured.";
   }
   if (/\b(return|returns|refund|exchange|exchanges)\b/i.test(latest)) {
-    return "Aetrex's return policy accepts unworn items in original packaging within 30 days of delivery. Refunds are issued to the original payment method within 5-7 business days after the return is received.";
+    return "Aetrex lets you wear shoes or orthotics for up to 30 days from the date received; if they are not the perfect fit, start a return through the return portal. U.S. returns have a $5.95 return fee, and final sale items are non-refundable.";
   }
   if (/\b(ship|shipping|delivery)\b/i.test(latest)) {
     return "For shipping and delivery questions, the latest order-specific details are available through the support link below or your order tracking email.";

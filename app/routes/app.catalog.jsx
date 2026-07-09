@@ -628,9 +628,10 @@ const FILE_TYPES = [
     templateName: "faqs-template.txt",
     template: `RETURN POLICY
 ═══════════════════════════════════════
-We accept returns within 30 days of delivery for unworn items in original
-packaging. Refunds are issued to the original payment method within 5-7
-business days after we receive the return.
+Wear your Aetrex shoes or orthotics for up to 30 days from the date your
+order was received. If they are not the perfect fit, send them back through
+the return portal. A $5.95 return fee is deducted from U.S. returns; final
+sale items are non-refundable.
 
 Exchanges are processed the same way — return the original, then place a
 new order for the replacement.
@@ -639,8 +640,9 @@ new order for the replacement.
 
 SHIPPING
 ═══════════════════════════════════════
-Standard shipping takes 5-7 business days within the US (free over $75).
-Expedited shipping (2-3 days) is available at checkout.
+Online orders are processed and shipped within 48 hours. U.S. estimated
+delivery is typically 3-7 business days from purchase date. Expedited
+shipping is available at checkout.
 
 International shipping is available to most countries. Customs and duties
 are the customer's responsibility.

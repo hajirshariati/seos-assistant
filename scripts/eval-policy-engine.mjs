@@ -255,6 +255,44 @@ await test("PE-10 — different merchant data → different composer output", as
   assert.notEqual(a.answerText, b.answerText);
 });
 
+await test("PE-10b — current Aetrex policy facts are preserved from knowledge chunks", async () => {
+  const returnFacts =
+    "Wear your Aetrex shoes or orthotics for up to 30 days from the date your order was received. " +
+    "A $5.95 return fee is automatically deducted when processing U.S. returns. " +
+    "Styles discounted 60% off or more and products marked Final Sale are non-refundable. " +
+    "The Plantar Fasciitis Kit cannot be partially returned.";
+  const shippingFacts =
+    "Online orders are processed and shipped within 48 hours. " +
+    "U.S. estimated delivery is typically 3-7 business days from purchase date. " +
+    "Orders do not ship on Saturdays, Sundays, or holidays.";
+
+  const ret = await runPolicyTurn(
+    { ...ctxBase, latestUserMessage: "what is your return policy?" },
+    {
+      forceEnable: true,
+      retrievedChunks: [
+        chunk({ similarity: 0.72, fileType: "faqs", sectionTitle: "RETURNS", content: returnFacts }),
+      ],
+    },
+  );
+  assert.match(ret.answerText, /\$5\.95/);
+  assert.match(ret.answerText, /60% off/i);
+  assert.match(ret.answerText, /Plantar Fasciitis Kit/i);
+
+  const ship = await runPolicyTurn(
+    { ...ctxBase, latestUserMessage: "how long does shipping take?" },
+    {
+      forceEnable: true,
+      retrievedChunks: [
+        chunk({ similarity: 0.72, fileType: "faqs", sectionTitle: "SHIPPING", content: shippingFacts }),
+      ],
+    },
+  );
+  assert.match(ship.answerText, /48 hours/i);
+  assert.match(ship.answerText, /3-7 business days/i);
+  assert.match(ship.answerText, /Saturdays, Sundays, or holidays/i);
+});
+
 // ─── honest admission when knowledge is missing ────────────────
 
 await test("PE-11 — discount question with NO matching chunks → admits + emits CTA (no raw URL in text)", async () => {

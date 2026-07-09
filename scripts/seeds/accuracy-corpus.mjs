@@ -103,17 +103,17 @@ export const CASES = [
   { id: "sale", message: "what's on sale?",
     expect: { workflow: "sale_browse", forcesCards: true }, tags: ["sale"] },
 
-  // ── policy_account / customer_service ────────────────────────────────────
+  // ── policy knowledge / private account handoff ───────────────────────────
   { id: "policy-return", message: "What is your return policy?",
-    expect: { workflow: "policy_account", display: "suppress", forcesCards: false }, tags: ["policy"] },
+    expect: { workflow: "policy_knowledge", display: "suppress", forcesCards: false }, tags: ["policy"] },
   { id: "policy-return-implicit", message: "What if I need to return them?",
-    expect: { workflow: "policy_account", display: "suppress", forcesCards: false }, tags: ["policy"] },
+    expect: { workflow: "policy_knowledge", display: "suppress", forcesCards: false }, tags: ["policy"] },
   { id: "policy-shipping", message: "How long does shipping take?",
-    expect: { workflow: "policy_account", display: "suppress", forcesCards: false }, tags: ["policy"] },
+    expect: { workflow: "policy_knowledge", display: "suppress", forcesCards: false }, tags: ["policy"] },
   { id: "cs-cancel", message: "I need to cancel my order",
-    expect: { workflow: "customer_service", display: "suppress", forcesCards: false }, tags: ["customer-service"] },
+    expect: { workflow: "account_private_handoff", display: "suppress", forcesCards: false }, tags: ["customer-service"] },
   { id: "cs-damaged", message: "my order arrived and one shoe is damaged, I need a replacement",
-    expect: { workflow: ["customer_service", "clarification"], display: "suppress", forcesCards: false }, tags: ["customer-service"] },
+    expect: { workflow: "account_private_handoff", display: "suppress", forcesCards: false }, tags: ["customer-service"] },
 
   // ── sizing_help ──────────────────────────────────────────────────────────
   { id: "sizing-runsmall", message: "do these run small?", ctx: { hasPriorCards: true },

@@ -110,6 +110,8 @@ scenario("'my package never arrived' → customer_service", { message: "my packa
   { workflow: W.ACCOUNT_PRIVATE_HANDOFF, searchRequired: false, productDisplayPolicy: "suppress" });
 scenario("'I got the wrong item' → customer_service", { message: "I got the wrong item" },
   { workflow: W.ACCOUNT_PRIVATE_HANDOFF, searchRequired: false });
+scenario("'order arrived and shoe is damaged, need replacement' → customer_service", { message: "my order arrived and one shoe is damaged, I need a replacement" },
+  { workflow: W.ACCOUNT_PRIVATE_HANDOFF, searchRequired: false, clarificationAllowed: false, productDisplayPolicy: "suppress" });
 scenario("'where is my order?' → customer_service", { message: "Where is my order? I ordered last week." },
   { workflow: W.ACCOUNT_PRIVATE_HANDOFF, searchRequired: false, productDisplayPolicy: "suppress" });
 scenario("'I want a refund' → customer_service", { message: "I want a refund" },

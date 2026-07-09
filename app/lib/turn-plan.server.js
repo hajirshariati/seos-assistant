@@ -407,11 +407,13 @@ const CUSTOMER_SERVICE_RE = new RegExp(
   "\\b(?:says?|marked|shows?)\\s+delivered\\b" + "|" +
   "\\b(?:never|didn'?t|did\\s+not|hasn'?t|has\\s+not|not)\\s+(?:get|got|receive[d]?|arrive[d]?|come|deliver(?:ed)?|show(?:n|\\s+up)?)\\b" + "|" +
   "\\b(?:missing|lost|stolen|late|delayed|wrong|damaged|defective|broken|torn|ripped)\\s+(?:package|parcel|order|item|shipment|delivery|product|shoe|pair)s?\\b" + "|" +
+  "\\b(?:package|parcel|order|item|shipment|delivery|product|shoe|pair)s?\\b[^.?!\\n]{0,60}\\b(?:arrived|came|delivered|showed\\s+up|is|was|were)\\b[^.?!\\n]{0,60}\\b(?:damaged|defective|broken|torn|ripped|wrong)\\b" + "|" +
   "\\b(?:package|parcel|order|shipment|delivery)\\s+(?:never|hasn'?t|has\\s+not|didn'?t|did\\s+not|isn'?t|is\\s+not)\\b" + "|" +
   "\\bwrong\\s+(?:item|size|color|colour|product|pair|order)\\b" + "|" +
   "\\b(?:received|got|sent\\s+me)\\s+the\\s+wrong\\b" + "|" +
   // explicit action requests on an order
   "\\b(?:i\\s+(?:want|need|'?d\\s+like|would\\s+like)\\s+to|how\\s+do\\s+i|can\\s+i|help\\s+me)\\s+(?:return|refund|exchange|cancel|replace)\\b" + "|" +
+  "\\b(?:i\\s+(?:want|need|'?d\\s+like|would\\s+like)|can\\s+i\\s+get)\\s+(?:a\\s+)?replacement\\b" + "|" +
   "\\b(?:i\\s+(?:want|need|'?d\\s+like|would\\s+like))\\s+(?:a\\s+)?refund\\b" + "|" +
   "\\b(?:return|exchange|cancel|replace)\\s+(?:my|this|these|the|an?)\\s+(?:order|item|pair|purchase|shoe)s?\\b" + "|" +
   // order lookup / problem with order
