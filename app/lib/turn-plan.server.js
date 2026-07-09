@@ -281,6 +281,17 @@ const OWNER_WORKFLOWS = {
   "policy-engine": new Set(["policy_knowledge", "policy_account"]),
   "product-engine": new Set(["browse", "condition_recommendation", "multi_recommendation", "sale_browse", "named_product_advisory", "comparison", "product_focus", "product_spec", "clarification"]),
   "resolver-no-match": new Set(["browse", "condition_recommendation", "multi_recommendation", "sale_browse"]),
+  // The in-loop recovery hops (denial-recovery + recovery-condition-search in
+  // runAgenticLoop) — live correctives that force a product search and rewrite
+  // the reply when the model denied availability or pitched without searching
+  // (legacy-owner audit Group 4: conditional keepers). Registered so the
+  // invariant layer can SEE them: they may only claim product-display turns,
+  // never a knowledge/handoff/suppress turn.
+  "recovery": new Set([
+    "browse", "clarification", "condition_recommendation", "multi_recommendation",
+    "sale_browse", "named_product_advisory", "comparison",
+    "availability", "prior_evidence_availability", "product_focus", "product_spec",
+  ]),
 };
 export function ownerAuthorizedForWorkflow(owner, workflow) {
   const set = OWNER_WORKFLOWS[String(owner || "")];
@@ -1372,6 +1383,15 @@ export function buildAnswerWorkflowExhaustionText(plan, pool = []) {
 export function planForcesProductDisplay(plan) {
   const d = plan?.productDisplayPolicy;
   return d === "show" || d === "show_availability" || d === "show_focused";
+}
+
+// May the in-loop recovery hops (denial-recovery / recovery-condition-search)
+// act on this turn? NEVER on a card-suppressing plan — a policy/knowledge/
+// handoff turn must not be rewritten into "Actually, take a look at these…"
+// with a forced product search. A missing plan fails open (the hops are live
+// correctives; TurnPlan is set on every real turn).
+export function recoveryHopAllowed(plan) {
+  return plan?.productDisplayPolicy !== "suppress";
 }
 
 // ── Hard ownership invariants (OBSERVE — used by the turn-invariant log) ──
