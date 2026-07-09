@@ -341,13 +341,23 @@ const CATALOG_BROWSE_WORKFLOWS = new Set([
   "browse", "sale_browse", "condition_recommendation", "multi_recommendation",
 ]);
 
+// Hard-handoff reasons that are INTENT-driven (the customer asked for a human,
+// kept expressing frustration, or the validator gave up) — legitimate on ANY
+// workflow, unlike pattern-driven dead-end handoffs. Single source of truth for
+// the catalog-browse invariant below AND the chat route's owner-authorization
+// exemption (an intent-driven takeover on a commerce turn is not "unauthorized").
+export const INTENT_DRIVEN_HANDOFF_REASONS = new Set([
+  "explicit_human_request",
+  "repeated_frustration",
+  "validation_failed",
+]);
+
 // INVARIANT detector (handoff_on_catalog_browse): a HARD support handoff must
 // never be the answer to a normal catalog browse/search turn (other than the
-// always-valid explicit-human / repeated-frustration / validation-failed
-// reasons, which are intent-driven not browse-driven).
+// always-valid intent-driven reasons above, which are not browse-driven).
 export function handoffOnCatalogBrowse({ mode = null, reason = "", workflow = "" } = {}) {
   if (mode !== "hard") return false;
-  if (["explicit_human_request", "repeated_frustration", "validation_failed"].includes(reason)) return false;
+  if (INTENT_DRIVEN_HANDOFF_REASONS.has(String(reason || ""))) return false;
   return CATALOG_BROWSE_WORKFLOWS.has(String(workflow || ""));
 }
 

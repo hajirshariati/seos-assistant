@@ -8,7 +8,7 @@ import { buildSystemPrompt } from "../lib/chat-prompt.server";
 import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
 import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
-import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource } from "../lib/support-handoff";
+import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource, handoffOnCatalogBrowse, INTENT_DRIVEN_HANDOFF_REASONS } from "../lib/support-handoff";
 import { extractConstraintPlan, cardMatchesSlotCategory, multiRecoTextCardMismatch, slotSearchCategory } from "../lib/constraint-plan";
 import { detectProcessNarration, stripProcessNarration, buildSalesVoiceFallback, SALES_JUDGMENT_WORKFLOWS } from "../lib/sales-voice";
 import { classifyTurnScope, scopeAttributesToTurn, isShortAmbiguousReply, messageStatesShoeEnvironment } from "../lib/turn-scope";
@@ -3715,6 +3715,12 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // Knowledge + private-handoff workflows are already owned by the answer-source
   // contract above — skip this generic gate so it can't wipe a kept RAG answer
   // (e.g. a knowledge reply that mentions "contact support" matching DEAD_END_RE).
+  // supportHandoffTakeoverReason: set when the HARD path takes the turn over, so
+  // (a) the cardOwner resolution attributes the wiped pool to "support-handoff"
+  // instead of the agnostic-exempt "none", and (b) the owner-authorization
+  // invariant can exempt INTENT-driven takeovers while still flagging a
+  // pattern-driven dead-end handoff that claimed a commerce turn.
+  let supportHandoffTakeoverReason = null;
   if (
     !isKnowledgeWorkflow(ctx.turnPlan?.workflow) &&
     !isPrivateHandoffWorkflow(ctx.turnPlan?.workflow) &&
@@ -3738,6 +3744,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       productSearchAttempted,
       frustrationEscalated: frustrationTurns >= 2,
     });
+    // INVARIANT (handoff_on_catalog_browse): a pattern-driven HARD handoff must
+    // never answer a normal catalog browse turn — record it the moment the
+    // decision is made (intent-driven reasons are exempt inside the detector).
+    if (handoffOnCatalogBrowse({ mode: handoff.mode, reason: handoff.reason, workflow: ctx.turnPlan?.workflow })) {
+      recordTurnInvariantViolation("handoff_on_catalog_browse", {
+        workflow: ctx.turnPlan?.workflow || "-", reason: handoff.reason,
+      });
+    }
     // A handoff CTA opens LIVE CHAT (Zendesk/Intercom/Gorgias) via the widget's
     // support_cta button — the Support Hub URL is only a fallback. So we emit a
     // support_cta event, NOT the plain type:"link" anchor, and never the generic
@@ -3754,6 +3768,10 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       supportCTA = null;
       supportHandoffCta = supportConfigured(ctx) ? { label: supportChatLabel(ctx), fallbackUrl: ctx.supportUrl } : null;
       qualitySignals.supportHandoffApplied = true;
+      // The takeover replaced the whole reply — attribute it so the invariant
+      // layer sees "support-handoff", never a masquerading "llm"/"none".
+      answerOwner = "support-handoff";
+      supportHandoffTakeoverReason = handoff.reason;
       console.log(`[handoff] mode=hard reason=${handoff.reason} support=${Boolean(supportHandoffCta)} cards=0`);
     } else if (handoff.mode === "soft") {
       const line = buildSupportHandoffText({ ctx, reason: handoff.reason, partial: true });
@@ -4589,10 +4607,14 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       console.log(`[chat] ${ctx.shop} fragment guard: cleanup left a ${fullResponseText.trim().length}-char fragment over ${finalCount} card(s) — replaced with a complete answer`);
       fullResponseText = safeText;
     }
+    // After a hard support-handoff takeover the pool was wiped and every pin
+    // nulled — without the takeover flag the owner would resolve to "none"
+    // (workflow-agnostic), making the takeover invisible to the invariants.
     const cardOwner = priorEvidencePinnedCards != null ? "prior-evidence"
       : availabilityPinnedCards != null ? "availability-truth"
       : comparisonPinnedCards != null ? "comparison"
       : evidencePinnedCards != null ? "evidence-plan"
+      : supportHandoffTakeoverReason != null ? "support-handoff"
       : finalCount > 0 ? "scorer" : "none";
     resolvedCardOwner = cardOwner;
     const textCleanupChanged = ownedTextSnapshot != null && ownedTextSnapshot !== fullResponseText;
@@ -4638,6 +4660,11 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         continue; // can't authorize an owner we don't know; the warning is the signal
       }
       if (isWorkflowAgnosticOwner(owner)) continue;
+      // An INTENT-driven support-handoff takeover ("talk to a human", repeated
+      // frustration, validator exhaustion) is legitimate on ANY workflow — only
+      // pattern-driven dead-end handoffs on commerce turns are unauthorized
+      // (those also fire handoff_on_catalog_browse at the gate).
+      if (owner === "support-handoff" && INTENT_DRIVEN_HANDOFF_REASONS.has(supportHandoffTakeoverReason || "")) continue;
       if (!ownerAuthorizedForWorkflow(owner, workflow)) {
         recordTurnInvariantViolation("unauthorized_owner_for_workflow", { workflow, owner });
         firedInvariants.push("unauthorized_owner_for_workflow");

@@ -13,9 +13,9 @@ import {
   shownCardsNotInActiveOwnerPool,
 } from "../app/lib/turn-invariant.server.js";
 import { negationCorruptedPositiveCategory } from "../app/lib/chat-postprocessing.js";
-import { hardGenderFailOpen } from "../app/lib/turn-plan.server.js";
+import { hardGenderFailOpen, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner } from "../app/lib/turn-plan.server.js";
 import { staleWidthAppliedAcrossProducts, availabilityTextCardColorMismatch } from "../app/lib/availability-truth.js";
-import { handoffOnCatalogBrowse } from "../app/lib/support-handoff.js";
+import { handoffOnCatalogBrowse, INTENT_DRIVEN_HANDOFF_REASONS } from "../app/lib/support-handoff.js";
 import { pivotSearchScopeLeak, effectiveScopeForSearch } from "../app/lib/effective-scope.server.js";
 
 let passed = 0, failed = 0;
@@ -147,6 +147,33 @@ test("handoff_on_catalog_browse: hard handoff on a browse turn fires; explicit-h
   assert.equal(handoffOnCatalogBrowse({ mode: "hard", reason: "dead_end_no_answer", workflow: "browse" }), true);
   assert.equal(handoffOnCatalogBrowse({ mode: "hard", reason: "explicit_human_request", workflow: "browse" }), false);
   assert.equal(handoffOnCatalogBrowse({ mode: null, reason: "catalog_no_match_refine", workflow: "browse" }), false);
+});
+
+// ── Phase A item 2 (2026-07-09): support-handoff attribution ─────────────────
+test("support-handoff attribution: intent-driven reasons are the single shared exemption set", () => {
+  // The chat route exempts intent-driven takeovers from the owner-authorization
+  // invariant using THIS set — it must stay in lockstep with the detector.
+  assert.deepEqual(
+    [...INTENT_DRIVEN_HANDOFF_REASONS].sort(),
+    ["explicit_human_request", "repeated_frustration", "validation_failed"],
+  );
+  for (const reason of INTENT_DRIVEN_HANDOFF_REASONS) {
+    assert.equal(handoffOnCatalogBrowse({ mode: "hard", reason, workflow: "browse" }), false, `${reason} is intent-driven, not browse-driven`);
+  }
+});
+
+test("support-handoff attribution: the owner has registry teeth on commerce workflows", () => {
+  // "support-handoff" is NOT workflow-agnostic and NOT authorized on commerce
+  // turns — so a pattern-driven takeover that claims answerOwner/cardOwner on a
+  // browse/availability turn now fires unauthorized_owner_for_workflow (the
+  // intent-driven exemption is reason-scoped in the route, not registry-wide).
+  assert.equal(isWorkflowAgnosticOwner("support-handoff"), false);
+  for (const wf of ["browse", "availability", "condition_recommendation", "comparison", "sale_browse"]) {
+    assert.equal(ownerAuthorizedForWorkflow("support-handoff", wf), false, `support-handoff unauthorized on ${wf}`);
+  }
+  for (const wf of ["policy_knowledge", "account_private_handoff", "customer_service"]) {
+    assert.equal(ownerAuthorizedForWorkflow("support-handoff", wf), true, `support-handoff authorized on ${wf}`);
+  }
 });
 
 test("owner_fallthrough_after_required_gate: off-domain cards under an active gate fire", () => {
