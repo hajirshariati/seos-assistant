@@ -5,7 +5,7 @@ import { getAttributeMappings } from "../models/AttributeMapping.server";
 import { getCatalogCategories, getAllCatalogCategories, getCategoryGenderAvailability, getCategoryAttributeCoverage } from "../models/Product.server";
 import { getActiveCampaigns, formatCampaignsForCS } from "../models/Campaign.server";
 import { buildSystemPrompt } from "../lib/chat-prompt.server";
-import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes } from "../lib/turn-plan.server";
+import { planTurn, buildTurnPlanPromptBlock, buildPlanClarifierRepair, planForcesProductDisplay, planRequiresSearch as planRequiresSearchFlag, clarifierGateDecision, isAnswerWorkflow, plannedWorkflowCardOwnerViolation, plannedSearchSkippedViolation, cardsNotInEvidencePool, textPresentsProducts, workflowDisablesTools, resolvedFamilyGender, isStrippedFragmentText, isOrthoticProductCard, messageExplicitlyAsksForShoes, recoveryHopAllowed } from "../lib/turn-plan.server";
 import { recordTurnInvariantViolation, logTurnInvariant } from "../lib/turn-invariant.server";
 import { classifyAvailability, buildAvailabilityAnswer, AVAILABILITY_RESULT, resolveAvailabilityRequest, isAvailabilityFollowUp, familyOfTitle, collectFamilyColors, constraintIntent, parseAvailabilityConstraints, parseRequestedColors, priorAvailabilityMessage, priorAvailabilityConstraints, variantDataDiagnostics, styleKeyOfTitle, styleNameOfTitle, availabilityTextCardColorMismatch } from "../lib/availability-truth";
 import { detectSupportHandoffNeed, buildSupportHandoffText, supportConfigured, normalizedSupportLabel, supportChatLabel, applyAnswerSourceContract, normalizeAnswerSource } from "../lib/support-handoff";
@@ -2265,8 +2265,15 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     const lastChunk = t.split(/[.!]\s+/).pop() || "";
     return /\?\s*$/.test(lastChunk.trim());
   })();
+  // Ownership instrumentation (see docs/chatbot-ownership-map.md). answerOwner
+  // is who produced the customer-facing TEXT; ownedTextSnapshot (declared below)
+  // is that text captured BEFORE the safety-cleanup pipeline runs. Default: the
+  // LLM owns the answer. Declared HERE so the recovery hops below can claim it
+  // ("recovery" — a registered owner scoped to product-display workflows).
+  let answerOwner = "llm";
   if (
     !productAuthorityModeEnabled() &&
+    recoveryHopAllowed(ctx.turnPlan) &&
     !productSearchAttempted &&
     looksLikeProductPitch(fullResponseText) &&
     allProductPool.size === 0 &&
@@ -2280,6 +2287,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     // what the customer just asked.
     const intent = detectConditionOrOccasion(ctx.latestUserMessage || ctx.userText || "");
     if (intent) {
+      console.log(`[legacy-cov] path=recovery-condition-search gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"}`);
       console.log(`[chat] recovery search: AI did not call tool, forcing query="${intent.phrase}" (${intent.kind})`);
       try {
         const recovery = await dispatchTool(
@@ -2295,6 +2303,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
           fullResponseText = intent.kind === "condition"
             ? `Here's what I'd recommend for ${intent.phrase}.`
             : `Here are some options for ${intent.phrase}.`;
+          answerOwner = "recovery";
           console.log(`[chat] recovery search: filled pool with ${recovery.products.length} product(s)`);
         } else {
           console.log(`[chat] recovery search: returned 0 products`);
@@ -2311,6 +2320,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
       ctx.resolverState.impossible_constraints.length > 0);
   if (
     !productAuthorityModeEnabled() &&
+    recoveryHopAllowed(ctx.turnPlan) &&
     !productSearchAttempted &&
     fullResponseText &&
     containsAvailabilityDenial(fullResponseText) &&
@@ -2319,6 +2329,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
     !hasCompetitorBrandMention(ctx.latestUserMessage) &&
     !resolverDeniedHonestly
   ) {
+    console.log(`[legacy-cov] path=denial-recovery gate=!productAuthorityMode workflow=${ctx.turnPlan?.workflow || "-"}`);
     console.log(`[chat] denial-recovery: AI denied availability without searching; forcing search of latest user message`);
     try {
       const denialQuery = String(ctx.latestUserMessage || "").slice(0, 200).trim();
@@ -2335,6 +2346,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
         // The AI's denial text is wrong. Replace with a neutral
         // pitch that matches the products we actually found.
         fullResponseText = "Actually, take a look at these — they should be a solid fit for what you're after.";
+        answerOwner = "recovery";
         console.log(`[chat] denial-recovery: replaced denial with ${recovery.products.length} real product(s)`);
       } else {
         productSearchAttempted = true; // we did try
@@ -2564,11 +2576,7 @@ async function runAgenticLoop({ anthropic, model, systemPrompt, messages, ctx, c
   // runner ships THIS instead of dropping the cards to a support handoff — the
   // pinned cards are the real answer and must survive.
   let evidenceFallbackText = null;
-  // Ownership instrumentation (see docs/chatbot-ownership-map.md). answerOwner
-  // is who produced the customer-facing TEXT; ownedTextSnapshot is that text
-  // captured BEFORE the safety-cleanup pipeline runs, so the turn-invariant log
-  // can report whether cleanup changed it. Default: the LLM owns the answer.
-  let answerOwner = "llm";
+  // (answerOwner is declared above the recovery hops — they claim it too.)
   // The final card owner for this turn (availability-truth | comparison |
   // evidence-plan | scorer | none), computed at the turn-invariant log and
   // returned so the retry orchestrator can carry it into a rewrite-only retry.

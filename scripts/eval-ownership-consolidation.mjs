@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import {
   planTurn, WORKFLOWS, ownerAuthorizedForWorkflow, isWorkflowAgnosticOwner, cardsNotInEvidencePool,
-  isRegisteredOwner, registeredOwnerNames,
+  isRegisteredOwner, registeredOwnerNames, recoveryHopAllowed,
 } from "../app/lib/turn-plan.server.js";
 import {
   applyAnswerSourceContract, lexicalKnowledgeHit, handoffMetaTextLeak, stripHandoffMetaText, isDeadEndAnswer,
@@ -265,6 +265,43 @@ check("class=support-handoff: meta-text is stripped from an otherwise-good knowl
   assert.doesNotMatch(cleaned, /[\[\]]|\bbutton\b/i);
   // a pure-meta reply strips to nothing → treated as a dead end (→ handoff)
   assert.equal(isDeadEndAnswer(stripHandoffMetaText("[Support Hub button is available above]")), true);
+});
+
+// ── RECOVERY HOPS ARE A FIRST-CLASS OWNER (Phase A item 1, 2026-07-09) ────────
+// The in-loop correctives (denial-recovery / recovery-condition-search) were the
+// last owners invisible to the invariant layer: unregistered, no suppress guard,
+// masquerading as answerOwner="llm". Now they are "recovery" — registered,
+// scoped to product-display workflows, and hard-skipped on suppress turns.
+check("recovery: registered owner, scoped to product-display workflows only", () => {
+  assert.equal(isRegisteredOwner("recovery"), true, "'recovery' is in the owner registry");
+  assert.equal(isWorkflowAgnosticOwner("recovery"), false, "'recovery' is NOT workflow-agnostic — the invariant layer can see it");
+  for (const wf of [W.BROWSE, W.CONDITION_RECOMMENDATION, W.AVAILABILITY, W.SALE_BROWSE]) {
+    assert.equal(ownerAuthorizedForWorkflow("recovery", wf), true, `recovery may act on ${wf}`);
+  }
+  for (const wf of [W.POLICY_KNOWLEDGE, W.ACCOUNT_PRIVATE_HANDOFF, W.SIZING_HELP, W.CART_HANDOFF, W.DISPLAY_RECOVERY]) {
+    assert.equal(ownerAuthorizedForWorkflow("recovery", wf), false, `recovery must NOT claim ${wf}`);
+  }
+});
+
+check("recovery: hops are hard-skipped on card-suppressing turns (policy/knowledge/handoff)", () => {
+  // A policy turn that WOULD have tripped denial-recovery ("we don't offer…"
+  // reads as an availability denial) must leave the text untouched: the plan
+  // suppresses cards, so recoveryHopAllowed is false before any other check.
+  for (const msg of [
+    "Do teachers get a discount?",
+    "What is your return policy?",
+    "I need help with an order that says delivered but I didn't get it.",
+  ]) {
+    const plan = planTurn({ message: msg });
+    assert.equal(plan.productDisplayPolicy, "suppress", `"${msg}" suppresses cards`);
+    assert.equal(recoveryHopAllowed(plan), false, `"${msg}" must never be rewritten by a recovery hop`);
+  }
+  // …while genuine product turns keep the live corrective.
+  for (const msg of ["show me sandals for walking", "do you have the Jillian in red?"]) {
+    assert.equal(recoveryHopAllowed(planTurn({ message: msg })), true, `"${msg}" keeps recovery`);
+  }
+  // No plan (defensive) fails OPEN — the hops are live correctives.
+  assert.equal(recoveryHopAllowed(null), true);
 });
 
 console.log("");
