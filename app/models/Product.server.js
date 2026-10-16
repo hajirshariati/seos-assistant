@@ -2,6 +2,8 @@ import prisma from "../db.server";
 import {
   getAttributeMappings,
   buildMetafieldFragment,
+  buildAutoMetafieldFragment,
+  resolveAutoAttributes,
   resolveProductAttributes,
   resolveVariantAttributes,
 } from "./AttributeMapping.server";
@@ -96,10 +98,18 @@ function mapProductFields(node, mappings) {
     status: node.status || null,
     featuredImageUrl: node.featuredImage?.url || null,
   };
-  if (mappings && mappings.length > 0) {
-    fields.attributesJson = resolveProductAttributes(node, mappings) || undefined;
-  }
+  // Mapped attributes win; zero-config auto-discovered metafields fill any
+  // attribute the merchant hasn't mapped (color/gender/category out of the box).
+  const mapped = mappings && mappings.length > 0 ? resolveProductAttributes(node, mappings) : null;
+  const auto = resolveAutoAttributes(node, mappings || []);
+  if (mapped || auto) fields.attributesJson = { ...(auto || {}), ...(mapped || {}) };
   return fields;
+}
+
+function productMetafieldFragment(mappings) {
+  return [buildMetafieldFragment(mappings, "product"), buildAutoMetafieldFragment(mappings)]
+    .filter(Boolean)
+    .join("\n        ");
 }
 
 function mapVariantFields(v, mappings) {
@@ -164,7 +174,7 @@ export async function upsertProductFromWebhook(shop, webhookPayload, admin) {
 
 export async function fetchAndUpsertProduct(admin, shop, shopifyGid) {
   const mappings = await getAttributeMappings(shop);
-  const productMf = buildMetafieldFragment(mappings, "product");
+  const productMf = productMetafieldFragment(mappings);
   const variantMf = buildMetafieldFragment(mappings, "variant");
   const query = productByIdQuery(productMf, variantMf);
   const resp = await admin.graphql(query, { variables: { id: shopifyGid } });
@@ -247,7 +257,7 @@ export async function syncCatalog(admin, shop) {
   await setSyncState(shop, { status: "running", lastError: null, syncedSoFar: 0 });
   try {
     const mappings = await getAttributeMappings(shop);
-    const productMf = buildMetafieldFragment(mappings, "product");
+    const productMf = productMetafieldFragment(mappings);
     const variantMf = buildMetafieldFragment(mappings, "variant");
     const query = productsQuery(productMf, variantMf);
     if (mappings.length > 0) {

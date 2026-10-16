@@ -759,7 +759,7 @@ function TestChat({ shop }) {
           if (p.type === "text" || p.type === "content_block_delta") {
             full += p.text || p.delta?.text || "";
           } else if (p.type === "products" && p.products) {
-            prods = prods.concat(p.products);
+            prods = p.products.slice(); // full card set per event — last one wins
           } else if (p.type === "choices" && Array.isArray(p.options)) {
             eventChoices = p.options;
           } else if (p.type === "error") {

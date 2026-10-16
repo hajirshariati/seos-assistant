@@ -137,7 +137,9 @@ import prisma from "../db.server";
 import { recordChatUsage, getTodayMessageCount } from "../models/ChatUsage.server";
 import { computeEmbeddingCost } from "../lib/pricing.server";
 import { canSendMessage } from "../lib/billing.server";
-import { normalizeVariantSize, normalizeVariantWidth } from "../lib/variant-matcher.server";
+import { normalizeVariantSize, normalizeVariantWidth, normalizeOptionBag } from "../lib/variant-matcher.server";
+import { titleSuffixColor } from "../lib/color-match.js";
+import { reconcileBufferedCardEvents } from "../lib/card-emission.js";
 
 // Model IDs are env-driven so you can update them in Railway without a code
 // deploy. When Anthropic ships a new model:
@@ -482,7 +484,7 @@ async function loadMerchantColors(ctx) {
   try {
     const products = await prisma.product.findMany({
       where: { shop: ctx.shop, NOT: { status: { in: ["DRAFT", "ARCHIVED"] } } },
-      select: { attributesJson: true, variants: { select: { attributesJson: true } } },
+      select: { title: true, attributesJson: true, variants: { select: { attributesJson: true, optionsJson: true } } },
       take: 1500,
     });
     const colorKeys = ["color", "Color", "color_family", "Color Family", "color_fallback"];
@@ -501,7 +503,14 @@ async function loadMerchantColors(ctx) {
     };
     for (const p of products) {
       addFrom(p.attributesJson);
-      for (const variant of (p.variants || [])) addFrom(variant.attributesJson);
+      // Zero-config sources: one-product-per-colorway catalogs keep color in the
+      // title suffix ("Savannah Sandal - Red"); others in the variant Color option.
+      const suffix = titleSuffixColor(p.title);
+      if (suffix) addFrom({ color: suffix });
+      for (const variant of (p.variants || [])) {
+        addFrom(variant.attributesJson);
+        addFrom(normalizeOptionBag(variant.optionsJson));
+      }
     }
     ctx._merchantColors = Array.from(colorSet);
     console.log(`[chat] color-enum: ${ctx._merchantColors.length} distinct color values from catalog`);
@@ -6706,6 +6715,21 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
               type: "text",
               text: cleanResult.fullResponseText || "",
             })));
+            // CARD EMISSION TRUTH: the buffered products event was written
+            // BEFORE commerce-truth repairs (and may belong to a later attempt
+            // than the accepted one). Collapse to ONE event carrying the
+            // accepted turn's final cards — the widget appends products events,
+            // so a dropped card must never reach the buffer flush.
+            {
+              const acceptedCards = Array.isArray(cleanResult.turnResult?.products)
+                ? cleanResult.turnResult.products
+                : (Array.isArray(cleanResult.finalProductCards) ? cleanResult.finalProductCards : null);
+              const rec = reconcileBufferedCardEvents(attemptBuf, acceptedCards, (o) => encoder.encode(sseChunk(o)));
+              if (rec.changed) {
+                console.log(`[card-emission] reconciled buffered cards emitted=${rec.emitted} → final=${rec.final}${rec.droppedViz ? " (dropped stale visualize_cta)" : ""}`);
+              }
+              attemptBuf = rec.chunks;
+            }
             for (const c of attemptBuf) controller.enqueue(c);
             // Honor the admin "Follow-up questions" toggle on this path
             // too — previously only the legacy path generated them, so

@@ -1028,6 +1028,35 @@ export function sanitizeSaleBrowseSearch(toolCall, ctx) {
   return { ...toolCall, input: { ...input, filters } };
 }
 
+// ── injectCurrentTurnFootwearCategory ──────────────────────────────
+// "show me shoes in red good for plantar fasciitis": the model searched with
+// category=undefined, so semantic matches pulled ORTHOTICS (whose titles say
+// "Women's" and pass the gender filter), the evidence plan pinned them, and the
+// customer saw insoles for a shoe request (live trace 2026-10-16). When THIS
+// turn's message says shoes/footwear — and is not about insoles — scope the
+// search to the merchant's own footwear category. Current-turn text only (never
+// stale memory), only a category the catalog actually has, and the model's own
+// category always wins.
+const GENERIC_SHOE_NOUN_RE = /\b(?:shoes?|footwear)\b/i;
+const INSOLE_NOUN_RE = /\b(?:orthotics?|insoles?|inserts?|footbeds?|inner[\s-]?soles?|arch\s+supports?)\b/i;
+const NAMED_PRODUCT_WORKFLOWS = new Set(["availability", "comparison", "named_product_advisory", "prior_evidence_availability"]);
+export function injectCurrentTurnFootwearCategory(toolCall, ctx) {
+  if (toolCall.name !== "search_products") return toolCall;
+  const filters = toolCall.input?.filters || {};
+  if (filters.category || filters.Category) return toolCall;
+  if (NAMED_PRODUCT_WORKFLOWS.has(ctx?.turnPlan?.workflow)) return toolCall;
+  const latest = String(ctx?.latestUserMessage || "");
+  if (!GENERIC_SHOE_NOUN_RE.test(latest) || INSOLE_NOUN_RE.test(latest)) return toolCall;
+  const cats = Array.isArray(ctx?.catalogCategories) ? ctx.catalogCategories : [];
+  const footwear = cats.map((c) => String(c || "").trim()).find((c) => /^(?:footwear|shoes)$/i.test(c));
+  if (!footwear) return toolCall;
+  console.log(`[chat] footwear-scope: "${latest.slice(0, 60)}" names shoes → filters.category="${footwear.toLowerCase()}"`);
+  return {
+    ...toolCall,
+    input: { ...toolCall.input, filters: { ...filters, category: footwear.toLowerCase() } },
+  };
+}
+
 export function rewriteToolCall(toolCall, ctx) {
   const original = toolCall;
   let rewritten = toolCall;
@@ -1040,6 +1069,7 @@ export function rewriteToolCall(toolCall, ctx) {
   rewritten = injectDefaultGenderOnClearNeed(rewritten, ctx);
   rewritten = injectLockedCategory(rewritten, ctx);
   rewritten = injectOccasionCategory(rewritten, ctx);
+  rewritten = injectCurrentTurnFootwearCategory(rewritten, ctx);
   // Run named-product relaxation LAST: it drops the category filter
   // for explicit named-product lookups, overriding any category
   // injection (e.g. injectOccasionCategory) that may have added one.

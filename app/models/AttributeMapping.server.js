@@ -134,6 +134,46 @@ export function resolveProductAttributes(node, mappings) {
   return Object.keys(attrs).length > 0 ? attrs : null;
 }
 
+// ── Zero-config attribute discovery ────────────────────────────────
+// A merchant who hasn't configured Attribute Mappings yet still keeps color,
+// gender and category in common metafields (Aetrex: custom.color="red",
+// custom.gender_text="Women", custom.category_for_filter="Sandals"). Without
+// them attributesJson was null, so "red shoes" matched nothing and the gender
+// filter could only read titles — where only orthotics say "Women's". These
+// candidates are read for any attribute the merchant has NOT mapped; an
+// explicit mapping always wins. One `metafield(...)` lookup per candidate.
+export const AUTO_METAFIELD_CANDIDATES = [
+  { attribute: "color", namespace: "custom", key: "color" },
+  { attribute: "color", namespace: "custom", key: "colour" },
+  { attribute: "color_family", namespace: "custom", key: "color_family" },
+  { attribute: "color_family", namespace: "custom", key: "attr_color_family" },
+  { attribute: "gender", namespace: "custom", key: "gender" },
+  { attribute: "gender", namespace: "custom", key: "gender_text" },
+  { attribute: "category_for_filter", namespace: "custom", key: "category_for_filter" },
+  { attribute: "subcategory", namespace: "custom", key: "subcategory" },
+];
+
+export function autoMetafieldCandidates(mappings = []) {
+  const mapped = new Set((mappings || []).map((m) => String(m?.attribute || "").toLowerCase()));
+  return AUTO_METAFIELD_CANDIDATES.filter((c) => !mapped.has(c.attribute));
+}
+
+export function buildAutoMetafieldFragment(mappings = []) {
+  return autoMetafieldCandidates(mappings)
+    .map((c, i) => `auto_${i}: metafield(namespace: "${c.namespace}", key: "${c.key}") { value }`)
+    .join("\n        ");
+}
+
+export function resolveAutoAttributes(node, mappings = []) {
+  const attrs = {};
+  autoMetafieldCandidates(mappings).forEach((c, i) => {
+    if (attrs[c.attribute] != null) return;
+    const val = resolveMetafieldValue(node?.[`auto_${i}`]);
+    if (val != null && val !== "" && !(Array.isArray(val) && val.length === 0)) attrs[c.attribute] = val;
+  });
+  return Object.keys(attrs).length > 0 ? attrs : null;
+}
+
 export function resolveVariantAttributes(variantNode, mappings) {
   if (!mappings || mappings.length === 0) return null;
 

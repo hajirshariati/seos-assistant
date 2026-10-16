@@ -1320,7 +1320,8 @@ if(p.type==='text'||p.type==='content_block_delta'){
   full+=tc;
 }
 if(p.type==='products'&&p.products){
-  prods=prods.concat(p.products);
+  /* Each products event is the FULL card set (server contract: last one wins) — replace, never append. */
+  prods=p.products.slice();
 }
 if(p.type==='link'&&p.url){
   linkCTA={url:p.url,label:p.label||'Visit Support Hub'};

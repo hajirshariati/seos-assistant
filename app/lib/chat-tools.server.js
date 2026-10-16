@@ -11,6 +11,7 @@ import {
   recommenderProductToCanonical,
 } from "./product-claim-facts.server.js";
 import { TOOLS, FIT_PREDICTOR_TOOL, CUSTOMER_ORDERS_TOOL } from "./chat-tool-schemas.js";
+import { matchColorValues, isColorFilterKey } from "./color-match.js";
 import {
   canonicalizeCatalogConstraints,
   deriveCatalogMatchContract,
@@ -1195,8 +1196,21 @@ const isExcludedByRule = (p) => {
     // gender risks leaking the wrong gender (e.g. men's products with empty
     // gender attributes appearing in women's queries). Catalog data should
     // tag every product; missing tags should fail closed, not open.
-    return false;
+    //
+    // EXCEPT when the catalog carries NO gender data at all (mirrors
+    // getCatalogCategories' strict=false). Failing closed there keeps only
+    // products whose TITLE says "Women's" — on Aetrex that is the orthotics,
+    // so "red shoes" returned insoles (trace 2026-10-16). The opposite-gender
+    // title check above still excludes explicit men's products.
+    return !catalogHasGenderData;
   };
+  const catalogHasGenderData = products.some((p) => {
+    const g = readAttributeCI(p.attributesJson || {}, ["gender", "gender_fallback", "genders"]);
+    return Array.isArray(g) ? g.length > 0 : Boolean(String(g || "").trim());
+  });
+  if (effectiveGender && !catalogHasGenderData) {
+    console.log(`[search]   gender ${effectiveGender}: catalog has no gender attributes — keeping ungendered products (title opposite-gender exclusion only)`);
+  }
 
   // Weighted scoring. A match in title / productType / category attributes
   // is a much stronger signal than the same word mentioned somewhere in a
@@ -1400,21 +1414,81 @@ const isExcludedByRule = (p) => {
       return typeof val === "string" && [...wants].some((w) => val.toLowerCase().includes(w));
     };
 
-    filtered = filtered.filter((p) => {
+    // Color reads every place a catalog keeps it (attributes, the variant
+    // "Color" option, the " - Red" title suffix) — see color-match.js. Exact
+    // colors first; close shades (red → burgundy) only when no exact exists.
+    // Merchants often keep facets like condition/use-case in TAGS
+    // ("Plantar Fasciitis") rather than attributes. A filter key that no
+    // product carries as an attribute is matched against tags; if neither
+    // exists anywhere in the pool the key is IGNORED — an unknown key must
+    // never wipe the real filters (color) along with it (trace 2026-10-16:
+    // condition="plantar fasciitis" wiped color=red and gender together).
+    const normFacet = (v) => String(v || "").toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    const tagsMatch = (p, wants) => {
+      const tags = (Array.isArray(p.tags) ? p.tags : []).map(normFacet);
+      return [...wants].map(normFacet).some((w) => w && tags.some((t) => t === w || t.includes(w)));
+    };
+    const attrKeyCarried = new Map();
+    const keyCarriedInPool = (key) => {
+      if (!attrKeyCarried.has(key)) {
+        attrKeyCarried.set(key, beforeAttrFilter.some((p) =>
+          readAttributeCI(p.attributesJson || {}, key) != null ||
+          (p.variants || []).some((v) => readAttributeCI(v.attributesJson, key) != null)));
+      }
+      return attrKeyCarried.get(key);
+    };
+    const ignoredAttrKeys = new Set();
+    const passesAttrFilters = (p, colorMode) => {
       if (!productMatchesVariantScope(p, variantScope)) return false;
       const productAttrs = p.attributesJson || {};
       return attrKeys.every((key) => {
         if (["size", "width", "sku"].includes(key.toLowerCase())) return true;
         const want = String(attrFilters[key] || "").toLowerCase();
         if (!want) return true;
+        if (ignoredAttrKeys.has(key)) return true;
         if (key.toLowerCase() === "category") {
           return matchesCategoryWant(p, want);
         }
         const wants = expandFilterValue(want);
+        if (isColorFilterKey(key)) {
+          const colorValues = [
+            ...productDisplayColorValues(p),
+            ...displayValues(readAttributeCI(productAttrs, key)),
+            ...(p.variants || []).flatMap((v) => displayValues(readAttributeCI(v.attributesJson, key))),
+          ];
+          const hit = matchColorValues(colorValues, [...wants]);
+          return colorMode === "family" ? hit != null : hit === "exact";
+        }
         if (matchesAttrExpanded(readAttributeCI(productAttrs, key), wants)) return true;
-        return (p.variants || []).some((v) => matchesAttrExpanded(readAttributeCI(v.attributesJson, key), wants));
+        if ((p.variants || []).some((v) => matchesAttrExpanded(readAttributeCI(v.attributesJson, key), wants))) return true;
+        return tagsMatch(p, wants);
       });
-    });
+    };
+    for (const key of attrKeys) {
+      const k = key.toLowerCase();
+      // badge stays protected (zero matches → honest empty, never ignored).
+      if (["size", "width", "sku", "category", "badge"].includes(k) || isColorFilterKey(key)) continue;
+      if (!attrFilters[key] || keyCarriedInPool(key)) continue;
+      const wants = expandFilterValue(String(attrFilters[key]).toLowerCase());
+      if (!beforeAttrFilter.some((p) => tagsMatch(p, wants))) {
+        ignoredAttrKeys.add(key);
+        console.log(`[search]   attr-filter: ignoring ${key}="${attrFilters[key]}" — no product carries it as an attribute or tag`);
+      }
+    }
+    filtered = filtered.filter((p) => passesAttrFilters(p, "exact"));
+    const colorFilterKey = attrKeys.find((k) => isColorFilterKey(k) && attrFilters[k]);
+    if (filtered.length === 0 && colorFilterKey && beforeAttrFilter.length > 0) {
+      const shades = beforeAttrFilter.filter((p) => passesAttrFilters(p, "family"));
+      if (shades.length > 0) {
+        const shadeNames = uniqueDisplayValues(shades.flatMap(productDisplayColorValues)).slice(0, 4);
+        console.log(`[search]   color-family: no exact "${attrFilters[colorFilterKey]}" — ${shades.length} close-shade match(es) (${shadeNames.join(", ")})`);
+        filtered = shades;
+        relaxedFilters = {
+          [colorFilterKey]: attrFilters[colorFilterKey],
+          _reason: `no exact ${attrFilters[colorFilterKey]} — showing the closest shades (${shadeNames.join(", ")})`,
+        };
+      }
+    }
 
 
     // Safety net: if the attribute filters wiped out every keyword match,
