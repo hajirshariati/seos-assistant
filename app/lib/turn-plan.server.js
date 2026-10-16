@@ -2,6 +2,15 @@
 // TurnPlan — the single front-of-turn brain.
 // =====================================================================
 import { isCompatibilityAsk, isMultiRecommendationAsk } from "./constraint-plan.js";
+
+// "are these dress shoes?" / "is this a sandal?" / "are they really wedges?"
+const SHOWN_TYPE_CHECK_RE =
+  /^\s*(?:(?:so|wait|hm+|um+|but|and)[,\s]+)?(?:are|is)\s+(?:these|those|they|this|that|it|them)\s+(?:(?:really|actually|even|considered|a|an)\s+)*(.{2,40}?)\s*[?.!]*\s*$/i;
+const SHOWN_TYPE_WORD_RE =
+  /\b(?:dress(?:y)?|formal|wedding|casual|work|office|walking|running|athletic|hiking|sandals?|sneakers?|boots?|booties?|heels?|wedges?|flats?|loafers?|clogs?|slippers?|oxfords?|mary\s+janes?|slip[-\s]?ons?|orthotics?|insoles?)\b/i;
+// Suitability/spec/stock questions keep their own workflows.
+const SHOWN_TYPE_EXCLUDE_RE =
+  /\b(?:good|ok(?:ay)?|comfortable|supportive|true\s+to\s+size|waterproof|available|in\s+stock|on\s+sale|worth|wide|narrow)\b/i;
 //
 // Deterministically classifies a customer turn into ONE workflow and emits
 // a plan that governs the whole turn: what evidence is required, whether a
@@ -1100,6 +1109,33 @@ export function planTurn({
             "Look up the named product this turn and answer the value/suitability question directly from its real facts — answer first, one honest tradeoff, then the card. Never answer a named-product question from memory alone.",
             "Refer to the product ONLY by the actual title and color of the card you are showing — never a color carried over from earlier in the conversation.",
           ],
+    });
+  }
+
+  // 4z. SHOWN-PRODUCT TYPE CHECK — "are these dress shoes?", "is this a
+  // sandal?" right after cards were shown. The customer is challenging the
+  // fit of what we showed. Live trace 2026-10-16: routed to clarification with
+  // cards suppressed → "You're right — those aren't dress shoes." and nothing
+  // else. A store associate answers honestly AND brings the right shoes.
+  const shownTypeCheck = hasPriorCards ? m.match(SHOWN_TYPE_CHECK_RE) : null;
+  if (
+    shownTypeCheck &&
+    SHOWN_TYPE_WORD_RE.test(shownTypeCheck[1]) &&
+    !SHOWN_TYPE_EXCLUDE_RE.test(shownTypeCheck[1])
+  ) {
+    const asked = shownTypeCheck[1].replace(/[?.!\s]+$/, "").trim();
+    return finalize({
+      workflow: WORKFLOWS.BROWSE,
+      requiredEvidence: ["product_facts"],
+      searchRequired: true,
+      clarificationAllowed: false,
+      productDisplayPolicy: "show",
+      answerRequirements: reqs({ answerFirst: true, concise: true }),
+      gender: genderFor(true),
+      directives: [
+        `The customer is checking whether the products just shown are "${asked}". Answer honestly in ONE short sentence from those products' real type/category (e.g. "Not quite — those are casual slip-ons."). If they are, say so and name them.`,
+        `If they are NOT, immediately search for real ${asked} options (keep the customer's gender and any other stated needs from earlier in the conversation) and SHOW them. Never just agree and stop — the customer still wants the right shoes.`,
+      ],
     });
   }
 

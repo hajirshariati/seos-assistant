@@ -20,6 +20,8 @@
 // and color injection share the same logic. Re-exported here so existing
 // imports (eval harness, future modules) keep working from this module.
 import { isPrecededByNegation } from "./chat-helpers.server.js";
+import { colorMatchIsGarmentAttached } from "./catalog-resolver.server.js";
+import { useCaseSearchTerms, DRESS_FOOTWEAR_ASK_RE } from "./use-case-terms.js";
 export { isPrecededByNegation };
 
 const RE_ESCAPE = /[.*+?^${}()|[\]\\]/g;
@@ -312,6 +314,13 @@ export function injectStructuredColorFilter(toolCall, ctx) {
       // in the message OR the customer is explicitly excluding this
       // color. Either way, don't filter ON the negated value.
       console.log(`[chat] color-inject: SKIP — "${color}" appears in negation context`);
+      continue;
+    }
+    // "a dress shoe for my blue dress" — the color describes what they're
+    // WEARING, not the shoe (live trace 2026-10-16: color=blue was forced onto
+    // the shoe search). Same garment rule the constraint extractor uses.
+    if (colorMatchIsGarmentAttached(latest, escapeRe(color).replace(/\s+/g, "\\s+"))) {
+      console.log(`[chat] color-inject: SKIP — "${color}" describes a garment, not the footwear`);
       continue;
     }
     console.log(`[chat] color-inject: "${color}" detected in user text → filters.color`);
@@ -1057,6 +1066,22 @@ export function injectCurrentTurnFootwearCategory(toolCall, ctx) {
   };
 }
 
+// ── expandDressUseCaseQuery ────────────────────────────────────────
+// "a dress shoe for my blue dress" → the model searched "dress shoe …" and the
+// keyword scorer matched casual styles whose copy says "dress it up". Add the
+// catalog's dressy vocabulary so wedges / Mary Janes / loafers / oxfords rank
+// first. Only when THIS turn asks for dress footwear; idempotent.
+export function expandDressUseCaseQuery(toolCall, ctx) {
+  if (toolCall.name !== "search_products") return toolCall;
+  const latest = String(ctx?.latestUserMessage || "");
+  if (!DRESS_FOOTWEAR_ASK_RE.test(latest)) return toolCall;
+  const query = String(toolCall.input?.query || "").trim();
+  const terms = useCaseSearchTerms("dress");
+  if (!query || query.includes(terms)) return toolCall;
+  console.log(`[chat] dress-scope: expanding query "${query.slice(0, 60)}" with dressy catalog terms`);
+  return { ...toolCall, input: { ...toolCall.input, query: `${query} ${terms}` } };
+}
+
 export function rewriteToolCall(toolCall, ctx) {
   const original = toolCall;
   let rewritten = toolCall;
@@ -1070,6 +1095,7 @@ export function rewriteToolCall(toolCall, ctx) {
   rewritten = injectLockedCategory(rewritten, ctx);
   rewritten = injectOccasionCategory(rewritten, ctx);
   rewritten = injectCurrentTurnFootwearCategory(rewritten, ctx);
+  rewritten = expandDressUseCaseQuery(rewritten, ctx);
   // Run named-product relaxation LAST: it drops the category filter
   // for explicit named-product lookups, overriding any category
   // injection (e.g. injectOccasionCategory) that may have added one.

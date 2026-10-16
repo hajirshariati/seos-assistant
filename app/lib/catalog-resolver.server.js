@@ -678,7 +678,7 @@ const FOOTWEAR_NOUNS_RE_SRC = FOOTWEAR_NOUNS
 // garment is NOT immediately followed by a footwear noun (so
 // "pink dress shoes" keeps pink — "dress" is the occasion, not the
 // garment). Returns true → drop this color word's match.
-function colorMatchIsGarmentAttached(message, colorWord) {
+export function colorMatchIsGarmentAttached(message, colorWord) {
   // "[colorWord] [garment] [footwear-noun]" — keep (dress as occasion).
   const occasionPattern = new RegExp(
     `\\b${colorWord}\\b\\s+(?:${GARMENT_NOUNS_RE_SRC})\\s+(?:${FOOTWEAR_NOUNS_RE_SRC})\\b`,

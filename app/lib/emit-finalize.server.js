@@ -76,6 +76,7 @@ import {
   umbrellaCategoryTermsFromGroups,
 } from "./catalog-matcher.server.js";
 import { extractUserConstraints } from "./catalog-resolver.server.js";
+import { useCaseSearchTerms } from "./use-case-terms.js";
 import { isPivotResetTurn, pivotSearchScopeLeak } from "./effective-scope.server.js";
 // Re-export so the chat route consumes the pivot-scope boundary helpers through
 // a server module it already imports (avoids adding a new direct route import).
@@ -257,6 +258,8 @@ export function scopedProductSearchInput(ctx = {}) {
   const size = latest.size || null;
   const width = latest.width || null;
   const condition = scope.condition || latest.condition;
+  // Use case from THIS message only ("a dress shoe for…") — never a stale one.
+  const useCase = latest.useCase || null;
   const filters = {};
   if (gender) filters.gender = gender;
   if (category) filters.category = category;
@@ -278,7 +281,7 @@ export function scopedProductSearchInput(ctx = {}) {
     filters.onSale = true;
     input.query = [color, category].filter(Boolean).join(" ").trim() || "sale";
   } else {
-    input.query = [color, condition, category].filter(Boolean).join(" ").trim() || latestMsg.slice(0, 160).trim() || "shoes";
+    input.query = [color, condition, useCaseSearchTerms(useCase), category].filter(Boolean).join(" ").trim() || latestMsg.slice(0, 160).trim() || "shoes";
   }
   if (priceCap) {
     const max = Number(priceCap[1]);
@@ -287,7 +290,7 @@ export function scopedProductSearchInput(ctx = {}) {
 
   return {
     input,
-    scope: { gender, category, color, size, width, condition, onSale: saleIntent || undefined, priceMax: priceCap ? Number(priceCap[1]) : undefined },
+    scope: { gender, category, color, size, width, condition, useCase: useCase || undefined, onSale: saleIntent || undefined, priceMax: priceCap ? Number(priceCap[1]) : undefined },
   };
 }
 
@@ -335,7 +338,7 @@ export function buildAnswerWorkflowForcedSearch({ ctx = {}, capturedInput = null
     const support = /\b(supportive|support|arch\s*support|cushion(?:ed|ing)?|stability|orthopedic|comfort(?:able)?)\b/i.test(latestMsg) ? "supportive" : "";
     const styleMatch = latestMsg.match(/\b(cute|stylish|dressy|elegant|chic|pretty|fashionable|sporty|casual|sleek|classy|trendy)\b/i);
     const style = styleMatch ? styleMatch[1].toLowerCase() : "";
-    const structuredQuery = [support, style, latest.useCase, latest.condition, latest.category]
+    const structuredQuery = [support, style, useCaseSearchTerms(latest.useCase), latest.condition, latest.category]
       .filter(Boolean)
       .join(" ")
       .trim();

@@ -250,7 +250,12 @@ check("condition: 'cute shoes for standing all day at a wedding' → structured 
   const q = String(out.input.query).toLowerCase();
   assert.match(q, /cute/);
   assert.notEqual(q, msg.toLowerCase(), "must NOT raw-query the whole sentence");
-  assert.ok(q.length < 40, `query should be compact, got: ${q}`);
+  // Structured catalog terms, not the sentence. "wedding" expands to the
+  // catalog's dressy vocabulary (use-case-terms.js, 2026-10-16), so allow
+  // that length — but never the customer's phrasing ("standing all day at").
+  assert.ok(q.length < 80, `query should be compact, got: ${q}`);
+  assert.doesNotMatch(q, /standing all day at/, `must not contain the raw phrasing, got: ${q}`);
+  assert.match(q, /wedge|mary jane|loafer/, `wedding should reach dressy catalog styles, got: ${q}`);
   // a structured comfort/occasion/category term should surface (wedding→dress,
   // shoes→footwear, etc.) — never the raw sentence.
   assert.ok(/standing|wedding|dress|shoes|footwear|sandal|loafer|comfort/.test(q), `expected a structured term, got: ${q}`);
