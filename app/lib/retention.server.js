@@ -1,5 +1,6 @@
 import { cleanupOldFeedback } from "../models/ChatFeedback.server";
 import { cleanupOldMentions } from "../models/ChatProductMention.server";
+import { cleanupOldTopics } from "../models/ChatTopic.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -13,6 +14,11 @@ async function runOnce() {
     await cleanupOldMentions();
   } catch (err) {
     console.error("[retention] cleanupOldMentions failed:", err?.message || err);
+  }
+  try {
+    await cleanupOldTopics();
+  } catch (err) {
+    console.error("[retention] cleanupOldTopics failed:", err?.message || err);
   }
 }
 

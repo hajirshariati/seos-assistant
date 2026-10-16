@@ -17,6 +17,7 @@ export const action = async ({ request }) => {
     db.chatUsage.deleteMany({ where: { shop } }),
     db.chatFeedback.deleteMany({ where: { shop } }),
     db.chatProductMention.deleteMany({ where: { shop } }),
+    db.chatTopic.deleteMany({ where: { shop } }),
     db.catalogFact.deleteMany({ where: { shop } }),
     db.catalogFacetIndex.deleteMany({ where: { shop } }),
     // Every shop-scoped table — ChatConversion holds a Shopify

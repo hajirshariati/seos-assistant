@@ -74,13 +74,13 @@ export async function getInterestBreakdown(shop, range = 30) {
     where: { shop, createdAt: { gte: start, lte: end } },
     _count: { _all: true },
   });
-  const result = { searches: 0, views: 0, skuLookups: 0, total: 0 };
+  const result = { searches: 0, views: 0, shown: 0, total: 0 };
   for (const r of rows) {
     const count = r._count._all;
     result.total += count;
     if (r.tool === "search_products") result.searches = count;
     else if (r.tool === "get_product_details") result.views = count;
-    else if (r.tool === "lookup_sku") result.skuLookups = count;
+    else if (r.tool === "show_products") result.shown = count;
   }
   return result;
 }

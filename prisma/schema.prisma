@@ -368,6 +368,20 @@ model ChatFeedback {
   @@index([createdAt])
 }
 
+// What each storefront chat turn was about — search filters, store
+// questions (answered or not), support hand-offs, store tools used. Never
+// the customer's words or anything identifying them. Kept 90 days.
+model ChatTopic {
+  id        String   @id @default(cuid())
+  shop      String
+  kind      String
+  value     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([createdAt])
+}
+
 model ChatProductMention {
   id        String   @id @default(cuid())
   shop      String

@@ -9,6 +9,7 @@ import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessag
 import { loadLeanCatalog } from "./catalog.server.js";
 import { buildLeanStoreExtras } from "./store-tools.server.js";
 import { logMentions } from "../../models/ChatProductMention.server.js";
+import { logTopics } from "../../models/ChatTopic.server.js";
 import { getActiveCampaigns, formatCampaignsForCS } from "../../models/Campaign.server.js";
 import { supportChatLabel } from "../support-handoff.js";
 import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
@@ -135,10 +136,11 @@ export function leanChatResponse({
         if (!internal) {
           recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls })
             .catch((err) => console.error("[lean] usage log error:", err?.message));
-          if (result.cards.length) {
-            logMentions(shop, result.cards.map((c) => ({ handle: c.handle, title: c.title, tool: "show_products" })))
-              .catch(() => {});
-          }
+          logMentions(shop, [
+            ...(result.mentions || []),
+            ...result.cards.map((c) => ({ handle: c.handle, title: c.title, tool: "show_products" })),
+          ]).catch(() => {});
+          logTopics(shop, result.topics).catch(() => {});
         }
       } catch (err) {
         console.error("[lean] turn failed:", err?.stack || err?.message || err);

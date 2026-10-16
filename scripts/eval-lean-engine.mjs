@@ -28,6 +28,7 @@ const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
+const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 
 let passed = 0;
 let failed = 0;
@@ -357,6 +358,26 @@ await test("contact_support → support button; follow-ups only with cards, clea
   ]);
   const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "red sandals" }], latestUserMessage: "red sandals", callModel: s2.callModel, log: quiet });
   assert.deepEqual(r2.followUps, ["Does it come in wide?", "Show black", "Any on sale?"]);
+});
+await test("analytics: a turn records what it was about (never the customer's words) and which products were found", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sandal", colors: ["red"], gender: "women", conditions: ["plantar fasciitis"] }), tu("t2", "search_store_info", { query: "Return Policy" })] },
+    { stop_reason: "tool_use", content: [tu("t3", "contact_support", { reason: "refund for jane@example.com" })] },
+    { stop_reason: "end_turn", content: [txt("Here's how returns work.")] },
+  ]);
+  const r = await runLeanTurn({
+    catalog, model: "m", messages: [{ role: "user", content: "my email is jane@example.com, red sandals?" }], latestUserMessage: "x",
+    callModel: s.callModel, lookupStoreInfo: async () => ({ found: false }), log: quiet,
+  });
+  assert.deepEqual(r.topics.map((t) => t.kind).sort(), ["color", "condition", "support", "unanswered"]);
+  assert.ok(r.topics.find((t) => t.kind === "unanswered").value === "return policy");
+  assert.ok(!JSON.stringify(r.topics).includes("jane"), "no customer text in topics");
+  assert.ok(r.mentions.length > 0 && r.mentions.every((m) => m.tool === "search_products"));
+  const week = summarizeWeek([...r.topics, ...r.topics, { kind: "category", value: "sandals" }, { kind: "tool", value: "recommend_orthotic" }]);
+  assert.deepEqual(week.unanswered, [{ label: "Return policy", count: 2 }]);
+  assert.equal(week.supportHandoffs, 2);
+  assert.deepEqual(week.tools, [{ label: "Guided finder", count: 1 }]);
+  assert.equal(summarizeWeek([]).empty, true);
 });
 await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
   const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));

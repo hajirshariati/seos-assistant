@@ -12,6 +12,8 @@ import { getFeedbackSummary, cleanupOldFeedback, getRecentQuestions } from "../m
 import {
   getTopProducts, getProductsByTool, getInterestBreakdown, cleanupOldMentions,
 } from "../models/ChatProductMention.server";
+import { getTopicRows } from "../models/ChatTopic.server";
+import { summarizeWeek } from "../lib/weekly-summary";
 import { getConversionSummary } from "../models/ChatConversion.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import BrandHeader from "../components/BrandHeader";
@@ -79,7 +81,8 @@ export const loader = async ({ request }) => {
   const prevStart = new Date(prevEnd.getTime() - spanDays * 86400000);
   const prevRange = { startDate: prevStart, endDate: prevEnd };
 
-  const [usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, prevUsage, prevFeedback, conversions, prevConversions, config] = await Promise.all([
+  const weekRange = { startDate: new Date(Date.now() - 7 * 86400000), endDate: new Date() };
+  const [usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage] = await Promise.all([
     getUsageSummary(session.shop, rangeArg),
     getFeedbackSummary(session.shop, rangeArg),
     getTopProducts(session.shop, rangeArg, 10),
@@ -92,12 +95,15 @@ export const loader = async ({ request }) => {
     getConversionSummary(session.shop, rangeArg),
     getConversionSummary(session.shop, prevRange),
     getShopConfig(session.shop),
+    getTopicRows(session.shop, { days: 7 }).catch(() => []),
+    getUsageSummary(session.shop, weekRange),
   ]);
   cleanupOldFeedback().catch(() => {});
   cleanupOldMentions().catch(() => {});
 
   return {
     usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, conversions,
+    week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
     modelStrategy: config?.modelStrategy || "smart",
     previous: {
       messages: prevUsage.totalMessages,
@@ -259,6 +265,54 @@ function LineChart({ data, height = 220 }) {
 
 // Ranked list with proportional bars — easier to scan than a numbered
 // DataTable: the bar tells you "how much more" at a glance.
+// Always the last 7 days, whatever range is picked below — the quick
+// "what are customers asking?" read for a Monday morning.
+function WeekSummaryCard({ week }) {
+  if (!week) return null;
+  const lists = [
+    { title: "Shopping for", rows: week.categories },
+    { title: "Foot conditions", rows: week.conditions },
+    { title: "Colors", rows: week.colors },
+    { title: "Store questions", rows: week.storeQuestions },
+    { title: "Products asked about", rows: week.products },
+    { title: "Also used", rows: week.tools },
+  ].filter((l) => l.rows.length > 0);
+  return (
+    <SectionCard
+      title="This week"
+      description={`What customers asked about in the last 7 days${week.messages ? ` · ${week.messages.toLocaleString()} messages` : ""}.`}
+    >
+      {week.empty ? (
+        <div className="seos-an-note">Nothing yet this week — topics show up here as customers chat.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {week.unanswered.length > 0 && (
+            <div className="seos-an-note">
+              <strong>Couldn't answer from your store info:</strong>{" "}
+              {week.unanswered.map((u) => `${u.label}${u.count > 1 ? ` (${u.count})` : ""}`).join(" · ")}.{" "}
+              Add the answer in <Link to="/app/knowledge">Knowledge → Your team's notes</Link> and the assistant will use it right away.
+            </div>
+          )}
+          <div className="seos-an-statrow">
+            <Kpi label="Sent to customer service" value={String(week.supportHandoffs)} sub="Support button shown" />
+            <Kpi label="Sale searches" value={String(week.saleSearches)} sub="Asked for discounted styles" />
+          </div>
+          {lists.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+              {lists.map((l) => (
+                <div key={l.title}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2e26", marginBottom: 8 }}>{l.title}</div>
+                  <RankList rows={l.rows.map((r) => ({ title: r.label, count: r.count }))} countLabel="" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function RankList({ rows, countLabel }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
@@ -475,7 +529,7 @@ function RangeSelector({ current, searchParams }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, interest, recentQuestions, daily, conversions, previous, range, modelStrategy } = useLoaderData();
+  const { usage, feedback, productsByTool, interest, recentQuestions, daily, conversions, previous, range, modelStrategy, week } = useLoaderData();
   const [searchParams] = useSearchParams();
   const shopify = useAppBridge();
   const [exporting, setExporting] = useState(null);
@@ -967,6 +1021,8 @@ export default function Analytics() {
         <BrandHeader title="Analytics" gutter={false} />
         <div className="seos-an">
 
+          <WeekSummaryCard week={week} />
+
           <div className="seos-an-card seos-an-rangebar">
             <div>
               <div className="seos-an-rangelabel">{range.label}</div>
@@ -1056,9 +1112,9 @@ export default function Analytics() {
               description="What the assistant actually does when customers ask questions."
             >
               <div className="seos-an-statrow">
-                <Kpi label="Product searches" value={String(interest.searches)} sub="Customers looking for products" />
-                <Kpi label="Product views" value={String(interest.views)} sub="Detailed info requested" />
-                <Kpi label="SKU lookups" value={String(interest.skuLookups)} sub="Matched to uploaded data" />
+                <Kpi label="Products found" value={String(interest.searches)} sub="Returned by catalog searches" />
+                <Kpi label="Product details opened" value={String(interest.views)} sub="Sizes, colors, specifics asked" />
+                <Kpi label="Product cards shown" value={String(interest.shown)} sub="Recommended to customers" />
                 <Kpi label="Total actions" value={String(interest.total)} sub="Across all interactions" />
               </div>
             </SectionCard>
@@ -1101,7 +1157,7 @@ export default function Analytics() {
 
           <SectionCard
             title="Under the hood"
-            description="Token usage and per-model cost. Smart routing answers short follow-ups on the Fast model and product questions on Standard."
+            description="Token usage and cost per model."
             exportSection={modelRows.length > 0 ? "models" : undefined}
             onExport={handleExport}
             exporting={exporting}

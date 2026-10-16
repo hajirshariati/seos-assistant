@@ -154,6 +154,14 @@ export async function runLeanTurn({
   let text = "";
   let finalIssues = [];
   const searches = [];
+  // For analytics: what this turn was about (no customer text) and which
+  // products were searched / opened.
+  const topics = [];
+  const mentions = [];
+  const topic = (kind, value) => {
+    const v = String(value ?? "").trim().slice(0, 80);
+    if (!topics.some((t) => t.kind === kind && t.value === v)) topics.push({ kind, value: v });
+  };
 
   const markSeen = (handles) => {
     for (const h of handles) {
@@ -167,6 +175,12 @@ export async function runLeanTurn({
       const result = leanSearch(catalog, input);
       markSeen(result.products.map((p) => p.handle));
       searches.push({ input, handles: new Set(result.products.map((p) => p.handle)) });
+      for (const c of input.categories || []) topic("category", c);
+      for (const c of input.conditions || []) topic("condition", c);
+      for (const c of input.colors || []) topic("color", c);
+      for (const c of input.activities || []) topic("activity", c);
+      if (input.on_sale) topic("sale", "");
+      for (const p of result.products) mentions.push({ handle: p.handle, title: p.title, tool: "search_products" });
       log(`[lean] search ${JSON.stringify(input)} → total=${result.total_matches} returned=${result.products.length}${result.if_relaxed ? ` if_relaxed=${JSON.stringify(result.if_relaxed)}` : ""}`);
       return result;
     }
@@ -174,6 +188,8 @@ export async function runLeanTurn({
       const d = productDetails(catalog, String(input.handle || ""));
       if (!d) return { error: "No product with that handle. Search first." };
       markSeen([d.handle, ...d.style_colorways.map((c) => c.handle)]);
+      topic("product", d.title);
+      mentions.push({ handle: d.handle, title: d.title, tool: "get_product_details" });
       log(`[lean] details ${input.handle}`);
       return d;
     }
@@ -198,11 +214,13 @@ export async function runLeanTurn({
     if (name === "search_store_info") {
       const r = await lookupStoreInfo(String(input.query || ""));
       if (r?.text) knowledgeText += `\n${r.text}`;
+      topic(r?.found ? "store_question" : "unanswered", String(input.query || "").toLowerCase());
       log(`[lean] store-info "${String(input.query || "").slice(0, 60)}" found=${Boolean(r?.found)}`);
       return r?.found ? { found: true, info: r.text } : { found: false, note: "No store info on this. Say you're not sure and point to customer service." };
     }
     if (name === "contact_support") {
       supportRequested = String(input.reason || "").slice(0, 200) || "customer needs help";
+      topic("support", "");
       log(`[lean] support button: ${supportRequested}`);
       return { ok: true, note: "A button to reach customer service is shown under your reply. Tell the customer briefly." };
     }
@@ -211,6 +229,7 @@ export async function runLeanTurn({
       const raw = await ext.run(input);
       const { _events, ...result } = raw && typeof raw === "object" ? raw : { result: raw };
       if (Array.isArray(_events)) events.push(..._events);
+      topic("tool", name);
       markSeen([...collectHandles(result)]);
       knowledgeText += `\n${JSON.stringify(result).slice(0, 6000)}`;
       log(`[lean] ${name} ${JSON.stringify(input).slice(0, 120)} → ${result.error ? `error: ${String(result.error).slice(0, 120)}` : "ok"}`);
@@ -294,6 +313,8 @@ export async function runLeanTurn({
     followUps: cards.length ? followUps : [],
     supportRequested,
     shopAllSearch,
+    topics,
+    mentions,
     events,
     usage,
     toolCalls,
