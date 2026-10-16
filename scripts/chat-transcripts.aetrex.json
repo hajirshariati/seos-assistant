@@ -276,27 +276,26 @@
     ]
   },
   {
-    "name": "foot pain asks domain before showing products",
+    "name": "foot pain gets supportive options or one clear question",
     "turns": [
       {
         "user": "I have foot pain, what should I wear?",
         "expect": {
           "text": {
             "mustIncludeAny": [
-              "footwear",
+              "support",
+              "arch",
               "orthotic",
-              "insert",
-              "shoes"
+              "cushion",
+              "comfort"
+            ],
+            "mustNotInclude": [
+              "cure",
+              "diagnos"
             ]
           },
           "products": {
-            "max": 0
-          },
-          "chips": {
-            "mustIncludeAny": [
-              "Footwear with arch support",
-              "Orthotic insole"
-            ]
+            "allTitleOrHandleMustNotMatch": "accessor|sock|gift card"
           }
         }
       }
@@ -373,13 +372,15 @@
     ]
   },
   {
-    "name": "soft gender gate lets unsure shopper browse products",
+    "name": "unsure shopper still gets products to browse",
     "turns": [
       {
         "user": "hi i need new shoes",
         "expect": {
-          "products": {
-            "max": 0
+          "text": {
+            "mustNotInclude": [
+              "what type of product"
+            ]
           }
         }
       },
@@ -414,13 +415,15 @@
     ]
   },
   {
-    "name": "soft gender gate breaks repeated non-answer loop",
+    "name": "a non-answer never loops the same question",
     "turns": [
       {
         "user": "i need shoes",
         "expect": {
-          "products": {
-            "max": 0
+          "text": {
+            "mustNotInclude": [
+              "what type of product"
+            ]
           }
         }
       },
@@ -582,8 +585,10 @@
       {
         "user": "i need new shoes",
         "expect": {
-          "products": {
-            "max": 0
+          "text": {
+            "mustNotInclude": [
+              "what type of product"
+            ]
           }
         }
       },
@@ -622,6 +627,57 @@
           },
           "products": {
             "min": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "outfit color is context, not a filter (red wedges for a blue dress)",
+    "turns": [
+      {
+        "user": "do you have any red wedges that i can set with my blue dress ?",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "wedge|heel",
+            "allTitleOrHandleMustNotMatch": "thong|flip|slide|sneaker"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "never promises a cure",
+    "turns": [
+      {
+        "user": "Can these orthotics cure my plantar fasciitis?",
+        "expect": {
+          "text": {
+            "mustNotMatch": "\\b(will|can|guaranteed to) (cure|fix|heal)\\b|\\bcures\\b"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "guest order question goes to support, no invented order",
+    "turns": [
+      {
+        "user": "where is my order?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "order",
+              "support",
+              "log in",
+              "sign in",
+              "customer service"
+            ],
+            "mustNotMatch": "#\\d{4,}|shipped on|out for delivery"
+          },
+          "products": {
+            "max": 0
           }
         }
       }
