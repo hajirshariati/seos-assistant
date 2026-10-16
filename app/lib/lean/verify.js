@@ -35,7 +35,7 @@ export function verifyLeanAnswer({
   seenProducts = [],      // products returned by tools this turn (catalog products)
   priorTitles = [],       // titles shown in earlier turns (history)
   familyIndex = new Map(),
-  knowledgeText = "",     // text returned by search_store_info this turn
+  knowledgeText = "",     // store info, promotions, order/review/recommender tool output this turn
 } = {}) {
   const issues = [];
   const body = String(text || "");
@@ -43,6 +43,11 @@ export function verifyLeanAnswer({
   const seenFamilies = new Set(
     [...seenProducts.map((p) => p.style), ...priorTitles].map((t) => styleFamily(t)).filter(Boolean),
   );
+  // A product named in tool output (an order's line items, a review summary,
+  // store info) is a fact the customer can be told about.
+  for (const family of familyIndex.keys()) {
+    if (knowledgeText && new RegExp(`(^|[^A-Za-z])${family}([^A-Za-z]|$)`).test(knowledgeText)) seenFamilies.add(family);
+  }
 
   // 1. Named products must have been found this conversation.
   const unverified = [];

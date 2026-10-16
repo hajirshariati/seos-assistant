@@ -268,15 +268,120 @@ await test("conversation normalization: starts with user, merges repeats", () =>
   assert.equal(c[0].content, "a\n\nb");
   assert.deepEqual(extractPriorShownTitles([{ role: "assistant", content: "x [Product cards displayed with this reply: 1. A - Red ($9.00); 2. B]" }]), ["A - Red ($9.00)", "B"]);
 });
-await test("engine switch: admin picks per request; storefront only via LEAN_CHAT_SHOPS", () => {
-  delete process.env.LEAN_CHAT_SHOPS;
-  assert.equal(leanEngineSelected({ shop: "s", internal: true, body: { engine: "lean" } }), true);
-  assert.equal(leanEngineSelected({ shop: "s", internal: false, body: { engine: "lean" } }), false);
-  process.env.LEAN_CHAT_SHOPS = "s,t";
+await test("engine switch: lean by default; CHAT_ENGINE / LEGACY_CHAT_SHOPS roll back; admin picks per request", () => {
+  delete process.env.CHAT_ENGINE;
+  delete process.env.LEGACY_CHAT_SHOPS;
   assert.equal(leanEngineSelected({ shop: "s" }), true);
   assert.equal(leanEngineSelected({ shop: "s", internal: true, body: { engine: "current" } }), false);
+  assert.equal(leanEngineSelected({ shop: "s", internal: false, body: { engine: "current" } }), true, "storefront can't pick");
+  process.env.LEGACY_CHAT_SHOPS = "s,t";
+  assert.equal(leanEngineSelected({ shop: "s" }), false);
+  assert.equal(leanEngineSelected({ shop: "u" }), true);
+  assert.equal(leanEngineSelected({ shop: "s", internal: true, body: { engine: "lean" } }), true);
+  delete process.env.LEGACY_CHAT_SHOPS;
+  process.env.CHAT_ENGINE = "current";
   assert.equal(leanEngineSelected({ shop: "u" }), false);
-  delete process.env.LEAN_CHAT_SHOPS;
+  delete process.env.CHAT_ENGINE;
+});
+
+console.log("\nstore tools + safety");
+const orderTool = {
+  definition: { name: "get_customer_orders", description: "orders", input_schema: { type: "object", properties: {} } },
+  run: async () => ({ orders: [{ name: "#1042", status: "In transit", total: "$129.95", items: [{ title: "Savannah Adjustable Quarter Strap Sandal - Red", quantity: 1 }], tracking: [{ carrier: "UPS", url: "https://ups.example/1Z" }] }] }),
+};
+await test("order lookup: products and prices from the order are facts, not inventions", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "get_customer_orders", {})] },
+    { stop_reason: "end_turn", content: [txt("Your order #1042 ($129.95) with the Savannah sandal is in transit with UPS.")] },
+  ]);
+  const msg = "where is my order?";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, extraTools: [orderTool], callModel: s.callModel, log: quiet });
+  assert.deepEqual(r.issues, []);
+  assert.equal(r.retried, false);
+  assert.ok(s.requests[0].tools.some((t) => t.name === "get_customer_orders"));
+});
+await test("guided finder result can be shown as a card; widget events pass through", async () => {
+  const finder = {
+    definition: { name: "recommend_orthotic", description: "finder", input_schema: { type: "object", properties: {} } },
+    run: async () => ({ masterSku: "L100W", product: { handle: H["Women's Train Orthotics W/ Metatarsal Support"], title: "Women's Train Orthotics W/ Metatarsal Support" }, _events: [{ type: "fit_report", recommendedSize: "W8" }] }),
+  };
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "recommend_orthotic", { gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Women's Train Orthotics W/ Metatarsal Support"]] })] },
+    { stop_reason: "end_turn", content: [txt("This orthotic is your match for training with ball-of-foot pain.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "which orthotic for training?" }], latestUserMessage: "which orthotic for training?", extraTools: [finder], callModel: s.callModel, log: quiet });
+  assert.deepEqual(r.cards.map((c) => c.title), ["Women's Train Orthotics W/ Metatarsal Support"]);
+  assert.deepEqual(r.events, [{ type: "fit_report", recommendedSize: "W8" }]);
+  assert.ok(!JSON.stringify(s.requests[1].messages).includes("_events"), "internal events never reach the model");
+});
+await test("a crashing store tool becomes an error result, never a failed turn", async () => {
+  const broken = { definition: { name: "get_product_reviews", description: "r", input_schema: { type: "object", properties: {} } }, run: async () => { throw new Error("yotpo down"); } };
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "get_product_reviews", { handle: "x" })] },
+    { stop_reason: "end_turn", content: [txt("I couldn't pull reviews right now.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "reviews?" }], latestUserMessage: "reviews?", extraTools: [broken], callModel: s.callModel, log: quiet });
+  assert.equal(r.text, "I couldn't pull reviews right now.");
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /yotpo down/);
+});
+await test("contact_support → support button; follow-ups only with cards, cleaned", async () => {
+  const s1 = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "contact_support", { reason: "damaged item" })] },
+    { stop_reason: "end_turn", content: [txt("I'm sorry about that — our team can sort out a replacement; tap below to reach them.")] },
+  ]);
+  const r1 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "my shoe arrived broken" }], latestUserMessage: "my shoe arrived broken", callModel: s1.callModel, log: quiet });
+  assert.equal(r1.supportRequested, "damaged item");
+  assert.deepEqual(r1.followUps, []);
+  const s2 = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sandal", colors: ["red"], gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]], follow_ups: ["Does it come in wide?", "**Show black**", "Does it come in wide?", "x", "Any on sale?"] })] },
+    { stop_reason: "end_turn", content: [txt("The Savannah in red is a great pick.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "red sandals" }], latestUserMessage: "red sandals", callModel: s2.callModel, log: quiet });
+  assert.deepEqual(r2.followUps, ["Does it come in wide?", "Show black", "Any on sale?"]);
+});
+await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
+  const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));
+  const s = scripted([...loop, { stop_reason: "end_turn", content: [txt("Here's what I found in sandals.")] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "sandals" }], latestUserMessage: "sandals", callModel: s.callModel, log: quiet });
+  assert.equal(s.requests.length, 8);
+  assert.deepEqual(s.requests[7].tool_choice, { type: "none" });
+  assert.equal(s.requests[0].tool_choice, undefined);
+  assert.equal(r.text, "Here's what I found in sandals.");
+});
+await test("time limit: past the deadline the next call must answer", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sandal" })] },
+    { stop_reason: "end_turn", content: [txt("Here are sandals.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "sandals" }], latestUserMessage: "sandals", deadlineMs: -1, callModel: s.callModel, log: quiet });
+  assert.deepEqual(s.requests[0].tool_choice, { type: "none" });
+  assert.ok(r.text.length > 0);
+});
+await test("store context (rules, promotions, customer) is a separate, uncached system block; promo prices verify", async () => {
+  const { buildStoreContextBlock } = await import("../app/lib/lean/store-tools.server.js");
+  const block = buildStoreContextBlock({
+    rules: ["Never recommend kids' products."],
+    campaigns: [{ name: "Fall Sale", content: "25% off sneakers with code FALL25. Free shipping over $75.", startsAt: "2026-10-01", endsAt: "2026-10-31" }],
+    customer: { firstName: "Dana", numberOfOrders: 3 },
+  });
+  assert.match(block, /INSTRUCTIONS FROM THE STORE TEAM\nNever recommend kids/);
+  assert.match(block, /Fall Sale .*FALL25/);
+  assert.match(block, /First name: Dana/);
+  assert.match(buildStoreContextBlock({}), /None are running/);
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Yes — 25% off sneakers with code FALL25, and free shipping over $75.")] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any sales?" }], latestUserMessage: "any sales?", extraSystem: block, callModel: s.callModel, log: quiet });
+  assert.equal(s.requests[0].system.length, 2);
+  assert.ok(s.requests[0].system[0].cache_control && !s.requests[0].system[1].cache_control);
+  assert.deepEqual(r.issues, [], "$75 comes from the promotion");
+});
+await test("long conversations are trimmed to the recent turns", async () => {
+  const long = Array.from({ length: 60 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `message ${i}` }));
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Sure.")] }]);
+  await runLeanTurn({ catalog, model: "m", messages: [...long, { role: "user", content: "hi" }], latestUserMessage: "hi", callModel: s.callModel, log: quiet });
+  assert.ok(s.requests[0].messages.length <= 24);
+  assert.equal(s.requests[0].messages[0].role, "user");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

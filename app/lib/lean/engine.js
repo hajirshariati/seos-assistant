@@ -16,6 +16,34 @@ import { applyMedicalDisclaimer, medicalDisclaimerRequired } from "../medical-di
 
 const MAX_HOPS = 8;
 const MAX_CARDS = 4;
+const MAX_HISTORY_MESSAGES = 24;
+const TURN_DEADLINE_MS = 45000;
+
+// Quick-reply chips must be short, plain, and distinct.
+export function cleanFollowUps(list) {
+  const out = [];
+  for (const raw of Array.isArray(list) ? list : []) {
+    const q = String(raw || "").replace(/[<>*_`#]/g, "").replace(/\s+/g, " ").trim();
+    if (q.length < 3 || q.length > 70) continue;
+    if (out.some((x) => x.toLowerCase() === q.toLowerCase())) continue;
+    out.push(q);
+    if (out.length === 3) break;
+  }
+  return out;
+}
+
+// Product handles anywhere in a tool result (orders, recommender, fit report).
+function collectHandles(value, out = new Set(), depth = 0) {
+  if (!value || depth > 6) return out;
+  if (Array.isArray(value)) { for (const v of value) collectHandles(v, out, depth + 1); return out; }
+  if (typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      if ((k === "handle" || k === "productHandle") && typeof v === "string") out.add(v);
+      else if (v && typeof v === "object") collectHandles(v, out, depth + 1);
+    }
+  }
+  return out;
+}
 
 // Titles of cards shown in earlier turns — sanitizeHistory appends them to the
 // assistant text as "[Product cards displayed with this reply: 1. Title ($x); …]".
@@ -77,6 +105,13 @@ export async function runLeanTurn({
   latestUserMessage = "",
   lookupStoreInfo = async () => ({ found: false }),
   primaryGender = "women",
+  // Store-specific tools (orders, fit predictor, recommenders, reviews):
+  // [{ definition, run: async (input) => result }]. A result may carry
+  // `_events` (widget events, e.g. fit_report) which are passed through.
+  extraTools = [],
+  // Per-request context (promotions, logged-in customer, store team rules).
+  extraSystem = "",
+  deadlineMs = TURN_DEADLINE_MS,
   log = (line) => console.log(line),
   callModel = null, // test seam: (request) => response
 }) {
@@ -86,15 +121,18 @@ export async function runLeanTurn({
   const byTitle = new Map(products.map((p) => [p.title.toLowerCase(), p]));
   const familyIndex = buildFamilyIndex(products);
 
-  const tools = buildLeanTools(catalog?.vocab || {});
-  tools[tools.length - 1] = { ...tools[tools.length - 1], cache_control: { type: "ephemeral" } };
+  const baseTools = buildLeanTools(catalog?.vocab || {});
+  baseTools[baseTools.length - 1] = { ...baseTools[baseTools.length - 1], cache_control: { type: "ephemeral" } };
+  const extraByName = new Map(extraTools.filter((t) => t?.definition?.name && typeof t.run === "function").map((t) => [t.definition.name, t]));
+  const tools = [...baseTools, ...[...extraByName.values()].map((t) => t.definition)];
   const system = [{
     type: "text",
     text: buildLeanSystemPrompt({ config, vocab: catalog?.vocab || {}, shop, primaryGender }),
     cache_control: { type: "ephemeral" },
   }];
+  if (String(extraSystem || "").trim()) system.push({ type: "text", text: String(extraSystem).trim() });
 
-  const conv = normalizeConversation(messages);
+  const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
   const priorTitles = extractPriorShownTitles(messages);
   const priorProducts = priorTitles
     .map((t) => byTitle.get(t.replace(/\s*\([^)]*\)\s*$/, "").trim().toLowerCase()))
@@ -103,7 +141,11 @@ export async function runLeanTurn({
   const seen = new Map(priorProducts.map((p) => [p.handle, p])); // handles Claude may show
   const seenThisTurn = new Map();
   let shown = [];
-  let knowledgeText = "";
+  let followUps = [];
+  let supportRequested = null;
+  const events = [];
+  // Facts the reply may quote: store info, promotions, order/recommender output.
+  let knowledgeText = String(extraSystem || "");
   const usage = {};
   let toolCalls = 0;
   let retried = false;
@@ -136,6 +178,7 @@ export async function runLeanTurn({
       const ok = handles.filter((h) => seen.has(h)).slice(0, MAX_CARDS);
       const rejected = handles.filter((h) => !seen.has(h));
       shown = ok;
+      followUps = cleanFollowUps(input.follow_ups);
       log(`[lean] show ${JSON.stringify(ok)}${rejected.length ? ` rejected=${JSON.stringify(rejected)}` : ""}`);
       return {
         showing: ok.map((h) => byHandle.get(h).title),
@@ -148,13 +191,34 @@ export async function runLeanTurn({
       log(`[lean] store-info "${String(input.query || "").slice(0, 60)}" found=${Boolean(r?.found)}`);
       return r?.found ? { found: true, info: r.text } : { found: false, note: "No store info on this. Say you're not sure and point to customer service." };
     }
+    if (name === "contact_support") {
+      supportRequested = String(input.reason || "").slice(0, 200) || "customer needs help";
+      log(`[lean] support button: ${supportRequested}`);
+      return { ok: true, note: "A button to reach customer service is shown under your reply. Tell the customer briefly." };
+    }
+    const ext = extraByName.get(name);
+    if (ext) {
+      const raw = await ext.run(input);
+      const { _events, ...result } = raw && typeof raw === "object" ? raw : { result: raw };
+      if (Array.isArray(_events)) events.push(..._events);
+      markSeen([...collectHandles(result)]);
+      knowledgeText += `\n${JSON.stringify(result).slice(0, 6000)}`;
+      log(`[lean] ${name} ${JSON.stringify(input).slice(0, 120)} → ${result.error ? `error: ${String(result.error).slice(0, 120)}` : "ok"}`);
+      return result;
+    }
     return { error: `Unknown tool ${name}` };
   };
 
   const call = callModel || ((req) => anthropic.messages.create(req));
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
-    const resp = await call({ model, max_tokens: 900, system, tools, messages: conv });
+    // Last hop, or running out of time: no more tools — answer with what we have.
+    const mustAnswer = hop === MAX_HOPS - 1 || Date.now() - started > deadlineMs;
+    if (mustAnswer) log(`[lean] hop=${hop} forcing a final answer (${hop === MAX_HOPS - 1 ? "hop limit" : "time limit"})`);
+    const resp = await call({
+      model, max_tokens: 900, system, tools, messages: conv,
+      ...(mustAnswer ? { tool_choice: { type: "none" } } : {}),
+    });
     addUsage(usage, resp.usage);
     const content = Array.isArray(resp.content) ? resp.content : [];
     conv.push({ role: "assistant", content });
@@ -169,7 +233,7 @@ export async function runLeanTurn({
         results.push({ type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(out) });
       }
       conv.push({ role: "user", content: results });
-      if (resp.stop_reason === "tool_use") continue;
+      if (resp.stop_reason === "tool_use" && !mustAnswer) continue;
     }
 
     text = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
@@ -181,7 +245,7 @@ export async function runLeanTurn({
       familyIndex,
       knowledgeText,
     });
-    if (issues.length > 0 && !retried) {
+    if (issues.length > 0 && !retried && Date.now() - started < deadlineMs) {
       retried = true;
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
@@ -210,5 +274,16 @@ export async function runLeanTurn({
     `[lean] final textLen=${text.length} cards=${cards.length} tools=${toolCalls} rewrite=${retried} ` +
     `unresolved=${finalIssues.map((i) => i.code).join(",") || "-"} ms=${Date.now() - started}`,
   );
-  return { text, cards, usage, toolCalls, retried, issues: finalIssues, newSeen: [...seenThisTurn.keys()] };
+  return {
+    text,
+    cards,
+    followUps: cards.length ? followUps : [],
+    supportRequested,
+    events,
+    usage,
+    toolCalls,
+    retried,
+    issues: finalIssues,
+    newSeen: [...seenThisTurn.keys()],
+  };
 }

@@ -54,8 +54,26 @@ export function buildLeanTools(vocab = {}) {
         "Display product cards to the customer. Call it with the products you recommend in your reply (best first, max 4). Only handles returned by a tool in this conversation. Call it at most once per reply; omit it when you're not recommending products.",
       input_schema: {
         type: "object",
-        properties: { handles: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 } },
+        properties: {
+          handles: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
+          follow_ups: {
+            type: "array",
+            items: { type: "string" },
+            maxItems: 3,
+            description: "Optional: up to 3 short next questions the customer might tap, written in their voice (e.g. \"Do these come in wide?\", \"Show me the navy one\"). Only things you can actually answer.",
+          },
+        },
         required: ["handles"],
+      },
+    },
+    {
+      name: "contact_support",
+      description:
+        "Show the customer a button to reach the store's customer service team. Use when they need a person: order problems you can't solve, returns/exchanges to start, account issues, complaints, or anything you can't answer.",
+      input_schema: {
+        type: "object",
+        properties: { reason: { type: "string", description: "One short line on why, for the support team." } },
+        required: ["reason"],
       },
     },
     {

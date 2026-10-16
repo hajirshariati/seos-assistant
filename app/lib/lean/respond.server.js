@@ -7,19 +7,27 @@ import { recordChatUsage } from "../../models/ChatUsage.server.js";
 import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessage } from "../anthropic-resilience.server.js";
 import { loadLeanCatalog } from "./catalog.server.js";
+import { buildLeanStoreExtras } from "./store-tools.server.js";
+import { logMentions } from "../../models/ChatProductMention.server.js";
+import { getActiveCampaigns, formatCampaignsForCS } from "../../models/Campaign.server.js";
+import { supportChatLabel } from "../support-handoff.js";
+import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
 import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
-// Which engine answers this request. LEAN_CHAT_SHOPS="shop-a.myshopify.com,…"
-// (or "*") switches storefront traffic; admin test/compare calls can pick
-// either engine explicitly with body.engine.
+// Which engine answers this request. The lean engine is the default.
+// Roll back without a deploy: CHAT_ENGINE=current (every shop) or
+// LEGACY_CHAT_SHOPS="shop-a.myshopify.com,…". Admin test/compare calls can
+// pick either engine explicitly with body.engine.
 export function leanEngineSelected({ shop, internal = false, body = {} } = {}) {
   if (internal && body?.engine === "lean") return true;
   if (internal && body?.engine === "current") return false;
-  const list = String(process.env.LEAN_CHAT_SHOPS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  return list.includes("*") || list.includes(shop);
+  const engine = String(process.env.CHAT_ENGINE || "").trim().toLowerCase();
+  if (engine === "current" || engine === "legacy") return false;
+  const legacy = String(process.env.LEGACY_CHAT_SHOPS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return !(legacy.includes("*") || legacy.includes(shop));
 }
 
 // Store info for Claude: the store team's uploaded notes first (they win if
@@ -53,39 +61,96 @@ function makeStoreInfoLookup({ shop, config }) {
   };
 }
 
-export function leanChatResponse({ shop, config, messages, latestUserMessage, internal = false }) {
+export function leanChatResponse({
+  shop,
+  config,
+  messages,
+  latestUserMessage,
+  internal = false,
+  accessToken = null,
+  loggedInCustomerId = null,
+  supportUrl = "",
+  supportLabel = "",
+}) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (obj) => controller.enqueue(encoder.encode(sse(obj)));
+      const send = (obj) => {
+        try { controller.enqueue(encoder.encode(sse(obj))); } catch { /* client gone */ }
+      };
       try {
-        const anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
+        // CS-team cheat code: exact phrase → list every live promotion.
+        const cheat = String(config.campaignCheatCode || "").trim().toLowerCase();
+        if (cheat && String(latestUserMessage).trim().toLowerCase() === cheat) {
+          send({ type: "text", text: formatCampaignsForCS(await getActiveCampaigns(shop), new Date()) });
+          send({ type: "products", products: [] });
+          send({ type: "done" });
+          return;
+        }
+
+        const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 1 });
         const model = config.anthropicModel || "claude-sonnet-4-6";
-        const catalog = await loadLeanCatalog(shop);
-        console.log(`[lean] turn shop=${shop} internal=${internal} msg="${String(latestUserMessage).slice(0, 80)}"`);
+        const [catalog, extras] = await Promise.all([
+          loadLeanCatalog(shop),
+          buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage })
+            .catch((err) => {
+              console.error("[lean] store extras failed:", err?.message || err);
+              return { tools: [], systemBlock: "" };
+            }),
+        ]);
+        console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} msg="${String(latestUserMessage).slice(0, 80)}"`);
         const result = await runLeanTurn({
           shop,
-          config,
+          config: { ...config, supportUrl: supportUrl || config.supportUrl, supportLabel: supportLabel || config.supportLabel },
           model,
           catalog,
           messages,
           latestUserMessage,
           lookupStoreInfo: makeStoreInfoLookup({ shop, config }),
+          extraTools: extras.tools,
+          extraSystem: extras.systemBlock,
           callModel: (req) => withAnthropicRetry(() => anthropic.messages.create(req)),
         });
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
+        for (const ev of result.events || []) send(ev);
+        if (result.cards.length === 1) {
+          const card = result.cards[0];
+          const product = catalog.products.find((p) => p.handle === card.handle);
+          const viz = buildVisualizeCtaEvent({
+            config,
+            product: { ...card, category: product?.category || "", productType: product?.productType || "" },
+            messages,
+            isInsoleRecommendation: /orthotic|insole/i.test(`${product?.category || ""} ${product?.productType || ""}`),
+          });
+          if (viz) send(viz);
+        }
+        if (result.followUps?.length && config.showFollowUps !== false) {
+          send({ type: "suggestions", questions: result.followUps });
+        }
+        if (result.supportRequested) {
+          send({
+            type: "support_cta",
+            label: supportChatLabel({ supportLabel: supportLabel || config.supportLabel }),
+            fallbackUrl: supportUrl || config.supportUrl || "",
+            context: { reason: result.supportRequested, engine: "lean" },
+          });
+        }
         send({ type: "done" });
         if (!internal) {
           recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls })
             .catch((err) => console.error("[lean] usage log error:", err?.message));
+          if (result.cards.length) {
+            logMentions(shop, result.cards.map((c) => ({ handle: c.handle, title: c.title, tool: "show_products" })))
+              .catch(() => {});
+          }
         }
       } catch (err) {
-        console.error("[lean] turn failed:", err?.message || err);
+        console.error("[lean] turn failed:", err?.stack || err?.message || err);
         const classified = classifyAnthropicError(err);
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });
       } finally {
-        controller.close();
+        try { controller.close(); } catch { /* already closed */ }
       }
     },
   });

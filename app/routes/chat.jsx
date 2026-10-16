@@ -5149,12 +5149,29 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     const history = sanitizeHistory(body.history);
     const messages = [...history, { role: "user", content: String(body.message) }];
 
-    // LEAN ENGINE (opt-in): Claude decides, code only checks facts — none of
-    // the routing/rewrite layers below run. Selected per shop via
-    // LEAN_CHAT_SHOPS, or per admin request (body.engine) for side-by-side
-    // comparison. See app/lib/lean/.
+    // LEAN ENGINE (default): Claude decides, code only checks facts — none of
+    // the routing/rewrite layers below run. Roll back with CHAT_ENGINE=current
+    // or LEGACY_CHAT_SHOPS; admin requests can pick via body.engine for the
+    // Compare page. See app/lib/lean/.
     if (leanEngineSelected({ shop, internal, body })) {
-      return leanChatResponse({ shop, config, messages, latestUserMessage: String(body.message), internal });
+      // HMAC-verified on app proxy requests — never a customer id from the body.
+      const leanCustomerId = new URL(request.url).searchParams.get("logged_in_customer_id") || null;
+      let leanToken = sessionAccessToken;
+      if (!leanToken && leanCustomerId) {
+        const offline = await prisma.session.findFirst({ where: { shop, isOnline: false }, orderBy: { expires: "desc" } });
+        leanToken = offline?.accessToken || null;
+      }
+      return leanChatResponse({
+        shop,
+        config,
+        messages,
+        latestUserMessage: String(body.message),
+        internal,
+        accessToken: leanToken,
+        loggedInCustomerId: leanCustomerId,
+        supportUrl: body.support_url || "",
+        supportLabel: body.support_label || "",
+      });
     }
 
     // Gender-pivot detection. detectGenderFromHistory walks the entire
