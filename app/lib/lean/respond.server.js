@@ -69,6 +69,12 @@ export function leanChatResponse({
       const send = (obj) => {
         try { controller.enqueue(encoder.encode(sse(obj))); } catch { /* client gone */ }
       };
+      // The answer arrives in one piece after the tool calls; until then a
+      // comment line every few seconds keeps proxies from dropping a silent
+      // connection. SSE clients (the widget) ignore comment lines.
+      const ping = () => { try { controller.enqueue(encoder.encode(": ping\n\n")); } catch { /* client gone */ } };
+      ping();
+      const heartbeat = setInterval(ping, 8000);
       try {
         // CS-team cheat code: exact phrase → list every live promotion.
         const cheat = String(config.campaignCheatCode || "").trim().toLowerCase();
@@ -147,6 +153,7 @@ export function leanChatResponse({
         const classified = classifyAnthropicError(err);
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });
       } finally {
+        clearInterval(heartbeat);
         try { controller.close(); } catch { /* already closed */ }
       }
     },
