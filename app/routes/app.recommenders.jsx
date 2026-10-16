@@ -46,6 +46,7 @@ import path from "node:path";
 import BrandHeader from "../components/BrandHeader";
 import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
+import { RecommenderTables, MappingReview } from "../components/RecommenderEditor";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -248,6 +249,7 @@ export const action = async ({ request }) => {
         mappingCsvApplied: true,
         treeId: saved.id,
         rowCount: parsed.masterIndex.length,
+        masterIndex: parsed.masterIndex,
       };
     } catch (err) {
       return { error: err?.message || "Could not save tree after CSV apply." };
@@ -304,6 +306,11 @@ export const action = async ({ request }) => {
           newHelpsWith,
           suggestedMapping,
           savedMapping,
+          // For the review table's answer dropdowns.
+          answers: {
+            nodes: existing?.definition?.nodes || [],
+            resolver: { masterIndex: existing?.definition?.resolver?.masterIndex || [] },
+          },
         },
       };
     } catch (err) {
@@ -476,14 +483,14 @@ function DecisionTreesCard({ enabled, trees }) {
   const fetcher = useFetcher();
   const loadFetcher = useFetcher();
   const regenFetcher = useFetcher();
-  const [editing, setEditing] = useState(null);  // { id?, name, intent, ... }
-  const [showCreate, setShowCreate] = useState(false);
-  // Regenerate-from-Shopify modal state. When discovery returns
-  // unmapped values (or this is the first run), show the merchant
-  // the suggested mapping in a textarea so they can review/tweak
-  // before applying. Saved mappings hide the textarea by default.
-  const [regenStep, setRegenStep] = useState("idle"); // idle | review | done
-  const [mappingDraft, setMappingDraft] = useState("");
+  const [editing, setEditing] = useState(null);  // { id?, name, intent, definition (object), ... }
+  const [showMore, setShowMore] = useState(false);
+  const [jsonDraft, setJsonDraft] = useState("");
+  const [jsonError, setJsonError] = useState("");
+  // Sync-from-Shopify: discovery returns the Shopify values with a suggested
+  // mapping; the merchant reviews it as a table, then applies.
+  const [regenStep, setRegenStep] = useState("idle"); // idle | discovering | review | done
+  const [mappingDraft, setMappingDraft] = useState(null);
 
   useEffect(() => {
     if (regenFetcher.data?.discovery) {
@@ -497,7 +504,7 @@ function DecisionTreesCard({ enabled, trees }) {
             specialtyOverrides: d.savedMapping.specialtyOverrides || d.suggestedMapping.specialtyOverrides,
           }
         : d.suggestedMapping;
-      setMappingDraft(JSON.stringify(merged, null, 2));
+      setMappingDraft(merged);
       setRegenStep("review");
     }
     if (regenFetcher.data?.regenerated) {
@@ -523,9 +530,10 @@ function DecisionTreesCard({ enabled, trees }) {
         triggerPhrases: triggerPhrasesText,
         triggerCategoryGroup: t.triggerCategoryGroup || "",
         enabled: Boolean(t.enabled),
-        definition: JSON.stringify(t.definition || {}, null, 2),
+        definition: t.definition || {},
       });
-      setShowCreate(false);
+      setShowMore(false);
+      setJsonError("");
     }
   }, [loadFetcher.data]);
 
@@ -545,13 +553,13 @@ function DecisionTreesCard({ enabled, trees }) {
   const applyRegen = () => {
     const fd = new FormData();
     fd.set("intent", "regen_orthotic_apply");
-    fd.set("mapping", mappingDraft);
+    fd.set("mapping", JSON.stringify(mappingDraft || {}));
     regenFetcher.submit(fd, { method: "post" });
   };
 
   const closeRegen = () => {
     setRegenStep("idle");
-    setMappingDraft("");
+    setMappingDraft(null);
   };
 
   const toggleMaster = (next) => {
@@ -559,23 +567,6 @@ function DecisionTreesCard({ enabled, trees }) {
     fd.set("intent", "toggle_decision_tree");
     fd.set("decisionTreeEnabled", next ? "true" : "false");
     fetcher.submit(fd, { method: "post" });
-  };
-
-  const toggleTree = (tree, next) => {
-    // Reuse save_decision_tree to flip just the enabled flag.
-    const fd = new FormData();
-    fd.set("intent", "load_decision_tree");
-    fd.set("id", tree.id);
-    loadFetcher.submit(fd, { method: "post" });
-    // Pending: once load returns, immediately submit with the new
-    // enabled flag. To keep this simple-but-honest, ask the merchant
-    // to use the editor for now if they want to flip enabled.
-    // Quick path: send a thin save with just the enabled change
-    // alongside the existing fields would require refetching the
-    // definition first — done via load + a second submit.
-    // Implementation note: keeping a single round trip here would
-    // be cleaner. For v1, we open the editor with the loaded tree
-    // and let the merchant flip the checkbox + Save.
   };
 
   const startNew = () => {
@@ -586,24 +577,26 @@ function DecisionTreesCard({ enabled, trees }) {
       triggerPhrases: "",
       triggerCategoryGroup: "",
       enabled: false,
-      // Minimal valid recommender shape. Only resolver.masterIndex
-      // is read by the runtime; the nodes array is preserved for
-      // back-compat with rows authored under the previous
-      // funnel-based design and for the schema validator (which
-      // still requires a rootNodeId pointing at a node — easy to
-      // satisfy with a single resolve node).
-      definition: JSON.stringify({
-        rootNodeId: "q_resolve",
-        nodes: [{ id: "q_resolve", type: "resolve" }],
+      // Smallest valid recommender: one question, one product row.
+      definition: {
+        rootNodeId: "q_gender",
+        nodes: [
+          {
+            id: "q_gender", type: "question", attribute: "gender", skipIfKnown: true,
+            question: "Who is this for?",
+            chips: [{ label: "Men", value: "Men" }, { label: "Women", value: "Women" }],
+            next: { _default: "q_resolve" },
+          },
+          { id: "q_resolve", type: "resolve" },
+        ],
         resolver: {
           defaults: {},
-          masterIndex: [
-            { masterSku: "EXAMPLE-1", title: "Example product", gender: "Unisex", useCase: "example" },
-          ],
+          masterIndex: [{ masterSku: "", title: "", gender: "Women", useCase: "" }],
         },
-      }, null, 2),
+      },
     });
-    setShowCreate(true);
+    setShowMore(false);
+    setJsonError("");
   };
 
   const onChange = (field) => (val) => {
@@ -619,7 +612,7 @@ function DecisionTreesCard({ enabled, trees }) {
     fd.set("treeIntent", editing.intent);
     fd.set("triggerPhrases", editing.triggerPhrases);
     fd.set("triggerCategoryGroup", editing.triggerCategoryGroup);
-    fd.set("definition", editing.definition);
+    fd.set("definition", JSON.stringify(editing.definition || {}));
     fd.set("enabled", editing.enabled ? "true" : "false");
     fetcher.submit(fd, { method: "post" });
   };
@@ -639,9 +632,23 @@ function DecisionTreesCard({ enabled, trees }) {
   useEffect(() => {
     if (fetcher.data?.saved && fetcher.data?.treeId && editing) {
       setEditing(null);
-      setShowCreate(false);
     }
   }, [fetcher.data]);
+
+  const openAdvanced = () => {
+    setJsonDraft(JSON.stringify(editing?.definition || {}, null, 2));
+    setJsonError("");
+    setShowMore((v) => !v);
+  };
+  const applyJson = () => {
+    try {
+      const parsed = JSON.parse(jsonDraft);
+      setEditing((p) => ({ ...p, definition: parsed }));
+      setJsonError("");
+    } catch (e) {
+      setJsonError(`Not valid JSON: ${e.message}`);
+    }
+  };
 
   const masterToggleSubmitting =
     fetcher.state === "submitting" &&
@@ -764,14 +771,13 @@ function DecisionTreesCard({ enabled, trees }) {
                   )}
                 </Banner>
               )}
-              <TextField
-                label="Mapping (edit any guess that's wrong, then Apply)"
-                helpText="The mapping is saved with the recommender so future regenerations reuse it. Only edit values you know are wrong."
-                value={mappingDraft}
-                onChange={(v) => setMappingDraft(v)}
-                multiline={20}
-                autoComplete="off"
-              />
+              {mappingDraft && (
+                <MappingReview
+                  mapping={mappingDraft}
+                  definition={regenFetcher.data.discovery.answers || {}}
+                  onChange={setMappingDraft}
+                />
+              )}
               <InlineStack gap="200" align="end">
                 <Button onClick={closeRegen}>Cancel</Button>
                 <Button
@@ -842,35 +848,47 @@ function DecisionTreesCard({ enabled, trees }) {
                   onChange={(v) => setEditing((p) => ({ ...p, enabled: v }))}
                 />
               </FormLayout>
-              {/* CSV editor first — most merchants will use this and never touch the raw JSON. */}
-              {editing.id && (
-                <MappingCsvSection treeId={editing.id} />
+              <RecommenderTables
+                definition={editing.definition || {}}
+                onChange={(definition) => setEditing((p) => ({ ...p, definition }))}
+              />
+              <InlineStack>
+                <Button variant="plain" onClick={openAdvanced}>
+                  {showMore ? "Hide more options" : "More options (spreadsheet, advanced)"}
+                </Button>
+              </InlineStack>
+              {showMore && (
+                <BlockStack gap="400">
+                  {editing.id && (
+                    <MappingCsvSection
+                      treeId={editing.id}
+                      onApplied={(masterIndex) => setEditing((p) => ({
+                        ...p,
+                        definition: { ...p.definition, resolver: { ...(p.definition?.resolver || {}), masterIndex } },
+                      }))}
+                    />
+                  )}
+                  <BlockStack gap="200">
+                    <Text as="h4" variant="headingSm">Advanced</Text>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      Everything above plus rules like “flat arch means flat-foot control”. Edit only if you know the format; Apply copies it into the tables above.
+                    </Text>
+                    <TextField
+                      label="Recommender definition"
+                      labelHidden
+                      value={jsonDraft}
+                      onChange={setJsonDraft}
+                      multiline={12}
+                      monospaced
+                      autoComplete="off"
+                      error={jsonError || undefined}
+                    />
+                    <InlineStack>
+                      <Button onClick={applyJson}>Apply</Button>
+                    </InlineStack>
+                  </BlockStack>
+                </BlockStack>
               )}
-              <FormLayout>
-                <Box paddingBlockStart="200">
-                  <Text as="h4" variant="headingSm">Advanced — raw JSON</Text>
-                </Box>
-                <div
-                  style={{
-                    maxHeight: "320px",
-                    overflowY: "auto",
-                    border: "1px solid var(--p-color-border, #e1e3e5)",
-                    borderRadius: "8px",
-                    padding: "0",
-                  }}
-                >
-                  <TextField
-                    label="Lookup table (JSON)"
-                    labelHidden
-                    value={editing.definition}
-                    onChange={onChange("definition")}
-                    multiline={12}
-                    monospaced
-                    autoComplete="off"
-                    helpText="The resolver.masterIndex array drives the recommendation: each entry maps an attribute set (gender, useCase, condition, etc.) to a master SKU. For most edits use the CSV editor above. The JSON view is here for chip questions, derivations, and other advanced fields."
-                  />
-                </div>
-              </FormLayout>
               <InlineStack gap="200">
                 <Button onClick={saveEditor} variant="primary"
                   loading={fetcher.state === "submitting" && fetcher.formData?.get?.("intent") === "save_decision_tree"}
@@ -902,7 +920,7 @@ function DecisionTreesCard({ enabled, trees }) {
 // (Diabetes-marketed product)" where the SEED MAPPING IS THE BUG, not
 // the runtime. Fixing it via JSON requires care; via CSV requires a
 // row edit.
-function MappingCsvSection({ treeId }) {
+function MappingCsvSection({ treeId, onApplied }) {
   const previewFetcher = useFetcher();
   const applyFetcher = useFetcher();
   const downloadFetcher = useFetcher();
@@ -990,6 +1008,11 @@ function MappingCsvSection({ treeId }) {
 
   const preview = previewFetcher.data?.mappingCsvPreview;
   const applied = applyFetcher.data?.mappingCsvApplied;
+  // The upload is saved directly — copy it into the open editor so a later
+  // Save doesn't put the old rows back.
+  useEffect(() => {
+    if (applied && Array.isArray(applyFetcher.data.masterIndex)) onApplied?.(applyFetcher.data.masterIndex);
+  }, [applyFetcher.data]);
   const applyError = applyFetcher.data?.error;
 
   return (
