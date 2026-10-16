@@ -76,5 +76,29 @@ test("empty catalog does not divide by zero", () => {
   assert.ok(cov.rows.every((r) => r.pct === 0));
 });
 
+test("Aetrex: orthotics and accessories have no color — left out as 'doesn't apply', not reported missing", () => {
+  const shoes = Array.from({ length: 20 }, (_, i) => p(`Style${i} Sandal - Black`, { attributesJson: { category_for_filter: "Sandals", color: "black", activity: ["Beach"] } }));
+  const orthotics = Array.from({ length: 6 }, (_, i) => p(`Women's Casual Orthotics ${i}`, { productType: "Footwear", attributesJson: { category_for_filter: "Orthotics", activity: ["Everyday Comfort"] } }));
+  const accessories = Array.from({ length: 2 }, (_, i) => p(`Silicone Heel Cup ${i}`, { attributesJson: { category_for_filter: "Accessories" } }));
+  const cov = computeCatalogCoverage({ products: [...shoes, ...orthotics, ...accessories], mappings: [], conditionTagsOf });
+  const color = row(cov, "color");
+  assert.equal(color.total, 20);
+  assert.equal(color.pct, 100);
+  assert.equal(color.status, "good");
+  assert.deepEqual(color.notApplicable, { Orthotics: 6, Accessories: 2 });
+  assert.ok(!cov.gaps.includes("Color"));
+  assert.deepEqual(row(cov, "activity").notApplicable, { Accessories: 2 });
+});
+
+test("a field missing everywhere is still a gap (never hidden as 'doesn't apply')", () => {
+  const cov = computeCatalogCoverage({
+    products: Array.from({ length: 5 }, (_, i) => p(`Style${i} Sneaker`, { attributesJson: { category_for_filter: "Sneakers" } })),
+    mappings: [],
+    conditionTagsOf,
+  });
+  assert.deepEqual(row(cov, "color").notApplicable, {});
+  assert.equal(row(cov, "color").status, "missing");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

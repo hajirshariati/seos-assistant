@@ -14,6 +14,19 @@ import {
   rebuildCatalogFacetIndex,
 } from "../lib/catalog-facts.server";
 import { syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
+import { fetchMetafieldDefinitions } from "../lib/metafield-definitions.server.js";
+
+// Metafield types per shop ("target:namespace.key" → type), so queries only
+// expand linked records for fields that are links. Refreshed every 10 min.
+const typeCache = new Map();
+async function metafieldTypes(admin, shop) {
+  const hit = typeCache.get(shop);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.types;
+  const { definitions } = await fetchMetafieldDefinitions(admin);
+  const types = new Map(definitions.map((d) => [`${d.target}:${d.namespace}.${d.key}`, d.type?.name || ""]));
+  if (types.size > 0) typeCache.set(shop, { at: Date.now(), types });
+  return types.size > 0 ? types : null;
+}
 
 const PRODUCTS_PAGE = 50;
 
@@ -107,8 +120,8 @@ function mapProductFields(node, mappings) {
   return fields;
 }
 
-function productMetafieldFragment(mappings) {
-  return [buildMetafieldFragment(mappings, "product"), buildAutoMetafieldFragment(mappings)]
+function productMetafieldFragment(mappings, types = null) {
+  return [buildMetafieldFragment(mappings, "product", types), buildAutoMetafieldFragment(mappings)]
     .filter(Boolean)
     .join("\n        ");
 }
@@ -175,8 +188,9 @@ export async function upsertProductFromWebhook(shop, webhookPayload, admin) {
 
 export async function fetchAndUpsertProduct(admin, shop, shopifyGid) {
   const mappings = await getAttributeMappings(shop);
-  const productMf = productMetafieldFragment(mappings);
-  const variantMf = buildMetafieldFragment(mappings, "variant");
+  const types = await metafieldTypes(admin, shop).catch(() => null);
+  const productMf = productMetafieldFragment(mappings, types);
+  const variantMf = buildMetafieldFragment(mappings, "variant", types);
   const query = productByIdQuery(productMf, variantMf);
   const resp = await admin.graphql(query, { variables: { id: shopifyGid } });
   const json = await resp.json();
@@ -258,8 +272,9 @@ export async function syncCatalog(admin, shop) {
   await setSyncState(shop, { status: "running", lastError: null, syncedSoFar: 0 });
   try {
     const mappings = await getAttributeMappings(shop);
-    const productMf = productMetafieldFragment(mappings);
-    const variantMf = buildMetafieldFragment(mappings, "variant");
+    const types = await metafieldTypes(admin, shop).catch(() => null);
+    const productMf = productMetafieldFragment(mappings, types);
+    const variantMf = buildMetafieldFragment(mappings, "variant", types);
     // Each chosen field makes a page of products costlier for Shopify; when a
     // page is over Shopify's per-query limit, fetch smaller pages instead.
     let pageSize = PRODUCTS_PAGE;
@@ -302,8 +317,14 @@ export async function syncCatalog(admin, shop) {
         const tooCostly = json.errors.some(
           (e) => e?.extensions?.code === "MAX_COST_EXCEEDED" || /max(imum)?.{0,10}cost|cost.{0,20}exceed/i.test(e?.message || ""),
         );
-        if (tooCostly && pageSize > 5) {
-          pageSize = Math.max(5, Math.floor(pageSize / 2));
+        if (tooCostly && pageSize > 1) {
+          // "Query cost is 1829, which exceeds … (1000)" → size the page to fit.
+          const msg = json.errors.map((e) => e?.message || "").join(" ");
+          const cost = Number(msg.match(/cost is (\d+)/i)?.[1]);
+          const limit = Number(msg.match(/limit \((\d+)\)/i)?.[1]) || 1000;
+          pageSize = cost > 0
+            ? Math.max(1, Math.min(pageSize - 1, Math.floor((pageSize * limit * 0.9) / cost)))
+            : Math.max(1, Math.floor(pageSize / 2));
           query = productsQuery(productMf, variantMf, pageSize);
           console.log(`[syncCatalog] ${shop}: page too costly for Shopify, retrying with ${pageSize} products per page`);
           continue;

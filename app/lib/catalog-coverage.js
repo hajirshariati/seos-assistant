@@ -10,7 +10,7 @@
 import { titleSuffixColor } from "./color-match.js";
 
 const FIELDS = [
-  { key: "color", label: "Color", attrs: ["color", "colour", "color_family", "colour_family"], core: true,
+  { key: "color", label: "Color", attrs: ["color", "colour", "color_family", "colour_family"], core: true, byCategory: true,
     use: "“red shoes”, “in black?”" },
   { key: "gender", label: "Gender", attrs: ["gender", "genders", "gender_fallback"], core: true,
     use: "“women's sandals”, “for my husband”" },
@@ -18,7 +18,7 @@ const FIELDS = [
     use: "“boots”, “sneakers” vs. orthotics" },
   { key: "conditions", label: "Conditions", attrs: ["helps_with", "condition", "recommended_for"], core: true,
     use: "“good for plantar fasciitis”, “bunions”" },
-  { key: "activity", label: "Activity / use", attrs: ["activity", "use_case"], core: false,
+  { key: "activity", label: "Activity / use", attrs: ["activity", "use_case"], core: false, byCategory: true,
     use: "“for walking”, “for the office”" },
   { key: "badge", label: "Badge", attrs: ["badge"], core: false, optional: true,
     use: "“new arrivals”, “limited release”" },
@@ -89,21 +89,54 @@ export const COVERAGE_SOURCE_LABELS = {
   tags: "product tags",
 };
 
+function categoryOf(p) {
+  const attrs = attrsOf(p);
+  const c = readCI(attrs, ["category_for_filter", "category"]);
+  const v = Array.isArray(c) ? c[0] : c;
+  return String(v || p?.productType || "Other").trim() || "Other";
+}
+
+// A field can simply not apply to a kind of product — orthotics have no
+// color. When other categories have the field but (nearly) none of a
+// category's products do, that category is left out of the count and listed
+// as "doesn't apply" instead of being reported as missing data.
+const NOT_APPLICABLE_BELOW = 0.1;
+function notApplicableCategories(field, active, hits) {
+  if (!field.byCategory) return new Set();
+  const byCat = new Map(); // category → { n, hit }
+  active.forEach((p, i) => {
+    const c = categoryOf(p);
+    const row = byCat.get(c) || { n: 0, hit: 0 };
+    row.n += 1;
+    if (hits[i]) row.hit += 1;
+    byCat.set(c, row);
+  });
+  const anyApplies = [...byCat.values()].some((r) => r.hit / r.n >= 0.5);
+  if (!anyApplies) return new Set();
+  return new Set([...byCat.entries()].filter(([, r]) => r.hit / r.n < NOT_APPLICABLE_BELOW).map(([c]) => c));
+}
+
 export function computeCatalogCoverage({ products = [], mappings = [], conditionTagsOf = null } = {}) {
   const active = (products || []).filter(
     (p) => !/^(draft|archived)$/i.test(String(p?.status || "")),
   );
   const mappedAttrs = new Set((mappings || []).map((m) => String(m?.attribute || "").toLowerCase()));
-  const total = active.length;
   const rows = FIELDS.map((field) => {
+    const srcs = active.map((p) => sourceFor(field, p, mappedAttrs, conditionTagsOf));
+    const na = notApplicableCategories(field, active, srcs);
+    const notApplicable = {};
     const sources = {};
     let covered = 0;
-    for (const p of active) {
-      const src = sourceFor(field, p, mappedAttrs, conditionTagsOf);
-      if (!src) continue;
+    let total = 0;
+    active.forEach((p, i) => {
+      const cat = categoryOf(p);
+      if (na.has(cat)) { notApplicable[cat] = (notApplicable[cat] || 0) + 1; return; }
+      total++;
+      const src = srcs[i];
+      if (!src) return;
       covered++;
       sources[src] = (sources[src] || 0) + 1;
-    }
+    });
     const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
     // Title / productType fallbacks work, but they're weaker than real data:
     // a title can't say "women" for an ungendered sneaker name.
@@ -113,8 +146,8 @@ export function computeCatalogCoverage({ products = [], mappings = [], condition
     if (field.optional) status = covered > 0 ? "good" : "info";
     else if (pct < 50) status = "missing";
     else if (pct < 90 || (field.core && strongPct < 50)) status = "partial";
-    return { key: field.key, label: field.label, use: field.use, core: field.core, covered, total, pct, strongPct, sources, status };
+    return { key: field.key, label: field.label, use: field.use, core: field.core, covered, total, pct, strongPct, sources, status, notApplicable };
   });
   const gaps = rows.filter((r) => r.core && r.status !== "good").map((r) => r.label);
-  return { total, rows, gaps };
+  return { total: active.length, rows, gaps };
 }

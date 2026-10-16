@@ -36,19 +36,26 @@ function filterMetafieldMappings(mappings, target) {
   );
 }
 
-export function buildMetafieldFragment(mappings, target = "product") {
+// types: optional Map "target:namespace.key" → Shopify type name. Linked
+// records (metaobjects) are only expanded for fields that are links — every
+// expansion costs Shopify query points on every product of a sync page.
+export function buildMetafieldFragment(mappings, target = "product", types = null) {
   const metafieldMappings = filterMetafieldMappings(mappings, target);
   if (metafieldMappings.length === 0) return "";
   return metafieldMappings
-    .map(
-      (m, i) =>
-        `attr_${i}: metafield(namespace: "${m.namespace}", key: "${m.key}") {
+    .map((m, i) => {
+      const type = types?.get(`${target}:${m.namespace}.${m.key}`) || "";
+      const single = `reference { ... on Metaobject { handle displayName } }`;
+      const list = `references(first: 10) { nodes { ... on Metaobject { handle displayName } } }`;
+      let refs;
+      if (!type) refs = `${single}\n          ${list}`;
+      else if (!/metaobject_reference/.test(type)) refs = "";
+      else refs = type.startsWith("list.") ? list : single;
+      return `attr_${i}: metafield(namespace: "${m.namespace}", key: "${m.key}") {
           value
-          type
-          reference { ... on Metaobject { handle displayName } }
-          references(first: 10) { nodes { ... on Metaobject { handle displayName } } }
-        }`,
-    )
+          type${refs ? `\n          ${refs}` : ""}
+        }`;
+    })
     .join("\n        ");
 }
 

@@ -732,7 +732,14 @@ function CatalogCoverageCard({ coverage }) {
       <Text as="span" variant="bodyMd" fontWeight="semibold">{r.label}</Text>
       <Text as="span" variant="bodySm" tone="subdued">{r.use}</Text>
     </BlockStack>,
-    `${r.covered} / ${r.total} (${r.pct}%)`,
+    <BlockStack gap="050" key={`${r.key}-n`}>
+      <Text as="span" variant="bodyMd">{`${r.covered} / ${r.total} (${r.pct}%)`}</Text>
+      {Object.keys(r.notApplicable || {}).length > 0 && (
+        <Text as="span" variant="bodySm" tone="subdued">
+          {`Doesn't apply to ${Object.entries(r.notApplicable).map(([c, n]) => `${c} (${n})`).join(", ")}`}
+        </Text>
+      )}
+    </BlockStack>,
     Object.entries(r.sources)
       .sort((a, b) => b[1] - a[1])
       .map(([src, n]) => `${COVERAGE_SOURCE_LABELS[src] || src} (${n})`)
@@ -745,7 +752,8 @@ function CatalogCoverageCard({ coverage }) {
         <BlockStack gap="100">
           <Text as="h2" variant="headingMd">What the assistant can filter on</Text>
           <Text as="p" tone="subdued">
-            Share of active products with each field, and where the value comes from. Common metafields
+            Share of active products with each field, and where the value comes from. Kinds of products a field
+            doesn't apply to (orthotics have no color) are left out and listed under the count. Common metafields
             (for example <code>custom.color</code>, <code>custom.gender_text</code>) are detected automatically
             during sync — a mapping below always takes priority.
           </Text>
