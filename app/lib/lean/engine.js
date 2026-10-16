@@ -12,7 +12,7 @@ import { leanSearch, productDetails } from "./search.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
-import { applyMedicalDisclaimer } from "../medical-disclaimer.js";
+import { applyMedicalDisclaimer, medicalDisclaimerRequired } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
 const MAX_CARDS = 4;
@@ -199,8 +199,11 @@ export async function runLeanTurn({
     text = "Sorry — I couldn't finish that one. Could you try asking again?";
   }
 
-  const md = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text });
-  text = md.text;
+  // The note is for customers who brought up pain or a condition — not for a
+  // fashion question whose answer happens to mention orthotics.
+  if (medicalDisclaimerRequired({ workflow: "condition_recommendation", message: latestUserMessage, text: "" })) {
+    text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
+  }
 
   const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map(toCard);
   log(

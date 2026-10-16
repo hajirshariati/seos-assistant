@@ -91,6 +91,22 @@ await test("no color requested → no color filter (outfit colors are Claude's c
   assert.deepEqual(r.products.map((p) => p.title), ["Ashley Arch Support Wedge - Navy"]);
   assert.deepEqual(r.products[0].same_style_other_colors, ["champagne"]);
 });
+await test('"red wedges to go with my blue dress" → the red wedge, never other colors or thong sandals', () => {
+  // Live store, 2026-10: the one red wedge is the Sydney espadrille; the old
+  // engine lost the category, dropped the color and showed thong sandals.
+  const live = buildLeanCatalog([
+    ...ROWS,
+    row("Sydney Quarter Strap Espadrille Wedge - Red", { cat: "Wedges/Heels", activity: ["social"], price: "47.99" }),
+    row("Charli Thong Sandal - White", { cat: "Sandals", price: "99.95" }),
+    row("Charli Thong Sandal - Black", { cat: "Sandals", price: "99.95" }),
+  ], { shop: "s.myshopify.com" });
+  assert.ok(live.vocab.categories.some((c) => c.value === "wedges/heels"));
+  const r = leanSearch(live, { query: "wedge", categories: ["wedges/heels"], colors: ["red"], gender: "women" });
+  const titles = r.products.map((x) => x.title);
+  assert.ok(titles.includes("Sydney Quarter Strap Espadrille Wedge - Red"), JSON.stringify(titles));
+  assert.ok(!titles.some((t) => /Charli|Navy|Champagne/.test(t)), JSON.stringify(titles));
+});
+
 await test("gender includes unisex; men's line excluded from a women's search", () => {
   const r = leanSearch(catalog, { query: "heel cradles sneaker", gender: "women" });
   const titles = r.products.map((p) => p.title);
@@ -233,6 +249,16 @@ await test("medical note appended by code on condition turns", async () => {
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
   assert.match(r.text, /podiatrist/);
   assert.deepEqual(r.cards.map((c) => c.title), ["Savannah Adjustable Quarter Strap Sandal - Red"]);
+});
+await test("no medical note on a fashion question, even if the reply mentions orthotics", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"], gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Ashley wedge in navy is a lovely match — and it works with our dress orthotics too.")] },
+  ]);
+  const msg = "do you have any red wedges that i can set with my blue dress?";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
+  assert.doesNotMatch(r.text, /podiatrist/);
 });
 
 console.log("\nplumbing");
