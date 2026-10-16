@@ -189,6 +189,42 @@ await test("a configured mapping wins — its attribute is not auto-discovered",
   assert.doesNotMatch(frag, /gender/);
 });
 
+await test("conditions / activity / badge metafields are auto-discovered; empty lists fall through", () => {
+  const frag = buildAutoMetafieldFragment([]);
+  const keys = [...frag.matchAll(/(auto_\d+): metafield\(namespace: "([^"]+)", key: "([^"]+)"\)/g)]
+    .map((m) => ({ alias: m[1], ref: `${m[2]}.${m[3]}` }));
+  const alias = (ref) => keys.find((k) => k.ref === ref).alias;
+  const node = {
+    [alias("product.recommended_for")]: { value: "[]" },
+    [alias("product.reccomended_for")]: { value: '["Plantar Fasciitis","Heel Pain"]' },
+    [alias("custom.attr_activity_shoe_type_for_filter")]: { value: '["Everyday Comfort","Beach"]' },
+    [alias("custom.badge")]: { value: "Limited Release" },
+  };
+  assert.deepEqual(resolveAutoAttributes(node, []), {
+    helps_with: ["plantar fasciitis", "heel pain"],
+    activity: ["everyday comfort", "beach"],
+    badge: "limited release",
+  });
+});
+
+console.log("\nfacet aliases (model filter names → catalog attributes)");
+await test("condition filter matches the helps_with attribute when tags are absent", async () => {
+  catalog = [
+    product("Savannah Adjustable Quarter Strap Sandal - Red", "Footwear", { attrs: { gender: "women", color: "red", helps_with: ["plantar fasciitis", "bunions"] } }),
+    product("Reagan Ankle Boot - Red", "Footwear", { attrs: { gender: "women", color: "red", helps_with: ["heel pain"] } }),
+  ];
+  const { titles } = await search({ query: "plantar fasciitis", filters: { color: "red", condition: "plantar_fasciitis", gender: "women" } });
+  assert.deepEqual(titles, ["Savannah Adjustable Quarter Strap Sandal - Red"]);
+});
+await test("use_case filter matches the activity attribute", async () => {
+  catalog = [
+    product("Emmy Braided Thong Sandal - Red", "Footwear", { attrs: { gender: "women", color: "red", activity: ["everyday comfort", "beach"] } }),
+    product("Margot Lace-Up Boot - Dark Red", "Footwear", { attrs: { gender: "women", color: "dark red", activity: ["office work"] } }),
+  ];
+  const { titles } = await search({ query: "sandals", filters: { color: "red", use_case: "beach" } });
+  assert.deepEqual(titles, ["Emmy Braided Thong Sandal - Red"]);
+});
+
 console.log("\nfootwear scope on the model's own search");
 const rctx = (msg, extra = {}) => ({ latestUserMessage: msg, catalogCategories: ["Accessories", "Footwear", "Orthotics"], ...extra });
 const call = (filters = {}) => ({ name: "search_products", input: { query: "plantar fasciitis shoes", filters } });

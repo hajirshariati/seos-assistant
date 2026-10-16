@@ -1428,12 +1428,34 @@ const isExcludedByRule = (p) => {
       const tags = (Array.isArray(p.tags) ? p.tags : []).map(normFacet);
       return [...wants].map(normFacet).some((w) => w && tags.some((t) => t === w || t.includes(w)));
     };
+    // The model names facets loosely ("condition", "use_case"); catalogs
+    // store them under the canonical attributes sync fills (helps_with,
+    // activity). Read the aliases too, underscore-insensitive.
+    const FACET_ALIASES = {
+      condition: ["helps_with", "recommended_for"],
+      conditions: ["helps_with", "recommended_for"],
+      use_case: ["activity"],
+      usecase: ["activity"],
+      occasion: ["activity"],
+      activity: ["use_case"],
+    };
+    const facetKeys = (key) => [key, ...(FACET_ALIASES[String(key).toLowerCase()] || [])];
+    const facetValues = (bag, key) =>
+      facetKeys(key).flatMap((k) => displayValues(readAttributeCI(bag || {}, k)));
+    const facetMatches = (p, key, wants) => {
+      const want = [...wants].map(normFacet).filter(Boolean);
+      const values = [
+        ...facetValues(p.attributesJson, key),
+        ...(p.variants || []).flatMap((v) => facetValues(v.attributesJson, key)),
+      ].map(normFacet);
+      return values.some((v) => want.some((w) => v === w || v.includes(w)));
+    };
     const attrKeyCarried = new Map();
     const keyCarriedInPool = (key) => {
       if (!attrKeyCarried.has(key)) {
         attrKeyCarried.set(key, beforeAttrFilter.some((p) =>
-          readAttributeCI(p.attributesJson || {}, key) != null ||
-          (p.variants || []).some((v) => readAttributeCI(v.attributesJson, key) != null)));
+          facetValues(p.attributesJson, key).length > 0 ||
+          (p.variants || []).some((v) => facetValues(v.attributesJson, key).length > 0)));
       }
       return attrKeyCarried.get(key);
     };
@@ -1461,6 +1483,7 @@ const isExcludedByRule = (p) => {
         }
         if (matchesAttrExpanded(readAttributeCI(productAttrs, key), wants)) return true;
         if ((p.variants || []).some((v) => matchesAttrExpanded(readAttributeCI(v.attributesJson, key), wants))) return true;
+        if (facetMatches(p, key, wants)) return true;
         return tagsMatch(p, wants);
       });
     };

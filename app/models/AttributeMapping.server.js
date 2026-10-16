@@ -151,6 +151,16 @@ export const AUTO_METAFIELD_CANDIDATES = [
   { attribute: "gender", namespace: "custom", key: "gender_text" },
   { attribute: "category_for_filter", namespace: "custom", key: "category_for_filter" },
   { attribute: "subcategory", namespace: "custom", key: "subcategory" },
+  // Conditions the product is made for → helps_with (read by catalog facts
+  // alongside tags). Aetrex: product.reccomended_for (sic).
+  { attribute: "helps_with", namespace: "custom", key: "helps_with" },
+  { attribute: "helps_with", namespace: "custom", key: "recommended_for" },
+  { attribute: "helps_with", namespace: "product", key: "recommended_for" },
+  { attribute: "helps_with", namespace: "product", key: "reccomended_for" },
+  // Occasion / use case → activity (read by catalog facts use-case tags).
+  { attribute: "activity", namespace: "custom", key: "activity" },
+  { attribute: "activity", namespace: "custom", key: "attr_activity_shoe_type_for_filter" },
+  { attribute: "badge", namespace: "custom", key: "badge" },
 ];
 
 export function autoMetafieldCandidates(mappings = []) {

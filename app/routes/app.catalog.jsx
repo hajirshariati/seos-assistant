@@ -59,6 +59,8 @@ import {
   getKnowledgeFileForDownload,
 } from "../models/ShopConfig.server";
 import prisma from "../db.server";
+import { computeCatalogCoverage, COVERAGE_SOURCE_LABELS } from "../lib/catalog-coverage.js";
+import { extractMerchantConditionTags } from "../lib/catalog-facts.server";
 import { backfillShopEmbeddings, resolveShopEmbedding } from "../lib/embeddings.server";
 import { rebuildChunksForFile } from "../lib/knowledge-chunks.server";
 import {
@@ -122,8 +124,31 @@ export const loader = async ({ request }) => {
     } catch { /* migration not yet applied; fall through */ }
   }
 
+  // Data coverage: which fields the assistant can actually filter on, per
+  // product, and where each value comes from (mapping / auto-detected
+  // metafield / title / tags). Surfaces gaps before a shopper hits them.
+  let coverage = null;
+  try {
+    const coverageProducts = await prisma.product.findMany({
+      where: { shop: session.shop },
+      select: {
+        title: true, status: true, productType: true, tags: true, attributesJson: true,
+        variants: { select: { attributesJson: true, optionsJson: true } },
+      },
+      take: 5000,
+    });
+    coverage = computeCatalogCoverage({
+      products: coverageProducts,
+      mappings,
+      conditionTagsOf: extractMerchantConditionTags,
+    });
+  } catch (err) {
+    console.error("[catalog-coverage] failed:", err?.message || err);
+  }
+
   return {
     shop: session.shop,
+    coverage,
     status: state.status,
     lastSyncedAt: state.lastSyncedAt,
     nextScheduledSyncAt: nextScheduledSyncAt().toISOString(),
@@ -2386,6 +2411,51 @@ function AttributeMappingsCard({ mappings }) {
   );
 }
 
+function CatalogCoverageCard({ coverage }) {
+  const toneFor = { good: "success", partial: "attention", missing: "critical", info: "info" };
+  const labelFor = { good: "Ready", partial: "Partial", missing: "Missing", info: "None set" };
+  const rows = coverage.rows.map((r) => [
+    <BlockStack gap="050" key={r.key}>
+      <Text as="span" variant="bodyMd" fontWeight="semibold">{r.label}</Text>
+      <Text as="span" variant="bodySm" tone="subdued">{r.use}</Text>
+    </BlockStack>,
+    `${r.covered} / ${r.total} (${r.pct}%)`,
+    Object.entries(r.sources)
+      .sort((a, b) => b[1] - a[1])
+      .map(([src, n]) => `${COVERAGE_SOURCE_LABELS[src] || src} (${n})`)
+      .join(", ") || "—",
+    <Badge key={`${r.key}-status`} tone={toneFor[r.status]}>{labelFor[r.status]}</Badge>,
+  ]);
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <BlockStack gap="100">
+          <Text as="h2" variant="headingMd">What the assistant can filter on</Text>
+          <Text as="p" tone="subdued">
+            Share of active products with each field, and where the value comes from. Common metafields
+            (for example <code>custom.color</code>, <code>custom.gender_text</code>) are detected automatically
+            during sync — a mapping below always takes priority.
+          </Text>
+        </BlockStack>
+        {coverage.gaps.length > 0 && (
+          <Banner tone="warning">
+            <p>
+              Limited data for <strong>{coverage.gaps.join(", ")}</strong>. Requests that depend on these
+              (for example “red shoes” or “women's sandals”) may miss products. Fill the field in Shopify or add a
+              mapping below, then click <strong>Resync now</strong>.
+            </p>
+          </Banner>
+        )}
+        <DataTable
+          columnContentTypes={["text", "text", "text", "text"]}
+          headings={["Field", "Products", "Comes from", "Status"]}
+          rows={rows}
+        />
+      </BlockStack>
+    </Card>
+  );
+}
+
 function CatalogSyncCard({ data }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -2807,6 +2877,7 @@ export default function RulesKnowledge() {
             description="Keep the AI's product index in sync with your Shopify catalog. Webhooks apply incremental changes automatically within seconds, and large bulk edits trigger an automatic full re-sync. Manual re-sync is only needed if something looks out of date."
           />
           <CatalogSyncCard data={data} />
+          {data.coverage && <CatalogCoverageCard coverage={data.coverage} />}
         </BlockStack>
 
         <BlockStack gap="400">

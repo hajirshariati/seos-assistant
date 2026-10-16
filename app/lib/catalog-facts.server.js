@@ -195,7 +195,7 @@ const MERCHANT_CONDITION_TAG_MAP = {
 // alone is sufficient; many shops will only populate one. Same
 // normalization map for both so downstream consumers get a single
 // canonical tag set.
-function extractMerchantConditionTags(product) {
+export function extractMerchantConditionTags(product) {
   const out = new Set();
 
   // Source A: merchant tags array (e.g. "Bunions", "Plantar Fasciitis")
