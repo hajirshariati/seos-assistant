@@ -4,7 +4,7 @@
 // tested offline: search applies exactly what the model asked for, nothing is
 // injected, cards are exactly what the model chose, the fact check catches
 // invented products/prices and triggers one rewrite. Model QUALITY is judged
-// on the admin Compare page against the live model.
+// against the live model with scripts/eval-chat-transcripts.mjs.
 //
 // Run: node scripts/eval-lean-engine.mjs
 
@@ -22,12 +22,12 @@ const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefine
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
 const { buildLeanCatalog } = await import("../app/lib/lean/catalog.js");
-const { leanSearch, productDetails } = await import("../app/lib/lean/search.js");
+const { leanSearch, productDetails, similarProducts } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation } = await import("../app/lib/lean/engine.js");
-const { leanEngineSelected } = await import("../app/lib/lean/respond.server.js");
+const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 
 let passed = 0;
 let failed = 0;
@@ -202,6 +202,20 @@ await test("dress-shoe turn: search params reach the catalog untouched; cards = 
   assert.equal(r.retried, false);
   assert.deepEqual(r.issues, []);
   assert.equal(r.cards[0].price_formatted, "$139.95");
+  assert.deepEqual(r.shopAllSearch, search, "the View-all link repeats the search that found the cards");
+});
+await test("View-all link: built from the search filters, store pattern honored, vague searches get none", () => {
+  assert.deepEqual(
+    buildShopAllLink({ query: "x", gender: "women", colors: ["Pink"], categories: ["sandals"] }),
+    { url: "/search?q=women+pink+sandals&type=product", label: "View all Women's Pink Sandals" },
+  );
+  assert.deepEqual(
+    buildShopAllLink({ query: "x", gender: "men", on_sale: true }, { pattern: "https://www.aetrex.com/collections/shop?q={q}&tab=products" }),
+    { url: "https://www.aetrex.com/collections/shop?q=sale+men&tab=products", label: "View all Sale Men's Styles" },
+  );
+  assert.equal(buildShopAllLink({ query: "comfy shoes" }), null);
+  assert.equal(buildShopAllLink({ query: "x", colors: ["Black", "Navy"] }), null, "two colors can't be one search");
+  assert.equal(buildShopAllLink(null), null);
 });
 await test("invented product → fact check → Claude rewrites once", async () => {
   const s = scripted([
@@ -268,20 +282,23 @@ await test("conversation normalization: starts with user, merges repeats", () =>
   assert.equal(c[0].content, "a\n\nb");
   assert.deepEqual(extractPriorShownTitles([{ role: "assistant", content: "x [Product cards displayed with this reply: 1. A - Red ($9.00); 2. B]" }]), ["A - Red ($9.00)", "B"]);
 });
-await test("engine switch: lean by default; CHAT_ENGINE / LEGACY_CHAT_SHOPS roll back; admin picks per request", () => {
-  delete process.env.CHAT_ENGINE;
-  delete process.env.LEGACY_CHAT_SHOPS;
-  assert.equal(leanEngineSelected({ shop: "s" }), true);
-  assert.equal(leanEngineSelected({ shop: "s", internal: true, body: { engine: "current" } }), false);
-  assert.equal(leanEngineSelected({ shop: "s", internal: false, body: { engine: "current" } }), true, "storefront can't pick");
-  process.env.LEGACY_CHAT_SHOPS = "s,t";
-  assert.equal(leanEngineSelected({ shop: "s" }), false);
-  assert.equal(leanEngineSelected({ shop: "u" }), true);
-  assert.equal(leanEngineSelected({ shop: "s", internal: true, body: { engine: "lean" } }), true);
-  delete process.env.LEGACY_CHAT_SHOPS;
-  process.env.CHAT_ENGINE = "current";
-  assert.equal(leanEngineSelected({ shop: "u" }), false);
-  delete process.env.CHAT_ENGINE;
+await test("store-chosen product fields reach Claude and are searchable", () => {
+  const rows = [
+    { ...row("Lexa Quarter Strap Wedge - Black", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork", materials: "Leather upper" } },
+    { ...row("Lexa Quarter Strap Wedge - Ivory", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork" } },
+    { ...row("Noelle Arch Support Wedge - Navy", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Memory foam" } },
+    { ...row("Ashley Arch Support Wedge - Rose", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork" } },
+    { ...row("Savannah Adjustable Quarter Strap Sandal - Red", { cat: "Sandals" }), attributesJson: { category_for_filter: "Sandals", gender: "women", footbed: "Cork" } },
+  ];
+  const c = buildLeanCatalog(rows, { shop: "s.myshopify.com" });
+  const r = leanSearch(c, { query: "cork", categories: ["wedges/heels"], gender: "women" });
+  assert.deepEqual(r.products.map((p) => p.title).sort(), ["Ashley Arch Support Wedge - Rose", "Lexa Quarter Strap Wedge - Black"].sort());
+  assert.equal(r.products.find((p) => p.title.startsWith("Lexa")).details.footbed, "Cork");
+  const d = productDetails(c, c.products[0].handle);
+  assert.equal(d.details.materials, "Leather upper");
+
+  const sim = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"] });
+  assert.deepEqual(sim.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "same category + footbed, other styles only");
 });
 
 console.log("\nstore tools + safety");

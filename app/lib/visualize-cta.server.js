@@ -7,7 +7,6 @@
 // on click it POSTs { productHandle, styleContext } to /visualize.
 
 import { isImageProviderSupported } from "./image-styling.server.js";
-import { classifyCatalogItemType } from "./turn-plan.server.js";
 
 // Scene presets per footwear category, shown in the style-preview panel so the
 // shopper can re-render the SAME shoe in real-life settings. `label` is what the
@@ -86,15 +85,16 @@ export function buildVisualizeCtaEvent({ config, product, messages, isInsoleReco
   const title = String(product?.title || "");
   if (NON_WEARABLE_RE.test(category) || NON_WEARABLE_RE.test(title)) return null;
 
-  // EXCLUDE true orthotic INSOLES: they sit INSIDE a shoe, so "see it on"
-  // produces a nonsensical insole-on-a-bare-foot image (prod traces 2026-06-24
-  // "Men's Premium Memory Foam Orthotics", 2026-06-29 "Men's Speed Orthotics -
-  // Insole For Running", 2026-06-30 "Men's Orthotics for Overpronation"). The
-  // CENTRAL classifier decides — the same one commerce truth uses — so a real
-  // wearable sandal with "Orthotic" in its name ("Maui Orthotic Flips") stays
-  // eligible, while insole/insert/footbed titles and bare-"Orthotics" products
-  // are blocked, however the SKU is category-tagged.
-  if (classifyCatalogItemType(product) === "orthotic_insole") return null;
+  // Insoles sit INSIDE a shoe — "see it on" would show an insole on a bare
+  // foot. Block insole categories and insole/insert/footbed/"Orthotics"
+  // titles; a wearable with "Orthotic" in its name ("Fiji
+  // Orthotic Flips") stays eligible.
+  const typeText = `${category} ${product?.productType || ""}`;
+  if (/\b(orthotics?|insoles?|inserts?|footbeds?)\b/i.test(typeText)) return null;
+  if (/\b(insoles?|inserts?|footbeds?)\b/i.test(title)) return null;
+  // Plural "Orthotics" names an insole product ("Men's Orthotics for Heel
+  // Spurs"); wearables use the adjective ("Orthotic Flips").
+  if (/\borthotics\b/i.test(title)) return null;
   const priceNum = Number(product?.price);
   if (Number.isFinite(priceNum) && priceNum <= 0) return null;
 

@@ -16,13 +16,11 @@ import {
   Badge,
   Divider,
   Checkbox,
-  Tag,
   FormLayout,
 } from "@shopify/polaris";
 import { CheckCircleIcon } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { leanEngineSelected } from "../lib/lean/respond.server";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import { backfillShopEmbeddings } from "../lib/embeddings.server";
 import prisma from "../db.server";
@@ -37,12 +35,8 @@ export const loader = async ({ request }) => {
   let hideOnUrls = [];
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
-    // The default engine uses one model for every reply; the routing
-    // strategy below only applies when a shop is rolled back to the classic one.
-    leanEngine: leanEngineSelected({ shop: session.shop }),
     hasAnthropicKey: config.anthropicApiKey !== "",
     anthropicModel: config.anthropicModel,
-    modelStrategy: config.modelStrategy || "smart",
     showFollowUps: config.showFollowUps !== false,
     showFeedback: config.showFeedback !== false,
     hasYotpoKey: config.yotpoApiKey !== "",
@@ -65,14 +59,13 @@ export const loader = async ({ request }) => {
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
+    storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
-    promptCaching: config.promptCaching === true,
     klaviyoFormId: config.klaviyoFormId || "",
     klaviyoCompanyId: config.klaviyoCompanyId || "",
     klaviyoListId: config.klaviyoListId || "",
     vipModeEnabled: config.vipModeEnabled === true,
     showLoginPill: config.showLoginPill !== false,
-    hasKlaviyoPrivateKey: config.klaviyoPrivateKey !== "",
     hasYotpoLoyaltyKey: config.yotpoLoyaltyApiKey !== "",
     yotpoLoyaltyGuid: config.yotpoLoyaltyGuid || "",
     loyaltyDisplay: config.loyaltyDisplay || "points",
@@ -87,7 +80,6 @@ export const loader = async ({ request }) => {
     imageProvider: config.imageProvider || "",
     visualizeLookLabel: config.visualizeLookLabel || "Visualize My Look",
     hasGeminiKey: (config.geminiApiKey || "") !== "",
-    knowledgeRagEnabled: config.knowledgeRagEnabled === true,
     plan: { id: plan.id, name: plan.name, features: plan.features },
   };
 };
@@ -178,8 +170,6 @@ export const action = async ({ request }) => {
   const model = formData.get("anthropicModel");
   if (model) data.anthropicModel = model;
 
-  const strategy = formData.get("modelStrategy");
-  if (strategy) data.modelStrategy = strategy;
 
   const yotpoKey = formData.get("yotpoApiKey");
   if (yotpoKey !== null && yotpoKey !== "") {
@@ -219,6 +209,9 @@ export const action = async ({ request }) => {
   const returnsPageUrl = formData.get("returnsPageUrl");
   if (returnsPageUrl !== null) data.returnsPageUrl = returnsPageUrl.trim();
 
+  const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
+  if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
+
   const referralPageUrl = formData.get("referralPageUrl");
   if (referralPageUrl !== null) data.referralPageUrl = referralPageUrl.trim();
 
@@ -243,8 +236,6 @@ export const action = async ({ request }) => {
   const feedbackToggle = formData.get("showFeedback");
   if (feedbackToggle !== null) data.showFeedback = feedbackToggle === "true";
 
-  const cachingToggle = formData.get("promptCaching");
-  if (cachingToggle !== null) data.promptCaching = cachingToggle === "true";
 
   const vipToggle = formData.get("vipModeEnabled");
   if (vipToggle !== null) data.vipModeEnabled = vipToggle === "true";
@@ -252,10 +243,6 @@ export const action = async ({ request }) => {
   const loginPillToggle = formData.get("showLoginPill");
   if (loginPillToggle !== null) data.showLoginPill = loginPillToggle === "true";
 
-  const klaviyoPrivateKey = formData.get("klaviyoPrivateKey");
-  if (klaviyoPrivateKey !== null && klaviyoPrivateKey !== "") {
-    data.klaviyoPrivateKey = klaviyoPrivateKey;
-  }
 
   const yotpoLoyaltyKey = formData.get("yotpoLoyaltyApiKey");
   if (yotpoLoyaltyKey !== null && yotpoLoyaltyKey !== "") {
@@ -634,49 +621,6 @@ const MODEL_OPTIONS = [
   { label: "Advanced — most capable", value: "claude-opus-4-7" },
 ];
 
-// Three user-facing strategy buckets. The backend still accepts the
-// older 5-value vocabulary (smart, cost-optimized, always-sonnet,
-// always-haiku, always-opus) so stored configs keep working — but the
-// admin only exposes three so the choice stays clear.
-//   • Smart (recommended): best balance — Fast model for standard
-//     turns, Standard for comparisons + automatic escalation when a
-//     reply fails the grounding fact-check.
-//   • Cost optimized: Fast model for every turn (comparisons too);
-//     Standard only on grounding-check escalations. Lowest spend.
-//   • Premium quality: every turn on the Advanced model. Maximum
-//     capability, highest cost. Enterprise plan only.
-// "Always use Standard" and "Always use Fast" were removed: Standard
-// is what Smart picks for substantive turns anyway, and Fast-on-every-
-// turn measurably degrades correctness.
-const STRATEGY_OPTIONS = [
-  { label: "Smart routing (recommended)", value: "smart" },
-  { label: "Cost optimized", value: "cost-optimized" },
-  { label: "Premium quality", value: "always-opus" },
-];
-
-const STRATEGY_HELP = {
-  smart: "Uses the Fast model for standard shopping turns and the Standard model for product comparisons and complex queries. Every reply is fact-checked against live catalog data; if a check fails, the turn automatically re-runs on the Standard model. Best balance of cost and quality.",
-  "cost-optimized": "Uses the Fast model for every turn, including comparisons. Every reply is still fact-checked against live catalog data, and a failed check automatically re-runs the turn on the Standard model — so product facts stay correct at the lowest cost.",
-  "always-opus": "Every message uses the Advanced model. Maximum capability for complex catalogs and nuanced shopper questions. Highest cost.",
-  // Legacy values still mapped so existing configs render a sensible
-  // helper line; the dropdown auto-normalizes them to 'smart' below.
-  "always-sonnet": "Every message uses the Standard model. Consistent quality for all conversations.",
-  "always-haiku": "Every message uses the Fast model. Lowest cost — degrades correctness on complex turns.",
-};
-
-// Map any legacy stored strategy to a value the new 3-option dropdown
-// can display. Saving from this UI overwrites with the normalized
-// value; until then the legacy backend logic keeps working.
-function normalizeStrategyForUi(value) {
-  const valid = new Set(STRATEGY_OPTIONS.map((o) => o.value));
-  if (valid.has(value)) return value;
-  // always-sonnet behaves like smart in practice (smart routes
-  // substantive turns to Sonnet). always-haiku is the option we'd
-  // most like merchants off — map to smart so they get correctness
-  // back the next time they save.
-  return "smart";
-}
-
 function HideUrlsPanel({ initial }) {
   const [rules, setRules] = useState(initial || []);
   const [matchType, setMatchType] = useState("equals");
@@ -753,7 +697,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, modelStrategy, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, referralPageUrl: initReferralPageUrl, promptCaching: initCaching, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasKlaviyoPrivateKey, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, knowledgeRagEnabled, plan, welcomeGlowStyle, welcomeGlowColors, welcomeGlowBorderWidth, welcomeGlowSize, welcomeGlowFadeInMs, welcomeGlowHoldMs, welcomeGlowFadeOutMs, welcomeGlowSpeed, leanEngine } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeGlowStyle, welcomeGlowColors, welcomeGlowBorderWidth, welcomeGlowSize, welcomeGlowFadeInMs, welcomeGlowHoldMs, welcomeGlowFadeOutMs, welcomeGlowSpeed } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -761,7 +705,6 @@ export default function ApiKeys() {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [showOptional, setShowOptional] = useState(false);
   const [model, setModel] = useState(anthropicModel || "claude-sonnet-4-6");
-  const [strategy, setStrategy] = useState(normalizeStrategyForUi(modelStrategy));
   const [followUps, setFollowUps] = useState(initFollowUps);
   const [feedbackOn, setFeedbackOn] = useState(initFeedback);
   const [yotpoKey, setYotpoKey] = useState("");
@@ -774,7 +717,7 @@ export default function ApiKeys() {
   const [trackingPageUrl, setTrackingPageUrl] = useState(initTrackingPageUrl);
   const [returnsPageUrl, setReturnsPageUrl] = useState(initReturnsPageUrl);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
-  const [caching, setCaching] = useState(initCaching);
+  const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
   const [klaviyoCompanyId, setKlaviyoCompanyId] = useState(initKlaviyoCompanyId);
   const [klaviyoListId, setKlaviyoListId] = useState(initKlaviyoListId);
@@ -782,7 +725,6 @@ export default function ApiKeys() {
   const [showLoginPill, setShowLoginPill] = useState(initShowLoginPill);
   const [dailyCapEnabled, setDailyCapEnabled] = useState(initDailyCapEnabled);
   const [dailyCapMessages, setDailyCapMessages] = useState(String(initDailyCapMessages ?? 200));
-  const [klaviyoPrivateKey, setKlaviyoPrivateKey] = useState("");
   const [yotpoLoyaltyKey, setYotpoLoyaltyKey] = useState("");
   const [yotpoLoyaltyGuidState, setYotpoLoyaltyGuidState] = useState(initYotpoLoyaltyGuid);
   const [loyaltyDisplay, setLoyaltyDisplay] = useState(initLoyaltyDisplay);
@@ -796,7 +738,6 @@ export default function ApiKeys() {
   const [isDirty, setIsDirty] = useState(false);
   const initialSnapshot = useRef({
     model: anthropicModel || "claude-sonnet-4-6",
-    strategy: modelStrategy,
     followUps: initFollowUps,
     feedbackOn: initFeedback,
     supportUrl: initSupportUrl,
@@ -804,7 +745,7 @@ export default function ApiKeys() {
     trackingPageUrl: initTrackingPageUrl,
     returnsPageUrl: initReturnsPageUrl,
     referralPageUrl: initReferralPageUrl,
-    caching: initCaching,
+    searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
     klaviyoCompanyId: initKlaviyoCompanyId,
     klaviyoListId: initKlaviyoListId,
@@ -827,7 +768,6 @@ export default function ApiKeys() {
       setAnthropicKey("");
       setYotpoKey("");
       setAftershipKey("");
-      setKlaviyoPrivateKey("");
       setYotpoLoyaltyKey("");
       setVoyageKey("");
       setOpenaiKey("");
@@ -838,7 +778,6 @@ export default function ApiKeys() {
     const s = initialSnapshot.current;
     setAnthropicKey("");
     setModel(s.model);
-    setStrategy(normalizeStrategyForUi(s.strategy));
     setFollowUps(s.followUps);
     setFeedbackOn(s.feedbackOn);
     setYotpoKey("");
@@ -848,13 +787,12 @@ export default function ApiKeys() {
     setTrackingPageUrl(s.trackingPageUrl);
     setReturnsPageUrl(s.returnsPageUrl);
     setReferralPageUrl(s.referralPageUrl);
-    setCaching(s.caching);
+    setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
     setKlaviyoCompanyId(s.klaviyoCompanyId);
     setKlaviyoListId(s.klaviyoListId);
     setVipMode(s.vipMode);
     setShowLoginPill(s.showLoginPill);
-    setKlaviyoPrivateKey("");
     setYotpoLoyaltyKey("");
     setYotpoLoyaltyGuidState(s.yotpoLoyaltyGuid);
     setLoyaltyDisplay(s.loyaltyDisplay);
@@ -871,7 +809,6 @@ export default function ApiKeys() {
 
   const optionalOn = [
     embeddingProvider ? "semantic search" : null,
-    knowledgeRagEnabled ? "knowledge retrieval" : null,
     initVizEnabled ? "styling previews" : null,
     hasYotpoKey || hasAftershipKey || klaviyoFormId ? "integrations" : null,
     vipMode ? "VIP experience" : null,
@@ -964,9 +901,7 @@ export default function ApiKeys() {
               description={
                 <BlockStack gap="200">
                   <Text as="p" tone="subdued" variant="bodySm">
-                    {leanEngine
-                      ? "Which Claude model answers your customers. The default is the best balance of quality, speed and cost."
-                      : "Control which AI model handles customer messages. Smart routing saves money by using a cheaper model for simple interactions."}
+                    Which Claude model answers your customers. The default is the best balance of quality, speed and cost.
                   </Text>
                 </BlockStack>
               }
@@ -974,63 +909,14 @@ export default function ApiKeys() {
               <Card>
                 <BlockStack gap="400">
                   <Select
-                    label={leanEngine ? "Model" : "Primary model"}
+                    label="Model"
                     options={MODEL_OPTIONS.filter(
                       (o) => o.value !== "claude-opus-4-7" || plan.features?.advancedModel,
                     )}
                     value={model}
                     onChange={setModel}
-                    helpText={leanEngine ? "Standard is recommended — the fact check catches mistakes, so a bigger model mostly adds cost and wait time." :
-                      plan.features?.advancedModel
-                        ? "Your Standard model. With Smart routing it handles product comparisons, complex queries, and automatic escalations when a reply fails the grounding fact-check; routine turns use the Fast model."
-                        : "Your Standard model. With Smart routing it handles product comparisons, complex queries, and automatic escalations when a reply fails the grounding fact-check; routine turns use the Fast model. The Advanced model is available on the Enterprise plan."
-                    }
+                    helpText="Standard is recommended — every answer is fact-checked, so a bigger model mostly adds cost and wait time."
                   />
-
-                  {!leanEngine && (
-                    <>
-                  <Divider />
-
-                  <PlanGate
-                    plan={plan}
-                    feature="smartRouting"
-                    summary="Smart routing can automatically use the Fast model for safe turns, lowering cost while keeping complex requests on the Standard model."
-                  >
-                    <BlockStack gap="400">
-                      <Select
-                        label="Routing strategy"
-                        options={STRATEGY_OPTIONS.filter(
-                          (o) => o.value !== "always-opus" || plan.features?.advancedModel,
-                        )}
-                        value={strategy}
-                        onChange={setStrategy}
-                        helpText={STRATEGY_HELP[strategy]}
-                      />
-
-                      {strategy === "smart" && (
-                        <Banner tone="info">
-                          <Text as="p" variant="bodySm">
-                            <strong>How smart routing works:</strong> Standard shopping turns run on the
-                            Fast model. Product comparisons and complex queries run on your primary model.
-                            Every reply is fact-checked against your live catalog before it reaches the
-                            customer — if a check fails, the turn automatically re-runs on your primary model.
-                          </Text>
-                        </Banner>
-                      )}
-                      {strategy === "cost-optimized" && (
-                        <Banner tone="info">
-                          <Text as="p" variant="bodySm">
-                            <strong>How cost optimized routing works:</strong> Every turn — including
-                            comparisons — runs on the Fast model for the lowest cost. Every reply is still
-                            fact-checked against your live catalog, and any reply that fails the check
-                            automatically re-runs on your primary model, so product facts stay correct.
-                          </Text>
-                        </Banner>
-                      )}
-                    </BlockStack>
-                  </PlanGate>
-                    </>
-                  )}
                 </BlockStack>
               </Card>
             </Layout.AnnotatedSection>
@@ -1074,6 +960,14 @@ export default function ApiKeys() {
                     helpText="AfterShip Returns or similar self-serve portal. When set, logged-in customers asking about returns or exchanges get a pre-filled link to this page (with their order number + email) instead of being routed to the support team."
                   />
                   <TextField
+                    label="Search results page"
+                    value={searchPattern}
+                    onChange={setSearchPattern}
+                    placeholder="/search?q={q}&type=product"
+                    autoComplete="off"
+                    helpText="Under a set of product cards the AI adds a 'View all' button (e.g. 'View all Women's Sandals') that opens your store's search. Put {q} where the search words go. Leave blank to use Shopify's standard search page."
+                  />
+                  <TextField
                     label="Referral program page URL"
                     value={referralPageUrl}
                     onChange={setReferralPageUrl}
@@ -1104,19 +998,6 @@ export default function ApiKeys() {
                     onChange={setFeedbackOn}
                     helpText="Shows thumbs up/down on product responses. Negative feedback appears in Analytics with hashed user data."
                   />
-                  <Divider />
-                  <PlanGate
-                    plan={plan}
-                    feature="promptCaching"
-                    summary="Prompt caching lowers input token cost by reusing the cached system prompt across turns. The current chat engine always caches the stable part of the prompt; this toggle only affects the legacy engine."
-                  >
-                    <Checkbox
-                      label="Prompt caching"
-                      checked={caching}
-                      onChange={setCaching}
-                      helpText="The current chat engine always caches the stable part of the system prompt (this is what keeps responses fast and costs low). This toggle is kept for the legacy engine only — leaving it on or off does not change the current engine's behavior."
-                    />
-                  </PlanGate>
                 </BlockStack>
               </Card>
             </Layout.AnnotatedSection>
@@ -1148,7 +1029,7 @@ export default function ApiKeys() {
                     {optionalOn.length > 0
                       ? `Turned on: ${optionalOn.join(", ")}.`
                       : "None turned on. Your assistant works fully without these."}
-                    {" "}Semantic search, knowledge retrieval, styling previews, Yotpo/Klaviyo/AfterShip integrations, VIP customer experience and a daily message limit.
+                    {" "}Semantic search, styling previews, Yotpo/Klaviyo/AfterShip integrations, VIP customer experience and a daily message limit.
                   </Text>
                   <InlineStack>
                     <Button onClick={() => setShowOptional((v) => !v)} disclosure={showOptional ? "up" : "down"}>
@@ -1227,61 +1108,6 @@ export default function ApiKeys() {
                       </Text>
                     </Banner>
                   )}
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Knowledge retrieval (RAG)"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Instead of injecting every knowledge file into every chat, RAG embeds your knowledge files and pulls only the most relevant sections per customer message. Keeps prompts focused and chat quality high as your knowledge base grows.
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Uses the same embedding provider as Semantic search above. No extra setup or extra cost beyond the embedding provider you already configured.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Text as="p" variant="bodyMd" fontWeight="semibold">Status:</Text>
-                    {!embeddingProvider ? (
-                      <Badge tone="warning">Requires embedding provider</Badge>
-                    ) : knowledgeRagEnabled ? (
-                      <Badge tone="success">Enabled</Badge>
-                    ) : (
-                      <Badge>Disabled</Badge>
-                    )}
-                  </InlineStack>
-
-                  <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                    <BlockStack gap="200">
-                      <Text as="p" variant="bodySm" fontWeight="semibold">How it works</Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        1. You upload knowledge files (FAQs, brand voice, rules) on the Knowledge page.
-                      </Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        2. The app splits each file into sections and creates an embedding for each one — one-time, on upload.
-                      </Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        3. On every chat turn, your customer&apos;s message is embedded and matched against your sections. Only the top-5 most relevant ones are sent to the AI.
-                      </Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        4. The AI answers using that focused context — fewer distractions, better responses, lower token cost.
-                      </Text>
-                    </BlockStack>
-                  </Box>
-
-                  <Banner tone="info">
-                    <BlockStack gap="100">
-                      <Text as="p" variant="bodySm">
-                        <strong>To turn on or off:</strong> open the <strong>Knowledge</strong> page → <strong>Knowledge files</strong> section → toggle <em>&ldquo;Use RAG retrieval&rdquo;</em>.
-                      </Text>
-                    </BlockStack>
-                  </Banner>
                 </BlockStack>
               </Card>
             </Layout.AnnotatedSection>
@@ -1449,18 +1275,15 @@ export default function ApiKeys() {
                 <PlanGate
                   plan={plan}
                   feature="klaviyoIntegration"
-                  summary="Show a newsletter signup form in the chat and (optionally) enrich logged-in customers with Klaviyo segment data like VIP or Winback."
+                  summary="Show a newsletter signup form in the chat."
                 >
                 <Card>
                   <BlockStack gap="300">
                     <InlineStack align="space-between" blockAlign="center">
                       <Text as="h3" variant="headingMd">Klaviyo</Text>
-                      <Badge tone={hasKlaviyoPrivateKey ? "success" : undefined}>
-                        {hasKlaviyoPrivateKey ? "Enrichment on" : "Signup only"}
-                      </Badge>
                     </InlineStack>
                     <Text as="p" tone="subdued" variant="bodySm">
-                      Newsletter signup form in chat (with Company ID + List ID). Optional private key unlocks VIP segment enrichment.
+                      Lets the assistant offer a newsletter signup form in the chat when a customer wants deals or updates.
                     </Text>
                     <TextField
                       label="Company ID (public API key)"
@@ -1477,15 +1300,6 @@ export default function ApiKeys() {
                       placeholder="XyZ789"
                       autoComplete="off"
                       helpText="The list to subscribe to. Found in Klaviyo → Audience → Lists → click your list → ID in the URL."
-                    />
-                    <TextField
-                      label="Private API key"
-                      type="password"
-                      value={klaviyoPrivateKey}
-                      onChange={setKlaviyoPrivateKey}
-                      placeholder={hasKlaviyoPrivateKey ? "••••••••••••••••" : "pk_..."}
-                      autoComplete="off"
-                      helpText="Optional. Required for VIP mode enrichment — lets the AI see logged-in customers' Klaviyo segments (e.g. VIP, Winback). Klaviyo → Settings → API Keys → Create Private API Key (scopes: profiles:read, segments:read)."
                     />
                   </BlockStack>
                 </Card>
@@ -1569,7 +1383,6 @@ export default function ApiKeys() {
 
           <input type="hidden" name="anthropicApiKey" value={anthropicKey} />
           <input type="hidden" name="anthropicModel" value={model} />
-          <input type="hidden" name="modelStrategy" value={strategy} />
           <input type="hidden" name="showFollowUps" value={String(followUps)} />
           <input type="hidden" name="showFeedback" value={String(feedbackOn)} />
           <input type="hidden" name="yotpoApiKey" value={yotpoKey} />
@@ -1582,13 +1395,12 @@ export default function ApiKeys() {
           <input type="hidden" name="trackingPageUrl" value={trackingPageUrl} />
           <input type="hidden" name="returnsPageUrl" value={returnsPageUrl} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
-          <input type="hidden" name="promptCaching" value={String(caching)} />
+          <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />
           <input type="hidden" name="klaviyoCompanyId" value={klaviyoCompanyId} />
           <input type="hidden" name="klaviyoListId" value={klaviyoListId} />
           <input type="hidden" name="vipModeEnabled" value={String(vipMode)} />
           <input type="hidden" name="showLoginPill" value={String(showLoginPill)} />
-          <input type="hidden" name="klaviyoPrivateKey" value={klaviyoPrivateKey} />
           <input type="hidden" name="yotpoLoyaltyApiKey" value={yotpoLoyaltyKey} />
           <input type="hidden" name="yotpoLoyaltyGuid" value={yotpoLoyaltyGuidState} />
           <input type="hidden" name="loyaltyDisplay" value={loyaltyDisplay} />

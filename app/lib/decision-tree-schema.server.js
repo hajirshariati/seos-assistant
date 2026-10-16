@@ -1,6 +1,6 @@
 // Validates the JSON shape of DecisionTree.definition. Pure function;
 // returns { ok: bool, errors: string[] }. Used at admin save-time
-// (rules-knowledge route) and once at runtime in the engine before
+// (Smart Recommenders page) and once at runtime in the engine before
 // stepping — the engine refuses to run a malformed tree rather than
 // returning a half-completed answer.
 //

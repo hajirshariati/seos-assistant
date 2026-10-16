@@ -3,7 +3,7 @@ import { Link, Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import { AppProvider as PolarisAppProvider } from "@shopify/polaris";
-import { Box, Text } from "@shopify/polaris";
+import { Text } from "@shopify/polaris";
 import { NavMenu } from "@shopify/app-bridge-react";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
@@ -141,12 +141,10 @@ export default function App() {
       `}</style>
         <NavMenu>
           <Link to="/app" rel="home">SEoS Assistant</Link>
-          <Link to="/app/rules">Rules</Link>
           <Link to="/app/knowledge">Knowledge</Link>
           <Link to="/app/catalog">Catalog</Link>
           <Link to="/app/recommenders">Smart Recommenders</Link>
           <Link to="/app/analytics">Analytics</Link>
-          <Link to="/app/compare">Compare engines</Link>
           <Link to="/app/api-keys">Settings</Link>
         </NavMenu>
         <Outlet />

@@ -14,21 +14,9 @@ import { supportChatLabel } from "../support-handoff.js";
 import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
 import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
+import { buildShopAllLink } from "./shop-all.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
-
-// Which engine answers this request. The lean engine is the default.
-// Roll back without a deploy: CHAT_ENGINE=current (every shop) or
-// LEGACY_CHAT_SHOPS="shop-a.myshopify.com,…". Admin test/compare calls can
-// pick either engine explicitly with body.engine.
-export function leanEngineSelected({ shop, internal = false, body = {} } = {}) {
-  if (internal && body?.engine === "lean") return true;
-  if (internal && body?.engine === "current") return false;
-  const engine = String(process.env.CHAT_ENGINE || "").trim().toLowerCase();
-  if (engine === "current" || engine === "legacy") return false;
-  const legacy = String(process.env.LEGACY_CHAT_SHOPS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  return !(legacy.includes("*") || legacy.includes(shop));
-}
 
 // Store info for Claude: the store team's uploaded notes first (they win if
 // anything differs), then what was learned from the store's own website
@@ -41,7 +29,9 @@ function makeStoreInfoLookup({ shop, config }) {
     if (!files) files = await getKnowledgeFilesWithContent(shop);
     const uploaded = lexicalRetrieveChunks(files, query, { limit: 3, minOverlap: 0.25 });
     let website = [];
-    if (config.knowledgeRagEnabled === true) {
+    {
+      // Semantic lookup whenever the store has an embedding provider; it
+      // returns nothing otherwise and keyword matching carries the answer.
       try {
         const semantic = await retrieveRelevantChunks(prisma, { shop, query, config, limit: 5 });
         for (const c of semantic || []) {
@@ -95,7 +85,7 @@ export function leanChatResponse({
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
-              return { tools: [], systemBlock: "" };
+              return { tools: [], similarAttributes: [], systemBlock: "" };
             }),
         ]);
         console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} msg="${String(latestUserMessage).slice(0, 80)}"`);
@@ -109,11 +99,16 @@ export function leanChatResponse({
           lookupStoreInfo: makeStoreInfoLookup({ shop, config }),
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
+          similarAttributes: extras.similarAttributes,
           callModel: (req) => withAnthropicRetry(() => anthropic.messages.create(req)),
         });
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
         for (const ev of result.events || []) send(ev);
+        if (result.cards.length > 1) {
+          const link = buildShopAllLink(result.shopAllSearch, { pattern: config.storefrontSearchUrlPattern });
+          if (link) send({ type: "link", ...link });
+        }
         if (result.cards.length === 1) {
           const card = result.cards[0];
           const product = catalog.products.find((p) => p.handle === card.handle);

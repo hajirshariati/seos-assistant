@@ -4,11 +4,8 @@
 // regression could land green. This globs EVERY eval-*.mjs, runs the offline
 // ones, and exits non-zero if any fail — the single gate CI runs on every PR.
 //
-// Excluded (env-gated — need a live API key / endpoint, not a code regression):
-//   eval-e2e, eval-chat-transcripts, eval-classifier-live*,
-//   eval-classifier-live-conversations.
-// Excluded (known pre-existing failure, tracked separately — NOT this batch):
-//   eval-conversations  ("Low-confidence classifier still routes correctly").
+// Excluded (env-gated — needs a live endpoint, not a code regression):
+//   eval-chat-transcripts.
 //
 // Run: node scripts/run-evals.mjs   (or: npm run eval:ci)
 //      node scripts/run-evals.mjs --all   (also run the excluded ones)
@@ -23,15 +20,10 @@ const runAll = process.argv.includes("--all");
 
 // Need a live API key / endpoint — excluded from the offline gate.
 const ENV_GATED = new Set([
-  "eval-e2e.mjs",
   "eval-chat-transcripts.mjs",
-  "eval-classifier-live.mjs",
-  "eval-classifier-live-conversations.mjs",
 ]);
 // Known pre-existing failure, tracked separately — keep the gate green until fixed.
-const KNOWN_FAILING = new Set([
-  "eval-conversations.mjs",
-]);
+const KNOWN_FAILING = new Set([]);
 
 const files = readdirSync(here)
   .filter((f) => /^eval-.*\.mjs$/.test(f))

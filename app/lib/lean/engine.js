@@ -8,7 +8,7 @@
 // `anthropic` client and `lookupStoreInfo` function, so it runs in tests with
 // stubs.
 
-import { leanSearch, productDetails } from "./search.js";
+import { leanSearch, productDetails, similarProducts } from "./search.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
@@ -111,6 +111,8 @@ export async function runLeanTurn({
   extraTools = [],
   // Per-request context (promotions, logged-in customer, store team rules).
   extraSystem = "",
+  // Qualities "similar" means for this store; empty → no similar tool.
+  similarAttributes = [],
   deadlineMs = TURN_DEADLINE_MS,
   log = (line) => console.log(line),
   callModel = null, // test seam: (request) => response
@@ -121,7 +123,7 @@ export async function runLeanTurn({
   const byTitle = new Map(products.map((p) => [p.title.toLowerCase(), p]));
   const familyIndex = buildFamilyIndex(products);
 
-  const baseTools = buildLeanTools(catalog?.vocab || {});
+  const baseTools = buildLeanTools(catalog?.vocab || {}, { similar: similarAttributes.length > 0 });
   baseTools[baseTools.length - 1] = { ...baseTools[baseTools.length - 1], cache_control: { type: "ephemeral" } };
   const extraByName = new Map(extraTools.filter((t) => t?.definition?.name && typeof t.run === "function").map((t) => [t.definition.name, t]));
   const tools = [...baseTools, ...[...extraByName.values()].map((t) => t.definition)];
@@ -151,6 +153,7 @@ export async function runLeanTurn({
   let retried = false;
   let text = "";
   let finalIssues = [];
+  const searches = [];
 
   const markSeen = (handles) => {
     for (const h of handles) {
@@ -163,6 +166,7 @@ export async function runLeanTurn({
     if (name === "search_products") {
       const result = leanSearch(catalog, input);
       markSeen(result.products.map((p) => p.handle));
+      searches.push({ input, handles: new Set(result.products.map((p) => p.handle)) });
       log(`[lean] search ${JSON.stringify(input)} → total=${result.total_matches} returned=${result.products.length}${result.if_relaxed ? ` if_relaxed=${JSON.stringify(result.if_relaxed)}` : ""}`);
       return result;
     }
@@ -172,6 +176,12 @@ export async function runLeanTurn({
       markSeen([d.handle, ...d.style_colorways.map((c) => c.handle)]);
       log(`[lean] details ${input.handle}`);
       return d;
+    }
+    if (name === "find_similar_products") {
+      const r = similarProducts(catalog, { ...input, attributes: similarAttributes });
+      if (!r.error) markSeen(r.products.map((p) => p.handle));
+      log(`[lean] similar ${input.handle} → ${r.error ? r.error : r.products.length}`);
+      return r;
     }
     if (name === "show_products") {
       const handles = (Array.isArray(input.handles) ? input.handles : []).map(String);
@@ -270,6 +280,10 @@ export async function runLeanTurn({
   }
 
   const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map(toCard);
+  // The search that found the shown cards — the "View all" link repeats it.
+  const shopAllSearch = cards.length
+    ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null
+    : null;
   log(
     `[lean] final textLen=${text.length} cards=${cards.length} tools=${toolCalls} rewrite=${retried} ` +
     `unresolved=${finalIssues.map((i) => i.code).join(",") || "-"} ms=${Date.now() - started}`,
@@ -279,6 +293,7 @@ export async function runLeanTurn({
     cards,
     followUps: cards.length ? followUps : [],
     supportRequested,
+    shopAllSearch,
     events,
     usage,
     toolCalls,

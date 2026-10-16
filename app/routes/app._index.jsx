@@ -2,17 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher, Link } from "react-router";
 import {
   Page,
-  Card,
   BlockStack,
-  InlineStack,
   Text,
-  Box,
-  Button,
-  Icon,
-  Badge,
   Banner,
 } from "@shopify/polaris";
-import { CheckCircleIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { getShopConfig, getKnowledgeFiles, updateShopConfig } from "../models/ShopConfig.server";
@@ -109,7 +102,6 @@ export const loader = async ({ request }) => {
     conversionCount: conversions.count,
     conversionRevenue: conversions.revenue,
     conversionCurrency: conversions.currency,
-    modelStrategy: config.modelStrategy || "smart",
     rateLimitHits,
     semanticEnabled: !!(config.embeddingProvider && (
       (config.embeddingProvider === "voyage" && config.voyageApiKey) ||
@@ -1512,8 +1504,8 @@ export default function Home() {
   const {
     hasApiKey, fileCount, shop, themeEditorUrl, widgetEnabled,
     storeKnowledgeCount, hasSupportLink, productsSynced,
-    productsCount, enrichmentCount, totalCost, totalMessages, avgCostPerMessage,
-    feedbackTotal, satisfactionRate, modelStrategy, rateLimitHits,
+    productsCount, totalCost, totalMessages, avgCostPerMessage,
+    feedbackTotal, satisfactionRate, rateLimitHits,
     semanticEnabled, semanticProvider, categoryGroupsCount,
     conversionCount, conversionRevenue, conversionCurrency,
     catalogSyncStatus, catalogLastError, lastSyncedAt, hoursSinceSync,

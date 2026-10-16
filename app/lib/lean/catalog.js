@@ -67,6 +67,27 @@ export function productUrl(shop, handle) {
   return `https://${shop}/products/${handle}?utm_content=SEoS`;
 }
 
+// Attribute keys already turned into first-class facts above.
+const CORE_ATTRIBUTE_KEYS = new Set([
+  "category_for_filter", "category", "subcategory", "gender", "genders", "gender_fallback",
+  "color", "colour", "color_family", "colour_family", "activity", "use_case",
+  "helps_with", "recommended_for", "condition", "badge",
+]);
+
+// Every other product field the store chose to share (footbed, materials,
+// heel height…) — as short readable text, so Claude can answer and filter.
+function extraAttributes(attrs) {
+  const out = {};
+  for (const [k, v] of Object.entries(attrs || {})) {
+    const key = String(k).toLowerCase();
+    if (CORE_ATTRIBUTE_KEYS.has(key)) continue;
+    const vals = list(v).map((x) => String(x).trim()).filter((x) => x && !x.startsWith("gid://"));
+    if (!vals.length) continue;
+    out[key] = vals.join(", ").replace(/\s+/g, " ").slice(0, 400);
+  }
+  return out;
+}
+
 export function normalizeProduct(row, { shop = "" } = {}) {
   const attrs = parseJson(row.attributesJson) || {};
   const variants = Array.isArray(row.variants) ? row.variants : [];
@@ -103,6 +124,7 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     activities: uniqLower(readCI(attrs, ["activity", "use_case"])),
     conditions: uniqLower(readCI(attrs, ["helps_with", "recommended_for", "condition"])),
     badge: String(readCI(attrs, ["badge"])[0] || "").trim(),
+    attributes: extraAttributes(attrs),
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
     description: String(row.description || "").replace(/\s+/g, " ").trim(),
     price: minPrice,

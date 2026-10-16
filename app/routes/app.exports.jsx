@@ -7,6 +7,8 @@ import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
 
 const MODEL_LABELS = {
+  "claude-sonnet-4-6": "Standard",
+  "claude-opus-4-7": "Advanced",
   "claude-sonnet-4-20250514": "Standard",
   "claude-haiku-4-5-20251001": "Fast",
   "claude-opus-4-20250514": "Advanced",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { PHASES, STEPS, ATTRIBUTE_MAPPINGS, CADENCE_SECTIONS } from "../lib/onboarding-data";
+import { PHASES, STEPS, CADENCE_SECTIONS } from "../lib/onboarding-data";
 import seosLogo from "../assets/SEoS.png";
 
 const SUPPORT_EMAIL = "hajiraiapp@gmail.com";
@@ -450,44 +450,6 @@ const STYLES = `
     line-height: 1.65;
     overflow-x: auto;
     white-space: pre;
-  }
-
-  /* ── Reference table ──────────────────────────────────────── */
-  .ref-table {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    border-collapse: separate;
-    border-spacing: 0;
-    overflow: hidden;
-    margin: 14px 0;
-  }
-  .ref-table th, .ref-table td {
-    text-align: left;
-    padding: 11px 14px;
-    font-size: 13.5px;
-    border-bottom: 1px solid var(--border);
-  }
-  .ref-table th {
-    background: var(--bg-muted);
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-size: 12px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-  }
-  .ref-table tr:last-child td { border-bottom: none; }
-  .ref-table code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12.5px;
-    background: var(--code-bg);
-    padding: 2px 6px;
-    border-radius: 3px;
-    color: var(--code-text);
-    white-space: nowrap;
-  }
-  @media (max-width: 700px) {
-    .ref-table-wrap { overflow-x: auto; }
   }
 
   /* ── Help block ───────────────────────────────────────────── */
@@ -1392,28 +1354,6 @@ export default function Onboarding() {
                                 <li key={j}>{item}</li>
                               ))}
                             </ul>
-                          ) : null}
-                          {step.showAttributeTable ? (
-                            <div className="ref-table-wrap">
-                              <table className="ref-table">
-                                <thead>
-                                  <tr>
-                                    <th>Source (Shopify)</th>
-                                    <th>Maps to</th>
-                                    <th>Notes</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {ATTRIBUTE_MAPPINGS.map((m) => (
-                                    <tr key={m.attribute}>
-                                      <td><code>{m.source}</code></td>
-                                      <td><code>{m.attribute}</code></td>
-                                      <td>{m.note}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
                           ) : null}
                           {step.commands ? (
                             <pre className="cmd-block" aria-label="Terminal commands">

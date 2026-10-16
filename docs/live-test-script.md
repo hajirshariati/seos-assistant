@@ -18,18 +18,13 @@ is a bug** — capture it (see "On failure") and we'll turn it into a regression
 ## On failure (capture this so it becomes a regression)
 
 - The exact prompt + the full visible reply (screenshot).
-- The Railway log lines for that turn (`[llm-owns-turn] … attempt=`, `emit textLen=`,
-  `cleanup pipeline:`, any `first_error=`, `[router]`, `[memory]`).
+- The Railway log lines for that turn — every line starting with `[lean]`
+  (`turn`, `search`, `details`, `show`, `fact-check failed`, `forcing a final answer`).
 - Which criterion failed and what you expected instead.
 
-## Relevant fixes already shipped (for routing failures)
-
-- **answer_first / too_long** validator rules → advisory turns must answer first, stay concise.
-- **raw_handle_leak** validator + emit guard → no `jillian-cork-sc364w` style slugs ever.
-- **brand stopword** → "the Aetrex X" no longer resolves to the Foot Roller.
-- **hop-budget regen** → a question never collapses to "Here are the matching styles."
-- **internal-leak scrub** → no "product handle / your session" plumbing talk.
-- **Aetrex selling playbook** (prompt) → support-not-cure, casual-vs-performance, value framing.
+To replay these prompts automatically against a deployed store, add them to
+`scripts/chat-transcripts.aetrex.json` and run `npm run eval:chat-transcripts`
+(set `CHAT_TRANSCRIPT_BASE_URL` to the app URL and `SHOPIFY_API_SECRET` so it can sign the request).
 
 ---
 

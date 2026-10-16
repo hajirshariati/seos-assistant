@@ -3,7 +3,7 @@ import { validateDecisionTree } from "./decision-tree-schema.server.js";
 // Runtime-only use (called inside executeRecommenderTool, never at module
 // load) so the orthotic-flow-gate ⇄ recommender-tools import cycle is safe —
 // hoisted function export, resolved by the time the tool runs.
-import { orthoticChipLabelsForAttribute } from "./orthotic-flow-gate.server.js";
+import { orthoticChipLabelsForAttribute } from "./recommender-chips.server.js";
 import { conditionFromText } from "./condition-normalize.js";
 
 // Apply tree-level derivations to the customer's answer set BEFORE

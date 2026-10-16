@@ -10,7 +10,7 @@ function arrayEnum(rows, description) {
   return { type: "array", items: { type: "string", enum: vals }, description };
 }
 
-export function buildLeanTools(vocab = {}) {
+export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   const props = {
     query: {
       type: "string",
@@ -32,7 +32,7 @@ export function buildLeanTools(vocab = {}) {
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };
   props.limit = { type: "integer", description: "How many styles to return (default 6, max 10)." };
 
-  return [
+  const tools = [
     {
       name: "search_products",
       description:
@@ -86,4 +86,21 @@ export function buildLeanTools(vocab = {}) {
       },
     },
   ];
+  if (similar) {
+    tools.splice(2, 0, {
+      name: "find_similar_products",
+      description:
+        "Styles like one specific product (\"something like the Savannah\", \"similar but cheaper\"): same category and line, matched on the qualities this store chose. The product itself is excluded.",
+      input_schema: {
+        type: "object",
+        properties: {
+          handle: { type: "string", description: "Handle of the product they mean (search first if you don't have it)." },
+          max_price: { type: "number", description: "Optional price ceiling, e.g. for \"cheaper\"." },
+          limit: { type: "integer", description: "How many styles (default 6, max 10)." },
+        },
+        required: ["handle"],
+      },
+    });
+  }
+  return tools;
 }

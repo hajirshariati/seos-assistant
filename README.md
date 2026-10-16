@@ -8,15 +8,21 @@ Claude.
 
 ## Architecture
 
-- **Admin** (`app/routes/app.*.jsx`) — embedded Polaris UI for setup,
-  knowledge, analytics, billing, and rules. Uses React Router and
-  `@shopify/shopify-app-react-router`.
+- **Admin** (`app/routes/app.*.jsx`) — embedded Polaris UI: Home (setup
+  checklist + test chat), Knowledge, Catalog, Smart Recommenders, Analytics,
+  Settings. Uses React Router and `@shopify/shopify-app-react-router`.
+- **Chat engine** (`app/lib/lean/`) — Claude decides, code checks facts.
+  Claude gets tools (catalog search, product details, similar products,
+  show cards, store info, customer service, plus store add-ons: orders, fit,
+  reviews, recommenders, newsletter); every answer is fact-checked against
+  what the tools returned and rewritten once if it names a product, price or
+  fact that wasn't returned.
 - **Storefront chat widget** (`extensions/hajirai-chat-widget/`) — Online
   Store theme app extension (app embed, `target: body`). Vanilla JS, no
   framework. Talks to `/apps/hajirai/chat` via Shopify's app proxy.
 - **Public endpoints**
-  - `app/routes/chat.jsx` — streamed Claude responses, tool calls, plan
-    + daily-cap enforcement
+  - `app/routes/chat.jsx` — rate limit, plan quota and daily cap, then the
+    chat engine (streamed as server-sent events)
   - `app/routes/feedback.jsx` — thumbs up/down, IP hashed
   - `app/routes/widget-config.jsx` — runtime config for the widget
 - **Data** — PostgreSQL via Prisma. See `prisma/schema.prisma`.
@@ -76,13 +82,12 @@ live under `app/routes/webhooks.*.jsx` and use
 
 ## Merchant settings (admin)
 
-- AI engine API key (encrypted at rest)
-- Primary model and routing strategy
+- AI engine API key (encrypted at rest) and model
 - **Daily message cap** — optional safety net. When enabled, the chat
   endpoint stops accepting new conversations once the configured count
   is hit for the UTC day; resumes at midnight UTC. Off by default.
-- Chat features (follow-ups, feedback, prompt caching)
-- Support / tracking / returns / referral page URLs
+- Chat features (follow-ups, feedback)
+- Support / tracking / returns / referral / search results page URLs
 - Klaviyo, Yotpo, Aftership integration keys (encrypted at rest)
 - VIP mode (uses `read_customers`/`read_orders` to greet logged-in
   customers and use order history for size recommendations)
@@ -97,6 +102,8 @@ live under `app/routes/webhooks.*.jsx` and use
 | `npm start`           | Serve the production build             |
 | `npm run setup`       | Prisma generate + deploy migrations    |
 | `npm run typecheck`   | React Router typegen + `tsc --noEmit`  |
+| `npm run eval`        | All offline evals (no API key needed)  |
+| `npm run eval:chat-transcripts` | Live chat scenarios against a deployed store |
 | `npx prisma studio`   | DB inspector                           |
 
 ## Repository layout
@@ -105,7 +112,8 @@ live under `app/routes/webhooks.*.jsx` and use
 app/
   routes/              # admin pages + webhooks + public endpoints
   models/              # Prisma helpers, one per table
-  lib/                 # tools, retention, billing, integrations
+  lib/lean/            # chat engine (tools, search, fact check)
+  lib/                 # store knowledge, recommenders, billing, integrations
   utils/encryption.server.js
   shopify.server.js    # Shopify app config; asserts ENCRYPTION_KEY at boot
 extensions/

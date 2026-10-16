@@ -38,7 +38,7 @@ function haystacks(p) {
   return {
     title: norm(p.title),
     category: norm([p.category, p.subcategory, p.productType].join(" ")),
-    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge].join(" ")),
+    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge, ...Object.values(p.attributes || {})].join(" ")),
     tags: norm(p.tags.join(" ")),
     description: norm(p.description),
   };
@@ -113,6 +113,12 @@ function passes(p, filters, catalogHasGender, skip = null) {
   return true;
 }
 
+function shortDetails(attrs) {
+  const out = {};
+  for (const [k, v] of Object.entries(attrs).slice(0, 10)) out[k] = String(v).slice(0, 120);
+  return out;
+}
+
 export function toModelProduct(p, { otherColors = [] } = {}) {
   return {
     handle: p.handle,
@@ -126,6 +132,7 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
     activities: p.activities.length ? p.activities : undefined,
     helps_with: p.conditions.length ? p.conditions.slice(0, 8) : undefined,
     badge: p.badge || undefined,
+    ...(Object.keys(p.attributes || {}).length ? { details: shortDetails(p.attributes) } : {}),
     sizes_in_stock: p.sizes.slice(0, 16),
     widths_in_stock: p.widths.length ? p.widths : undefined,
     summary: p.description.slice(0, 240),
@@ -196,9 +203,50 @@ export function productDetails(catalog, handle) {
     ...toModelProduct(p),
     in_stock: p.inStock,
     description: p.description.slice(0, 1500),
+    ...(Object.keys(p.attributes || {}).length ? { details: p.attributes } : {}),
     tags: p.tags.slice(0, 30),
     style_colorways: siblings.map((s) => ({ handle: s.handle, title: s.title, colors: s.colors, price: s.priceLabel })),
   };
+}
+
+// "Something like the Savannah": same category and line, plus the qualities
+// the store chose (Catalog → "Show me something similar"), excluding the style
+// itself. Ranked by how many of those qualities match.
+export function similarProducts(catalog, { handle, attributes = [], limit = 6, max_price } = {}) {
+  const products = catalog?.products || [];
+  const ref = products.find((x) => x.handle === handle);
+  if (!ref) return { error: "No product with that handle. Search first." };
+  const want = attributes.map((a) => String(a).toLowerCase());
+  const valueOf = (p, key) => {
+    if (key === "color" || key === "colors" || key === "color_family") return p.colors.join(", ");
+    if (key === "activity") return p.activities.join(", ");
+    if (key === "helps_with") return p.conditions.join(", ");
+    return lc(p.attributes?.[key] || "");
+  };
+  const scored = [];
+  for (const p of products) {
+    if (!p.inStock || lc(p.style) === lc(ref.style)) continue;
+    if (lc(p.category) !== lc(ref.category)) continue;
+    if (ref.gender.length && p.gender.length && !p.gender.some((g) => ref.gender.includes(g) || g === "unisex")) continue;
+    if (Number.isFinite(max_price) && p.price > max_price) continue;
+    let score = 0;
+    for (const key of want) {
+      const a = valueOf(ref, key);
+      if (a && a === valueOf(p, key)) score += 1;
+    }
+    if (want.length && score === 0) continue;
+    scored.push({ p, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.p.price - b.p.price);
+  const seenStyles = new Set();
+  const out = [];
+  for (const { p } of scored) {
+    if (seenStyles.has(lc(p.style))) continue;
+    seenStyles.add(lc(p.style));
+    out.push(toModelProduct(p));
+    if (out.length >= Math.min(Math.max(1, limit || 6), 10)) break;
+  }
+  return { reference: ref.title, matched_on: ["category", "line", ...want], products: out };
 }
 
 // Same-style lookup used to resolve "that style" when only a style name is known.
