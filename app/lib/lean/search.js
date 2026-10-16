@@ -34,13 +34,19 @@ const FIELD_WEIGHTS = [
   ["description", 1],
 ];
 
+// Short field values (labels, yes/no) are facts to filter on; long ones
+// (comfort, materials write-ups) are read like the description.
+const SHORT_VALUE = 80;
+const isShort = (v) => String(v).length <= SHORT_VALUE;
+
 function haystacks(p) {
+  const values = Object.values(p.attributes || {});
   return {
     title: norm(p.title),
     category: norm([p.category, p.subcategory, p.productType].join(" ")),
-    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge, ...Object.values(p.attributes || {})].join(" ")),
+    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge, ...values.filter(isShort)].join(" ")),
     tags: norm(p.tags.join(" ")),
-    description: norm(p.description),
+    description: norm([p.description, ...values.filter((v) => !isShort(v))].join(" ")),
   };
 }
 
@@ -113,9 +119,15 @@ function passes(p, filters, catalogHasGender, skip = null) {
   return true;
 }
 
+// Search results stay small (fast, cheap): only the short fields. Long text
+// comes with get_product_details, when Claude needs it for one product.
 function shortDetails(attrs) {
   const out = {};
-  for (const [k, v] of Object.entries(attrs).slice(0, 10)) out[k] = String(v).slice(0, 120);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (!isShort(v)) continue;
+    out[k] = String(v);
+    if (Object.keys(out).length >= 8) break;
+  }
   return out;
 }
 
@@ -132,7 +144,7 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
     activities: p.activities.length ? p.activities : undefined,
     helps_with: p.conditions.length ? p.conditions.slice(0, 8) : undefined,
     badge: p.badge || undefined,
-    ...(Object.keys(p.attributes || {}).length ? { details: shortDetails(p.attributes) } : {}),
+    ...(Object.keys(shortDetails(p.attributes || {})).length ? { details: shortDetails(p.attributes) } : {}),
     sizes_in_stock: p.sizes.slice(0, 16),
     widths_in_stock: p.widths.length ? p.widths : undefined,
     summary: p.description.slice(0, 240),

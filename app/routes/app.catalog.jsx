@@ -186,6 +186,32 @@ export const action = async ({ request }) => {
     }
   }
 
+  // "Add all recommended": several fields, one catalog update.
+  if (intent === "save_mappings_bulk") {
+    let items = [];
+    try { items = JSON.parse(String(formData.get("items") || "[]")); } catch { /* */ }
+    items = (Array.isArray(items) ? items : []).filter((i) => i?.attribute && i?.namespace && i?.key).slice(0, 60);
+    if (items.length === 0) return { error: "Nothing to add." };
+    for (const i of items) {
+      await upsertAttributeMapping(session.shop, {
+        attribute: String(i.attribute).trim().toLowerCase(),
+        sourceType: "metafield",
+        target: i.target === "variant" ? "variant" : "product",
+        namespace: String(i.namespace).trim(),
+        key: String(i.key).trim(),
+        prefix: null,
+      });
+    }
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Product" SET embedding = NULL, "embeddingUpdatedAt" = NULL WHERE shop = $1`,
+        session.shop,
+      );
+    } catch { /* no embedding column */ }
+    syncCatalogAsync(admin, session.shop);
+    return { saved: true, embeddingsStale: true, syncStarted: true, savedAttribute: `${items.length} fields` };
+  }
+
   if (intent === "save_mapping") {
     const attribute = String(formData.get("attribute") || "").trim().toLowerCase();
     const sourceType = String(formData.get("sourceType") || "metafield");
@@ -533,6 +559,14 @@ function AttributeMappingsCard({ mappings, choices = [], choicesError = null }) 
     prefix: "",
   });
   const handleDelete = (attr) => submit({ intent: "delete_mapping", attribute: attr });
+  const addAllRecommended = () => submit({
+    intent: "save_mappings_bulk",
+    items: JSON.stringify(
+      choices
+        .filter((r) => r.group === "recommended")
+        .map((r) => ({ attribute: r.attribute, target: r.target, namespace: r.namespace, key: r.key })),
+    ),
+  });
   const handleManualSave = () => submit({ intent: "save_mapping", attribute, sourceType, target, namespace, key, prefix });
 
   const canSave =
@@ -595,6 +629,17 @@ function AttributeMappingsCard({ mappings, choices = [], choicesError = null }) 
                 <Text as="h3" variant="headingSm">In use</Text>
                 {inUse.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
               </BlockStack>
+            )}
+
+            {recommended.length > 0 && !q && (
+              <InlineStack align="space-between" blockAlign="center" gap="200">
+                <Text as="p" tone="subdued" variant="bodySm">
+                  Not sure? Add every recommended field — duplicates and internal fields are already left out, and extra fields don't slow answers down.
+                </Text>
+                <Button variant="primary" onClick={addAllRecommended} loading={busy}>
+                  {`Add all recommended (${recommended.length})`}
+                </Button>
+              </InlineStack>
             )}
 
             {recommended.length > 0 && (

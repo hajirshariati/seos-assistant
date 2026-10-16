@@ -17,10 +17,10 @@ import { syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
 
 const PRODUCTS_PAGE = 50;
 
-function productsQuery(productMfFragment = "", variantMfFragment = "") {
+function productsQuery(productMfFragment = "", variantMfFragment = "", pageSize = PRODUCTS_PAGE) {
   return `#graphql
   query SyncProducts($cursor: String) {
-    products(first: ${PRODUCTS_PAGE}, after: $cursor) {
+    products(first: ${pageSize}, after: $cursor) {
       pageInfo { hasNextPage endCursor }
       nodes {
         id
@@ -260,7 +260,10 @@ export async function syncCatalog(admin, shop) {
     const mappings = await getAttributeMappings(shop);
     const productMf = productMetafieldFragment(mappings);
     const variantMf = buildMetafieldFragment(mappings, "variant");
-    const query = productsQuery(productMf, variantMf);
+    // Each chosen field makes a page of products costlier for Shopify; when a
+    // page is over Shopify's per-query limit, fetch smaller pages instead.
+    let pageSize = PRODUCTS_PAGE;
+    let query = productsQuery(productMf, variantMf, pageSize);
     if (mappings.length > 0) {
       const prodCount = mappings.filter((m) => (m.target || "product") === "product").length;
       const varCount = mappings.filter((m) => m.target === "variant").length;
@@ -280,13 +283,31 @@ export async function syncCatalog(admin, shop) {
         return { ok: true, count: totalSeen, stopped: true };
       }
 
-      const resp = await admin.graphql(query, { variables: { cursor } });
-      const json = await resp.json();
+      let json;
+      try {
+        const resp = await admin.graphql(query, { variables: { cursor } });
+        json = await resp.json();
+      } catch (err) {
+        // The client may throw GraphQL errors instead of returning them.
+        const errs = err?.body?.errors?.graphQLErrors || err?.body?.errors;
+        if (Array.isArray(errs) && errs.length) json = { errors: errs };
+        else if (/cost|throttl/i.test(err?.message || "")) json = { errors: [{ message: err.message }] };
+        else throw err;
+      }
 
       // Surface real GraphQL errors instead of dying with a generic
       // "no products data". Shopify cost-throttling mid-pagination is
       // the common one — back off and retry the same page.
       if (Array.isArray(json?.errors) && json.errors.length > 0) {
+        const tooCostly = json.errors.some(
+          (e) => e?.extensions?.code === "MAX_COST_EXCEEDED" || /max(imum)?.{0,10}cost|cost.{0,20}exceed/i.test(e?.message || ""),
+        );
+        if (tooCostly && pageSize > 5) {
+          pageSize = Math.max(5, Math.floor(pageSize / 2));
+          query = productsQuery(productMf, variantMf, pageSize);
+          console.log(`[syncCatalog] ${shop}: page too costly for Shopify, retrying with ${pageSize} products per page`);
+          continue;
+        }
         const throttled = json.errors.some(
           (e) => e?.extensions?.code === "THROTTLED" || /throttl/i.test(e?.message || ""),
         );

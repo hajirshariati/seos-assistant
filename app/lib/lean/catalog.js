@@ -76,14 +76,21 @@ const CORE_ATTRIBUTE_KEYS = new Set([
 
 // Every other product field the store chose to share (footbed, materials,
 // heel height…) — as short readable text, so Claude can answer and filter.
-function extraAttributes(attrs) {
+// A value that repeats one already known (the same data in two metafields,
+// or a copy of the category / colors) is kept once.
+function extraAttributes(attrs, known = []) {
   const out = {};
+  const seen = new Set(known.map((v) => String(v).toLowerCase().replace(/\s+/g, " ").trim()).filter(Boolean));
   for (const [k, v] of Object.entries(attrs || {})) {
     const key = String(k).toLowerCase();
     if (CORE_ATTRIBUTE_KEYS.has(key)) continue;
     const vals = list(v).map((x) => String(x).trim()).filter((x) => x && !x.startsWith("gid://"));
     if (!vals.length) continue;
-    out[key] = vals.join(", ").replace(/\s+/g, " ").slice(0, 400);
+    const text = vals.join(", ").replace(/\s+/g, " ").slice(0, 800);
+    const norm = text.toLowerCase();
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    out[key] = text;
   }
   return out;
 }
@@ -110,6 +117,10 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     titleSuffixColor(row.title) || "",
   ]);
 
+  const category = String(readCI(attrs, ["category_for_filter", "category"])[0] || row.productType || "").trim();
+  const gender = uniqLower(readCI(attrs, ["gender", "genders", "gender_fallback"]));
+  const activities = uniqLower(readCI(attrs, ["activity", "use_case"]));
+  const conditions = uniqLower(readCI(attrs, ["helps_with", "recommended_for", "condition"]));
   return {
     handle: row.handle,
     title: row.title,
@@ -117,14 +128,18 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     url: productUrl(shop, row.handle),
     image: row.featuredImageUrl || "",
     productType: String(row.productType || "").trim(),
-    category: String(readCI(attrs, ["category_for_filter", "category"])[0] || row.productType || "").trim(),
+    category,
     subcategory: String(readCI(attrs, ["subcategory"])[0] || "").trim(),
-    gender: uniqLower(readCI(attrs, ["gender", "genders", "gender_fallback"])),
+    gender,
     colors,
-    activities: uniqLower(readCI(attrs, ["activity", "use_case"])),
-    conditions: uniqLower(readCI(attrs, ["helps_with", "recommended_for", "condition"])),
+    activities,
+    conditions,
     badge: String(readCI(attrs, ["badge"])[0] || "").trim(),
-    attributes: extraAttributes(attrs),
+    attributes: extraAttributes(attrs, [
+      category, row.productType, row.title,
+      gender.join(", "), colors.join(", "), activities.join(", "), conditions.join(", "),
+      ...gender, ...colors, ...activities, ...conditions,
+    ]),
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
     description: String(row.description || "").replace(/\s+/g, " ").trim(),
     price: minPrice,

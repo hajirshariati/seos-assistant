@@ -301,6 +301,25 @@ await test("store-chosen product fields reach Claude and are searchable", () => 
   const sim = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"] });
   assert.deepEqual(sim.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "same category + footbed, other styles only");
 });
+await test("many store fields: search results stay small, long text only in details, duplicates dropped", () => {
+  const comfort = "Memory foam footbed with built-in arch support that cushions every step and relieves pressure on the heel and ball of the foot.";
+  const rows = [
+    { ...row("Lexa Quarter Strap Wedge - Black", { cat: "Wedges/Heels" }), attributesJson: {
+      category_for_filter: "Wedges/Heels", attr_category: "Wedges/Heels", gender: "women", attr_gender: "women",
+      footbed: "Cork", comfort_details: comfort, features: ["Arch support", "Cushioned"], highlights: ["Arch support", "Cushioned"],
+    } },
+  ];
+  const c = buildLeanCatalog(rows, { shop: "s.myshopify.com" });
+  const p = c.products[0];
+  assert.equal(p.attributes.attr_category, undefined, "copy of the category");
+  assert.equal(p.attributes.attr_gender, undefined, "copy of the line");
+  assert.equal(Object.keys(p.attributes).filter((k) => k === "features" || k === "highlights").length, 1, "two fields, same values");
+  const r = leanSearch(c, { query: "relieves pressure heel" });
+  assert.equal(r.products.length, 1, "long text is still searchable");
+  assert.equal(r.products[0].details.comfort_details, undefined, "long text left out of search results");
+  assert.equal(r.products[0].details.footbed, "Cork");
+  assert.equal(productDetails(c, p.handle).details.comfort_details, comfort, "full text when Claude opens the product");
+});
 
 console.log("\nstore tools + safety");
 const orderTool = {

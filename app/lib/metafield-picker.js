@@ -19,7 +19,10 @@ const KNOWN_NAMES = {
 // Data the assistant can't use (links to other records, files, apps' plumbing).
 const UNUSABLE_TYPES = /(^|\.)(product_reference|collection_reference|page_reference|file_reference|variant_reference|url|json|link|mixed_reference)$/;
 const APP_NAMESPACES = /^(shopify--|mm-google-shopping|avalara|globo--|judgeme|yotpo|klaviyo|seo|app--)/i;
-const INTERNAL_KEYS = /(^|_)(id|pimid|sku|taxcode|tax_code|code|gallery|galleryid|tooltip|chart|icons?|media|override|searchable|frontrow|template|sort|position|highlights_color_mode|related|complementary)(_|$)/i;
+const INTERNAL_KEYS = /(^|_)(id|pimid|sku|taxcode|tax_code|code|gallery|galleryid|tooltip|chart|media|override|searchable|frontrow|template|sort|position|highlights_color_mode|related|complementary)(_|$)/i;
+
+// Attributes that mean the same thing to the assistant.
+const concept = (attr) => ({ category_for_filter: "category", color_family: "color" }[attr] || attr);
 const LONG_TEXT = /multi_line_text_field|rich_text_field/;
 
 export function slugAttribute(raw) {
@@ -68,6 +71,14 @@ export function buildMetafieldChoices({ definitions = [], mappings = [] } = {}) 
       .map((c) => [`product:${c.namespace}.${c.key}`, c.attribute]),
   );
   const taken = new Set([...mappedAttributes, ...AUTO_METAFIELD_CANDIDATES.map((c) => c.attribute)]);
+  // What the assistant already gets from another field (mapped, or read
+  // automatically because the store has it filled in).
+  const filled = new Set(
+    definitions.filter((d) => Number(d?.metafieldsCount) > 0).map((d) => `product:${d.namespace}.${d.key}`),
+  );
+  const covered = new Map(); // concept → field name
+  for (const m of mappings) if (m?.attribute) covered.set(concept(String(m.attribute).toLowerCase()), m.key || m.attribute);
+  for (const [id, attr] of autoBy) if (filled.has(id) && !covered.has(concept(attr))) covered.set(concept(attr), id.split(".").pop());
 
   const rows = [];
   for (const d of definitions) {
@@ -85,11 +96,16 @@ export function buildMetafieldChoices({ definitions = [], mappings = [] } = {}) 
     else if (APP_NAMESPACES.test(d.namespace)) { group = "hidden"; why = "Added by an app"; }
     else if (count === 0) { group = "hidden"; why = "Not filled in on any product"; }
     else if (INTERNAL_KEYS.test(d.key.replace(/-/g, "_"))) { group = "other"; why = "Looks internal"; }
-    else if (LONG_TEXT.test(type)) { group = "other"; why = "Long text — helps answer questions, not for filtering"; }
+    else if (!mappedAs && !autoAs && KNOWN_NAMES[d.key.toLowerCase().replace(/-/g, "_")] && covered.has(concept(KNOWN_NAMES[d.key.toLowerCase().replace(/-/g, "_")]))) {
+      group = "other";
+      why = `Same information as “${covered.get(concept(KNOWN_NAMES[d.key.toLowerCase().replace(/-/g, "_")]))}”, which the assistant already reads`;
+    }
+    else if (LONG_TEXT.test(type)) { why = "Long text — read when a customer asks about one product"; }
     else if (count < 3) { group = "other"; why = "Only on a few products"; }
 
     const status = mappedAs ? "added" : autoAs ? "automatic" : "available";
     const suggested = status === "available" ? suggestAttributeName(d, taken) : mappedAs || autoAs;
+    if (status === "available" && group !== "hidden") taken.add(suggested);
     rows.push({
       id,
       target,
