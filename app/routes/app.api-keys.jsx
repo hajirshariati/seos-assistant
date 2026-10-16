@@ -22,7 +22,10 @@ import {
 import { CheckCircleIcon } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { leanEngineSelected } from "../lib/lean/respond.server";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
+import { backfillShopEmbeddings } from "../lib/embeddings.server";
+import prisma from "../db.server";
 import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
 import BrandHeader from "../components/BrandHeader";
@@ -34,6 +37,9 @@ export const loader = async ({ request }) => {
   let hideOnUrls = [];
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
+    // The default engine uses one model for every reply; the routing
+    // strategy below only applies when a shop is rolled back to the classic one.
+    leanEngine: leanEngineSelected({ shop: session.shop }),
     hasAnthropicKey: config.anthropicApiKey !== "",
     anthropicModel: config.anthropicModel,
     modelStrategy: config.modelStrategy || "smart",
@@ -285,7 +291,18 @@ export const action = async ({ request }) => {
   }
 
   if (Object.keys(data).length > 0) {
-    await updateShopConfig(session.shop, data);
+    const before = await getShopConfig(session.shop);
+    const saved = await updateShopConfig(session.shop, data);
+    // Turning on semantic search (or changing its provider/key) embeds the
+    // catalog in the background — no separate "Backfill" step to remember.
+    const embeddingChanged =
+      saved.embeddingProvider &&
+      (saved.embeddingProvider !== before.embeddingProvider || data.voyageApiKey || data.openaiApiKey);
+    if (embeddingChanged) {
+      backfillShopEmbeddings(prisma, session.shop, saved)
+        .then((r) => console.log(`[settings] auto-embed ${session.shop}:`, JSON.stringify(r)))
+        .catch((err) => console.error(`[settings] auto-embed failed ${session.shop}:`, err?.message || err));
+    }
   }
 
   return { success: true };
@@ -736,12 +753,13 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, modelStrategy, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, referralPageUrl: initReferralPageUrl, promptCaching: initCaching, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasKlaviyoPrivateKey, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, knowledgeRagEnabled, plan, welcomeGlowStyle, welcomeGlowColors, welcomeGlowBorderWidth, welcomeGlowSize, welcomeGlowFadeInMs, welcomeGlowHoldMs, welcomeGlowFadeOutMs, welcomeGlowSpeed } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, modelStrategy, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, referralPageUrl: initReferralPageUrl, promptCaching: initCaching, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasKlaviyoPrivateKey, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, knowledgeRagEnabled, plan, welcomeGlowStyle, welcomeGlowColors, welcomeGlowBorderWidth, welcomeGlowSize, welcomeGlowFadeInMs, welcomeGlowHoldMs, welcomeGlowFadeOutMs, welcomeGlowSpeed, leanEngine } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
 
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [showOptional, setShowOptional] = useState(false);
   const [model, setModel] = useState(anthropicModel || "claude-sonnet-4-6");
   const [strategy, setStrategy] = useState(normalizeStrategyForUi(modelStrategy));
   const [followUps, setFollowUps] = useState(initFollowUps);
@@ -851,6 +869,15 @@ export default function ApiKeys() {
     if (formRef.current) formRef.current.requestSubmit();
   };
 
+  const optionalOn = [
+    embeddingProvider ? "semantic search" : null,
+    knowledgeRagEnabled ? "knowledge retrieval" : null,
+    initVizEnabled ? "styling previews" : null,
+    hasYotpoKey || hasAftershipKey || klaviyoFormId ? "integrations" : null,
+    vipMode ? "VIP experience" : null,
+    dailyCapEnabled ? "daily limit" : null,
+  ].filter(Boolean);
+
   return (
     <Page>
       <TitleBar title="Settings" />
@@ -889,10 +916,11 @@ export default function ApiKeys() {
                the green theme. Force the brand green on settings-page links. */
             .Polaris-Layout__Annotation a,
             .Polaris-Layout__AnnotationContent a { color: #2D6B4F; text-underline-offset: 2px; }
+            .set-optional { border-top: 1px solid rgba(30,27,51,0.08); margin-top: 24px; padding-top: 24px; }
             .Polaris-Layout__Annotation a:hover,
             .Polaris-Layout__AnnotationContent a:hover { color: #245741; }
           `}</style>
-          <p className="set-intro">Your assistant's API keys, model strategy, widget, and safety limits — all in one place.</p>
+          <p className="set-intro">Most stores only need the first few sections below. Everything under "Optional add-ons" can be left as it is.</p>
 
           <Layout>
             <Layout.AnnotatedSection
@@ -932,12 +960,13 @@ export default function ApiKeys() {
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
-              title="Model routing"
+              title="AI model"
               description={
                 <BlockStack gap="200">
                   <Text as="p" tone="subdued" variant="bodySm">
-                    Control which AI model handles customer messages. Smart routing saves money by using
-                    a cheaper model for simple interactions.
+                    {leanEngine
+                      ? "Which Claude model answers your customers. The default is the best balance of quality, speed and cost."
+                      : "Control which AI model handles customer messages. Smart routing saves money by using a cheaper model for simple interactions."}
                   </Text>
                 </BlockStack>
               }
@@ -945,19 +974,21 @@ export default function ApiKeys() {
               <Card>
                 <BlockStack gap="400">
                   <Select
-                    label="Primary model"
+                    label={leanEngine ? "Model" : "Primary model"}
                     options={MODEL_OPTIONS.filter(
                       (o) => o.value !== "claude-opus-4-7" || plan.features?.advancedModel,
                     )}
                     value={model}
                     onChange={setModel}
-                    helpText={
+                    helpText={leanEngine ? "Standard is recommended — the fact check catches mistakes, so a bigger model mostly adds cost and wait time." :
                       plan.features?.advancedModel
                         ? "Your Standard model. With Smart routing it handles product comparisons, complex queries, and automatic escalations when a reply fails the grounding fact-check; routine turns use the Fast model."
                         : "Your Standard model. With Smart routing it handles product comparisons, complex queries, and automatic escalations when a reply fails the grounding fact-check; routine turns use the Fast model. The Advanced model is available on the Enterprise plan."
                     }
                   />
 
+                  {!leanEngine && (
+                    <>
                   <Divider />
 
                   <PlanGate
@@ -998,10 +1029,138 @@ export default function ApiKeys() {
                       )}
                     </BlockStack>
                   </PlanGate>
+                    </>
+                  )}
                 </BlockStack>
               </Card>
             </Layout.AnnotatedSection>
 
+            <Layout.AnnotatedSection
+              title="Support link"
+              description="When a customer asks for help or customer service, the AI shows a 'Visit Support Hub' button linking to this URL."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <TextField
+                    label="Support page URL"
+                    value={supportUrl}
+                    onChange={setSupportUrl}
+                    placeholder="https://yourstore.com/pages/contact"
+                    autoComplete="off"
+                    helpText="Leave blank to disable the support button."
+                  />
+                  <TextField
+                    label="Button label (optional)"
+                    value={supportLabel}
+                    onChange={setSupportLabel}
+                    placeholder="Visit Support Hub"
+                    autoComplete="off"
+                    helpText="Defaults to 'Visit Support Hub' if left blank."
+                  />
+                  <TextField
+                    label="Order tracking page URL"
+                    value={trackingPageUrl}
+                    onChange={setTrackingPageUrl}
+                    placeholder="https://orders.yourstore.com"
+                    autoComplete="off"
+                    helpText="AfterShip, Parcel Panel, or any branded tracking page. When set, logged-in customers get a tracking link to this page instead of the raw carrier URL. The AI appends the tracking number automatically."
+                  />
+                  <TextField
+                    label="Returns page URL"
+                    value={returnsPageUrl}
+                    onChange={setReturnsPageUrl}
+                    placeholder="https://returns.yourstore.com"
+                    autoComplete="off"
+                    helpText="AfterShip Returns or similar self-serve portal. When set, logged-in customers asking about returns or exchanges get a pre-filled link to this page (with their order number + email) instead of being routed to the support team."
+                  />
+                  <TextField
+                    label="Referral program page URL"
+                    value={referralPageUrl}
+                    onChange={setReferralPageUrl}
+                    placeholder="https://yourstore.com/pages/refer"
+                    autoComplete="off"
+                    helpText="Your Give-$X-Get-$X / referral landing page. When a customer asks how to refer friends, the AI links them here so they can get their personal referral link and share options. Used as a fallback when the customer's personal link isn't available from Yotpo."
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Chat features"
+              description="Toggle AI behaviors for the storefront chat widget."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <Checkbox
+                    label="Follow-up questions"
+                    checked={followUps}
+                    onChange={setFollowUps}
+                    helpText="AI suggests 2-3 clickable follow-up questions after each response. Only suggests questions it can answer."
+                  />
+                  <Divider />
+                  <Checkbox
+                    label="Helpful / Not helpful feedback"
+                    checked={feedbackOn}
+                    onChange={setFeedbackOn}
+                    helpText="Shows thumbs up/down on product responses. Negative feedback appears in Analytics with hashed user data."
+                  />
+                  <Divider />
+                  <PlanGate
+                    plan={plan}
+                    feature="promptCaching"
+                    summary="Prompt caching lowers input token cost by reusing the cached system prompt across turns. The current chat engine always caches the stable part of the prompt; this toggle only affects the legacy engine."
+                  >
+                    <Checkbox
+                      label="Prompt caching"
+                      checked={caching}
+                      onChange={setCaching}
+                      helpText="The current chat engine always caches the stable part of the system prompt (this is what keeps responses fast and costs low). This toggle is kept for the legacy engine only — leaving it on or off does not change the current engine's behavior."
+                    />
+                  </PlanGate>
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Widget visibility"
+              description="Control which pages the chat widget appears on, and customize the intro animation customers see when they first open the chat."
+            >
+              <BlockStack gap="400">
+                <HideUrlsPanel initial={hideOnUrls} />
+                <WelcomeGlowCard
+                  initialStyle={welcomeGlowStyle}
+                  initialColors={welcomeGlowColors}
+                  initialBorderWidth={welcomeGlowBorderWidth}
+                  initialSize={welcomeGlowSize}
+                  initialFadeInMs={welcomeGlowFadeInMs}
+                  initialHoldMs={welcomeGlowHoldMs}
+                  initialFadeOutMs={welcomeGlowFadeOutMs}
+                  initialSpeed={welcomeGlowSpeed}
+                />
+              </BlockStack>
+            </Layout.AnnotatedSection>
+
+            <Layout.Section>
+              <div className="set-optional">
+                <BlockStack gap="200">
+                  <Text as="h2" variant="headingMd">Optional add-ons</Text>
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    {optionalOn.length > 0
+                      ? `Turned on: ${optionalOn.join(", ")}.`
+                      : "None turned on. Your assistant works fully without these."}
+                    {" "}Semantic search, knowledge retrieval, styling previews, Yotpo/Klaviyo/AfterShip integrations, VIP customer experience and a daily message limit.
+                  </Text>
+                  <InlineStack>
+                    <Button onClick={() => setShowOptional((v) => !v)} disclosure={showOptional ? "up" : "down"}>
+                      {showOptional ? "Hide optional settings" : "Show optional settings"}
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              </div>
+            </Layout.Section>
+
+            {showOptional && (
+              <>
             <Layout.AnnotatedSection
               title="Semantic search (optional)"
               description={
@@ -1064,34 +1223,12 @@ export default function ApiKeys() {
                   {embeddingProvider !== "" && (
                     <Banner tone="info">
                       <Text as="p" variant="bodySm">
-                        After saving, click <strong>Backfill embeddings</strong> on the Rules &amp; Knowledge page to embed your existing catalog. New and updated products are embedded automatically going forward.
+                        After you save, your catalog is embedded automatically in the background (a few minutes). New and updated products are embedded as they change. Progress shows on the Catalog page.
                       </Text>
                     </Banner>
                   )}
                 </BlockStack>
               </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Visualize My Look (AI styling preview)"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    When the assistant lands on a single best product, shoppers can tap a standout button to see an AI styling preview — their actual product, styled for what they described (e.g. “heels to go with my blue dress”).
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Optional. Only appears for single-product recommendations. You bring your own image-provider key and pay that provider per image.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <VisualizeLookCard
-                initialEnabled={initVizEnabled}
-                initialProvider={initImageProvider}
-                initialLabel={initVizLabel}
-                hasGeminiKey={hasGeminiKey}
-                hasOpenaiKey={hasOpenaiKey}
-              />
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
@@ -1124,7 +1261,7 @@ export default function ApiKeys() {
                     <BlockStack gap="200">
                       <Text as="p" variant="bodySm" fontWeight="semibold">How it works</Text>
                       <Text as="p" variant="bodySm" tone="subdued">
-                        1. You upload knowledge files (FAQs, brand voice, rules) on the Rules &amp; Knowledge page.
+                        1. You upload knowledge files (FAQs, brand voice, rules) on the Knowledge page.
                       </Text>
                       <Text as="p" variant="bodySm" tone="subdued">
                         2. The app splits each file into sections and creates an embedding for each one — one-time, on upload.
@@ -1141,7 +1278,7 @@ export default function ApiKeys() {
                   <Banner tone="info">
                     <BlockStack gap="100">
                       <Text as="p" variant="bodySm">
-                        <strong>To turn on or off:</strong> open <strong>Rules &amp; Knowledge</strong> → <strong>Knowledge files</strong> section → toggle <em>&ldquo;Use RAG retrieval&rdquo;</em>. After enabling, run <strong>Backfill embeddings</strong> from the same page.
+                        <strong>To turn on or off:</strong> open the <strong>Knowledge</strong> page → <strong>Knowledge files</strong> section → toggle <em>&ldquo;Use RAG retrieval&rdquo;</em>.
                       </Text>
                     </BlockStack>
                   </Banner>
@@ -1150,132 +1287,25 @@ export default function ApiKeys() {
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
-              title="Daily message cap"
+              title="Visualize My Look (AI styling preview)"
               description={
                 <BlockStack gap="200">
                   <Text as="p" tone="subdued" variant="bodySm">
-                    Optional safety net to keep daily AI costs predictable.
+                    When the assistant lands on a single best product, shoppers can tap a standout button to see an AI styling preview — their actual product, styled for what they described (e.g. “heels to go with my blue dress”).
                   </Text>
                   <Text as="p" tone="subdued" variant="bodySm">
-                    When enabled, the assistant pauses for the rest of the day once the cap is hit and resumes the next day at midnight UTC. Customers see a friendly &quot;back tomorrow&quot; message instead of an error. Counts every conversation across your storefront.
+                    Optional. Only appears for single-product recommendations. You bring your own image-provider key and pay that provider per image.
                   </Text>
                 </BlockStack>
               }
             >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Enable daily cap"
-                    checked={dailyCapEnabled}
-                    onChange={setDailyCapEnabled}
-                    helpText="Off by default. Most stores leave this off and rely on monthly plan limits."
-                  />
-                  <TextField
-                    label="Maximum messages per day"
-                    type="number"
-                    min="1"
-                    max="100000"
-                    value={dailyCapMessages}
-                    onChange={setDailyCapMessages}
-                    disabled={!dailyCapEnabled}
-                    autoComplete="off"
-                    helpText="Conversations counted against the cap reset at midnight UTC."
-                  />
-                  {dailyCapEnabled && (
-                    <Banner tone="info">
-                      <Text as="p" variant="bodySm">
-                        <strong>Tip:</strong> a typical store costs roughly 1–3¢ per conversation depending on the AI model. Pick a cap based on how much you&apos;re willing to spend per day — for example, 200 messages at 2¢ each ≈ $4/day.
-                      </Text>
-                    </Banner>
-                  )}
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Chat features"
-              description="Toggle AI behaviors for the storefront chat widget."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Follow-up questions"
-                    checked={followUps}
-                    onChange={setFollowUps}
-                    helpText="AI suggests 2-3 clickable follow-up questions after each response. Only suggests questions it can answer."
-                  />
-                  <Divider />
-                  <Checkbox
-                    label="Helpful / Not helpful feedback"
-                    checked={feedbackOn}
-                    onChange={setFeedbackOn}
-                    helpText="Shows thumbs up/down on product responses. Negative feedback appears in Analytics with hashed user data."
-                  />
-                  <Divider />
-                  <PlanGate
-                    plan={plan}
-                    feature="promptCaching"
-                    summary="Prompt caching lowers input token cost by reusing the cached system prompt across turns. The current chat engine always caches the stable part of the prompt; this toggle only affects the legacy engine."
-                  >
-                    <Checkbox
-                      label="Prompt caching"
-                      checked={caching}
-                      onChange={setCaching}
-                      helpText="The current chat engine always caches the stable part of the system prompt (this is what keeps responses fast and costs low). This toggle is kept for the legacy engine only — leaving it on or off does not change the current engine's behavior."
-                    />
-                  </PlanGate>
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Support link"
-              description="When a customer asks for help or customer service, the AI shows a 'Visit Support Hub' button linking to this URL."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Support page URL"
-                    value={supportUrl}
-                    onChange={setSupportUrl}
-                    placeholder="https://yourstore.com/pages/contact"
-                    autoComplete="off"
-                    helpText="Leave blank to disable the support button."
-                  />
-                  <TextField
-                    label="Button label (optional)"
-                    value={supportLabel}
-                    onChange={setSupportLabel}
-                    placeholder="Visit Support Hub"
-                    autoComplete="off"
-                    helpText="Defaults to 'Visit Support Hub' if left blank."
-                  />
-                  <TextField
-                    label="Order tracking page URL"
-                    value={trackingPageUrl}
-                    onChange={setTrackingPageUrl}
-                    placeholder="https://orders.yourstore.com"
-                    autoComplete="off"
-                    helpText="AfterShip, Parcel Panel, or any branded tracking page. When set, logged-in customers get a tracking link to this page instead of the raw carrier URL. The AI appends the tracking number automatically."
-                  />
-                  <TextField
-                    label="Returns page URL"
-                    value={returnsPageUrl}
-                    onChange={setReturnsPageUrl}
-                    placeholder="https://returns.yourstore.com"
-                    autoComplete="off"
-                    helpText="AfterShip Returns or similar self-serve portal. When set, logged-in customers asking about returns or exchanges get a pre-filled link to this page (with their order number + email) instead of being routed to the support team."
-                  />
-                  <TextField
-                    label="Referral program page URL"
-                    value={referralPageUrl}
-                    onChange={setReferralPageUrl}
-                    placeholder="https://yourstore.com/pages/refer"
-                    autoComplete="off"
-                    helpText="Your Give-$X-Get-$X / referral landing page. When a customer asks how to refer friends, the AI links them here so they can get their personal referral link and share options. Used as a fallback when the customer's personal link isn't available from Yotpo."
-                  />
-                </BlockStack>
-              </Card>
+              <VisualizeLookCard
+                initialEnabled={initVizEnabled}
+                initialProvider={initImageProvider}
+                initialLabel={initVizLabel}
+                hasGeminiKey={hasGeminiKey}
+                hasOpenaiKey={hasOpenaiKey}
+              />
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
@@ -1492,23 +1522,49 @@ export default function ApiKeys() {
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
-              title="Widget visibility"
-              description="Control which pages the chat widget appears on, and customize the intro animation customers see when they first open the chat."
+              title="Daily message cap"
+              description={
+                <BlockStack gap="200">
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    Optional safety net to keep daily AI costs predictable.
+                  </Text>
+                  <Text as="p" tone="subdued" variant="bodySm">
+                    When enabled, the assistant pauses for the rest of the day once the cap is hit and resumes the next day at midnight UTC. Customers see a friendly &quot;back tomorrow&quot; message instead of an error. Counts every conversation across your storefront.
+                  </Text>
+                </BlockStack>
+              }
             >
-              <BlockStack gap="400">
-                <HideUrlsPanel initial={hideOnUrls} />
-                <WelcomeGlowCard
-                  initialStyle={welcomeGlowStyle}
-                  initialColors={welcomeGlowColors}
-                  initialBorderWidth={welcomeGlowBorderWidth}
-                  initialSize={welcomeGlowSize}
-                  initialFadeInMs={welcomeGlowFadeInMs}
-                  initialHoldMs={welcomeGlowHoldMs}
-                  initialFadeOutMs={welcomeGlowFadeOutMs}
-                  initialSpeed={welcomeGlowSpeed}
-                />
-              </BlockStack>
+              <Card>
+                <BlockStack gap="400">
+                  <Checkbox
+                    label="Enable daily cap"
+                    checked={dailyCapEnabled}
+                    onChange={setDailyCapEnabled}
+                    helpText="Off by default. Most stores leave this off and rely on monthly plan limits."
+                  />
+                  <TextField
+                    label="Maximum messages per day"
+                    type="number"
+                    min="1"
+                    max="100000"
+                    value={dailyCapMessages}
+                    onChange={setDailyCapMessages}
+                    disabled={!dailyCapEnabled}
+                    autoComplete="off"
+                    helpText="Conversations counted against the cap reset at midnight UTC."
+                  />
+                  {dailyCapEnabled && (
+                    <Banner tone="info">
+                      <Text as="p" variant="bodySm">
+                        <strong>Tip:</strong> a typical store costs roughly 1–3¢ per conversation depending on the AI model. Pick a cap based on how much you&apos;re willing to spend per day — for example, 200 messages at 2¢ each ≈ $4/day.
+                      </Text>
+                    </Banner>
+                  )}
+                </BlockStack>
+              </Card>
             </Layout.AnnotatedSection>
+              </>
+            )}
           </Layout>
 
           <input type="hidden" name="anthropicApiKey" value={anthropicKey} />

@@ -22,6 +22,7 @@ import { getUsageSummary, getDailySeries } from "../models/ChatUsage.server";
 import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getConversionSummary, getConversionDailySeries } from "../models/ChatConversion.server";
 import { listDecisionTrees } from "../models/DecisionTree.server";
+import { listStoreKnowledge } from "../lib/store-knowledge/sync.server";
 import seosLogo from "../assets/SEoS.png";
 
 export const loader = async ({ request }) => {
@@ -38,6 +39,7 @@ export const loader = async ({ request }) => {
     getDailySeries(session.shop, 30).catch(() => []),
     getConversionDailySeries(session.shop, 30).catch(() => []),
   ]);
+  const storeKnowledgeCount = await listStoreKnowledge(session.shop).then((d) => d.length).catch(() => 0);
 
   if (!syncState.lastSyncedAt && syncState.status !== "running") {
     syncCatalogAsync(admin, session.shop);
@@ -83,6 +85,9 @@ export const loader = async ({ request }) => {
   return {
     hasApiKey: config.anthropicApiKey !== "",
     fileCount: files.length,
+    storeKnowledgeCount,
+    hasSupportLink: Boolean(String(config.supportUrl || "").trim()),
+    productsSynced: Boolean(syncState.lastSyncedAt) && (syncState.productsCount || 0) > 0,
     shop: session.shop,
     userFirstName,
     // Open the theme editor's "App embeds" panel, where the merchant toggles
@@ -1254,11 +1259,14 @@ function SetupCheckCircle() {
   );
 }
 
-function SetupChecklist({
-  hasApiKey, widgetEnabled, fileCount, categoryGroupsCount, semanticEnabled,
-  semanticProvider, themeEditorUrl, inline = false,
+// The setup steps — shared by the home card's progress ring and its checklist.
+// Products and store pages are learned automatically; only the API key and
+// the theme embed truly need the merchant.
+function buildSetupItems({
+  hasApiKey, widgetEnabled, productsSynced, storeKnowledgeCount = 0, fileCount = 0,
+  hasSupportLink, semanticEnabled, semanticProvider, themeEditorUrl,
 }) {
-  const items = [
+  return [
     {
       done: hasApiKey,
       title: "Connect the AI engine",
@@ -1268,36 +1276,52 @@ function SetupChecklist({
     },
     {
       done: widgetEnabled,
-      title: "Enable the chat widget",
+      title: "Turn on the chat widget",
       description: widgetEnabled
-        ? "Your storefront is loading the chat widget. Use the theme editor to adjust appearance and content."
-        : "Turn on the SEoS Assistant chat block in your active Shopify theme so customers see it on your storefront.",
+        ? "Your storefront is showing the chat widget. Use the theme editor to adjust how it looks."
+        : "In your theme editor, switch on the SEoS Assistant app embed so customers see the chat.",
       actionLabel: widgetEnabled ? "Customize" : "Open theme editor",
       actionUrl: themeEditorUrl,
       external: true,
     },
     {
-      done: fileCount > 0,
-      title: "Upload extra knowledge (optional)",
-      description: "FAQs, brand voice, sizing guides, product specs — CSV files with a SKU column are automatically linked to your catalog.",
-      actionLabel: fileCount > 0 ? "Manage files" : "Upload",
-      actionUrl: "/app/knowledge",
-    },
-    {
-      done: categoryGroupsCount > 0,
-      title: "Define category groups (optional)",
-      description: "Group your catalog (e.g. Footwear / Orthotics / Accessories) so the AI never offers irrelevant categories when a customer asks about one of them.",
-      actionLabel: categoryGroupsCount > 0 ? `Manage (${categoryGroupsCount})` : "Set up groups",
+      done: productsSynced,
+      title: "Products learned (automatic)",
+      description: productsSynced
+        ? "Your products, colors, sizes and product fields are synced and kept up to date automatically."
+        : "We're reading your products from Shopify now — nothing to do.",
+      actionLabel: "View",
       actionUrl: "/app/catalog",
     },
     {
+      done: storeKnowledgeCount > 0 || fileCount > 0,
+      title: "Store policies & pages learned (automatic)",
+      description: storeKnowledgeCount > 0
+        ? `Learned ${storeKnowledgeCount} page${storeKnowledgeCount === 1 ? "" : "s"} and policies from your website. Add your own notes anytime.`
+        : "Shipping, returns and FAQ pages are read from your website automatically after each product sync.",
+      actionLabel: "Review",
+      actionUrl: "/app/knowledge",
+    },
+    {
+      done: hasSupportLink,
+      title: "Add your support link (recommended)",
+      description: "Where the assistant sends customers who need a person — your contact or help page.",
+      actionLabel: hasSupportLink ? "Manage" : "Add link",
+      actionUrl: "/app/api-keys",
+    },
+    {
       done: semanticEnabled,
-      title: "Enable semantic search (optional)",
-      description: "The assistant already searches your catalog with AI — adding a Voyage AI or OpenAI key sharpens matching by meaning, not just keywords. Typically under $1/month, and everything works without it.",
+      title: "Semantic search (optional)",
+      description: "Sharper matching by meaning. Typically under $1/month, and everything works without it.",
       actionLabel: semanticEnabled ? `Manage (${semanticProvider === "voyage" ? "Voyage AI" : "OpenAI"})` : "Add provider",
       actionUrl: "/app/api-keys",
     },
   ];
+}
+
+function SetupChecklist(props) {
+  const { hasApiKey, widgetEnabled, inline = false } = props;
+  const items = buildSetupItems(props);
   const doneCount = items.filter((i) => i.done).length;
   const allDone = doneCount === items.length;
   const requiredDone = hasApiKey && widgetEnabled;
@@ -1423,14 +1447,8 @@ function SetupChecklist({
 // ---------------------------------------------------------------------------
 function SetupCard(props) {
   const [open, setOpen] = useState(false);
-  const { hasApiKey, widgetEnabled, fileCount, categoryGroupsCount, semanticEnabled } = props;
-  const itemsDone = [
-    hasApiKey,
-    widgetEnabled,
-    fileCount > 0,
-    categoryGroupsCount > 0,
-    semanticEnabled,
-  ];
+  const { hasApiKey, widgetEnabled } = props;
+  const itemsDone = buildSetupItems(props).map((i) => i.done);
   const doneCount = itemsDone.filter(Boolean).length;
   const total = itemsDone.length;
   const allDone = doneCount === total;
@@ -1493,6 +1511,7 @@ function timeGreeting() {
 export default function Home() {
   const {
     hasApiKey, fileCount, shop, themeEditorUrl, widgetEnabled,
+    storeKnowledgeCount, hasSupportLink, productsSynced,
     productsCount, enrichmentCount, totalCost, totalMessages, avgCostPerMessage,
     feedbackTotal, satisfactionRate, modelStrategy, rateLimitHits,
     semanticEnabled, semanticProvider, categoryGroupsCount,
@@ -2587,6 +2606,9 @@ export default function Home() {
                 hasApiKey={hasApiKey}
                 widgetEnabled={widgetEnabled}
                 fileCount={fileCount}
+                storeKnowledgeCount={storeKnowledgeCount}
+                hasSupportLink={hasSupportLink}
+                productsSynced={productsSynced}
                 categoryGroupsCount={categoryGroupsCount}
                 semanticEnabled={semanticEnabled}
                 semanticProvider={semanticProvider}

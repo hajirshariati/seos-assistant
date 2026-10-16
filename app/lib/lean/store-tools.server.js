@@ -5,7 +5,7 @@
 // recommender-tools; this file only decides which ones this store and this
 // customer get, and adds no routing of its own — Claude decides when to call.
 
-import { executeTool, CUSTOMER_ORDERS_TOOL, FIT_PREDICTOR_TOOL } from "../chat-tools.server.js";
+import { executeTool, TOOLS, CUSTOMER_ORDERS_TOOL, FIT_PREDICTOR_TOOL } from "../chat-tools.server.js";
 import { buildRecommenderTools } from "../recommender-tools.server.js";
 import { fetchCustomerContext } from "../customer-context.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
@@ -76,6 +76,8 @@ export async function buildLeanStoreExtras({
     fitPredictorConfig,
     yotpoApiKey: config.yotpoApiKey || "",
     aftershipApiKey: config.aftershipApiKey || "",
+    deduplicateColors: config.deduplicateColors,
+    similarMatchAttributes: parseJson(config.similarMatchAttributes, []),
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
     conversationText,
@@ -130,6 +132,13 @@ export async function buildLeanStoreExtras({
       }
       return r;
     });
+  }
+
+  // "Something like the Savannah" — only when the store picked what
+  // "similar" means (Rules → "Show me something similar").
+  const similarDef = TOOLS.find((t) => t.name === "find_similar_products");
+  if (similarDef && Array.isArray(ctx.similarMatchAttributes) && ctx.similarMatchAttributes.length > 0) {
+    wrap(similarDef, (input) => executeTool("find_similar_products", input, ctx));
   }
 
   if (ctx.yotpoApiKey) wrap(REVIEWS_TOOL, (input) => executeTool("get_product_reviews", input, ctx));

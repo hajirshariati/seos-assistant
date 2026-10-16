@@ -32,6 +32,7 @@ import {
 import { DeleteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { leanEngineSelected } from "../lib/lean/respond.server";
 import {
   getCatalogSyncState,
   getProductCount,
@@ -43,6 +44,8 @@ import {
   upsertAttributeMapping,
   deleteAttributeMapping,
 } from "../models/AttributeMapping.server";
+import { fetchMetafieldDefinitions } from "../lib/metafield-definitions.server";
+import { buildMetafieldChoices } from "../lib/metafield-picker";
 import {
   listCampaigns,
   saveCampaign,
@@ -97,8 +100,8 @@ function safeParse(raw, fallback) {
 }
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const [state, count, mappings, config, files, plan, campaigns, decisionTrees] = await Promise.all([
+  const { admin, session } = await authenticate.admin(request);
+  const [state, count, mappings, config, files, plan, campaigns, decisionTrees, metafieldDefs] = await Promise.all([
     getCatalogSyncState(session.shop),
     getProductCount(session.shop),
     getAttributeMappings(session.shop),
@@ -107,7 +110,9 @@ export const loader = async ({ request }) => {
     getShopPlan(session.shop),
     listCampaigns(session.shop),
     listDecisionTrees(session.shop),
+    fetchMetafieldDefinitions(admin),
   ]);
+  const metafieldChoices = buildMetafieldChoices({ definitions: metafieldDefs.definitions, mappings });
   const enrichedCounts = await Promise.all(files.map((f) => countEnrichmentsBySourceFile(f.id)));
   const filesWithCounts = files.map((f, i) => ({ ...f, enrichedSkus: enrichedCounts[i] }));
 
@@ -156,6 +161,9 @@ export const loader = async ({ request }) => {
     productsCount: count,
     syncedSoFar: state.syncedSoFar || 0,
     mappings,
+    metafieldChoices,
+    metafieldError: metafieldDefs.error,
+    leanEngine: leanEngineSelected({ shop: session.shop }),
     categoryExclusions: safeParse(config.categoryExclusions, []),
     categoryGroups: safeParse(config.categoryGroups, []),
     embeddingProvider,
@@ -278,6 +286,12 @@ export const action = async ({ request }) => {
         session.shop,
       );
     } catch { /* table might not have the column on shops without semantic search */ }
+    // Pull the new attribute into every product right away — no separate
+    // "Resync" step for the merchant to remember.
+    if (formData.get("autoSync") === "1") {
+      syncCatalogAsync(admin, session.shop);
+      return { saved: true, embeddingsStale: true, syncStarted: true, savedAttribute: attribute };
+    }
     return { saved: true, embeddingsStale: true };
   }
 
@@ -290,6 +304,10 @@ export const action = async ({ request }) => {
         session.shop,
       );
     } catch { /* */ }
+    if (formData.get("autoSync") === "1") {
+      syncCatalogAsync(admin, session.shop);
+      return { deleted: true, embeddingsStale: true, syncStarted: true };
+    }
     return { deleted: true, embeddingsStale: true };
   }
 
@@ -2283,12 +2301,95 @@ function SearchRulesCard({ initial }) {
   );
 }
 
-function AttributeMappingsCard({ mappings }) {
+// Category groups only steer the classic engine; the assistant now reads
+// categories straight from your product data. Folded, not removed.
+function ClassicCategoryGroups({ data }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <BlockStack gap="300">
+      <Card>
+        <BlockStack gap="200">
+          <Text as="h2" variant="headingMd">Category groups (classic engine)</Text>
+          <Text as="p" tone="subdued">
+            Not needed anymore — the assistant reads your categories directly from your products.
+            {data.categoryGroups?.length ? ` Your ${data.categoryGroups.length} saved group(s) are kept in case you switch back.` : ""}
+          </Text>
+          <InlineStack>
+            <Button variant="plain" disclosure={open ? "up" : "down"} onClick={() => setOpen((v) => !v)}>
+              {open ? "Hide" : "Show category groups"}
+            </Button>
+          </InlineStack>
+        </BlockStack>
+      </Card>
+      {open && (
+        <PlanGate plan={data.plan} feature="searchRules" summary="Category groups.">
+          <CategoryGroupsCard initial={data.categoryGroups} />
+        </PlanGate>
+      )}
+    </BlockStack>
+  );
+}
+
+function MetafieldRow({ row, onAdd, onRemove, busy }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(row.attribute || "");
+  return (
+    <Box paddingBlock="200" borderBlockEndWidth="025" borderColor="border-secondary">
+      <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
+        <BlockStack gap="050">
+          <InlineStack gap="200" blockAlign="center">
+            <Text as="span" variant="bodyMd" fontWeight="semibold">{row.name}</Text>
+            {row.status === "automatic" && <Badge tone="success">Used automatically</Badge>}
+            {row.status === "added" && <Badge tone="success">{`Added as "${row.attribute}"`}</Badge>}
+            {row.target === "variant" && <Badge>Per size/color</Badge>}
+          </InlineStack>
+          <Text as="span" variant="bodySm" tone="subdued">
+            {[row.typeLabel, row.count ? `filled in on ${row.count.toLocaleString()} product${row.count === 1 ? "" : "s"}` : "", row.why]
+              .filter(Boolean).join(" · ")}
+            {row.description && row.description !== row.name ? ` — ${row.description}` : ""}
+          </Text>
+        </BlockStack>
+        {row.status === "available" && !editing && (
+          <InlineStack gap="200" wrap={false}>
+            <Button size="slim" onClick={() => onAdd(row, row.attribute)} loading={busy}>Add</Button>
+            <Button size="slim" variant="tertiary" onClick={() => setEditing(true)}>Rename</Button>
+          </InlineStack>
+        )}
+        {row.status === "added" && (
+          <Button size="slim" variant="tertiary" tone="critical" onClick={() => onRemove(row.attribute)} loading={busy}>Remove</Button>
+        )}
+      </InlineStack>
+      {editing && (
+        <Box paddingBlockStart="200">
+          <InlineStack gap="200" blockAlign="end" wrap={false}>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Name the assistant uses"
+                value={name}
+                onChange={setName}
+                autoComplete="off"
+                helpText="Lowercase words, e.g. heel_height. We picked one for you."
+              />
+            </div>
+            <Button variant="primary" disabled={!name.trim()} loading={busy} onClick={() => { onAdd(row, name); setEditing(false); }}>Add</Button>
+            <Button variant="tertiary" onClick={() => setEditing(false)}>Cancel</Button>
+          </InlineStack>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function AttributeMappingsCard({ mappings, choices = [], choicesError = null }) {
   const fetcher = useFetcher();
-  const saving = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "save_mapping";
+  const busy = fetcher.state !== "idle";
   const lastError = fetcher.data?.error;
   const lastSaved = fetcher.data?.saved;
+  const [search, setSearch] = useState("");
+  const [showOther, setShowOther] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(choices.length === 0);
 
+  // Manual form (advanced): tag prefixes, or a metafield that has no definition.
   const [attribute, setAttribute] = useState("");
   const [sourceType, setSourceType] = useState("metafield");
   const [target, setTarget] = useState("product");
@@ -2305,107 +2406,163 @@ function AttributeMappingsCard({ mappings }) {
     }
   }, [lastSaved]);
 
-  const handleSave = () => {
+  const submit = (fields) => {
     const fd = new FormData();
-    fd.set("intent", "save_mapping");
-    fd.set("attribute", attribute);
-    fd.set("sourceType", sourceType);
-    fd.set("target", target);
-    fd.set("namespace", namespace);
-    fd.set("key", key);
-    fd.set("prefix", prefix);
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+    fd.set("autoSync", "1");
     fetcher.submit(fd, { method: "post" });
   };
-
-  const handleDelete = (attr) => {
-    const fd = new FormData();
-    fd.set("intent", "delete_mapping");
-    fd.set("attribute", attr);
-    fetcher.submit(fd, { method: "post" });
-  };
+  const addFromPicker = (row, name) => submit({
+    intent: "save_mapping",
+    attribute: name,
+    sourceType: "metafield",
+    target: row.target,
+    namespace: row.namespace,
+    key: row.key,
+    prefix: "",
+  });
+  const handleDelete = (attr) => submit({ intent: "delete_mapping", attribute: attr });
+  const handleManualSave = () => submit({ intent: "save_mapping", attribute, sourceType, target, namespace, key, prefix });
 
   const canSave =
     attribute.trim().length > 0 &&
     ((sourceType === "metafield" && namespace.trim() && key.trim()) ||
       (sourceType === "tag_prefix" && prefix.trim()));
 
+  const q = search.trim().toLowerCase();
+  const matches = (r) => !q || `${r.name} ${r.namespace}.${r.key} ${r.description}`.toLowerCase().includes(q);
+  const visible = choices.filter(matches);
+  const inUse = visible.filter((r) => r.group === "in_use");
+  const recommended = visible.filter((r) => r.group === "recommended");
+  const other = visible.filter((r) => r.group === "other");
+  const hiddenCount = choices.filter((r) => r.group === "hidden").length;
+  // Mappings that don't come from a definition (tag prefixes, manual keys).
+  const pickerIds = new Set(choices.filter((r) => r.status === "added").map((r) => r.attribute));
+  const manualMappings = mappings.filter((m) => !pickerIds.has(m.attribute));
+
   return (
     <Card>
       <BlockStack gap="400">
         <BlockStack gap="100">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Product attributes</Text>
-            <Badge tone="warning">Enables filtering</Badge>
-          </InlineStack>
+          <Text as="h2" variant="headingMd">Product attributes</Text>
           <Text as="p" tone="subdued">
-            Map your Shopify metafields or tag prefixes to shared attribute names so the AI can filter results ("show me men's running shoes" → <code>gender: men</code>). Supports product- and variant-level metafields, including Metaobject references.
+            These are the fields on your products in Shopify. Click <strong>Add</strong> on any the assistant should know about —
+            it can then filter by them ("show me cork footbeds") and answer questions about them. Your products update automatically.
           </Text>
         </BlockStack>
 
-        {mappings.length > 0 && (
+        {fetcher.data?.syncStarted && (
+          <Banner tone="success">
+            <p>
+              {fetcher.data.savedAttribute ? `Added "${fetcher.data.savedAttribute}". ` : "Saved. "}
+              Updating your products in the background — this takes about a minute.
+            </p>
+          </Banner>
+        )}
+        {lastError && <Banner tone="critical"><p>{lastError}</p></Banner>}
+        {choicesError && (
+          <Banner tone="warning">
+            <p>We couldn't load your store's fields from Shopify ({choicesError}). You can still add one by hand under Advanced.</p>
+          </Banner>
+        )}
+
+        {choices.length > 0 && (
           <>
-            <Divider />
-            <BlockStack gap="200">
-              {mappings.map((m) => (
-                <InlineStack key={m.id} align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Text as="span" variant="bodyMd" fontWeight="semibold">{m.attribute}</Text>
-                    <Badge tone={m.target === "variant" ? "attention" : "info"}>
-                      {m.target === "variant" ? "Variant" : "Product"}
-                    </Badge>
-                    {m.sourceType === "metafield" ? (
-                      <Tag>{`metafield: ${m.namespace}.${m.key}`}</Tag>
-                    ) : (
-                      <Tag>{`tag prefix: ${m.prefix}`}</Tag>
-                    )}
-                  </InlineStack>
-                  <Button variant="tertiary" tone="critical" onClick={() => handleDelete(m.attribute)}>
-                    Remove
-                  </Button>
-                </InlineStack>
-              ))}
-            </BlockStack>
+            <TextField
+              label="Search your product fields"
+              labelHidden
+              placeholder="Search fields (e.g. material, heel, width)"
+              value={search}
+              onChange={setSearch}
+              autoComplete="off"
+              clearButton
+              onClearButtonClick={() => setSearch("")}
+            />
+
+            {inUse.length > 0 && (
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingSm">In use</Text>
+                {inUse.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
+              </BlockStack>
+            )}
+
+            {recommended.length > 0 && (
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingSm">Recommended to add</Text>
+                <Text as="p" variant="bodySm" tone="subdued">Filled in on your products and useful for shoppers.</Text>
+                {recommended.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
+              </BlockStack>
+            )}
+            {inUse.length + recommended.length === 0 && (
+              <Text as="p" tone="subdued">No matching fields{q ? ` for "${search}"` : ""}.</Text>
+            )}
+
+            {other.length > 0 && (
+              <BlockStack gap="100">
+                <Button variant="plain" disclosure={showOther ? "up" : "down"} onClick={() => setShowOther((v) => !v)}>
+                  {`${showOther ? "Hide" : "Show"} ${other.length} other field${other.length === 1 ? "" : "s"} (long text, internal IDs, rarely used)`}
+                </Button>
+                {showOther && other.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
+              </BlockStack>
+            )}
+            {hiddenCount > 0 && !q && (
+              <Text as="p" variant="bodySm" tone="subdued">
+                {`${hiddenCount} more field${hiddenCount === 1 ? " is" : "s are"} hidden — empty on every product, added by other apps, or links to other records.`}
+              </Text>
+            )}
           </>
         )}
 
         <Divider />
-
         <BlockStack gap="200">
-          <Text as="h3" variant="headingSm">Add mapping</Text>
-          {lastError && <Banner tone="critical"><p>{lastError}</p></Banner>}
-          <FormLayout>
-            <FormLayout.Group>
-              <TextField label="Attribute name" value={attribute} onChange={setAttribute}
-                helpText="Shared name the AI will use (e.g. gender, color, category, material, size)." autoComplete="off" />
-              <Select label="Source"
-                options={[{ label: "Metafield", value: "metafield" }, { label: "Tag prefix", value: "tag_prefix" }]}
-                value={sourceType} onChange={setSourceType} />
-              <Select label="Target"
-                options={[{ label: "Product", value: "product" }, { label: "Variant", value: "variant" }]}
-                value={target} onChange={setTarget}
-                disabled={sourceType === "tag_prefix"}
-                helpText={sourceType === "tag_prefix" ? "Tags live on products only" : undefined} />
-            </FormLayout.Group>
-
-            {sourceType === "metafield" ? (
-              <FormLayout.Group>
-                <TextField label="Namespace" value={namespace} onChange={setNamespace} placeholder="custom" autoComplete="off" />
-                <TextField label="Key" value={key} onChange={setKey} placeholder="gender" autoComplete="off" />
-              </FormLayout.Group>
-            ) : (
-              <TextField label="Tag prefix" value={prefix} onChange={setPrefix} placeholder="gender:"
-                helpText="Tags starting with this prefix become the attribute value (e.g. tag 'gender:men' → gender=men)." autoComplete="off" />
-            )}
-
-            <Button variant="primary" loading={saving} disabled={!canSave} onClick={handleSave}>
-              Save mapping
-            </Button>
-          </FormLayout>
+          <Button variant="plain" disclosure={showAdvanced ? "up" : "down"} onClick={() => setShowAdvanced((v) => !v)}>
+            Advanced: tag prefixes or a field that isn't listed
+          </Button>
+          {showAdvanced && (
+            <BlockStack gap="300">
+              {manualMappings.length > 0 && (
+                <BlockStack gap="200">
+                  {manualMappings.map((m) => (
+                    <InlineStack key={m.id} align="space-between" blockAlign="center">
+                      <InlineStack gap="200" blockAlign="center">
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">{m.attribute}</Text>
+                        {m.sourceType === "metafield" ? (
+                          <Tag>{`metafield: ${m.namespace}.${m.key}`}</Tag>
+                        ) : (
+                          <Tag>{`tag prefix: ${m.prefix}`}</Tag>
+                        )}
+                      </InlineStack>
+                      <Button variant="tertiary" tone="critical" onClick={() => handleDelete(m.attribute)}>Remove</Button>
+                    </InlineStack>
+                  ))}
+                </BlockStack>
+              )}
+              <FormLayout>
+                <FormLayout.Group>
+                  <TextField label="Attribute name" value={attribute} onChange={setAttribute}
+                    helpText="The name the assistant uses (e.g. material, heel_height)." autoComplete="off" />
+                  <Select label="Comes from"
+                    options={[{ label: "Metafield", value: "metafield" }, { label: "Product tags with a prefix", value: "tag_prefix" }]}
+                    value={sourceType} onChange={setSourceType} />
+                  <Select label="Level"
+                    options={[{ label: "Product", value: "product" }, { label: "Variant (per size/color)", value: "variant" }]}
+                    value={target} onChange={setTarget}
+                    disabled={sourceType === "tag_prefix"} />
+                </FormLayout.Group>
+                {sourceType === "metafield" ? (
+                  <FormLayout.Group>
+                    <TextField label="Namespace" value={namespace} onChange={setNamespace} placeholder="custom" autoComplete="off" />
+                    <TextField label="Key" value={key} onChange={setKey} placeholder="material" autoComplete="off" />
+                  </FormLayout.Group>
+                ) : (
+                  <TextField label="Tag prefix" value={prefix} onChange={setPrefix} placeholder="material:"
+                    helpText="Tags like 'material:leather' become material = leather." autoComplete="off" />
+                )}
+                <Button loading={busy} disabled={!canSave} onClick={handleManualSave}>Add</Button>
+              </FormLayout>
+            </BlockStack>
+          )}
         </BlockStack>
-
-        <Banner tone="info">
-          <p>After adding or changing mappings, click <strong>Resync now</strong> above so new attributes get pulled into every product.</p>
-        </Banner>
       </BlockStack>
     </Card>
   );
@@ -2894,12 +3051,16 @@ export default function RulesKnowledge() {
 
         <BlockStack gap="400">
           <SectionHeading
-            title="Tell the AI which metafields to filter by"
-            description="Map gender, color, size, and other attributes to the metafields or tags they live on in your products."
+            title="What the assistant knows about each product"
+            description="Pick the product fields (metafields) the assistant should use — like material, footbed or heel height. Common ones are picked up automatically."
           />
-          <AttributeMappingsCard mappings={data.mappings} />
+          <AttributeMappingsCard mappings={data.mappings} choices={data.metafieldChoices || []} choicesError={data.metafieldError} />
         </BlockStack>
 
+        {data.leanEngine ? (
+          <ClassicCategoryGroups data={data} />
+        ) : (
+          <>
         <BlockStack gap="400">
           <SectionHeading
             title="How product types group together"
@@ -2913,6 +3074,8 @@ export default function RulesKnowledge() {
             <CategoryGroupsCard initial={data.categoryGroups} />
           </PlanGate>
         </BlockStack>
+          </>
+        )}
       </BlockStack>
     </Page>
   );

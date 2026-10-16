@@ -32,6 +32,7 @@ import {
 import { DeleteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { leanEngineSelected } from "../lib/lean/respond.server";
 import {
   getCatalogSyncState,
   getProductCount,
@@ -121,8 +122,26 @@ export const loader = async ({ request }) => {
     } catch { /* migration not yet applied; fall through */ }
   }
 
+  // Attribute names actually present on synced products — the similar-
+  // products picker offers these instead of asking for a typed key.
+  let attributeKeys = [];
+  try {
+    attributeKeys = await prisma.$queryRawUnsafe(
+      `SELECT k AS key, COUNT(*)::int AS n
+         FROM "Product" p,
+              jsonb_object_keys(CASE WHEN jsonb_typeof(p."attributesJson") = 'object' THEN p."attributesJson" ELSE '{}'::jsonb END) AS k
+        WHERE p.shop = $1
+        GROUP BY k ORDER BY n DESC LIMIT 60`,
+      session.shop,
+    );
+  } catch (err) {
+    console.error("[rules] attribute keys failed:", err?.message || err);
+  }
+
   return {
     shop: session.shop,
+    leanEngine: leanEngineSelected({ shop: session.shop }),
+    attributeKeys,
     status: state.status,
     lastSyncedAt: state.lastSyncedAt,
     lastError: state.lastError,
@@ -1318,10 +1337,14 @@ function QuerySynonymsCard({ initial }) {
   );
 }
 
-function SimilarMatchAttributesCard({ initial }) {
+// Attributes that already scope every similar-products lookup.
+const SIMILAR_ALWAYS = new Set(["gender", "category", "category_for_filter"]);
+
+function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
   const fetcher = useFetcher();
   const [attrs, setAttrs] = useState(initial || []);
   const [input, setInput] = useState("");
+  const [showManual, setShowManual] = useState(attributeKeys.length === 0);
 
   const save = (list) => {
     const fd = new FormData();
@@ -1329,66 +1352,70 @@ function SimilarMatchAttributesCard({ initial }) {
     fd.set("similarMatchAttributes", JSON.stringify(list));
     fetcher.submit(fd, { method: "post" });
   };
-
-  const add = () => {
+  const has = (k) => attrs.some((a) => a.toLowerCase() === String(k).toLowerCase());
+  const toggle = (k, on) => {
+    const updated = on ? (has(k) ? attrs : [...attrs, k]) : attrs.filter((a) => a.toLowerCase() !== String(k).toLowerCase());
+    setAttrs(updated);
+    save(updated);
+  };
+  const addManual = () => {
     const v = input.trim();
     if (!v) return;
-    if (attrs.some((a) => a.toLowerCase() === v.toLowerCase())) {
-      setInput("");
-      return;
-    }
-    const updated = [...attrs, v];
-    setAttrs(updated);
     setInput("");
-    save(updated);
+    if (!has(v)) toggle(v, true);
   };
 
-  const remove = (idx) => {
-    const updated = attrs.filter((_, i) => i !== idx);
-    setAttrs(updated);
-    save(updated);
-  };
+  const options = attributeKeys.filter((r) => !SIMILAR_ALWAYS.has(String(r.key).toLowerCase()));
+  const extra = attrs.filter((a) => !options.some((r) => String(r.key).toLowerCase() === a.toLowerCase()));
 
   return (
     <Card>
       <BlockStack gap="400">
         <BlockStack gap="100">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Similar-product matching</Text>
-            <Badge tone="info">Powers "similar to X"</Badge>
-          </InlineStack>
+          <Text as="h2" variant="headingMd">"Show me something similar"</Text>
           <Text as="p" tone="subdued">
-            When a customer asks for styles "like" or "similar to" a specific product, the AI looks up that product and recommends other products that share the same value for each attribute listed here — plus the same category and gender. The reference product itself is always excluded from the results.
-          </Text>
-          <Text as="p" tone="subdued" variant="bodySm">
-            Enter the exact attribute name you mapped above in <strong>Product attributes</strong> (e.g. <code>footbed</code>, <code>fabric</code>, <code>material</code>, <code>heel_type</code>). Leave empty to disable the similar-products tool.
+            When a shopper asks for styles like a product they're looking at, what should "similar" mean? Tick the qualities that
+            should match. Category and gender always match. Leave everything unticked to turn this off.
           </Text>
         </BlockStack>
 
-        {attrs.length > 0 && (
-          <InlineStack gap="200" wrap>
-            {attrs.map((a, i) => (
-              <Tag key={i} onRemove={() => remove(i)}>{a}</Tag>
+        {fetcher.state !== "idle" && <Text as="p" variant="bodySm" tone="subdued">Saving…</Text>}
+
+        {options.length > 0 ? (
+          <BlockStack gap="100">
+            {options.map((r) => (
+              <Checkbox
+                key={r.key}
+                label={String(r.key).replace(/_/g, " ")}
+                helpText={`On ${Number(r.n).toLocaleString()} product${r.n === 1 ? "" : "s"}`}
+                checked={has(r.key)}
+                onChange={(on) => toggle(r.key, on)}
+              />
             ))}
+          </BlockStack>
+        ) : (
+          <Text as="p" tone="subdued">
+            No product attributes found yet. Add some on the <strong>Catalog</strong> page under "Product attributes", then come back.
+          </Text>
+        )}
+
+        {extra.length > 0 && (
+          <InlineStack gap="200" wrap>
+            {extra.map((a) => <Tag key={a} onRemove={() => toggle(a, false)}>{a}</Tag>)}
           </InlineStack>
         )}
 
-        <Divider />
-
-        <BlockStack gap="200">
-          <Text as="h3" variant="headingSm">Add an attribute</Text>
-          <FormLayout>
-            <TextField
-              label="Attribute name"
-              value={input}
-              onChange={setInput}
-              placeholder="footbed"
-              autoComplete="off"
-              helpText="Single attribute key — exactly matching how it appears in Product attributes above."
-            />
-            <Button onClick={add} disabled={!input.trim()}>Add attribute</Button>
-          </FormLayout>
-        </BlockStack>
+        <Button variant="plain" disclosure={showManual ? "up" : "down"} onClick={() => setShowManual((v) => !v)}>
+          Type an attribute name instead
+        </Button>
+        {showManual && (
+          <InlineStack gap="200" blockAlign="end" wrap={false}>
+            <div style={{ flex: 1 }}>
+              <TextField label="Attribute name" value={input} onChange={setInput} placeholder="footbed" autoComplete="off" />
+            </div>
+            <Button onClick={addManual} disabled={!input.trim()}>Add</Button>
+          </InlineStack>
+        )}
       </BlockStack>
     </Card>
   );
@@ -3038,6 +3065,44 @@ function DecisionTreesCard({ enabled, trees }) {
   );
 }
 
+// Search rules, synonyms and the "View all" button only drive the classic
+// engine. Kept (and editable) for stores that roll back, but folded away so
+// nobody tunes settings that don't change anything.
+function ClassicEngineRules({ data }) {
+  const [open, setOpen] = useState(false);
+  const count =
+    (data.categoryExclusions?.length || 0) + (data.querySynonyms?.length || 0) +
+    (data.ctaOverrides?.length || 0) + (data.storefrontSearchUrlPattern ? 1 : 0);
+  return (
+    <BlockStack gap="300">
+      <Card>
+        <BlockStack gap="200">
+          <Text as="h2" variant="headingMd">Classic engine settings</Text>
+          <Text as="p" tone="subdued">
+            Search rules, synonyms and "View all" buttons were needed by the old engine. Your assistant doesn't use them
+            now{count ? ` (you have ${count} saved — they're kept in case you switch back)` : ""}.
+          </Text>
+          <InlineStack>
+            <Button variant="plain" disclosure={open ? "up" : "down"} onClick={() => setOpen((v) => !v)}>
+              {open ? "Hide classic settings" : "Show classic settings"}
+            </Button>
+          </InlineStack>
+        </BlockStack>
+      </Card>
+      {open && (
+        <PlanGate plan={data.plan} feature="searchRules" summary="Custom search rules and query synonyms.">
+          <BlockStack gap="400">
+            <SearchRulesCard initial={data.categoryExclusions} />
+            <QuerySynonymsCard initial={data.querySynonyms} />
+            <StorefrontSearchUrlCard initial={data.storefrontSearchUrlPattern} />
+            <CTAOverridesCard initial={data.ctaOverrides} />
+          </BlockStack>
+        </PlanGate>
+      )}
+    </BlockStack>
+  );
+}
+
 export default function RulesKnowledge() {
   const data = useLoaderData();
   // Live-tracked campaign bytes — CampaignsCard reports its current
@@ -3053,38 +3118,53 @@ export default function RulesKnowledge() {
       <TitleBar title="Rules" />
       <BrandHeader title="Rules" />
       <BlockStack gap="800">
-        <BlockStack gap="400">
-          <SectionHeading
-            title="How the AI searches your catalog"
-            description="Hard filters, synonym expansions, and what counts as 'similar' for recommendations."
-          />
-          <PlanGate
-            plan={data.plan}
-            feature="searchRules"
-            summary="Custom search rules, query synonyms, and similar-match attributes let you tune how the AI matches customer questions to your catalog."
-          >
+        {data.leanEngine ? (
+          <>
             <BlockStack gap="400">
-              <SearchRulesCard initial={data.categoryExclusions} />
-              <QuerySynonymsCard initial={data.querySynonyms} />
-              <SimilarMatchAttributesCard initial={data.similarMatchAttributes} />
+              <SectionHeading
+                title="Recommendations"
+                description="The assistant understands synonyms, occasions and categories on its own — there's nothing to configure for everyday searches."
+              />
+              <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
             </BlockStack>
-          </PlanGate>
-        </BlockStack>
+            <ClassicEngineRules data={data} />
+          </>
+        ) : (
+          <>
+          <BlockStack gap="400">
+            <SectionHeading
+              title="How the AI searches your catalog"
+              description="Hard filters, synonym expansions, and what counts as 'similar' for recommendations."
+            />
+            <PlanGate
+              plan={data.plan}
+              feature="searchRules"
+              summary="Custom search rules, query synonyms, and similar-match attributes let you tune how the AI matches customer questions to your catalog."
+            >
+              <BlockStack gap="400">
+                <SearchRulesCard initial={data.categoryExclusions} />
+                <QuerySynonymsCard initial={data.querySynonyms} />
+                <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
+              </BlockStack>
+            </PlanGate>
+          </BlockStack>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="What the customer sees below the chat"
-            description="Shop-all buttons that appear beneath product cards in the customer's chat."
-          />
-          <PlanGate
-            plan={data.plan}
-            feature="searchRules"
-            summary='Auto-generated "View all" CTA below product cards, pointing to your storefront search.'
-          >
-            <StorefrontSearchUrlCard initial={data.storefrontSearchUrlPattern} />
-            <CTAOverridesCard initial={data.ctaOverrides} />
-          </PlanGate>
-        </BlockStack>
+          <BlockStack gap="400">
+            <SectionHeading
+              title="What the customer sees below the chat"
+              description="Shop-all buttons that appear beneath product cards in the customer's chat."
+            />
+            <PlanGate
+              plan={data.plan}
+              feature="searchRules"
+              summary='Auto-generated "View all" CTA below product cards, pointing to your storefront search.'
+            >
+              <StorefrontSearchUrlCard initial={data.storefrontSearchUrlPattern} />
+              <CTAOverridesCard initial={data.ctaOverrides} />
+            </PlanGate>
+          </BlockStack>
+          </>
+        )}
 
         <BlockStack gap="400">
           <SectionHeading
