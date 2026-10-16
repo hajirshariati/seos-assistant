@@ -140,6 +140,7 @@ import { canSendMessage } from "../lib/billing.server";
 import { normalizeVariantSize, normalizeVariantWidth, normalizeOptionBag } from "../lib/variant-matcher.server";
 import { titleSuffixColor } from "../lib/color-match.js";
 import { reconcileBufferedCardEvents } from "../lib/card-emission.js";
+import { leanEngineSelected, leanChatResponse } from "../lib/lean/respond.server.js";
 
 // Model IDs are env-driven so you can update them in Railway without a code
 // deploy. When Anthropic ships a new model:
@@ -5146,6 +5147,14 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     const llmNamedAnchors = extractLLMNamedAnchors(body.history);
     const history = sanitizeHistory(body.history);
     const messages = [...history, { role: "user", content: String(body.message) }];
+
+    // LEAN ENGINE (opt-in): Claude decides, code only checks facts — none of
+    // the routing/rewrite layers below run. Selected per shop via
+    // LEAN_CHAT_SHOPS, or per admin request (body.engine) for side-by-side
+    // comparison. See app/lib/lean/.
+    if (leanEngineSelected({ shop, internal, body })) {
+      return leanChatResponse({ shop, config, messages, latestUserMessage: String(body.message), internal });
+    }
 
     // Gender-pivot detection. detectGenderFromHistory walks the entire
     // conversation; if the customer clicked the Men's chip in turn 1
