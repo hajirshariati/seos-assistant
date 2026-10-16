@@ -1,25 +1,36 @@
-// Admin Analytics CostEstimator accuracy (PRD 2026-06-28).
+// Cost estimator accuracy.
 //
-// Locks the honest accounting: the estimator anchors on chat-only cost (image
-// previews excluded), labels say "assistant replies" not "AI requests", and the
-// anchored/fallback copy switches on sample size. Pure modules → no DB, no
-// React render.
+// Usage summaries count chat replies only (image previews separate); the
+// estimator uses real Shopify sessions, a per-reply cost measured from
+// recorded replies (cold cache writes normalised) or priced from the store's
+// real setup, and the cache-warmth effect of traffic volume. Pure modules →
+// no DB, no React render.
 //
 // Run: node scripts/eval-cost-estimator.mjs
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { summarizeUsageRecords } from "../app/lib/usage-summary.js";
+import { register } from "node:module";
 import {
-  resolveEstimatorBaseRate,
-  strategyProfile,
-  ANCHOR_COPY,
-  REPLIES_LABEL,
   CALC_MIN_SAMPLE,
-  SIDE_CALL_OVERHEAD,
+  resolvePerReply,
+  warmAverage,
+  coldShare,
+  monthlyEstimate,
+  summarizeTraffic,
 } from "../app/lib/cost-estimator-math.js";
+
+const HOOK = `export async function resolve(spec, ctx, next) {
+  try { return await next(spec, ctx); } catch (e) {
+    if (e.code === "ERR_MODULE_NOT_FOUND" && (spec.startsWith(".") || spec.startsWith("/")) && !/\\.[cm]?jsx?$/.test(spec)) return next(spec + ".js", ctx);
+    throw e;
+  }
+}`;
+register("data:text/javascript," + encodeURIComponent(HOOK));
+const { buildLeanCatalog } = await import("../app/lib/lean/catalog.js");
+const { measureStore, replyCost, coldStartExtra } = await import("../app/lib/lean/cost-model.js");
+const { withConversationCache } = await import("../app/lib/lean/engine.js");
+const { MODEL_PRICING } = await import("../app/lib/pricing.server.js");
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -65,66 +76,90 @@ test("empty / no-message window → safe zeros", () => {
   assert.equal(s.chatOnlyCost, 0);
 });
 
-// ── Problem 1 + 4: estimator anchors on chat-only avg, with copy by sample ──
-const { rates } = strategyProfile("smart");
-
-test("anchored when there are enough recorded chat replies", () => {
-  const r = resolveEstimatorBaseRate({ avgChatCostPerMessage: 0.006, totalMessages: CALC_MIN_SAMPLE, rates });
-  assert.equal(r.anchored, true);
-  // Anchored base = recorded chat avg × the disclosed side-call overhead.
-  assert.ok(Math.abs(r.baseRate - 0.006 * SIDE_CALL_OVERHEAD) < 1e-12, `baseRate=${r.baseRate}`);
+// ── Per-reply cost: measured beats modeled once there are enough replies ──
+test("measured average is used from 25 replies; before that the store's modeled cost", () => {
+  const modeled = { perReply: 0.017 };
+  assert.deepEqual(resolvePerReply({ measured: { replies: CALC_MIN_SAMPLE, avgCost: 0.012 }, modeled }), { perReply: 0.012, source: "measured" });
+  assert.deepEqual(resolvePerReply({ measured: { replies: CALC_MIN_SAMPLE - 1, avgCost: 0.012 }, modeled }), { perReply: 0.017, source: "modeled" });
+  assert.equal(resolvePerReply({}).source, "none");
 });
 
-test("fallback to the blended rate when the sample is too small", () => {
-  const r = resolveEstimatorBaseRate({ avgChatCostPerMessage: 0.006, totalMessages: CALC_MIN_SAMPLE - 1, rates });
-  assert.equal(r.anchored, false);
-  assert.equal(r.baseRate, rates.fallback, "uses the strategy fallback, not the store avg");
+test("cold replies (instructions re-cached) are normalised so test chats don't overstate cost", () => {
+  const rows = [
+    { cost: 0.03, cacheWriteTokens: 3200, internal: true },  // cold: wrote the 3,100-token instructions
+    { cost: 0.018, cacheWriteTokens: 1300, internal: false }, // warm
+  ];
+  const w = warmAverage(rows, { prefixTokens: 3100, coldStartExtra: 0.012 });
+  assert.equal(w.coldReplies, 1);
+  assert.equal(w.testReplies, 1);
+  assert.ok(Math.abs(w.avgCost - 0.018) < 1e-9, `avg=${w.avgCost}`);
 });
 
-test("fallback when there is no recorded average yet", () => {
-  const r = resolveEstimatorBaseRate({ avgChatCostPerMessage: 0, totalMessages: 1000, rates });
-  assert.equal(r.anchored, false);
-  assert.equal(r.baseRate, rates.fallback);
+test("cache warmth follows traffic: busy stores almost never pay the cold write", () => {
+  assert.ok(coldShare(50000) < 0.01, `50k replies/mo → ${coldShare(50000)}`);
+  assert.ok(coldShare(300) > 0.9, `300 replies/mo → ${coldShare(300)}`);
 });
 
-test("side-call overhead lifts the anchored rate but never the fallback", () => {
-  const anchored = resolveEstimatorBaseRate({ avgChatCostPerMessage: 0.01, totalMessages: 100, rates });
-  assert.ok(anchored.baseRate > 0.01, "anchored real avg is nudged up for unmetered side calls");
-  const fb = resolveEstimatorBaseRate({ avgChatCostPerMessage: 0.01, totalMessages: 2, rates });
-  assert.equal(fb.baseRate, rates.fallback, "fallback already includes overhead — not multiplied again");
+test("monthly estimate = sessions × chat share × replies × rate (+ cold share)", () => {
+  const e = monthlyEstimate({ sessions: 787000, engagementPct: 2, repliesPerChat: 3, perReply: 0.017, coldStartExtra: 0.012 });
+  assert.equal(Math.round(e.chats), 15740);
+  assert.equal(Math.round(e.replies), 47220);
+  assert.ok(e.rate > 0.017 && e.rate < 0.0171, `rate=${e.rate}`);
+  assert.ok(Math.abs(e.cost - e.replies * e.rate) < 1e-6);
 });
 
-test("anchored vs fallback COPY is correct and distinct", () => {
-  assert.match(ANCHOR_COPY.anchored, /recorded chat average over the selected analytics period/i);
-  assert.match(ANCHOR_COPY.fallback, /typical model-routing assumptions until your store has enough traffic/i);
-  assert.notEqual(ANCHOR_COPY.anchored, ANCHOR_COPY.fallback);
+// ── Real traffic from Shopify Analytics ──
+test("traffic: last 12 full months only (current month and partial first month dropped)", () => {
+  const rows = [
+    ["2025-09", 120000], ["2025-10", 251515], ["2025-11", 681817], ["2025-12", 393645], ["2026-01", 579344],
+    ["2026-02", 637463], ["2026-03", 656404], ["2026-04", 772474], ["2026-05", 1119309], ["2026-06", 870958],
+    ["2026-07", 902696], ["2026-08", 1035418], ["2026-09", 1012183], ["2026-10", 416234],
+  ].map(([month, sessions]) => ({ month, sessions }));
+  const t = summarizeTraffic(rows, new Date("2026-10-16T12:00:00Z"));
+  assert.equal(t.months.length, 12);
+  assert.equal(t.months[0].month, "2025-10");
+  assert.equal(t.months.at(-1).month, "2026-09");
+  assert.equal(t.peak.month, "2026-05");
+  assert.equal(t.low.month, "2025-10");
+  assert.equal(t.average, Math.round(t.yearTotal / 12));
+  assert.equal(summarizeTraffic([], new Date()).error, "no data");
 });
 
-test("multiplier label says assistant replies, not AI requests", () => {
-  assert.equal(REPLIES_LABEL, "assistant replies / mo");
-  assert.doesNotMatch(REPLIES_LABEL, /request/i);
+// ── Pricing a reply from the store's real setup ──
+const rows = Array.from({ length: 60 }, (_, i) => ({
+  handle: `p-${i}`, title: `Style${i} Arch Support Sandal - ${["Black", "Navy", "Rose"][i % 3]}`, productType: "Footwear",
+  tags: ["Plantar Fasciitis", "Arch Pain"], description: "Arch support all day. ".repeat(20), status: "ACTIVE",
+  attributesJson: { category_for_filter: ["Sandals", "Sneakers", "Wedges/Heels"][i % 3], gender: i % 2 ? "Women" : "Men", helps_with: ["Plantar Fasciitis", "Heel Pain"] },
+  variants: [{ price: "99.95", inventoryQty: 4, optionsJson: JSON.stringify([{ name: "Size", value: "8 US" }]) }],
+}));
+const catalog = buildLeanCatalog(rows, { shop: "s.myshopify.com" });
+const measured = measureStore({ catalog, shop: "s.myshopify.com", extraSystemText: "ACTIVE PROMOTIONS\nNone." });
+
+test("the cost model measures the store's real instructions and search results", () => {
+  assert.ok(measured.prefixTokens > 1500, `prefix=${measured.prefixTokens}`);
+  assert.ok(measured.searchTokens > 300, `search=${measured.searchTokens}`);
+  assert.equal(measured.products, 60);
 });
 
-// ── Problem 1 + 6: the component source must not imply raw API request counts ──
-const here = dirname(fileURLToPath(import.meta.url));
-const COMPONENT = readFileSync(join(here, "..", "app", "components", "CostEstimator.jsx"), "utf8");
-const ROUTE = readFileSync(join(here, "..", "app", "routes", "app.analytics.jsx"), "utf8");
-
-test("CostEstimator labels/copy never say 'AI request' or 'per request'", () => {
-  // (Allowed only inside the explanatory comment that says it's NOT requests.)
-  const code = COMPONENT.replace(/\/\/[^\n]*\n/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.doesNotMatch(code, /AI request/i, "no 'AI requests' label");
-  assert.doesNotMatch(code, /per AI request/i);
-  assert.match(COMPONENT, /assistant repl/i, "uses 'assistant replies' wording");
+test("per-reply cost is in a sane range and follows the model's price", () => {
+  const sonnet = replyCost(MODEL_PRICING["claude-sonnet-4-6"], measured).perReply;
+  const haiku = replyCost(MODEL_PRICING["claude-haiku-4-5-20251001"], measured).perReply;
+  assert.ok(sonnet > 0.005 && sonnet < 0.05, `sonnet=${sonnet}`);
+  assert.ok(Math.abs(haiku / sonnet - 1 / 3) < 0.01, `haiku/sonnet=${haiku / sonnet}`);
+  assert.ok(coldStartExtra(MODEL_PRICING["claude-sonnet-4-6"], measured) > 0);
 });
 
-test("the route passes avgChatCostPerMessage (not avgCostPerMessage) to the estimator", () => {
-  assert.match(ROUTE, /<CostEstimator[^>]*avgChatCostPerMessage=\{usage\.avgChatCostPerMessage\}/);
-  assert.doesNotMatch(ROUTE, /<CostEstimator[^>]*avgCostPerMessage=\{usage\.avgCostPerMessage\}/);
-});
-
-test("the component accepts the avgChatCostPerMessage prop", () => {
-  assert.match(COMPONENT, /function CostEstimator\(\{\s*avgChatCostPerMessage/);
+test("the engine caches the growing conversation: only the newest message is marked", () => {
+  const conv = [
+    { role: "user", content: "hi" },
+    { role: "assistant", content: [{ type: "tool_use", id: "t1", name: "search_products", input: {} }] },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "{}" }] },
+  ];
+  const out = withConversationCache(conv);
+  assert.equal(JSON.stringify(out).match(/cache_control/g).length, 1);
+  assert.deepEqual(out[2].content[0].cache_control, { type: "ephemeral" });
+  assert.equal(conv[2].content[0].cache_control, undefined, "input not mutated");
+  assert.deepEqual(withConversationCache([{ role: "user", content: "hello" }])[0].content, [{ type: "text", text: "hello", cache_control: { type: "ephemeral" } }]);
 });
 
 console.log(`\n${failed === 0 ? "✅" : "❌"}  ${passed} passed, ${failed} failed\n`);

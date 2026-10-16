@@ -13,11 +13,11 @@ function startOfTodayUtc() {
 
 export async function getTodayMessageCount(shop) {
   return prisma.chatUsage.count({
-    where: { shop, createdAt: { gte: startOfTodayUtc() } },
+    where: { shop, internal: false, createdAt: { gte: startOfTodayUtc() } },
   });
 }
 
-export async function recordChatUsage({ shop, model, usage, toolCalls, embeddingTokens = 0, embeddingCostUsd = 0 }) {
+export async function recordChatUsage({ shop, model, usage, toolCalls, embeddingTokens = 0, embeddingCostUsd = 0, internal = false }) {
   const costUsd = computeCost(model, usage);
   return prisma.chatUsage.create({
     data: {
@@ -34,6 +34,7 @@ export async function recordChatUsage({ shop, model, usage, toolCalls, embedding
       // folded into every summary total downstream.
       embeddingTokens: embeddingTokens || 0,
       embeddingCostUsd: embeddingCostUsd || 0,
+      internal: Boolean(internal),
     },
   });
 }
@@ -81,7 +82,7 @@ function resolveRange(arg) {
 export async function getUsageSummary(shop, range = 30) {
   const { start, end } = resolveRange(range);
   const records = await prisma.chatUsage.findMany({
-    where: { shop, createdAt: { gte: start, lte: end } },
+    where: { shop, internal: false, createdAt: { gte: start, lte: end } },
     orderBy: { createdAt: "desc" },
   });
   return summarizeUsageRecords(records, start.toISOString(), end.toISOString());
@@ -91,7 +92,7 @@ export async function getDailySeries(shop, range = 30) {
   const { start, end } = resolveRange(range);
   const [usageRows, feedbackRows] = await Promise.all([
     prisma.chatUsage.findMany({
-      where: { shop, createdAt: { gte: start, lte: end } },
+      where: { shop, internal: false, createdAt: { gte: start, lte: end } },
       select: { createdAt: true, costUsd: true, embeddingCostUsd: true, imageCostUsd: true, model: true, inputTokens: true, outputTokens: true, toolCalls: true },
     }),
     prisma.chatFeedback.findMany({
@@ -128,4 +129,22 @@ export async function getDailySeries(shop, range = 30) {
   }
 
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// What replies have really cost — customer chats and admin test chats alike
+// (same engine, same price). Feeds the cost estimate.
+export async function getReplyCostSample(shop, { days = 60 } = {}) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await prisma.chatUsage.findMany({
+    where: { shop, createdAt: { gte: since }, NOT: { model: { startsWith: "image:" } } },
+    select: { costUsd: true, embeddingCostUsd: true, internal: true, model: true, cacheCreationInputTokens: true },
+    orderBy: { createdAt: "desc" },
+    take: 5000,
+  });
+  return rows.map((r) => ({
+    cost: (r.costUsd || 0) + (r.embeddingCostUsd || 0),
+    cacheWriteTokens: r.cacheCreationInputTokens || 0,
+    internal: r.internal,
+    model: r.model,
+  }));
 }

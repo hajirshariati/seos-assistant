@@ -1,31 +1,18 @@
 import { useState } from "react";
 import {
-  strategyProfile,
-  effectiveRate,
-  resolveEstimatorBaseRate,
-  ANCHOR_COPY,
-  REPLIES_LABEL,
+  DEFAULTS,
+  SOURCE_COPY,
+  monthlyEstimate,
+  resolvePerReply,
 } from "../lib/cost-estimator-math";
 
 // ---------------------------------------------------------------------------
-// CostEstimator — Apple-style "what will this cost me?" panel. The merchant
-// types their store sessions, drags an engagement slider, and picks a
-// conversation depth; the result panel answers with a live monthly figure.
-// The per-reply rate anchors on the store's own recorded CHAT average (image
-// previews excluded) once there's enough real traffic to trust it, otherwise
-// on a typical blended rate — and the anchor in use is always disclosed.
-//
-// NOTE on units: the multiplier below is estimated ASSISTANT REPLIES (chat
-// turns), NOT raw provider API requests. One reply can fan out into a
-// classifier call, model retries, follow-up suggestions, tools, and
-// embeddings. The cost math + constants live in lib/cost-estimator-math.js so
-// the accounting is unit-tested independently of this component.
+// CostEstimator — what the assistant will cost at this store's real traffic.
+// Sessions come from the store's Shopify Analytics (last 12 full months); the
+// cost per reply is measured from recorded replies, or estimated from the
+// store's actual catalog and instructions until there are enough. Math lives
+// in lib/cost-estimator-math.js (unit-tested).
 // ---------------------------------------------------------------------------
-const CALC_DEPTHS = [
-  { key: "quick", label: "Quick", desc: "2 messages", turns: 2 },
-  { key: "typical", label: "Typical", desc: "4 messages", turns: 4 },
-  { key: "detailed", label: "Detailed", desc: "7 messages", turns: 7 },
-];
 
 function calcMoney(n) {
   if (!Number.isFinite(n) || n <= 0) return "$0";
@@ -35,55 +22,43 @@ function calcMoney(n) {
 }
 
 const rateFmt = (r) => `$${r.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+const monthName = (ym) => {
+  const [y, m] = String(ym).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+};
 
-export default function CostEstimator({ avgChatCostPerMessage, totalMessages, modelStrategy = "smart" }) {
-  const { rates, label: strategyLabel } = strategyProfile(modelStrategy);
-  // Anchor on the store's recorded CHAT average (image previews excluded) once
-  // there's enough traffic; otherwise the strategy's blended fallback rate.
-  const { anchored, baseRate } = resolveEstimatorBaseRate({
-    avgChatCostPerMessage,
-    totalMessages,
-    rates,
-  });
+export default function CostEstimator({ traffic = null, modeled = null, measured = null }) {
+  const hasTraffic = traffic && !traffic.error && traffic.average > 0;
+  const { perReply, source } = resolvePerReply({ measured, modeled });
+  const coldStartExtra = modeled?.coldStartExtra || 0;
 
-  const [sessionsRaw, setSessionsRaw] = useState("25,000");
-  const [period, setPeriod] = useState("month");
-  const [engagement, setEngagement] = useState(5);
-  const [depth, setDepth] = useState("typical");
+  const [sessionsRaw, setSessionsRaw] = useState(
+    (hasTraffic ? traffic.average : 25000).toLocaleString("en-US"),
+  );
+  const [engagement, setEngagement] = useState(DEFAULTS.engagementPct);
+  const [repliesPerChat, setRepliesPerChat] = useState(DEFAULTS.repliesPerChat);
 
   const onSessions = (e) => {
     const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 9);
     setSessionsRaw(digits ? Number(digits).toLocaleString("en-US") : "");
   };
-
-  // Switching the period converts the typed number (25,000/mo ↔ 300,000/yr)
-  // so the toggle changes how you read the field — never the estimate.
-  const onPeriod = (next) => {
-    if (next === period) return;
-    const current = parseInt(sessionsRaw.replace(/[^\d]/g, ""), 10) || 0;
-    if (current > 0) {
-      const converted = Math.min(
-        next === "year" ? current * 12 : Math.round(current / 12),
-        999999999,
-      );
-      setSessionsRaw(converted.toLocaleString("en-US"));
-    }
-    setPeriod(next);
-  };
-
+  const setSessions = (n) => setSessionsRaw(Math.round(n).toLocaleString("en-US"));
   const sessions = parseInt(sessionsRaw.replace(/[^\d]/g, ""), 10) || 0;
-  const monthlySessions = period === "year" ? sessions / 12 : sessions;
-  const turns = CALC_DEPTHS.find((d) => d.key === depth).turns;
-  const conversations = monthlySessions * (engagement / 100);
-  // Estimated assistant replies (chat turns), not raw provider API requests.
-  const replies = conversations * turns;
-  const rate = effectiveRate(baseRate, replies, rates.atScale);
-  const scaled = rate < baseRate - 1e-9;
-  const monthlyCost = replies * rate;
-  const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
 
-  const ENG_MIN = 1;
-  const ENG_MAX = 50;
+  const est = monthlyEstimate({ sessions, engagementPct: engagement, repliesPerChat, perReply, coldStartExtra });
+  // The next 12 months if traffic repeats the last 12.
+  const yearCost = hasTraffic
+    ? traffic.months.reduce((sum, m) => sum + monthlyEstimate({ sessions: m.sessions, engagementPct: engagement, repliesPerChat, perReply, coldStartExtra }).cost, 0)
+    : est.cost * 12;
+  const scenarios = [1, 2, 3, 5].map((pct) => ({
+    pct,
+    avg: monthlyEstimate({ sessions, engagementPct: pct, repliesPerChat, perReply, coldStartExtra }).cost,
+    peak: hasTraffic ? monthlyEstimate({ sessions: traffic.peak.sessions, engagementPct: pct, repliesPerChat, perReply, coldStartExtra }).cost : null,
+  }));
+
+  const ENG_MIN = 0.5;
+  const ENG_MAX = 10;
   const fill = `${(((engagement - ENG_MIN) / (ENG_MAX - ENG_MIN)) * 100).toFixed(1)}%`;
 
   return (
@@ -279,24 +254,26 @@ export default function CostEstimator({ avgChatCostPerMessage, totalMessages, mo
             border-top: 1px solid rgba(45,107,79,0.12);
           }
         }
+      
+        .seos-calc-months { display: flex; gap: 6px; flex-wrap: wrap; }
+        .seos-calc-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .seos-calc-table th, .seos-calc-table td { text-align: right; padding: 5px 6px; border-bottom: 1px solid rgba(45,107,79,0.10); }
+        .seos-calc-table th:first-child, .seos-calc-table td:first-child { text-align: left; }
+        .seos-calc-table th { font-size: 10.5px; font-weight: 650; color: rgba(26,46,38,0.55); }
+        .seos-calc-table tr.is-on td { font-weight: 700; color: #1a2e26; }
       `}</style>
       <div className="seos-calc-grid">
         <div className="seos-calc-controls">
           <div>
             <div className="seos-calc-title">Cost estimator</div>
             <div className="seos-calc-desc">
-              See what the assistant would cost at your store&rsquo;s traffic.
-              Type your sessions, drag the slider — the estimate updates live.
+              What the assistant will cost at your store&rsquo;s real traffic. Every figure below can be changed.
             </div>
           </div>
 
           <div className="seos-calc-field">
             <div className="seos-calc-labelrow">
-              <label className="seos-calc-label" htmlFor="seos-calc-sessions">Store sessions</label>
-              <div className="seos-calc-seg" role="group" aria-label="Sessions period">
-                <button type="button" className={period === "month" ? "is-on" : ""} onClick={() => onPeriod("month")}>Monthly</button>
-                <button type="button" className={period === "year" ? "is-on" : ""} onClick={() => onPeriod("year")}>Yearly</button>
-              </div>
+              <label className="seos-calc-label" htmlFor="seos-calc-sessions">Store sessions per month</label>
             </div>
             <input
               id="seos-calc-sessions"
@@ -306,17 +283,38 @@ export default function CostEstimator({ avgChatCostPerMessage, totalMessages, mo
               autoComplete="off"
               value={sessionsRaw}
               onChange={onSessions}
-              placeholder="25,000"
             />
-            <div className="seos-calc-hint">
-              Pre-filled with an example — replace it with your real number from
-              Shopify admin &rarr; Analytics &rarr; Sessions.
-            </div>
+            {hasTraffic ? (
+              <>
+                <div className="seos-calc-months">
+                  <div className="seos-calc-seg" role="group" aria-label="Traffic level">
+                    <button type="button" className={sessions === traffic.average ? "is-on" : ""} onClick={() => setSessions(traffic.average)}>
+                      Average {fmtInt(traffic.average)}
+                    </button>
+                    <button type="button" className={sessions === traffic.peak.sessions ? "is-on" : ""} onClick={() => setSessions(traffic.peak.sessions)}>
+                      Busiest {monthName(traffic.peak.month)}
+                    </button>
+                    <button type="button" className={sessions === traffic.low.sessions ? "is-on" : ""} onClick={() => setSessions(traffic.low.sessions)}>
+                      Quietest {monthName(traffic.low.month)}
+                    </button>
+                  </div>
+                </div>
+                <div className="seos-calc-hint">
+                  From your Shopify Analytics, last {traffic.months.length} full months ({monthName(traffic.months[0].month)} – {monthName(traffic.months[traffic.months.length - 1].month)}).
+                </div>
+              </>
+            ) : (
+              <div className="seos-calc-hint">
+                {traffic?.error === "permission"
+                  ? "Approve the app's new Analytics permission to fill this in from your real traffic. Until then, type your sessions from Shopify admin → Analytics."
+                  : "Type your sessions from Shopify admin → Analytics → Sessions."}
+              </div>
+            )}
           </div>
 
           <div className="seos-calc-field">
             <div className="seos-calc-labelrow">
-              <label className="seos-calc-label" htmlFor="seos-calc-engagement">Visitors who chat</label>
+              <label className="seos-calc-label" htmlFor="seos-calc-engagement">Sessions that start a chat</label>
               <span className="seos-calc-readout">{engagement}%</span>
             </div>
             <input
@@ -325,29 +323,24 @@ export default function CostEstimator({ avgChatCostPerMessage, totalMessages, mo
               type="range"
               min={ENG_MIN}
               max={ENG_MAX}
-              step="1"
+              step="0.5"
               value={engagement}
               onChange={(e) => setEngagement(Number(e.target.value))}
               style={{ "--fill": fill }}
               aria-valuetext={`${engagement} percent of sessions`}
             />
-            <div className="seos-calc-hint">Most stores see 2&ndash;8% of sessions open the assistant.</div>
+            <div className="seos-calc-hint">AI shopping assistants usually see 1&ndash;3% of sessions start a chat. After launch, compare with your real count in Analytics.</div>
           </div>
 
           <div className="seos-calc-field">
             <div className="seos-calc-labelrow">
-              <span className="seos-calc-label" id="seos-calc-depth-label">Conversation depth</span>
+              <span className="seos-calc-label" id="seos-calc-depth-label">Replies per chat</span>
             </div>
             <div className="seos-calc-seg seos-calc-seg--wide" role="group" aria-labelledby="seos-calc-depth-label">
-              {CALC_DEPTHS.map((d) => (
-                <button
-                  key={d.key}
-                  type="button"
-                  className={depth === d.key ? "is-on" : ""}
-                  onClick={() => setDepth(d.key)}
-                >
-                  {d.label}
-                  <small>{d.desc}</small>
+              {[2, 3, 5, 8].map((n) => (
+                <button key={n} type="button" className={repliesPerChat === n ? "is-on" : ""} onClick={() => setRepliesPerChat(n)}>
+                  {n}
+                  <small>{n === 2 ? "quick" : n === 3 ? "typical" : n === 5 ? "detailed" : "long"}</small>
                 </button>
               ))}
             </div>
@@ -357,42 +350,43 @@ export default function CostEstimator({ avgChatCostPerMessage, totalMessages, mo
         <div className="seos-calc-result">
           <div className="seos-calc-result-label">Estimated AI cost</div>
           <div className="seos-calc-bignum">
-            {calcMoney(monthlyCost)}
+            {calcMoney(est.cost)}
             <span className="seos-calc-per">/month</span>
           </div>
-          <div className="seos-calc-yearly">&asymp; {calcMoney(monthlyCost * 12)} per year</div>
+          <div className="seos-calc-yearly">
+            &asymp; {calcMoney(yearCost)} per year{hasTraffic ? " at your last 12 months of traffic" : ""}
+          </div>
           <div className="seos-calc-breakdown">
-            <div>
-              <span>{fmtInt(conversations)}</span>
-              <small>conversations / mo</small>
-            </div>
-            <div>
-              <span>{fmtInt(replies)}</span>
-              <small>{REPLIES_LABEL}</small>
-            </div>
-            <div>
-              <span>{calcMoney(rate * turns)}</span>
-              <small>per conversation</small>
-            </div>
+            <div><span>{fmtInt(est.chats)}</span><small>chats / mo</small></div>
+            <div><span>{fmtInt(est.replies)}</span><small>replies / mo</small></div>
+            <div><span>{perReply > 0 ? rateFmt(est.rate) : "—"}</span><small>per reply</small></div>
           </div>
+          <table className="seos-calc-table">
+            <thead>
+              <tr><th>Sessions that chat</th><th>At sessions above</th>{hasTraffic && <th>Busiest month</th>}</tr>
+            </thead>
+            <tbody>
+              {scenarios.map((s) => (
+                <tr key={s.pct} className={s.pct === engagement ? "is-on" : ""}>
+                  <td>{s.pct}%</td>
+                  <td>{calcMoney(s.avg)}</td>
+                  {hasTraffic && <td>{calcMoney(s.peak)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <div className="seos-calc-anchor">
-            {scaled
-              ? `${anchored
-                ? `Your store's current average is ${rateFmt(baseRate)} per assistant reply at today's low volume`
-                : `The typical low-volume rate on ${strategyLabel} is ${rateFmt(baseRate)} per assistant reply`}, but AI gets much cheaper at scale — prompt caching and fast-model routing bring it down to about ${rateFmt(rate)} per reply at this traffic. The estimate uses the at-scale rate.`
-              : anchored
-                ? `Anchored on your store's real average of ${rateFmt(rate)} per assistant reply.`
-                : `Based on the ${strategyLabel} blended rate of ${rateFmt(rate)} per assistant reply. Once your store has chat activity, this switches to your real average automatically.`}
+            {source === "measured" ? SOURCE_COPY.measured(measured.replies) : SOURCE_COPY[source]}
           </div>
+          {modeled && (
+            <div className="seos-calc-anchor" style={{ marginTop: 4 }}>
+              Measured on your setup: {modeled.products.toLocaleString("en-US")} products; instructions of about {fmtInt(modeled.prefixTokens)} tokens (the unit AI is billed in —
+              cached, so each reply pays about a tenth for them); about {fmtInt(modeled.searchTokens)} tokens per product search.
+              {source === "measured" && ` Estimate from your setup: ${rateFmt(modeled.perReply)} per reply.`}
+            </div>
+          )}
           <div className="seos-calc-anchor" style={{ marginTop: 4 }}>
-            {anchored ? ANCHOR_COPY.anchored : ANCHOR_COPY.fallback}
-          </div>
-          <div className="seos-calc-anchor" style={{ marginTop: 4 }}>
-            Based on your recorded average cost per assistant reply — not a raw
-            provider request count. One reply can include a classifier call,
-            model retries, follow-up suggestions, tools, and embeddings. Style
-            preview (image) generations are billed separately and are not
-            included here. Reflects your current model strategy ({strategyLabel}).
+            AI engine (Anthropic) cost only, at today&rsquo;s list prices. Semantic search adds a fraction of a cent per thousand replies; &ldquo;Visualize my look&rdquo; images are billed separately.
           </div>
         </div>
       </div>

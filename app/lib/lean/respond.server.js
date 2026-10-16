@@ -139,9 +139,10 @@ export function leanChatResponse({
           });
         }
         send({ type: "done" });
+        // Test chats are recorded for the cost estimate only (internal flag).
+        recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls, internal })
+          .catch((err) => console.error("[lean] usage log error:", err?.message));
         if (!internal) {
-          recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls })
-            .catch((err) => console.error("[lean] usage log error:", err?.message));
           logMentions(shop, [
             ...(result.mentions || []),
             ...result.cards.map((c) => ({ handle: c.handle, title: c.title, tool: "show_products" })),

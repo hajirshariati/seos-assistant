@@ -6,7 +6,7 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { getUsageSummary, getDailySeries } from "../models/ChatUsage.server";
+import { getUsageSummary, getDailySeries, getReplyCostSample } from "../models/ChatUsage.server";
 import { getShopPlan } from "../lib/billing.server";
 import { getFeedbackSummary, cleanupOldFeedback, getRecentQuestions } from "../models/ChatFeedback.server";
 import {
@@ -18,6 +18,9 @@ import { getConversionSummary } from "../models/ChatConversion.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import BrandHeader from "../components/BrandHeader";
 import CostEstimator from "../components/CostEstimator";
+import { getMonthlySessions } from "../lib/store-traffic.server";
+import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
+import { warmAverage } from "../lib/cost-estimator-math";
 
 const MODEL_LABELS = {
   "claude-sonnet-4-20250514": "Standard",
@@ -68,7 +71,7 @@ function daysBetween(a, b) {
 }
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
   const parsed = parseRange(url.searchParams);
   const planForRetention = await getShopPlan(session.shop);
@@ -98,13 +101,27 @@ export const loader = async ({ request }) => {
     getTopicRows(session.shop, { days: 7 }).catch(() => []),
     getUsageSummary(session.shop, weekRange),
   ]);
+  // Cost estimator: real traffic, this store's priced setup, recorded replies.
+  const [traffic, modeled, costRows] = await Promise.all([
+    getMonthlySessions(admin, session.shop).catch((err) => ({ error: String(err?.message || err) })),
+    config?.anthropicApiKey ? estimateStoreReplyCost(session.shop, config).catch(() => null) : Promise.resolve(null),
+    getReplyCostSample(session.shop).catch(() => []),
+  ]);
+  const measured = warmAverage(costRows, { prefixTokens: modeled?.prefixTokens || 0, coldStartExtra: modeled?.coldStartExtra || 0 });
   cleanupOldFeedback().catch(() => {});
   cleanupOldMentions().catch(() => {});
 
   return {
     usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, conversions,
     week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
-    modelStrategy: config?.modelStrategy || "smart",
+    estimator: {
+      traffic,
+      modeled: modeled && {
+        perReply: modeled.perReply, coldStartExtra: modeled.coldStartExtra, model: modeled.model,
+        prefixTokens: modeled.prefixTokens, searchTokens: modeled.searchTokens, products: modeled.products,
+      },
+      measured,
+    },
     previous: {
       messages: prevUsage.totalMessages,
       cost: prevUsage.totalCost,
@@ -529,7 +546,7 @@ function RangeSelector({ current, searchParams }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, interest, recentQuestions, daily, conversions, previous, range, modelStrategy, week } = useLoaderData();
+  const { usage, feedback, productsByTool, interest, recentQuestions, daily, conversions, previous, range, estimator, week } = useLoaderData();
   const [searchParams] = useSearchParams();
   const shopify = useAppBridge();
   const [exporting, setExporting] = useState(null);
@@ -1185,7 +1202,7 @@ export default function Analytics() {
             )}
           </SectionCard>
 
-          <CostEstimator avgChatCostPerMessage={usage.avgChatCostPerMessage} totalMessages={usage.totalMessages} modelStrategy={modelStrategy} />
+          <CostEstimator {...estimator} />
 
           <div className="seos-an-foot">
             Cost estimates based on AI engine pricing. User data hashed for privacy.

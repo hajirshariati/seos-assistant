@@ -77,6 +77,21 @@ export function normalizeConversation(messages = []) {
   return conv;
 }
 
+// Cache the conversation up to its newest message, so each later call in the
+// turn (search → show → answer) reads what came before at the cached rate —
+// cheaper and faster. Only the newest message carries the marker (the API
+// allows four; tools and system use two).
+export function withConversationCache(conv) {
+  if (conv.length === 0) return conv;
+  const last = conv[conv.length - 1];
+  const blocks = typeof last.content === "string"
+    ? [{ type: "text", text: last.content }]
+    : Array.isArray(last.content) ? last.content : [];
+  if (blocks.length === 0) return conv;
+  const marked = [...blocks.slice(0, -1), { ...blocks[blocks.length - 1], cache_control: { type: "ephemeral" } }];
+  return [...conv.slice(0, -1), { ...last, content: marked }];
+}
+
 function addUsage(total, u = {}) {
   for (const k of ["input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"]) {
     total[k] = (total[k] || 0) + (Number(u[k]) || 0);
@@ -245,7 +260,7 @@ export async function runLeanTurn({
     const mustAnswer = hop === MAX_HOPS - 1 || Date.now() - started > deadlineMs;
     if (mustAnswer) log(`[lean] hop=${hop} forcing a final answer (${hop === MAX_HOPS - 1 ? "hop limit" : "time limit"})`);
     const resp = await call({
-      model, max_tokens: 900, system, tools, messages: conv,
+      model, max_tokens: 900, system, tools, messages: withConversationCache(conv),
       ...(mustAnswer ? { tool_choice: { type: "none" } } : {}),
     });
     addUsage(usage, resp.usage);

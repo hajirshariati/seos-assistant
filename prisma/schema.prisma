@@ -346,6 +346,9 @@ model ChatUsage {
   // priced separately (merchant pays Gemini/OpenAI directly).
   imageCount               Int      @default(0)
   imageCostUsd             Float    @default(0)
+  // Admin test chats: counted for the cost estimate only — never in customer
+  // analytics, the daily cap or exports.
+  internal                 Boolean  @default(false)
   createdAt                DateTime @default(now())
 
   @@index([shop])

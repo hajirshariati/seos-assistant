@@ -1,82 +1,86 @@
-// Pure cost-estimator math + copy — shared by the admin CostEstimator
-// component and its unit tests. No React, no DB: just the numbers and the
-// honest labels. Keeping it here means the accounting can be tested without
-// rendering the component.
+// Cost estimator math — shared by the Analytics CostEstimator and its tests.
+// Pure: no React, no DB.
+//
+// Monthly cost = sessions × share of visitors who chat × replies per chat ×
+// cost per reply. Sessions come from the store's own Shopify Analytics; the
+// cost per reply is measured from recorded replies once there are enough,
+// otherwise priced from this store's real instructions and catalog
+// (lean/cost-model.js).
 
-export const CALC_MIN_SAMPLE = 25; // recorded chat replies needed before trusting the store's own average
+export const CALC_MIN_SAMPLE = 25; // recorded replies before the measured average is trusted
 
-// Per-reply cost falls as volume grows: at low traffic nearly every
-// conversation pays a fresh prompt-cache write with nothing amortizing it,
-// while at high traffic the cache stays hot (reads bill at ~1/10th the input
-// price) and the fast-model share of routing rises. Log-interpolate from the
-// anchored low-volume rate down to the at-scale blended rate.
-export const CALC_AMORT_START = 2000;
-export const CALC_AMORT_FULL = 100000;
-
-// Auxiliary per-turn LLM calls — the orthotic Haiku classifier, the
-// product-turn / policy voice-synthesis Haiku calls, and the orthotic-flow
-// layer-3 mapping — run DURING a customer turn but are not separately metered
-// into ChatUsage (they live in dispatch paths with their own emit flow). They
-// are small Haiku calls that fire on a subset of turns, so the recorded chat
-// average understates true cost by a few percent. We correct the ANCHORED real
-// average with this small, conservative, DISCLOSED allowance. The fallback
-// blended rates below already bake auxiliary overhead in, so they are NOT
-// multiplied again. See docs/cost-accounting-audit.md for the full audit.
-export const SIDE_CALL_OVERHEAD = 1.06;
-
-// The per-reply rate is driven mostly by which model answers. At scale the
-// dominant cost is the cached system-prefix READ, so these scale with each
-// model's cache-read + output price relative to Sonnet (pricing.server.js).
-export const STRATEGY_RATES = {
-  smart: { fallback: 0.008, atScale: 0.006 },
-  "cost-optimized": { fallback: 0.005, atScale: 0.0035 },
-  "always-opus": { fallback: 0.014, atScale: 0.011 },
+export const DEFAULTS = {
+  engagementPct: 2,   // AI shopping assistants typically see 1–3% of sessions start a chat
+  repliesPerChat: 3,
 };
 
-export function strategyProfile(strategy) {
-  switch (strategy) {
-    case "cost-optimized":
-    case "always-haiku":
-      return { rates: STRATEGY_RATES["cost-optimized"], label: "Cost-optimized routing" };
-    case "always-opus":
-    case "premium":
-      return { rates: STRATEGY_RATES["always-opus"], label: "Premium quality" };
-    default:
-      return { rates: STRATEGY_RATES.smart, label: "Smart routing" };
+// Recorded replies → the cost of a reply when the instructions are already
+// cached ("warm"). A reply that wrote the instructions to cache (cold — test
+// chats minutes apart, or a quiet night) is counted without that one-off
+// write; monthlyEstimate adds it back at the rate real traffic would see.
+export function warmAverage(rows = [], { prefixTokens = 0, coldStartExtra = 0 } = {}) {
+  if (!rows.length) return { replies: 0, testReplies: 0, avgCost: 0, coldReplies: 0 };
+  let total = 0;
+  let cold = 0;
+  for (const r of rows) {
+    const isCold = prefixTokens > 0 && r.cacheWriteTokens >= prefixTokens * 0.9;
+    if (isCold) cold += 1;
+    total += Math.max(0, r.cost - (isCold ? coldStartExtra : 0));
   }
+  return {
+    replies: rows.length,
+    testReplies: rows.filter((r) => r.internal).length,
+    coldReplies: cold,
+    avgCost: total / rows.length,
+  };
 }
 
-export function effectiveRate(baseRate, monthlyReplies, atScaleRate) {
-  if (baseRate <= atScaleRate) return baseRate;
-  if (!Number.isFinite(monthlyReplies) || monthlyReplies <= CALC_AMORT_START) return baseRate;
-  const t = Math.min(
-    1,
-    (Math.log10(monthlyReplies) - Math.log10(CALC_AMORT_START)) /
-      (Math.log10(CALC_AMORT_FULL) - Math.log10(CALC_AMORT_START)),
-  );
-  return baseRate + (atScaleRate - baseRate) * t;
+// The per-reply rate in use, and where it came from.
+export function resolvePerReply({ measured = null, modeled = null } = {}) {
+  if (measured && measured.replies >= CALC_MIN_SAMPLE && measured.avgCost > 0) {
+    return { perReply: measured.avgCost, source: "measured" };
+  }
+  if (modeled && modeled.perReply > 0) return { perReply: modeled.perReply, source: "modeled" };
+  return { perReply: 0, source: "none" };
 }
 
-// Decide the anchor: the store's own recorded CHAT average (image previews
-// excluded) once there are enough recorded replies, otherwise the strategy's
-// fallback blended rate. The anchored real average is nudged up by the
-// documented side-call allowance; the fallback already includes it.
-export function resolveEstimatorBaseRate({ avgChatCostPerMessage, totalMessages, rates }) {
-  const anchored = totalMessages >= CALC_MIN_SAMPLE && avgChatCostPerMessage > 0;
-  const baseRate = anchored ? avgChatCostPerMessage * SIDE_CALL_OVERHEAD : rates.fallback;
-  return { anchored, baseRate };
-}
-
-// UI copy for the active anchor — kept here so tests assert exact wording.
-export const ANCHOR_COPY = {
-  // shown when totalMessages >= CALC_MIN_SAMPLE
-  anchored: "Based on your recorded chat average over the selected analytics period.",
-  // shown when the sample is too small to trust
-  fallback: "Based on typical model-routing assumptions until your store has enough traffic.",
+export const SOURCE_COPY = {
+  measured: (n) => `Measured from ${n.toLocaleString("en-US")} real replies in the last 60 days (test chats included — same engine, same price).`,
+  modeled: "Estimated from your store's actual instructions, catalog and search results. It switches to your measured cost after 25 replies — ask a few questions in the test chat on Home to measure it now.",
+  none: "Add your AI engine key in Settings to estimate the cost per reply.",
 };
 
-// The per-period multiplier label. This is estimated assistant replies (chat
-// turns), NOT raw provider API requests — a single reply can include classifier
-// calls, model retries, follow-up suggestions, tools, and embeddings.
-export const REPLIES_LABEL = "assistant replies / mo";
-export const PER_REPLY_NOUN = "assistant reply";
+// Share of replies that arrive after the 5-minute prompt cache expired,
+// assuming chats spread over ~16 busy hours a day.
+export function coldShare(monthlyReplies) {
+  const perMinute = Math.max(0, monthlyReplies) / (30 * 16 * 60);
+  return Math.exp(-perMinute * 5);
+}
+
+// perReply is a warm rate (modeled, or warmAverage); the cold-start share for
+// this traffic level is added on top.
+export function monthlyEstimate({ sessions, engagementPct, repliesPerChat, perReply, coldStartExtra = 0 }) {
+  const chats = Math.max(0, sessions) * (Math.max(0, engagementPct) / 100);
+  const replies = chats * Math.max(0, repliesPerChat);
+  const rate = perReply + coldShare(replies) * coldStartExtra;
+  return { chats, replies, rate, cost: replies * rate };
+}
+
+// rows: [{ month: "YYYY-MM", sessions }] from Shopify Analytics. Uses only
+// complete months: the current month is partial, and so may be the first.
+export function summarizeTraffic(rows = [], now = new Date()) {
+  const current = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  let full = rows.filter((r) => r.month && r.month < current && r.sessions > 0).sort((a, b) => a.month.localeCompare(b.month));
+  if (full.length > 12) full = full.slice(-12);
+  if (full.length === 0) return { error: "no data" };
+  const values = full.map((r) => r.sessions);
+  const peak = full.reduce((a, b) => (b.sessions > a.sessions ? b : a));
+  const low = full.reduce((a, b) => (b.sessions < a.sessions ? b : a));
+  return {
+    months: full,
+    average: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
+    peak,
+    low,
+    yearTotal: values.reduce((a, b) => a + b, 0),
+  };
+}

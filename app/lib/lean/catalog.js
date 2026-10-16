@@ -86,7 +86,17 @@ function extraAttributes(attrs, known = []) {
     if (CORE_ATTRIBUTE_KEYS.has(key)) continue;
     const vals = list(v).map((x) => String(x).trim()).filter((x) => x && !x.startsWith("gid://"));
     if (!vals.length) continue;
-    const text = vals.join(", ").replace(/\s+/g, " ").slice(0, 800);
+    // Some stores keep HTML in text fields (<ul><li>…) — keep only the words.
+    const text = vals.join(", ")
+      .replace(/<\/(li|p|div)>\s*/gi, "; ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"')
+      .replace(/\s*;\s*(?=;|$)/g, "")
+      .replace(/([.!?])\s*;/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 800);
+    if (!text) continue;
     const norm = text.toLowerCase();
     if (seen.has(norm)) continue;
     seen.add(norm);
