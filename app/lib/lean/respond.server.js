@@ -7,6 +7,7 @@ import { recordChatUsage } from "../../models/ChatUsage.server.js";
 import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessage } from "../anthropic-resilience.server.js";
 import { loadLeanCatalog } from "./catalog.server.js";
+import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
@@ -21,25 +22,34 @@ export function leanEngineSelected({ shop, internal = false, body = {} } = {}) {
   return list.includes("*") || list.includes(shop);
 }
 
+// Store info for Claude: the store team's uploaded notes first (they win if
+// anything differs), then what was learned from the store's own website
+// (policies + pages, store-knowledge sync).
 function makeStoreInfoLookup({ shop, config }) {
   let files = null;
+  const fmt = (c) => `${c.sectionTitle ? `${c.sectionTitle}: ` : ""}${String(c.content || "").trim()}`;
   return async (query) => {
     if (!query.trim()) return { found: false };
-    let chunks = null;
+    if (!files) files = await getKnowledgeFilesWithContent(shop);
+    const uploaded = lexicalRetrieveChunks(files, query, { limit: 3, minOverlap: 0.25 });
+    let website = [];
     if (config.knowledgeRagEnabled === true) {
-      try { chunks = await retrieveRelevantChunks(prisma, { shop, query, config, limit: 4 }); }
-      catch (err) { console.error("[lean] store-info rag failed:", err?.message || err); }
+      try {
+        const semantic = await retrieveRelevantChunks(prisma, { shop, query, config, limit: 5 });
+        for (const c of semantic || []) {
+          if (String(c.fileType || "").startsWith("store_")) website.push(c);
+          else if (!uploaded.some((u) => u.content === c.content)) uploaded.push(c);
+        }
+      } catch (err) {
+        console.error("[lean] store-info rag failed:", err?.message || err);
+      }
     }
-    if (!Array.isArray(chunks) || chunks.length === 0) {
-      if (!files) files = await getKnowledgeFilesWithContent(shop);
-      chunks = lexicalRetrieveChunks(files, query, { limit: 4, minOverlap: 0.25 });
-    }
-    if (!chunks || chunks.length === 0) return { found: false };
-    const text = chunks
-      .map((c) => `${c.sectionTitle ? `${c.sectionTitle}: ` : ""}${String(c.content || "").trim()}`)
-      .join("\n\n")
-      .slice(0, 6000);
-    return { found: true, text };
+    if (website.length === 0) website = await lexicalStoreKnowledge(shop, query, { limit: 4 }).catch(() => []);
+    if (uploaded.length === 0 && website.length === 0) return { found: false };
+    const parts = [];
+    if (uploaded.length) parts.push(`STORE TEAM NOTES (uploaded by the store — these win if anything differs):\n${uploaded.map(fmt).join("\n\n")}`);
+    if (website.length) parts.push(`FROM THE STORE'S WEBSITE:\n${website.map(fmt).join("\n\n")}`);
+    return { found: true, text: parts.join("\n\n").slice(0, 7000) };
   };
 }
 

@@ -141,6 +141,7 @@ import { normalizeVariantSize, normalizeVariantWidth, normalizeOptionBag } from 
 import { titleSuffixColor } from "../lib/color-match.js";
 import { reconcileBufferedCardEvents } from "../lib/card-emission.js";
 import { leanEngineSelected, leanChatResponse } from "../lib/lean/respond.server.js";
+import { lexicalStoreKnowledge } from "../lib/store-knowledge/sync.server.js";
 
 // Model IDs are env-driven so you can update them in Railway without a code
 // deploy. When Anthropic ships a new model:
@@ -5541,7 +5542,11 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
             Array.isArray(retrievedChunks) && retrievedChunks.length === 0 &&
             (isPolicyOrServiceQuestion(ragQuery) || isKnowledgeWorkflow(planTurn({ message: ragQuery }).workflow))
           ) {
-            const lex = lexicalRetrieveChunks(knowledge, ragQuery, { limit: 3 });
+            const lex = [
+              ...lexicalRetrieveChunks(knowledge, ragQuery, { limit: 3 }),
+              // Website-learned policies/pages (store-knowledge sync).
+              ...(await lexicalStoreKnowledge(shop, ragQuery, { limit: 2 }).catch(() => [])),
+            ];
             if (lex.length > 0) {
               retrievedChunks = lex;
               console.log(`[rag] lexical_fallback=true hits=${lex.length} topCategory=${lex[0].fileType || "-"} topScore=${lex[0].similarity.toFixed(2)} — injected knowledge sections (no support handoff)`);

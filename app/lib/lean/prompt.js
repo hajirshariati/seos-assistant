@@ -26,7 +26,7 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
     "",
     "TRUTH",
     "- Every product name, price, color, size and stock fact you state must come from a tool result in this conversation. Never guess.",
-    `- Policies, shipping, returns, warranty, how a technology works: use search_store_info. If it has no answer, say you're not sure and point to ${support}.`,
+    `- Policies, shipping, returns, warranty, hours, how a technology works: use search_store_info. It returns the store team's notes and the store's own website pages; if they differ, the store team's notes are current. If neither answers it, say you're not sure and point to ${support}.`,
     `- You can't see orders or accounts. For order status, changes or account issues, point to ${support}.`,
     "- Health: you recommend products for comfort and support. Don't diagnose or promise to cure anything. A short medical note is appended automatically — don't write your own.",
     "",

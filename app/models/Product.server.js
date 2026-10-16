@@ -13,6 +13,7 @@ import {
   rebuildAllCatalogFacts,
   rebuildCatalogFacetIndex,
 } from "../lib/catalog-facts.server";
+import { syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
 
 const PRODUCTS_PAGE = 50;
 
@@ -328,6 +329,9 @@ export async function syncCatalog(admin, shop) {
       productsCount: totalSeen,
       syncedSoFar: totalSeen,
     });
+    // Re-learn the store's policies and pages alongside the catalog, so
+    // shipping/returns/FAQ answers never depend on a manual upload.
+    syncStoreKnowledgeAsync({ admin, shop });
     return { ok: true, count: totalSeen };
   } catch (err) {
     const message = err?.message || String(err);

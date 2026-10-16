@@ -387,7 +387,7 @@ export const action = async ({ request }) => {
     const definitionRaw = String(formData.get("definition") || "").trim();
     const enabled = formData.get("enabled") === "true";
     if (!name) return { error: "Tree name is required." };
-    if (!treeIntent) return { error: "Intent slug is required (a-z, 0-9, _, -)." };
+    if (!treeIntent) return { error: "ID is required — for the orthotic finder use: orthotic" };
     let definition;
     try { definition = JSON.parse(definitionRaw); }
     catch { return { error: "Definition must be valid JSON." }; }
@@ -2995,8 +2995,8 @@ function DecisionTreesCard({ enabled, trees }) {
                     autoComplete="off"
                   />
                   <TextField
-                    label="Intent slug"
-                    helpText="a-z, 0-9, _, - — becomes the tool name (recommend_<intent>) the AI can call. e.g. orthotic, mattress, supplement."
+                    label="ID (what it recommends)"
+                    helpText="One short word for what this recommends. For the Aetrex orthotic finder it must be: orthotic"
                     value={editing.intent}
                     onChange={onChange("intent")}
                     autoComplete="off"

@@ -4,6 +4,10 @@ const LABELS = {
   brand: "Brand & About",
   products: "Product Details",
   custom: "Custom Knowledge",
+  // Learned automatically from the store's own website. Uploaded knowledge
+  // files are the store team's notes and win if the two ever differ.
+  store_policy: "From the store's website — policy (uploaded store notes win if they differ)",
+  store_page: "From the store's website — page (uploaded store notes win if they differ)",
 };
 
 // Inlined (not imported from llm-owns-turn.server.js) to avoid a

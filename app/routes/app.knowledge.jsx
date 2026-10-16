@@ -59,6 +59,7 @@ import {
   getKnowledgeFileForDownload,
 } from "../models/ShopConfig.server";
 import prisma from "../db.server";
+import { listStoreKnowledge, syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
 import { backfillShopEmbeddings, resolveShopEmbedding } from "../lib/embeddings.server";
 import { rebuildChunksForFile } from "../lib/knowledge-chunks.server";
 import {
@@ -121,8 +122,13 @@ export const loader = async ({ request }) => {
     } catch { /* migration not yet applied; fall through */ }
   }
 
+  let storeKnowledge = [];
+  try { storeKnowledge = await listStoreKnowledge(session.shop); }
+  catch (err) { console.error("[store-knowledge] list failed:", err?.message || err); }
+
   return {
     shop: session.shop,
+    storeKnowledge: storeKnowledge.map((d) => ({ ...d, syncedAt: d.syncedAt instanceof Date ? d.syncedAt.toISOString() : d.syncedAt })),
     status: state.status,
     lastSyncedAt: state.lastSyncedAt,
     lastError: state.lastError,
@@ -170,6 +176,11 @@ export const action = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (intent === "sync_store_knowledge") {
+    syncStoreKnowledgeAsync({ admin, shop: session.shop });
+    return { storeSyncStarted: true };
+  }
 
   if (intent === "resync") {
     syncCatalogAsync(admin, session.shop);
@@ -386,7 +397,7 @@ export const action = async ({ request }) => {
     const definitionRaw = String(formData.get("definition") || "").trim();
     const enabled = formData.get("enabled") === "true";
     if (!name) return { error: "Tree name is required." };
-    if (!treeIntent) return { error: "Intent slug is required (a-z, 0-9, _, -)." };
+    if (!treeIntent) return { error: "ID is required — for the orthotic finder use: orthotic" };
     let definition;
     try { definition = JSON.parse(definitionRaw); }
     catch { return { error: "Definition must be valid JSON." }; }
@@ -2751,8 +2762,8 @@ function DecisionTreesCard({ enabled, trees }) {
                     autoComplete="off"
                   />
                   <TextField
-                    label="Intent slug"
-                    helpText="a-z, 0-9, _, - — becomes the tool name (recommend_<intent>) the AI can call. e.g. orthotic, mattress, supplement."
+                    label="ID (what it recommends)"
+                    helpText="One short word for what this recommends. For the Aetrex orthotic finder it must be: orthotic"
                     value={editing.intent}
                     onChange={onChange("intent")}
                     autoComplete="off"
@@ -2794,6 +2805,53 @@ function DecisionTreesCard({ enabled, trees }) {
   );
 }
 
+function StoreKnowledgeCard({ docs }) {
+  const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const started = fetcher.data?.storeSyncStarted;
+  const busy = fetcher.state !== "idle";
+  useEffect(() => {
+    if (!started) return;
+    const t = setTimeout(() => revalidator.revalidate(), 45000);
+    return () => clearTimeout(t);
+  }, [started]); // eslint-disable-line react-hooks/exhaustive-deps
+  const refresh = () => {
+    const fd = new FormData();
+    fd.set("intent", "sync_store_knowledge");
+    fetcher.submit(fd, { method: "post" });
+  };
+  const last = docs.reduce((m, d) => (d.syncedAt && (!m || d.syncedAt > m) ? d.syncedAt : m), null);
+  const policies = docs.filter((d) => d.kind === "Policy").length;
+  const rows = docs.map((d) => [
+    d.kind,
+    d.url ? <a key={d.id} href={d.url} target="_blank" rel="noreferrer">{d.title}</a> : d.title,
+    `${Math.max(1, Math.round(d.chars / 1000))}k chars`,
+  ]);
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <InlineStack align="space-between" blockAlign="center">
+          <BlockStack gap="050">
+            <Text as="h2" variant="headingMd">
+              {docs.length > 0 ? `${docs.length} documents learned (${policies} policies, ${docs.length - policies} pages)` : "Nothing learned yet"}
+            </Text>
+            <Text as="p" tone="subdued" variant="bodySm">
+              {last ? `Last refreshed ${new Date(last).toLocaleString()}` : "Click refresh to read your store's policies and pages now."}
+            </Text>
+          </BlockStack>
+          <Button onClick={refresh} loading={busy} disabled={busy}>Refresh from store now</Button>
+        </InlineStack>
+        {started && (
+          <Banner tone="info"><p>Reading your store's policies and pages — this takes about a minute. The list updates automatically.</p></Banner>
+        )}
+        {rows.length > 0 && (
+          <DataTable columnContentTypes={["text", "text", "text"]} headings={["Type", "Title", "Size"]} rows={rows} />
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
 export default function RulesKnowledge() {
   const data = useLoaderData();
   // Live-tracked campaign bytes — CampaignsCard reports its current
@@ -2809,6 +2867,14 @@ export default function RulesKnowledge() {
       <TitleBar title="Knowledge" />
       <BrandHeader title="Knowledge" />
       <BlockStack gap="800">
+        <BlockStack gap="400">
+          <SectionHeading
+            title="Learned automatically from your store"
+            description="Your store policies and published pages (shipping, returns, FAQ, size guide, about…) are read from your website after every catalog sync and nightly — no upload needed. Files you upload below are your team's notes and take priority if anything differs."
+          />
+          <StoreKnowledgeCard docs={data.storeKnowledge || []} />
+        </BlockStack>
+
         <BlockStack gap="400">
           <SectionHeading
             title="Soft context the AI can reference"

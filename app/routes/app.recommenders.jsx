@@ -30,6 +30,7 @@ import {
   listDecisionTrees,
   getDecisionTreeById,
   getDecisionTreeByIntent,
+  repairOrthoticIntent,
   saveDecisionTree,
   deleteDecisionTree,
 } from "../models/DecisionTree.server";
@@ -54,6 +55,9 @@ import { PlanGate } from "../components/PlanGate";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
+  // Fix an orthotic finder saved with a placeholder ID (e.g. "a-z") so the
+  // chat can find it — before listing, so the table shows the fixed ID.
+  await repairOrthoticIntent(session.shop).catch(() => null);
   const [config, decisionTrees, plan] = await Promise.all([
     getShopConfig(session.shop),
     listDecisionTrees(session.shop),
@@ -100,7 +104,7 @@ export const action = async ({ request }) => {
     const definitionRaw = String(formData.get("definition") || "").trim();
     const enabled = formData.get("enabled") === "true";
     if (!name) return { error: "Tree name is required." };
-    if (!treeIntent) return { error: "Intent slug is required (a-z, 0-9, _, -)." };
+    if (!treeIntent) return { error: "ID is required — for the orthotic finder use: orthotic" };
     let definition;
     try { definition = JSON.parse(definitionRaw); }
     catch { return { error: "Definition must be valid JSON." }; }
@@ -663,12 +667,13 @@ function DecisionTreesCard({ enabled, trees }) {
             />
           </InlineStack>
           <Text as="p" tone="subdued">
-            Master switch. When ON, every enabled recommender below becomes a
-            guided flow the AI can hand off to when it sees a clear orthotic-finder
-            intent. The customer answers a few choice-button questions, the
-            lookup runs, and one specific product is shown. When OFF (default),
-            the recommender stays out of the way completely and the chat behaves
-            like a standard product-search assistant.
+            A recommender is a short guided quiz. When a shopper asks for help
+            picking an orthotic, the assistant asks a few tap-to-answer
+            questions (who it's for, what shoes, what hurts, arch type) and
+            shows the one orthotic that fits. Setup: click <strong>Reset to
+            factory</strong> once, then <strong>Sync from Shopify</strong>,
+            and switch this ON. Turned OFF, the assistant still recommends
+            orthotics — just without the quiz.
           </Text>
         </BlockStack>
 
@@ -717,10 +722,12 @@ function DecisionTreesCard({ enabled, trees }) {
           {trees && trees.length > 0 && (
             <DataTable
               columnContentTypes={["text", "text", "numeric", "text"]}
-              headings={["Name", "Intent", "Calls", ""]}
+              headings={["Name", "ID", "Times used", ""]}
               rows={trees.map((t) => [
                 <Text key={`n-${t.id}`} as="span" fontWeight="semibold">{t.name}</Text>,
-                <Text key={`i-${t.id}`} as="span">{t.intent}</Text>,
+                <Text key={`i-${t.id}`} as="span" tone={t.intent === "orthotic" || /orthotic|insole/i.test(t.name || "") === false ? undefined : "critical"}>
+                  {t.intent}{t.intent !== "orthotic" && /orthotic|insole/i.test(t.name || "") ? " — should be: orthotic" : ""}
+                </Text>,
                 t.completedCount,
                 <InlineStack key={`a-${t.id}`} gap="200">
                   <Badge tone={t.enabled ? "success" : undefined}>
@@ -828,8 +835,8 @@ function DecisionTreesCard({ enabled, trees }) {
                     autoComplete="off"
                   />
                   <TextField
-                    label="Intent slug"
-                    helpText="a-z, 0-9, _, - — becomes the tool name (recommend_<intent>) the AI can call. e.g. orthotic, mattress, supplement."
+                    label="ID (what it recommends)"
+                    helpText="One short word for what this recommends. For the Aetrex orthotic finder it must be: orthotic"
                     value={editing.intent}
                     onChange={onChange("intent")}
                     autoComplete="off"
