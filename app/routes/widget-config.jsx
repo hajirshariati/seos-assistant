@@ -68,19 +68,7 @@ export const loader = async ({ request }) => {
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,
-        welcomeGlowStyle: ["none", "internal", "external"].includes(config.welcomeGlowStyle)
-          ? config.welcomeGlowStyle
-          : "internal",
-        welcomeGlowColors: String(config.welcomeGlowColors || "")
-          .split(",")
-          .map((c) => c.trim())
-          .filter((c) => /^#[0-9a-f]{3,8}$/i.test(c)),
-        welcomeGlowBorderWidth: Number.isFinite(config.welcomeGlowBorderWidth) ? config.welcomeGlowBorderWidth : 2,
-        welcomeGlowSize:        Number.isFinite(config.welcomeGlowSize)        ? config.welcomeGlowSize        : 18,
-        welcomeGlowFadeInMs:    Number.isFinite(config.welcomeGlowFadeInMs)    ? config.welcomeGlowFadeInMs    : 1500,
-        welcomeGlowHoldMs:      Number.isFinite(config.welcomeGlowHoldMs)      ? config.welcomeGlowHoldMs      : 4000,
-        welcomeGlowFadeOutMs:   Number.isFinite(config.welcomeGlowFadeOutMs)   ? config.welcomeGlowFadeOutMs   : 2000,
-        welcomeGlowSpeed:       Number.isFinite(config.welcomeGlowSpeed)       ? config.welcomeGlowSpeed       : 1.0,
+        welcomeGlowStyle: config.welcomeGlowStyle === "none" ? "none" : "subtle",
       },
       {
         // 60s keeps the storefront responsive without making merchant config

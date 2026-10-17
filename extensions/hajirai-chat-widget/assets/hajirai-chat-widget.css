@@ -191,10 +191,12 @@
   overflow: hidden;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(24px) scale(0.95);
-  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              visibility 0.3s;
+  transform: translateY(12px) scale(0.98);
+  transform-origin: bottom right;
+  /* Opening: a short fade with a gentle spring (no overshoot). */
+  transition: opacity 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+              transform 0.46s cubic-bezier(0.32, 0.72, 0, 1),
+              visibility 0.46s;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -202,7 +204,8 @@
 .ai-chat-panel--bottom-center {
   bottom: 20px;
   left: 50%;
-  transform: translateX(-50%) translateY(24px) scale(0.95);
+  transform: translateX(-50%) translateY(12px) scale(0.98);
+  transform-origin: bottom center;
 }
 
 .ai-chat-panel--bottom-center.open {
@@ -212,6 +215,7 @@
 .ai-chat-panel--bottom-left {
   bottom: 20px;
   left: 24px;
+  transform-origin: bottom left;
 }
 
 .ai-chat-panel--bottom-right {
@@ -2183,160 +2187,6 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
     transition: none !important;
     animation: none !important;
   }
-  .ai-chat-welcome-glow {
-    display: none !important;
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────────
-   Welcome gradient-ring intro. Inset animated gradient sweeps the
-   panel border on first open, then fades out smoothly. Lives as an
-   absolutely-positioned overlay inside the panel so the panel's
-   overflow:hidden clips the ring to a clean inner border. The
-   ::before mask blurs the inner area so only a soft gradient strip
-   shows at the edges.
-   ───────────────────────────────────────────────────────────────── */
-@property --hajirai-glow-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-@keyframes hajirai-glow-rotate {
-  to { --hajirai-glow-angle: 360deg; }
-}
-/* Apple Intelligence-style organic shimmer. All breathing/scale
-   motion lives on the soft halo (::before) ONLY — the sharp border
-   ring (::after) must stay constant width or the line visibly
-   thickens and thins, which reads as a bug.
-
-   IMPORTANT: hue-rotate is NOT used here. Previous version drifted
-   hues over time, but that re-tinted the merchant's configured
-   colors into unrelated ones (e.g. sage → purple via hue-rotate
-   180°). Customer-picked palettes must be respected. The shimmer
-   comes purely from conic angle rotation + blur radius pulse +
-   opacity pulse + scale pulse — color values stay verbatim. */
-@keyframes hajirai-glow-halo-breathe {
-  0%, 100% {
-    filter: blur(var(--hajirai-glow-blur, 18px));
-    opacity: 0.65;
-    transform: scale(1);
-  }
-  50% {
-    filter: blur(var(--hajirai-glow-blur-max, 24px));
-    opacity: 0.9;
-    transform: scale(1.04);
-  }
-}
-/* INTERNAL ring. Conic gradient covers the panel; ::after sits 4px
-   in with the panel's background color, leaving a 4px gradient ring
-   visible at the edges. z-index lives in the panel's stacking
-   context. */
-.ai-chat-welcome-glow {
-  display: block !important;
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  border-radius: var(--ai-chat-radius, 16px);
-  pointer-events: none;
-  z-index: 9999;
-  /* Gradient-border via padding + mask-composite:exclude.
-     padding = merchant-configurable ring thickness. */
-  padding: var(--hajirai-glow-border-width, 3px);
-  background: conic-gradient(
-    from var(--hajirai-glow-angle, 0deg),
-    var(--hajirai-glow-colors, #6366f1, #a855f7, #ec4899, #f59e0b, #10b981, #06b6d4, #6366f1)
-  );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  animation: hajirai-glow-rotate calc(4s / var(--hajirai-glow-speed, 1)) linear infinite;
-  opacity: 1;
-  transition: opacity var(--hajirai-glow-fade-in, 1.5s) cubic-bezier(0.4, 0, 0.2, 1);
-}
-.ai-chat-welcome-glow.is-entering {
-  opacity: 0;
-}
-.ai-chat-welcome-glow.is-fading {
-  opacity: 0;
-  transition: opacity var(--hajirai-glow-fade-out, 2s) cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* EXTERNAL halo. Rendered as a fixed-position sibling on document.body,
-   sized LARGER than the panel via JS (top/left/width/height already
-   include the spread). Gradient lives directly on the element with a
-   heavy blur for a soft halo. Sits at the same z-index as the
-   overlay but appears AFTER it in document order, so it paints on
-   top of the dim overlay; the panel (z+1) is still on top. */
-.ai-chat-welcome-glow-outer {
-  display: block !important;
-  position: fixed;
-  pointer-events: none;
-  z-index: 999990;
-  border-radius: 20px;
-  opacity: 1;
-  transition: opacity var(--hajirai-glow-fade-in, 1.5s) cubic-bezier(0.4, 0, 0.2, 1);
-}
-/* Layer 1 — soft outer halo. inset (halo size) + animation speeds
-   come from merchant tuning via custom properties. */
-.ai-chat-welcome-glow-outer::before {
-  content: "";
-  position: absolute;
-  inset: var(--hajirai-glow-halo-inset, -18px);
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--hajirai-glow-angle, 0deg),
-    var(--hajirai-glow-colors, #6366f1, #a855f7, #ec4899, #f59e0b, #10b981, #06b6d4, #6366f1)
-  );
-  transform-origin: center;
-  animation:
-    hajirai-glow-rotate calc(9s / var(--hajirai-glow-speed, 1)) linear infinite,
-    hajirai-glow-halo-breathe calc(7s / var(--hajirai-glow-speed, 1)) ease-in-out infinite;
-}
-/* Layer 2 — sharp gradient ring. Rotates at a different speed than
-   the halo so the two layers never lock-step. No hue-rotate —
-   merchant's configured colors stay exactly as entered. */
-.ai-chat-welcome-glow-outer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--hajirai-glow-angle, 0deg),
-    var(--hajirai-glow-colors, #6366f1, #a855f7, #ec4899, #f59e0b, #10b981, #06b6d4, #6366f1)
-  );
-  animation:
-    hajirai-glow-rotate calc(6.5s / var(--hajirai-glow-speed, 1)) linear infinite;
-}
-.ai-chat-welcome-glow-outer.is-entering {
-  opacity: 0;
-}
-.ai-chat-welcome-glow-outer.is-fading {
-  opacity: 0;
-  transition: opacity var(--hajirai-glow-fade-out, 2s) cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* External halo extends past the panel into the storefront chrome —
-   on mobile (<768px) it's either clipped by the viewport or looks
-   visually noisy at small panel sizes. Hide it entirely as a
-   defensive measure; the JS path also force-downgrades external →
-   internal on mobile, so this is belt-and-suspenders. */
-@media (max-width: 767px) {
-  .ai-chat-welcome-glow-outer {
-    display: none !important;
-  }
-}
-
-/* Fallback for browsers without @property: static angled gradient. */
-@supports not (background: conic-gradient(from var(--hajirai-glow-angle), red, blue)) {
-  .ai-chat-welcome-glow,
-  .ai-chat-welcome-glow-outer {
-    background: linear-gradient(135deg, var(--hajirai-glow-colors, #6366f1, #a855f7, #ec4899, #f59e0b, #10b981, #06b6d4));
-    animation: none;
-  }
 }
 
 /* ================================================================
@@ -2837,4 +2687,28 @@ a.ai-chat-product-title {
 }
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
   background: #fff !important;
+}
+
+/* ================================================================
+   OPENING ANIMATION — the welcome content rises in, line by line
+   ================================================================
+   Calm and quick: each block fades up 8px with an ease-out, 60ms apart,
+   while the panel springs open. No colors, no glow. Off for shoppers who
+   prefer reduced motion. */
+@keyframes aiChatRiseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.ai-chat-welcome.is-intro > * {
+  animation: aiChatRiseIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ai-chat-welcome.is-intro > *:nth-child(1) { animation-delay: 0.06s; }
+.ai-chat-welcome.is-intro > *:nth-child(2) { animation-delay: 0.12s; }
+.ai-chat-welcome.is-intro > *:nth-child(3) { animation-delay: 0.18s; }
+.ai-chat-welcome.is-intro > *:nth-child(4) { animation-delay: 0.24s; }
+.ai-chat-welcome.is-intro > *:nth-child(5) { animation-delay: 0.3s; }
+.ai-chat-welcome.is-intro > *:nth-child(n + 6) { animation-delay: 0.36s; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-welcome.is-intro > * { animation: none; }
+  .ai-chat-panel { transition: opacity 0.15s linear, visibility 0.15s; }
 }

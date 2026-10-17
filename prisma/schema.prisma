@@ -129,31 +129,10 @@ model ShopConfig {
   // set) wins. Use for dedicated landing pages like /collections/
   // womens-sale that don't surface well via ?q= search.
   ctaOverrides           String   @default("[]")
-  // Welcome panel intro effect. One of: "none" | "internal" | "external".
-  // - none: no animated effect on first open.
-  // - internal: rotating gradient ring rendered INSIDE the panel border.
-  // - external: rotating gradient halo OUTSIDE the panel (blurred outer
-  //   shadow effect; rendered as a separate fixed-position element).
-  welcomeGlowStyle       String   @default("internal")
-  // Comma-separated hex colors used by the welcome glow animation.
-  // 3+ colors recommended for a smooth gradient sweep. Empty falls
-  // back to the default palette.
-  welcomeGlowColors      String   @default("#6366f1,#a855f7,#ec4899,#f59e0b,#10b981,#06b6d4")
-  // Welcome glow animation tuning. All exposed in admin so merchants
-  // can dial the effect to taste without code changes.
-  //   borderWidth: thickness of the sharp gradient line at the panel edge (px)
-  //   size:        how far the soft halo extends outside the panel (px)
-  //   fadeInMs:    fade-in duration in milliseconds
-  //   holdMs:      time at full opacity before fade-out starts (ms)
-  //   fadeOutMs:   fade-out duration in milliseconds
-  //   speed:       animation speed multiplier (1.0 = default; 0.5 = half speed;
-  //                2.0 = double speed). Controls rotation and breathing periods.
-  welcomeGlowBorderWidth Int      @default(2)
-  welcomeGlowSize        Int      @default(18)
-  welcomeGlowFadeInMs    Int      @default(1500)
-  welcomeGlowHoldMs      Int      @default(4000)
-  welcomeGlowFadeOutMs   Int      @default(2000)
-  welcomeGlowSpeed       Float    @default(1.0)
+  // Opening animation of the chat's welcome screen: "none" turns it off;
+  // anything else plays it (the panel springs open, the welcome content
+  // rises in). Older values ("internal", "external") read as on.
+  welcomeGlowStyle       String   @default("subtle")
   similarMatchAttributes String   @default("[]")
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)

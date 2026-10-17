@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 fitfinder-compact');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 calm-intro');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -46,14 +46,7 @@ fetch(CONFIG_URL).then(function(r){return r.json()}).then(function(d){
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(d.productCardStyle==='showcase')PRODUCT_CARD_STYLE='showcase';
-  if(typeof d.welcomeGlowStyle==='string')WELCOME_GLOW_STYLE=d.welcomeGlowStyle;
-  if(Array.isArray(d.welcomeGlowColors)&&d.welcomeGlowColors.length>=2)WELCOME_GLOW_COLORS=d.welcomeGlowColors;
-  if(Number.isFinite(d.welcomeGlowBorderWidth))WELCOME_GLOW_BORDER_WIDTH=d.welcomeGlowBorderWidth;
-  if(Number.isFinite(d.welcomeGlowSize))WELCOME_GLOW_SIZE=d.welcomeGlowSize;
-  if(Number.isFinite(d.welcomeGlowFadeInMs))WELCOME_GLOW_FADE_IN_MS=d.welcomeGlowFadeInMs;
-  if(Number.isFinite(d.welcomeGlowHoldMs))WELCOME_GLOW_HOLD_MS=d.welcomeGlowHoldMs;
-  if(Number.isFinite(d.welcomeGlowFadeOutMs))WELCOME_GLOW_FADE_OUT_MS=d.welcomeGlowFadeOutMs;
-  if(Number.isFinite(d.welcomeGlowSpeed)&&d.welcomeGlowSpeed>0)WELCOME_GLOW_SPEED=d.welcomeGlowSpeed;
+  if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
      the server echo (both must agree to enable rotation). When ready,
      append translations to the frames array — the running rotator
@@ -130,14 +123,7 @@ var KLAVIYO_LIST_ID='';
    the panel; "external" renders a blurred halo OUTSIDE it.
    Tuning fields control thickness, halo extent, animation speed,
    and the three timing phases (fade-in / hold / fade-out). */
-var WELCOME_GLOW_STYLE='internal';
-var WELCOME_GLOW_COLORS=['#6366f1','#a855f7','#ec4899','#f59e0b','#10b981','#06b6d4'];
-var WELCOME_GLOW_BORDER_WIDTH=2;
-var WELCOME_GLOW_SIZE=18;
-var WELCOME_GLOW_FADE_IN_MS=1500;
-var WELCOME_GLOW_HOLD_MS=4000;
-var WELCOME_GLOW_FADE_OUT_MS=2000;
-var WELCOME_GLOW_SPEED=1.0;
+var WELCOME_INTRO=true;
 var SK='hajirai_chat_session';
 var HK='hajirai_chat_history';
 
@@ -412,113 +398,18 @@ msgsEl.innerHTML=h;
 if(GREETCTA)startGreetCtaRotator();
 }
 
-/* Animated gradient intro effect on the welcome panel. Style controlled
-   by merchant config (welcomeGlowStyle):
-     - "none":     no effect
-     - "internal": gradient ring INSIDE the panel border
-     - "external": blurred gradient halo OUTSIDE the panel
-   Colors come from welcomeGlowColors (array of hex). Plays for ~3s on
-   panel open, then fades out over 1.6s and removes itself. */
-function playWelcomeGlow(){
-try{
-  if(WELCOME_GLOW_STYLE==='none'){console.log('[hajirai] glow disabled by config');return}
+/* Opening animation: the welcome content rises in, line by line, as the
+   panel springs open (both in the stylesheet, under "OPENING ANIMATION").
+   Only on the welcome screen — a chat with history opens instantly — and
+   never for shoppers who prefer reduced motion (CSS media query). */
+function playWelcomeIntro(){
+  if(!WELCOME_INTRO)return;
   var welcomeEl=msgsEl&&msgsEl.querySelector('.ai-chat-welcome');
-  if(!welcomeEl){console.log('[hajirai] glow skipped: no welcome view (chat history present)');return}
-  /* On mobile (<768px) the external halo extends past the panel into
-     the storefront chrome — usually clipped or visually noisy on
-     small screens. Force internal style on mobile so the merchant's
-     external selection downgrades cleanly instead of disappearing. */
-  var effectiveStyle=(window.innerWidth<768&&WELCOME_GLOW_STYLE==='external')?'internal':WELCOME_GLOW_STYLE;
-  /* Apply colors via CSS custom property so both internal and external
-     styles share the same palette. Conic gradient + repeated first
-     color = smooth seam at the rotation boundary. */
-  var colors=(WELCOME_GLOW_COLORS||[]).concat([WELCOME_GLOW_COLORS[0]]).join(',');
-  /* Tuning values applied via CSS custom properties — keeps the JS
-     side dumb (no per-style branching) and the CSS in charge of how
-     the values are consumed (durations, sizes, etc.). */
-  var fadeInS  = (WELCOME_GLOW_FADE_IN_MS  /1000).toFixed(3)+'s';
-  var fadeOutS = (WELCOME_GLOW_FADE_OUT_MS /1000).toFixed(3)+'s';
-  var holdMs   = Math.max(0, WELCOME_GLOW_HOLD_MS);
-  var startFadeAt = WELCOME_GLOW_FADE_IN_MS + holdMs;
-  var removeAt    = startFadeAt + WELCOME_GLOW_FADE_OUT_MS;
-  /* Clean up any leftover glows from a prior open. */
-  var oldI=panel.querySelector('.ai-chat-welcome-glow');if(oldI)oldI.remove();
-  var oldE=document.querySelector('.ai-chat-welcome-glow-outer');if(oldE)oldE.remove();
-
-  if(effectiveStyle==='external'){
-    /* Outer halo. Fixed-position sibling on document.body. Two-layer
-       effect: ::after = sharp gradient ring at the panel edge (width
-       = SPREAD); ::before = soft blurred halo extending further out.
-       The panel grows as the welcome content (avatar → tagline →
-       CTAs → quick picks) lays out, so we keep the halo in sync via
-       requestAnimationFrame for the full visible lifetime. */
-    var SPREAD=WELCOME_GLOW_BORDER_WIDTH;
-    var glowE=document.createElement('div');
-    glowE.className='ai-chat-welcome-glow-outer is-entering';
-    glowE.style.setProperty('--hajirai-glow-colors',colors);
-    glowE.style.setProperty('--hajirai-glow-halo-inset',(-WELCOME_GLOW_SIZE)+'px');
-    glowE.style.setProperty('--hajirai-glow-blur',Math.round(WELCOME_GLOW_SIZE)+'px');
-    glowE.style.setProperty('--hajirai-glow-blur-max',Math.round(WELCOME_GLOW_SIZE*1.33)+'px');
-    glowE.style.setProperty('--hajirai-glow-speed',String(WELCOME_GLOW_SPEED));
-    glowE.style.setProperty('--hajirai-glow-fade-in',fadeInS);
-    glowE.style.setProperty('--hajirai-glow-fade-out',fadeOutS);
-    document.body.appendChild(glowE);
-    requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        glowE.classList.remove('is-entering');
-      });
-    });
-
-    function syncGlowRect(){
-      var rect=panel.getBoundingClientRect();
-      glowE.style.top=(rect.top-SPREAD)+'px';
-      glowE.style.left=(rect.left-SPREAD)+'px';
-      glowE.style.width=(rect.width+SPREAD*2)+'px';
-      glowE.style.height=(rect.height+SPREAD*2)+'px';
-    }
-    syncGlowRect();
-    console.log('[hajirai] welcome glow fired (external)',panel.getBoundingClientRect());
-
-    /* Track panel size for as long as the halo is mounted — covers
-       the open-transition (0.3s), late content layout, and any
-       theme-driven resize. */
-    var stop=false;
-    function tick(){
-      if(stop||!glowE.parentNode)return;
-      syncGlowRect();
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-
-    /* Timeline driven by merchant config (admin → Settings →
-       Widget visibility → Welcome panel intro effect → Tuning). */
-    setTimeout(function(){glowE.classList.add('is-fading')},startFadeAt);
-    setTimeout(function(){
-      stop=true;
-      if(glowE.parentNode)glowE.parentNode.removeChild(glowE);
-    },removeAt);
-    return;
-  }
-
-  /* Internal ring — inside the panel. aria-hidden intentionally
-     not set; see external path comment. */
-  var glow=document.createElement('div');
-  glow.className='ai-chat-welcome-glow is-entering';
-  glow.style.setProperty('--hajirai-glow-colors',colors);
-  glow.style.setProperty('--hajirai-glow-border-width',WELCOME_GLOW_BORDER_WIDTH+'px');
-  glow.style.setProperty('--hajirai-glow-speed',String(WELCOME_GLOW_SPEED));
-  glow.style.setProperty('--hajirai-glow-fade-in',fadeInS);
-  glow.style.setProperty('--hajirai-glow-fade-out',fadeOutS);
-  panel.appendChild(glow);
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){
-      glow.classList.remove('is-entering');
-    });
-  });
-  console.log('[hajirai] welcome glow fired (internal)');
-  setTimeout(function(){glow.classList.add('is-fading')},startFadeAt);
-  setTimeout(function(){if(glow.parentNode)glow.parentNode.removeChild(glow)},removeAt);
-}catch(e){console.warn('[hajirai] glow error',e)}
+  if(!welcomeEl)return;
+  welcomeEl.classList.remove('is-intro');
+  void welcomeEl.offsetWidth;/* restart the animation on every open */
+  welcomeEl.classList.add('is-intro');
+  setTimeout(function(){welcomeEl.classList.remove('is-intro')},1400);
 }
 
 function toggle(force){
@@ -532,28 +423,13 @@ if(isOpen){
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   checkIdleOnOpen();
-  /* Trigger the gradient intro AFTER the panel's open-transition
-     finishes (CSS transition is 0.3s; 450ms gives the welcome
-     content a frame or two to settle so getBoundingClientRect()
-     captures the full panel size). The external-halo path also
-     runs a rAF loop to keep size in sync as content lays out. */
-  setTimeout(playWelcomeGlow,450);
+  playWelcomeIntro();
 }else{
   panel.classList.remove('open');
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');
   document.body.classList.remove('ai-chat-blurred');
   menu.style.display='none';
-  /* Tear down any in-flight welcome glow when the chat closes.
-     The element's own setTimeout (fade-out + remove) keeps running
-     after close, so if the customer dismisses the chat mid-animation
-     the halo would linger on the page (position:fixed, locked to the
-     panel's old coords). Cleanup here covers all glow types and
-     internal glow inside the panel. */
-  var glowOuter=document.querySelector('.ai-chat-welcome-glow-outer');
-  if(glowOuter&&glowOuter.parentNode)glowOuter.parentNode.removeChild(glowOuter);
-  var glowInner=panel&&panel.querySelector('.ai-chat-welcome-glow');
-  if(glowInner&&glowInner.parentNode)glowInner.parentNode.removeChild(glowInner);
 }
 }
 
@@ -1797,7 +1673,7 @@ scrollMsgTop(mDiv);
 function clearChat(){
 messages=[];localStorage.removeItem(HK);localStorage.removeItem(SK);
 msgsEl.innerHTML='';buildWelcome();
-if(isOpen)setTimeout(playWelcomeGlow,100);
+if(isOpen)playWelcomeIntro();
 if(abortCtrl){abortCtrl.abort();abortCtrl=null}
 isStreaming=false;typingEl.classList.remove('visible');
 idleTimedOut=false;clearLastMsg();

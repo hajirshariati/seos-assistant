@@ -42,19 +42,7 @@ export const loader = async ({ request }) => {
     hasYotpoKey: config.yotpoApiKey !== "",
     hasAftershipKey: config.aftershipApiKey !== "",
     hideOnUrls,
-    welcomeGlowStyle: ["none", "internal", "external"].includes(config.welcomeGlowStyle)
-      ? config.welcomeGlowStyle
-      : "internal",
-    welcomeGlowColors: String(config.welcomeGlowColors || "")
-      .split(",")
-      .map((c) => c.trim())
-      .filter((c) => /^#[0-9a-f]{3,8}$/i.test(c)),
-    welcomeGlowBorderWidth: Number.isFinite(config.welcomeGlowBorderWidth) ? config.welcomeGlowBorderWidth : 2,
-    welcomeGlowSize:        Number.isFinite(config.welcomeGlowSize)        ? config.welcomeGlowSize        : 18,
-    welcomeGlowFadeInMs:    Number.isFinite(config.welcomeGlowFadeInMs)    ? config.welcomeGlowFadeInMs    : 1500,
-    welcomeGlowHoldMs:      Number.isFinite(config.welcomeGlowHoldMs)      ? config.welcomeGlowHoldMs      : 4000,
-    welcomeGlowFadeOutMs:   Number.isFinite(config.welcomeGlowFadeOutMs)   ? config.welcomeGlowFadeOutMs   : 2000,
-    welcomeGlowSpeed:       Number.isFinite(config.welcomeGlowSpeed)       ? config.welcomeGlowSpeed       : 1.0,
+    welcomeIntroOn: config.welcomeGlowStyle !== "none",
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
@@ -92,51 +80,8 @@ export const action = async ({ request }) => {
   // useFetcher (own success/error banners, isolated from the big
   // settings form). Each returns its own response shape.
   const intent = formData.get("intent");
-  if (intent === "save_welcome_glow") {
-    const style = String(formData.get("welcomeGlowStyle") || "");
-    if (!["none", "internal", "external"].includes(style)) {
-      return { error: "Invalid welcome glow style." };
-    }
-    const colors = String(formData.get("welcomeGlowColors") || "")
-      .split(",")
-      .map((c) => c.trim())
-      .filter(Boolean);
-    for (const c of colors) {
-      if (!/^#[0-9a-f]{3,8}$/i.test(c)) {
-        return { error: `Invalid hex color: ${c}. Use #rgb, #rrggbb, or #rrggbbaa.` };
-      }
-    }
-    if (style !== "none" && colors.length < 2) {
-      return { error: "Welcome glow needs at least 2 colors for a gradient." };
-    }
-    // Parse tuning fields with sensible clamps so a typo can't make the
-    // animation unusable (e.g. 0ms hold or 999999ms fade-out).
-    const clampInt = (raw, def, min, max) => {
-      const n = parseInt(raw, 10);
-      if (!Number.isFinite(n)) return def;
-      return Math.max(min, Math.min(max, n));
-    };
-    const clampFloat = (raw, def, min, max) => {
-      const n = parseFloat(raw);
-      if (!Number.isFinite(n)) return def;
-      return Math.max(min, Math.min(max, n));
-    };
-    const borderWidth = clampInt(formData.get("welcomeGlowBorderWidth"), 2,    1,  20);
-    const size        = clampInt(formData.get("welcomeGlowSize"),        18,   2,  80);
-    const fadeInMs    = clampInt(formData.get("welcomeGlowFadeInMs"),    1500, 100, 8000);
-    const holdMs      = clampInt(formData.get("welcomeGlowHoldMs"),      4000, 0,   30000);
-    const fadeOutMs   = clampInt(formData.get("welcomeGlowFadeOutMs"),   2000, 100, 8000);
-    const speed       = clampFloat(formData.get("welcomeGlowSpeed"),     1.0,  0.2, 5.0);
-    await updateShopConfig(session.shop, {
-      welcomeGlowStyle:       style,
-      welcomeGlowColors:      colors.join(","),
-      welcomeGlowBorderWidth: borderWidth,
-      welcomeGlowSize:        size,
-      welcomeGlowFadeInMs:    fadeInMs,
-      welcomeGlowHoldMs:      holdMs,
-      welcomeGlowFadeOutMs:   fadeOutMs,
-      welcomeGlowSpeed:       speed,
-    });
+  if (intent === "save_welcome_intro") {
+    await updateShopConfig(session.shop, { welcomeGlowStyle: formData.get("on") === "true" ? "subtle" : "none" });
     return { saved: true };
   }
 
@@ -295,14 +240,6 @@ export const action = async ({ request }) => {
   return { success: true };
 };
 
-const WELCOME_GLOW_STYLE_OPTIONS = [
-  { label: "None — no animation", value: "none" },
-  { label: "Internal — gradient ring inside the panel", value: "internal" },
-  { label: "External — blurred halo around the panel", value: "external" },
-];
-
-const DEFAULT_GLOW_COLORS = "#6366f1,#a855f7,#ec4899,#f59e0b,#10b981,#06b6d4";
-
 function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasGeminiKey, hasOpenaiKey }) {
   const fetcher = useFetcher();
   const [enabled, setEnabled] = useState(Boolean(initialEnabled));
@@ -400,204 +337,30 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
   );
 }
 
-function WelcomeGlowCard({
-  initialStyle,
-  initialColors,
-  initialBorderWidth,
-  initialSize,
-  initialFadeInMs,
-  initialHoldMs,
-  initialFadeOutMs,
-  initialSpeed,
-}) {
+// One switch: the chat opens with a calm, Apple-style motion (the panel
+// springs up, the welcome content rises in). No colors or timings to tune.
+function WelcomeIntroCard({ initialOn }) {
   const fetcher = useFetcher();
-  const [style, setStyle] = useState(initialStyle || "internal");
-  const [colors, setColors] = useState(
-    Array.isArray(initialColors) && initialColors.length > 0
-      ? initialColors.join(", ")
-      : DEFAULT_GLOW_COLORS,
-  );
-  const [borderWidth, setBorderWidth] = useState(String(initialBorderWidth ?? 2));
-  const [size,        setSize]        = useState(String(initialSize        ?? 18));
-  const [fadeInMs,    setFadeInMs]    = useState(String(initialFadeInMs    ?? 1500));
-  const [holdMs,      setHoldMs]      = useState(String(initialHoldMs      ?? 4000));
-  const [fadeOutMs,   setFadeOutMs]   = useState(String(initialFadeOutMs   ?? 2000));
-  const [speed,       setSpeed]       = useState(String(initialSpeed       ?? 1.0));
-  const saving = fetcher.state !== "idle";
-  const saved = fetcher.data?.saved === true;
-  const errorMsg = fetcher.data?.error;
-
-  const save = () => {
+  const [on, setOn] = useState(initialOn !== false);
+  const toggle = (next) => {
+    setOn(next);
     const fd = new FormData();
-    fd.set("intent", "save_welcome_glow");
-    fd.set("welcomeGlowStyle", style);
-    fd.set(
-      "welcomeGlowColors",
-      colors.split(",").map((c) => c.trim()).filter(Boolean).join(","),
-    );
-    fd.set("welcomeGlowBorderWidth", borderWidth);
-    fd.set("welcomeGlowSize",        size);
-    fd.set("welcomeGlowFadeInMs",    fadeInMs);
-    fd.set("welcomeGlowHoldMs",      holdMs);
-    fd.set("welcomeGlowFadeOutMs",   fadeOutMs);
-    fd.set("welcomeGlowSpeed",       speed);
+    fd.set("intent", "save_welcome_intro");
+    fd.set("on", next ? "true" : "false");
     fetcher.submit(fd, { method: "post" });
   };
-
-  const resetColors = () => setColors(DEFAULT_GLOW_COLORS);
-  const resetTiming = () => {
-    setBorderWidth("2");
-    setSize("18");
-    setFadeInMs("1500");
-    setHoldMs("4000");
-    setFadeOutMs("2000");
-    setSpeed("1.0");
-  };
-
-  const swatches = colors
-    .split(",")
-    .map((c) => c.trim())
-    .filter((c) => /^#[0-9a-f]{3,8}$/i.test(c));
-
   return (
     <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Welcome panel intro effect</Text>
-            <Badge tone="info">First-open animation</Badge>
-          </InlineStack>
-          <Text as="p" tone="subdued">
-            Plays a brief animated gradient effect on the chat panel when a customer first opens it (welcome view only — returning customers with chat history skip it). Pick: no animation, a gradient ring inside the panel, or a blurred halo outside.
-          </Text>
-        </BlockStack>
-
-        <FormLayout>
-          <Select
-            label="Style"
-            options={WELCOME_GLOW_STYLE_OPTIONS}
-            value={style}
-            onChange={setStyle}
-            helpText="None disables the effect entirely. Internal stays inside the panel border. External creates a soft glowing halo around the panel."
-          />
-          <TextField
-            label="Colors"
-            value={colors}
-            onChange={setColors}
-            placeholder={DEFAULT_GLOW_COLORS}
-            autoComplete="off"
-            disabled={style === "none"}
-            helpText="Comma-separated hex codes (3+ recommended for a smooth gradient). The animation rotates through them like a conic gradient."
-          />
-        </FormLayout>
-
-        {swatches.length > 0 && (
-          <InlineStack gap="100" blockAlign="center" wrap>
-            <Text as="span" variant="bodySm" tone="subdued">Preview:</Text>
-            {swatches.map((c, i) => (
-              <span
-                key={i}
-                title={c}
-                style={{
-                  display: "inline-block",
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  background: c,
-                  border: "1px solid rgba(0,0,0,0.1)",
-                }}
-              />
-            ))}
-          </InlineStack>
-        )}
-
-        {errorMsg && (
-          <Banner tone="critical"><Text as="p">{errorMsg}</Text></Banner>
-        )}
-        {saved && !errorMsg && (
-          <Banner tone="success"><Text as="p">Saved. New panel opens will use the updated effect.</Text></Banner>
-        )}
-
-        <Divider />
-
-        <BlockStack gap="200">
-          <Text as="h3" variant="headingSm">Tuning</Text>
-          <Text as="p" tone="subdued" variant="bodySm">
-            Fine-tune the look and timing of the effect. All durations are in milliseconds (1000 ms = 1 second).
-          </Text>
-          <FormLayout>
-            <FormLayout.Group>
-              <TextField
-                type="number"
-                label="Border thickness (px)"
-                value={borderWidth}
-                onChange={setBorderWidth}
-                min={1}
-                max={20}
-                helpText="Width of the sharp gradient line at the panel edge. 1–20."
-                disabled={style === "none"}
-              />
-              <TextField
-                type="number"
-                label="Glow size (px)"
-                value={size}
-                onChange={setSize}
-                min={2}
-                max={80}
-                helpText="How far the soft halo extends past the panel. 2–80."
-                disabled={style === "none"}
-              />
-              <TextField
-                type="number"
-                label="Animation speed"
-                value={speed}
-                onChange={setSpeed}
-                min={0.2}
-                max={5}
-                step={0.1}
-                helpText="Multiplier. 1.0 = default; 0.5 = half speed; 2.0 = double."
-                disabled={style === "none"}
-              />
-            </FormLayout.Group>
-            <FormLayout.Group>
-              <TextField
-                type="number"
-                label="Fade-in (ms)"
-                value={fadeInMs}
-                onChange={setFadeInMs}
-                min={100}
-                max={8000}
-                helpText="100–8000."
-                disabled={style === "none"}
-              />
-              <TextField
-                type="number"
-                label="Hold (ms)"
-                value={holdMs}
-                onChange={setHoldMs}
-                min={0}
-                max={30000}
-                helpText="Full-opacity hold. 0–30000."
-                disabled={style === "none"}
-              />
-              <TextField
-                type="number"
-                label="Fade-out (ms)"
-                value={fadeOutMs}
-                onChange={setFadeOutMs}
-                min={100}
-                max={8000}
-                helpText="100–8000."
-                disabled={style === "none"}
-              />
-            </FormLayout.Group>
-          </FormLayout>
-        </BlockStack>
-
-        <InlineStack gap="200">
-          <Button onClick={save} loading={saving} variant="primary">Save</Button>
-          <Button onClick={resetColors} variant="plain">Reset colors</Button>
-          <Button onClick={resetTiming} variant="plain">Reset tuning</Button>
+      <BlockStack gap="200">
+        <InlineStack align="space-between" blockAlign="center" wrap={false} gap="400">
+          <BlockStack gap="100">
+            <Text as="h2" variant="headingMd">Opening animation</Text>
+            <Text as="p" tone="subdued">
+              When the chat opens, the panel springs up and the welcome message rises in — quick and subtle.
+              Shoppers who prefer reduced motion never see it.
+            </Text>
+          </BlockStack>
+          <Checkbox label={on ? "On" : "Off"} checked={on} onChange={toggle} />
         </InlineStack>
       </BlockStack>
     </Card>
@@ -697,7 +460,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeGlowStyle, welcomeGlowColors, welcomeGlowBorderWidth, welcomeGlowSize, welcomeGlowFadeInMs, welcomeGlowHoldMs, welcomeGlowFadeOutMs, welcomeGlowSpeed } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -1004,20 +767,11 @@ export default function ApiKeys() {
 
             <Layout.AnnotatedSection
               title="Widget visibility"
-              description="Control which pages the chat widget appears on, and customize the intro animation customers see when they first open the chat."
+              description="Choose which pages show the chat, and whether it opens with a subtle animation."
             >
               <BlockStack gap="400">
                 <HideUrlsPanel initial={hideOnUrls} />
-                <WelcomeGlowCard
-                  initialStyle={welcomeGlowStyle}
-                  initialColors={welcomeGlowColors}
-                  initialBorderWidth={welcomeGlowBorderWidth}
-                  initialSize={welcomeGlowSize}
-                  initialFadeInMs={welcomeGlowFadeInMs}
-                  initialHoldMs={welcomeGlowHoldMs}
-                  initialFadeOutMs={welcomeGlowFadeOutMs}
-                  initialSpeed={welcomeGlowSpeed}
-                />
+                <WelcomeIntroCard initialOn={welcomeIntroOn} />
               </BlockStack>
             </Layout.AnnotatedSection>
 
