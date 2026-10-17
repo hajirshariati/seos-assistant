@@ -303,6 +303,23 @@ await test("store-chosen product fields reach Claude and are searchable", () => 
   const sim = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"] });
   assert.deepEqual(sim.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "same category + footbed, other styles only");
 });
+await test("'similar' matches shared list values, and only sensible fields are offered", async () => {
+  const { similarityOptions, valueOverlap } = await import("../app/lib/similar-attributes.js");
+  assert.equal(valueOverlap("Arch Pain, Plantar Fasciitis", "Plantar Fasciitis, Heel Pain"), 1 / 3);
+  assert.equal(valueOverlap("Cork", "cork"), 1);
+  assert.equal(valueOverlap("Cork", "Memory foam"), 0);
+  const rows = [
+    { key: "helps_with", n: 900, distinct_n: 60, avg_len: 40, numeric_share: 0 },
+    { key: "short_description", n: 899, distinct_n: 880, avg_len: 240, numeric_share: 0 },
+    { key: "care_instructions", n: 893, distinct_n: 4, avg_len: 160, numeric_share: 0 },
+    { key: "rating", n: 893, distinct_n: 20, avg_len: 3, numeric_share: 1 },
+    { key: "rating_count", n: 896, distinct_n: 300, avg_len: 2, numeric_share: 1 },
+    { key: "material", n: 870, distinct_n: 25, avg_len: 12, numeric_share: 0 },
+    { key: "gender", n: 916, distinct_n: 3, avg_len: 5, numeric_share: 0 },
+  ];
+  assert.deepEqual(similarityOptions(rows, [], new Set(["gender"])).map((r) => r.key), ["helps_with", "material"]);
+  assert.ok(similarityOptions(rows, ["rating"], new Set(["gender"])).some((r) => r.key === "rating"), "a ticked field stays visible so it can be unticked");
+});
 await test("many store fields: search results stay small, long text only in details, duplicates dropped", () => {
   const comfort = "Memory foam footbed with built-in arch support that cushions every step and relieves pressure on the heel and ball of the foot.";
   const rows = [

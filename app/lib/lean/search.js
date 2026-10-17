@@ -5,6 +5,7 @@
 // says how many products each filter's removal would bring back
 // (`if_relaxed`), so Claude decides how to broaden, honestly. Pure.
 
+import { valueOverlap } from "../similar-attributes.js";
 import { matchColorValues } from "../color-match.js";
 import { styleName } from "./catalog.js";
 
@@ -242,10 +243,7 @@ export function similarProducts(catalog, { handle, attributes = [], limit = 6, m
     if (ref.gender.length && p.gender.length && !p.gender.some((g) => ref.gender.includes(g) || g === "unisex")) continue;
     if (Number.isFinite(max_price) && p.price > max_price) continue;
     let score = 0;
-    for (const key of want) {
-      const a = valueOf(ref, key);
-      if (a && a === valueOf(p, key)) score += 1;
-    }
+    for (const key of want) score += valueOverlap(valueOf(ref, key), valueOf(p, key));
     if (want.length && score === 0) continue;
     scored.push({ p, score });
   }

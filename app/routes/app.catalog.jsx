@@ -41,6 +41,7 @@ import { extractMerchantConditionTags } from "../lib/condition-tags";
 import { backfillShopEmbeddings, resolveShopEmbedding } from "../lib/embeddings.server";
 import BrandHeader from "../components/BrandHeader";
 import { nextScheduledSyncAt } from "../lib/catalog-sync-scheduler.server";
+import { similarityOptions } from "../lib/similar-attributes.js";
 
 
 function safeParse(raw, fallback) {
@@ -103,11 +104,13 @@ export const loader = async ({ request }) => {
   let attributeKeys = [];
   try {
     attributeKeys = await prisma.$queryRawUnsafe(
-      `SELECT k AS key, COUNT(*)::int AS n
+      `SELECT e.k AS key, COUNT(*)::int AS n, COUNT(DISTINCT e.v)::int AS distinct_n,
+              AVG(length(e.v))::float AS avg_len,
+              AVG(CASE WHEN e.v ~ '^[0-9.,\\s/%$-]+$' THEN 1 ELSE 0 END)::float AS numeric_share
          FROM "Product" p,
-              jsonb_object_keys(CASE WHEN jsonb_typeof(p."attributesJson") = 'object' THEN p."attributesJson" ELSE '{}'::jsonb END) AS k
-        WHERE p.shop = $1
-        GROUP BY k ORDER BY n DESC LIMIT 60`,
+              jsonb_each_text(CASE WHEN jsonb_typeof(p."attributesJson") = 'object' THEN p."attributesJson" ELSE '{}'::jsonb END) AS e(k, v)
+        WHERE p.shop = $1 AND e.v <> ''
+        GROUP BY e.k ORDER BY n DESC LIMIT 80`,
       session.shop,
     );
   } catch (err) {
@@ -953,7 +956,9 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
     if (!has(v)) toggle(v, true);
   };
 
-  const options = attributeKeys.filter((r) => !SIMILAR_ALWAYS.has(String(r.key).toLowerCase()));
+  // Only fields that can sensibly match (short, shared values) — chosen ones first.
+  const options = similarityOptions(attributeKeys, attrs, SIMILAR_ALWAYS)
+    .sort((a, b) => Number(has(b.key)) - Number(has(a.key)));
   const extra = attrs.filter((a) => !options.some((r) => String(r.key).toLowerCase() === a.toLowerCase()));
 
   return (
@@ -962,8 +967,9 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
         <BlockStack gap="100">
           <Text as="h2" variant="headingMd">"Show me something similar"</Text>
           <Text as="p" tone="subdued">
-            When a shopper asks for styles like a product they're looking at, what should "similar" mean? Tick the qualities that
-            should match. Category and gender always match. Leave everything unticked to turn this off.
+            When a shopper asks for “something like this one” or “similar but cheaper”, the assistant shows other styles from
+            the same category and gender that share the qualities you tick here. Only fields that can match between products
+            are listed. Leave everything unticked to turn this off.
           </Text>
         </BlockStack>
 
