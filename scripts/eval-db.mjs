@@ -40,7 +40,13 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log(`  ✓ ${name}`); }
   catch (err) { failed++; console.log(`  ✗ ${name}\n      ${err.message}`); }
 }
-const settle = () => new Promise((r) => setTimeout(r, 150));
+// Health rows are written fire-and-forget: wait until they've landed.
+async function settle(shop = A, expected = 8) {
+  for (let i = 0; i < 60; i++) {
+    if ((await prisma.chatHealthEvent.count({ where: { shop } })) >= expected) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
 
 console.log("\nhealth");
 await test("/healthz reports the database up", async () => {
