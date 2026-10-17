@@ -3118,6 +3118,17 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   color: var(--seos-text-2) !important;
   font-family: var(--seos-font) !important;
 }
+/* The prompt is the bar's open button: look like the text it replaced. */
+button.ai-chat-launcher__text {
+  margin: 0;
+  padding: 0 8px 0 0;
+  min-width: 0;
+  text-align: left;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img img {
   width: 100% !important;
   height: 100% !important;

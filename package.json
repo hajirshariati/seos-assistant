@@ -27,7 +27,8 @@
     "eval:ci": "node scripts/run-evals.mjs",
     "eval:all": "node scripts/run-evals.mjs --all",
     "eval": "node scripts/run-evals.mjs",
-    "test:integration": "node scripts/e2e/server-integration.mjs"
+    "test:integration": "node scripts/e2e/server-integration.mjs",
+    "test:widget": "node scripts/e2e/widget/flows.mjs && node scripts/e2e/widget/resilience.mjs"
   },
   "type": "module",
   "engines": {
@@ -61,6 +62,7 @@
     "@types/react-dom": "^18.3.7",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "axe-core": "^4.10.3",
     "eslint": "^8.57.1",
     "eslint-import-resolver-typescript": "^3.10.1",
     "eslint-plugin-import": "^2.32.0",
@@ -68,6 +70,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
+    "playwright": "^1.56.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "vite": "^6.3.6"

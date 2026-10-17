@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 audit-cleanup');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 launch-ready');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -167,13 +167,10 @@ function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-h
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
 launcher.style.width=LWIDTH+'px';
 launcher.style.maxWidth='calc(100vw - 32px)';
-launcher.setAttribute('role','button');
-launcher.setAttribute('tabindex','0');
-launcher.setAttribute('aria-label','Open the shopping assistant chat');
 /* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
-launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
   '<span class="ai-chat-launcher__orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</span>';
 
 /* Build panel */
@@ -225,10 +222,16 @@ document.body.appendChild(launcher);
    above the highest one it would otherwise overlap. */
 var LBUBBLE_KEY='hajirai_launcher_bubble';
 try{localStorage.removeItem(LBUBBLE_KEY)}catch(e){}/* was remembered forever */
+/* The bar holds two buttons (open, minimize), so the bar itself isn't one;
+   the round bubble is a single control, so it is the button. */
+function launcherA11y(){
+  if(launcher.classList.contains('is-bubble')){launcher.setAttribute('role','button');launcher.setAttribute('tabindex','0');launcher.setAttribute('aria-label','Open the AI shopping assistant')}
+  else{launcher.removeAttribute('role');launcher.removeAttribute('tabindex');launcher.removeAttribute('aria-label')}
+}
 function setLauncherBubble(on){
   try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
   launcher.classList.toggle('is-bubble',!!on);
-  launcher.setAttribute('aria-label',on?'Open the AI shopping assistant':'Open the shopping assistant chat');
+  launcherA11y();
   if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
   placeLauncher();
 }
@@ -277,6 +280,7 @@ function placeLauncher(){
   }
 }
 try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1'){launcher.classList.add('is-bubble');launcher.title='Ask AI'}}catch(e){}
+launcherA11y();
 window.addEventListener('resize',placeLauncher);
 /* Other apps' buttons (Zendesk and the like) load late — often only after
    the first scroll or tap — and fade or slide in, so no single moment is
@@ -509,7 +513,7 @@ if(isOpen){
   focusBeforeOpen=document.activeElement;
   loadFitfinder();
   launcher.classList.add('hidden');
-  launcher.setAttribute('tabindex','-1');launcher.setAttribute('aria-hidden','true');
+  launcher.inert=true;launcher.setAttribute('aria-hidden','true');
   panel.classList.add('open');
   overlay.classList.add('visible');
   document.body.classList.add('ai-chat-blurred');
@@ -521,11 +525,11 @@ if(isOpen){
   panel.classList.remove('open');
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');
-  launcher.setAttribute('tabindex','0');launcher.removeAttribute('aria-hidden');
+  launcher.inert=false;launcher.removeAttribute('aria-hidden');
   document.body.classList.remove('ai-chat-blurred');
   restoreFloaters();
   menu.style.display='none';
-  var back=focusBeforeOpen&&document.body.contains(focusBeforeOpen)&&focusBeforeOpen!==document.body?focusBeforeOpen:launcher;
+  var back=focusBeforeOpen&&document.body.contains(focusBeforeOpen)&&focusBeforeOpen!==document.body?focusBeforeOpen:(launcher.classList.contains('is-bubble')?launcher:$('.ai-chat-launcher__text',launcher)||launcher);
   focusBeforeOpen=null;
   try{back.focus({preventScroll:true})}catch(e){}
 }
@@ -1385,8 +1389,8 @@ errorRetryCount++;
 var critical=isCreditOrCriticalError(errText);
 var rate=isRateLimitError(errText);
 if(critical||errorRetryCount>=3||!lastUserMessage){
+  /* Offer support or a fresh start — but the shopper can still type. */
   bubble.insertAdjacentHTML('beforeend',deadEndHtml());
-  inputEl.disabled=true;inputEl.placeholder='Choose an option above';sendBtn.disabled=true;
   return;
 }
 bubble.insertAdjacentHTML('beforeend',retryRowHtml());
@@ -1406,7 +1410,8 @@ function showStreamError(em){
 isStreaming=false;sendBtn.disabled=false;
 typingEl.classList.remove('visible');
 var md=appendMsg('assistant',em);
-messages.push({role:'assistant',content:em});saveH(messages);
+/* Shown, not saved: an error isn't something the assistant said, and the
+   history is sent back to the model with the next message. */
 var bb=$('.ai-chat-msg-bubble',md);
 attachErrorRecovery(bb,em);
 scrollBottom();
@@ -1827,6 +1832,9 @@ if(retryBtn){
   var row=retryBtn.closest('.ai-chat-retry-row');
   if(row&&row.parentNode)row.parentNode.removeChild(row);
   inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;
+  /* The failed message is sent again — not stacked twice in the history. */
+  var lm=messages[messages.length-1];
+  if(lm&&lm.role==='user'&&lm.content===lastUserMessage){messages.pop();saveH(messages)}
   inputEl.value=lastUserMessage;sendMessage();
   return;
 }
