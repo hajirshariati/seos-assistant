@@ -136,7 +136,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("…and to the logged-in shopper's profile", fitSaves.at(-1)?.fitKey === "D");
   await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "show me 1");
   await page.keyboard.press("Enter");
-  await page.waitForFunction((n) => document.querySelectorAll(".ai-chat-product-card").length >= 2, 2);
+  await page.waitForFunction((n) => document.querySelectorAll(".ai-chat-product-card").length >= n, 2);
   check("the next message carries the saved FIT", chatBodies.at(-1)?.fitfinder?.saved?.key === "D");
   check("ff: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
