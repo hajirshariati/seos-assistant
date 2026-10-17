@@ -83,7 +83,7 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
     },
     {
       name: "search_store_info",
-      description: "Search the store's own knowledge (shipping, returns, warranty, sizing guides, technologies, FAQs). Use for any policy or how-it-works question.",
+      description: "Search everything the store has published — policies (shipping, returns, warranty), its pages (FAQs, sizing guides, technologies, clinical studies, about the company) and its blog articles (foot health, conditions, care, guides) — plus the store team's notes. Use for any policy, how-it-works, research, foot-health or company question. Results include each page's link.",
       input_schema: {
         type: "object",
         properties: { query: { type: "string" } },

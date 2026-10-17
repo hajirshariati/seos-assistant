@@ -31,6 +31,7 @@ const { getShopConfig, saveKnowledgeFile, deleteKnowledgeFile, incrementRateLimi
 const { recordFeedback } = await import("../app/models/ChatFeedback.server.js");
 const { syncCatalog } = await import("../app/models/Product.server.js");
 const { healthCheck: healthz } = await import("../app/lib/health-check.server.js");
+const { syncStoreKnowledge } = await import("../app/lib/store-knowledge/sync.server.js");
 
 const A = `eval-a-${Date.now()}.myshopify.com`;
 const B = `eval-b-${Date.now()}.myshopify.com`;
@@ -157,10 +158,36 @@ await test("two syncs started together: one runs, the other steps aside", async 
   assert.equal((await prisma.catalogSyncState.findUnique({ where: { shop: B } })).status, "idle");
 });
 
+console.log("\nstore knowledge");
+await test("re-syncing the website keeps unchanged chunks and replaces only what changed", async () => {
+  const body = (extra = "") => `<h2>Returns</h2><p>We offer no hassle returns and exchanges within 30 days of purchase if you are not satisfied with your purchase.${extra}</p>`;
+  const admin = (pageBody) => ({
+    graphql: async (query) => {
+      const data = /primaryDomain/.test(query) ? { shop: { primaryDomain: { url: "https://www.aetrex.test" } } }
+        : /pages\(/.test(query) ? { pages: { pageInfo: { hasNextPage: false }, nodes: [{ title: "Returns", handle: "returns", body: pageBody, isPublished: true, templateSuffix: null }] } }
+          : /articles\(/.test(query) ? { articles: { pageInfo: { hasNextPage: false }, nodes: [] } }
+            : /shopPolicies/.test(query) ? { shop: { shopPolicies: [] } } : {};
+      return { json: async () => ({ data }) };
+    },
+  });
+  const quiet = { fetchImpl: async () => ({ ok: false }), log: () => {} };
+  const first = await syncStoreKnowledge({ admin: admin(body()), shop: A, ...quiet });
+  assert.equal(first.ok, true);
+  const ids = (await prisma.knowledgeChunk.findMany({ where: { shop: A }, select: { id: true } })).map((r) => r.id).sort();
+  const again = await syncStoreKnowledge({ admin: admin(body()), shop: A, ...quiet });
+  assert.equal(again.added, 0);
+  assert.deepEqual((await prisma.knowledgeChunk.findMany({ where: { shop: A }, select: { id: true } })).map((r) => r.id).sort(), ids);
+  const changed = await syncStoreKnowledge({ admin: admin(body(" Orthotics carry a 60-day guarantee.")), shop: A, ...quiet });
+  assert.ok(changed.added >= 1 && changed.removed >= 1);
+  const rows = await prisma.knowledgeChunk.findMany({ where: { shop: A } });
+  assert.ok(rows.some((r) => /60-day guarantee/.test(r.content)));
+  assert.equal(rows.length, changed.chunks);
+});
+
 // Cleanup — every row this run created.
 for (const shop of [A, B]) {
   await prisma.product.deleteMany({ where: { shop } });
-  for (const m of ["chatHealthEvent", "campaign", "decisionTree", "knowledgeFile", "chatFeedback", "catalogSyncState", "shopConfig"]) {
+  for (const m of ["chatHealthEvent", "knowledgeChunk", "campaign", "decisionTree", "knowledgeFile", "chatFeedback", "catalogSyncState", "shopConfig"]) {
     await prisma[m].deleteMany({ where: { shop } });
   }
 }

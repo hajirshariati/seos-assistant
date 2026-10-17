@@ -23,7 +23,9 @@ const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
 // Store info for Claude: the store team's uploaded notes first (they win if
 // anything differs), then what was learned from the store's own website
-// (policies + pages, store-knowledge sync).
+// (policies, pages, blog articles — store-knowledge sync). Semantic matches
+// come first; keyword matches fill in, so exact names ("Premium Memory Foam",
+// "clinical study") are found even when the meaning search misses them.
 function makeStoreInfoLookup({ shop, config }) {
   let files = null;
   const fmt = (c) => `${c.sectionTitle ? `${c.sectionTitle}: ` : ""}${String(c.content || "").trim()}`;
@@ -36,7 +38,7 @@ function makeStoreInfoLookup({ shop, config }) {
       // Semantic lookup whenever the store has an embedding provider; it
       // returns nothing otherwise and keyword matching carries the answer.
       try {
-        const semantic = await retrieveRelevantChunks(prisma, { shop, query, config, limit: 5 });
+        const semantic = await retrieveRelevantChunks(prisma, { shop, query, config, limit: 6 });
         for (const c of semantic || []) {
           if (String(c.fileType || "").startsWith("store_")) website.push(c);
           else if (!uploaded.some((u) => u.content === c.content)) uploaded.push(c);
@@ -45,12 +47,18 @@ function makeStoreInfoLookup({ shop, config }) {
         console.error("[lean] store-info rag failed:", err?.message || err);
       }
     }
-    if (website.length === 0) website = await lexicalStoreKnowledge(shop, query, { limit: 4 }).catch(() => []);
+    if (website.length < 3) {
+      const lexical = await lexicalStoreKnowledge(shop, query, { limit: 5 }).catch(() => []);
+      for (const c of lexical) {
+        if (website.length >= 5) break;
+        if (!website.some((w) => w.content === c.content)) website.push(c);
+      }
+    }
     if (uploaded.length === 0 && website.length === 0) return { found: false };
     const parts = [];
     if (uploaded.length) parts.push(`STORE TEAM NOTES (uploaded by the store — these win if anything differs):\n${uploaded.map(fmt).join("\n\n")}`);
     if (website.length) parts.push(`FROM THE STORE'S WEBSITE:\n${website.map(fmt).join("\n\n")}`);
-    return { found: true, text: parts.join("\n\n").slice(0, 7000) };
+    return { found: true, text: parts.join("\n\n").slice(0, 9000) };
   };
 }
 

@@ -935,7 +935,8 @@ function StoreKnowledgeCard({ docs }) {
     fetcher.submit(fd, { method: "post" });
   };
   const last = docs.reduce((m, d) => (d.syncedAt && (!m || d.syncedAt > m) ? d.syncedAt : m), null);
-  const policies = docs.filter((d) => d.kind === "Policy").length;
+  const count = (kind) => docs.filter((d) => d.kind === kind).length;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const rows = docs.map((d) => [
     d.kind,
     d.url ? <a key={d.id} href={d.url} target="_blank" rel="noreferrer">{d.title}</a> : d.title,
@@ -947,16 +948,18 @@ function StoreKnowledgeCard({ docs }) {
         <InlineStack align="space-between" blockAlign="center">
           <BlockStack gap="050">
             <Text as="h2" variant="headingMd">
-              {docs.length > 0 ? `${docs.length} documents learned (${policies} policies, ${docs.length - policies} pages)` : "Nothing learned yet"}
+              {docs.length > 0
+                ? `${docs.length} documents learned (${plural(count("Policy"), "policy", "policies")}, ${plural(count("Page"), "page", "pages")}, ${plural(count("Article"), "blog article", "blog articles")})`
+                : "Nothing learned yet"}
             </Text>
             <Text as="p" tone="subdued" variant="bodySm">
-              {last ? `Last refreshed ${new Date(last).toLocaleString()}` : "Click refresh to read your store's policies and pages now."}
+              {last ? `Last refreshed ${new Date(last).toLocaleString()}` : "Click refresh to read your store's policies, pages and blog articles now."}
             </Text>
           </BlockStack>
           <Button onClick={refresh} loading={busy} disabled={busy}>Refresh from store now</Button>
         </InlineStack>
         {started && (
-          <Banner tone="info"><p>Reading your store's policies and pages — this takes about a minute. The list updates automatically.</p></Banner>
+          <Banner tone="info"><p>Reading your store's policies, pages and blog articles — this takes a minute or two. The list updates automatically.</p></Banner>
         )}
         {rows.length > 0 && (
           <DataTable columnContentTypes={["text", "text", "text"]} headings={["Type", "Title", "Size"]} rows={rows} />
@@ -971,7 +974,7 @@ export default function Knowledge() {
   const now = Date.now();
   const livePromos = (data.campaigns || []).filter((c) => new Date(c.startsAt).getTime() <= now && new Date(c.endsAt).getTime() >= now).length;
   const summary = [
-    { label: "From your website", value: `${(data.storeKnowledge || []).length} pages & policies` },
+    { label: "From your website", value: `${(data.storeKnowledge || []).length} pages, policies & articles` },
     { label: "Your team's notes", value: `${(data.files || []).length} file${(data.files || []).length === 1 ? "" : "s"}` },
     { label: "Promotions", value: livePromos ? `${livePromos} live now` : "none live" },
   ];

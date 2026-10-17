@@ -1,8 +1,9 @@
 // Store-knowledge eval — the assistant learns policies and pages from the
 // store's own website (no upload needed), and uploaded notes stay the override.
 //
-// Offline: Shopify-like HTML fixtures, a fake Admin API (with and without the
-// content scopes) and a stub fetch for the public storefront.
+// Offline: Shopify-like HTML fixtures, a theme page template shaped like the
+// real Aetrex clinical-study page, blog articles, a fake Admin API (with and
+// without the content scopes) and a stub fetch for the public storefront.
 //
 // Run: node scripts/eval-store-knowledge.mjs
 
@@ -20,8 +21,11 @@ register("data:text/javascript," + encodeURIComponent(HOOK));
 // In-memory prisma: just the KnowledgeChunk + ShopConfig calls the sync uses.
 const chunks = [];
 let nextId = 1;
-const matches = (row, where = {}) => Object.entries(where).every(([k, v]) =>
-  v && typeof v === "object" && "startsWith" in v ? String(row[k] || "").startsWith(v.startsWith) : row[k] === v);
+const matches = (row, where = {}) => Object.entries(where).every(([k, v]) => {
+  if (v && typeof v === "object" && "startsWith" in v) return String(row[k] || "").startsWith(v.startsWith);
+  if (v && typeof v === "object" && "in" in v) return v.in.includes(row[k]);
+  return row[k] === v;
+});
 global.prismaGlobal = {
   knowledgeChunk: {
     deleteMany: async ({ where }) => {
@@ -35,9 +39,10 @@ global.prismaGlobal = {
   },
   shopConfig: { findUnique: async () => ({ shop: "demo.myshopify.com" }), create: async ({ data }) => data },
   $executeRawUnsafe: async () => 0,
+  $queryRawUnsafe: async () => [],
 };
 
-const { htmlToText, parseSitemap, splitSections, toKnowledgeDoc } = await import("../app/lib/store-knowledge/extract.js");
+const { htmlToText, parseSitemap, splitSections, toKnowledgeDoc, themeTemplateText } = await import("../app/lib/store-knowledge/extract.js");
 const { syncStoreKnowledge, lexicalStoreKnowledge, listStoreKnowledge, STORE_SOURCE_PREFIX } = await import("../app/lib/store-knowledge/sync.server.js");
 
 let passed = 0;
@@ -98,11 +103,12 @@ const WEB = {
   "https://www.aetrex.test/pages/empty": shell("<h1>Empty</h1>"),
 };
 
-function fakeAdmin({ scopes = true } = {}) {
+function fakeAdmin({ scopes = true, pages = null, articles = [], templates = {}, themes = true, articlesOk = true } = {}) {
   const calls = [];
   return {
     calls,
-    graphql: async (query) => {
+    graphql: async (query, opts) => {
+      const variables = opts?.variables;
       calls.push(query);
       const ok = (data) => ({ json: async () => ({ data }) });
       const denied = () => ({ json: async () => ({ errors: [{ message: "Access denied for pages field. Required access: `read_content` access scope." }] }) });
@@ -114,6 +120,17 @@ function fakeAdmin({ scopes = true } = {}) {
             { type: "PRIVACY_POLICY", title: "Privacy policy", url: "https://www.aetrex.test/policies/privacy-policy", body: "" },
           ] } })
           : denied();
+      }
+      if (/themes\(first/.test(query)) return scopes && themes ? ok({ themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/1" }] } }) : denied();
+      if (/theme\(id/.test(query)) {
+        const nodes = (variables?.filenames || []).filter((f) => templates[f]).map((f) => ({ filename: f, body: { content: templates[f] } }));
+        return ok({ theme: { files: { nodes } } });
+      }
+      if (/articles\(/.test(query)) {
+        return scopes && articlesOk ? ok({ articles: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: articles } }) : denied();
+      }
+      if (/pages\(/.test(query) && pages) {
+        return scopes ? ok({ pages: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: pages } }) : denied();
       }
       if (/pages\(/.test(query)) {
         return scopes
@@ -241,6 +258,188 @@ await test("a sync that collects nothing keeps the previous store knowledge", as
   const r = await syncStoreKnowledge({ admin: fakeAdmin({ scopes: false }), shop: "demo.myshopify.com", fetchImpl: stubFetch({}), log: () => {} });
   assert.equal(r.ok, false);
   assert.equal(chunks.length, before);
+});
+
+
+// ── The whole published site: theme-built pages, study links, blog ──
+console.log("\nthe whole published site — theme-built pages, outside links, blog articles");
+
+// Shaped like Aetrex's real templates/page.case-premmem.json: the words live
+// in section settings, the page body is empty.
+const CASE_TEMPLATE = `/*
+ * IMPORTANT: The contents of this file are auto-generated.
+ */
+${JSON.stringify({
+  sections: {
+    "main-page": { type: "main-page", disabled: true, settings: { heading_size: "title-xl tracking-heading", heading_tag: "h1", padding_top: 72 } },
+    hero: {
+      type: "image-with-text-overlay",
+      blocks: {
+        h: { type: "heading", settings: { heading: "<p>Clinically Proven to Relieve Foot Pain and More!*</p>", heading_size: "title-md", heading_tag: "h4", highlighted_text: "none", highlighted_scribble: "circle" } },
+        t: { type: "text", settings: { text: "<p>Aetrex Premium Memory Foam Orthotics</p>", text_font: "body", text_size: "subtext-md", secondary_color: true } },
+        b1: { type: "button", settings: { button_label: "SHOP PREMIUM ORTHOTICS", button_link: "shopify://collections/premium-memory-foam", button_video_link: "", button_style: "primary" } },
+        b2: { type: "button", settings: { button_label: "READ THE STUDY", button_link: "https://www.tandfonline.com/doi/full/10.1080/02703181.2023.2215818" } },
+      },
+      block_order: ["h", "t", "b1", "b2"],
+      settings: { image: "shopify://shop_images/PMFd.jpg", content_position: "md:items-center md:justify-start", color_text: "#ffffff" },
+    },
+    pain: {
+      type: "image-with-text",
+      blocks: {
+        a: { type: "text", settings: { text: "<p>Reducing & Preventing Pain</p>" } },
+        b: { type: "text", settings: { text: "<p>Aetrex Premium Memory Foam Orthotics are clinically proven to reduce common foot pains as well as pain in the back, hip, knee and ankle. Plus, they have been clinically proven to help reduce the fear of falling in older adults.</p>" } },
+        x: { type: "text", disabled: true, settings: { text: "<p>Hidden block: 70% off today only</p>" } },
+      },
+      block_order: ["a", "b", "x"],
+      settings: { layout: "text_first", img_url: "" },
+    },
+    old: { type: "rich-text", disabled: true, settings: { heading: "Old promo: 50% off everything" } },
+    liquid: { type: "custom-liquid", settings: { custom_liquid: "<p>Rated {{ product.metafields.reviews.rating }} by wearers in the study group</p>" } },
+    foot: { type: "rich-text", blocks: { a: { type: "text", settings: { text: "<p>* Clinical Study conducted in Liverpool, England by Dr. George Ampat, ** Statistics provided by the FHSQ Subscale & Falls Efficacy Scale used in the study</p>" } } }, block_order: ["a"], settings: {} },
+  },
+  order: ["main-page", "hero", "pain", "old", "liquid", "foot"],
+}, null, 2)}`;
+
+await test("theme template → text: hidden sections and styling dropped, buttons keep label and link", () => {
+  const t = themeTemplateText(CASE_TEMPLATE, { domain: "https://www.aetrex.test" });
+  assert.match(t, /^## Clinically Proven to Relieve Foot Pain and More!\*/m);
+  assert.match(t, /clinically proven to reduce common foot pains as well as pain in the back, hip, knee and ankle/);
+  assert.match(t, /READ THE STUDY: https:\/\/www\.tandfonline\.com\/doi\/full\/10\.1080\/02703181\.2023\.2215818/);
+  assert.match(t, /SHOP PREMIUM ORTHOTICS: https:\/\/www\.aetrex\.test\/collections\/premium-memory-foam/);
+  assert.match(t, /Liverpool, England by Dr\. George Ampat/);
+  for (const junk of ["70% off", "50% off", "title-xl", "#ffffff", "md:items-center", "shop_images", "{{", "metafields", "none", "circle"]) {
+    assert.ok(!t.includes(junk), `should drop "${junk}"`);
+  }
+});
+
+await test("links to outside sources are kept; store links, old URLs and share buttons are just text", () => {
+  const t = htmlToText('<p>See <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC1/x.pdf">the published trial</a>, our <a href="https://www.aetrex.test/blog.html?p=old">old post</a>, <a href="/pages/about">story</a> and <a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a>.</p>', { ownHosts: ["www.aetrex.test", "demo.myshopify.com"] });
+  assert.match(t, /the published trial \(https:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/PMC1\/x\.pdf\)/);
+  assert.ok(!/blog\.html|\/pages\/about|facebook/.test(t), t);
+  assert.match(t, /our old post, story and Share/);
+});
+
+// Shaped like Aetrex's templates/page.faq-shipping.json (question blocks).
+const FAQ_TEMPLATE = JSON.stringify({
+  sections: {
+    main: { type: "main-page", disabled: true, settings: { heading_size: "title-xl", heading_tag: "h1" } },
+    faq: {
+      type: "faq",
+      blocks: {
+        "rich-text-1": { type: "rich-text", settings: { heading: "Shipping", text: "", highlighted_text: "none", highlighted_scribble: "circle" } },
+        "question-1": { type: "question", settings: { title: "Which carrier do you use to ship my online order?", text: "<p>Orders are shipped via UPS Ground and USPS First Class as the default shipping method. <strong>WE SHIP TO P.O. BOXES but we do not ship to APO BOXES.</strong></p>", highlighted_text: "none" } },
+        "question-2": { type: "question", settings: { title: "Where do you ship from?", text: "<p>All items are shipped from our warehouse facility and order fulfillment centers in <strong>New Jersey or Missouri.</strong></p>" } },
+      },
+      block_order: ["rich-text-1", "question-1", "question-2"],
+      settings: { style: "with-border", heading: "Shipping & Delivery FAQs", heading_size: "title-md", heading_alignment: "text-left md:items-end md:flex-row", abra_promo_code_show: "" },
+    },
+  },
+  order: ["main", "faq"],
+});
+
+await test("an FAQ template keeps each question as a heading with its answer", () => {
+  const t = themeTemplateText(FAQ_TEMPLATE, { domain: "https://www.aetrex.test" });
+  assert.match(t, /^## Shipping & Delivery FAQs$/m);
+  assert.match(t, /^## Shipping$/m, "one-word heading kept");
+  assert.match(t, /^## Which carrier do you use to ship my online order\?\n\nOrders are shipped via UPS Ground/m);
+  assert.match(t, /New Jersey or Missouri/);
+  assert.ok(!/with-border|title-md|none|circle/.test(t), t);
+});
+
+const ARTICLES = [
+  {
+    title: "Plantar Fasciitis Exercises: 10 Steps To Help Relieve Pain", handle: "plantar-fasciitis-exercises", isPublished: true, publishedAt: "2023-08-06T21:07:00Z",
+    tags: ["Foot Health & Wellness"], blog: { handle: "aetrex-blog", title: "Aetrex Blog" }, summary: "",
+    body: "<p>Plantar fasciitis is a common type of inflammation that occurs when the plantar fascia is excessively stretched. The pain is commonly felt in the arch and heel.</p><h3>Exercises</h3><p><strong>1. Towel Curls</strong> Sit down in a chair with your heels under your knees and pull the towel toward you with your toes. Repeat 4-5 times.</p><p>Watch: <iframe src=\"//www.youtube.com/embed/x\"></iframe></p>",
+  },
+  {
+    title: "Draft: winter boots", handle: "draft-winter", isPublished: false, publishedAt: null, tags: [], blog: { handle: "aetrex-blog", title: "Aetrex Blog" }, summary: "",
+    body: "<p>" + "Not live yet. ".repeat(30) + "</p>",
+  },
+  {
+    title: "Aetrex in the News", handle: "aetrex-news-2024", isPublished: true, publishedAt: "2024-03-01T12:00:00Z", tags: [], blog: { handle: "news", title: "News" }, summary: "",
+    body: "<p>Aetrex was named one of the most trusted comfort footwear brands by a national survey of podiatrists, recognising decades of work on arch support and foot scanning.</p>",
+  },
+];
+const SITE_PAGES = [
+  { title: "Premium Memory Foam Case Study", handle: "case-premmem", body: "", isPublished: true, templateSuffix: "case-premmem" },
+  { title: "Our Story", handle: "about", body: "<h2>Founded in 1946</h2><p>Aetrex has spent decades studying feet. Our foot scanners have measured millions of feet, and that data shapes every orthotic and shoe we design for all-day comfort and support.</p>", isPublished: true, templateSuffix: null },
+];
+const siteAdmin = (over = {}) => fakeAdmin({ pages: SITE_PAGES, articles: ARTICLES, templates: { "templates/page.case-premmem.json": CASE_TEMPLATE }, ...over });
+
+await test("a theme-built page is read from its theme template — no live fetch needed", async () => {
+  chunks.length = 0;
+  const fetched = [];
+  const r = await syncStoreKnowledge({ admin: siteAdmin(), shop: "demo.myshopify.com", fetchImpl: stubFetch({}, fetched), log: () => {} });
+  assert.equal(r.ok, true);
+  assert.ok(!fetched.some((u) => /case-premmem/.test(u)), "template text was enough");
+  const page = chunks.filter((c) => c.sourceFileId === "store:page:case-premmem");
+  assert.ok(page.some((c) => /pain in the back, hip, knee and ankle/.test(c.content)));
+  assert.ok(page.some((c) => /tandfonline\.com\/doi/.test(c.content)), "study link stored");
+});
+
+await test("published blog articles are learned with their blog link, date and topics; drafts skipped", async () => {
+  const arts = chunks.filter((c) => c.fileType === "store_article");
+  const ids = new Set(arts.map((c) => c.sourceFileId));
+  assert.deepEqual([...ids].sort(), ["store:article:aetrex-blog/plantar-fasciitis-exercises", "store:article:news/aetrex-news-2024"]);
+  const pf = arts.filter((c) => c.sourceFileId.endsWith("plantar-fasciitis-exercises"));
+  assert.match(pf[0].content, /Source: https:\/\/www\.aetrex\.test\/blogs\/aetrex-blog\/plantar-fasciitis-exercises/);
+  assert.ok(pf.some((c) => /published 2023-08-06/.test(c.content) && /Foot Health & Wellness/.test(c.content)));
+  assert.ok(!arts.some((c) => /youtube/.test(c.content)), "embeds dropped");
+});
+
+await test("every stored chunk carries its page link", () => {
+  const store = chunks.filter((c) => c.sourceFileId.startsWith(STORE_SOURCE_PREFIX));
+  assert.ok(store.length >= 4);
+  for (const c of store) assert.match(c.content, /Source: https:\/\/www\.aetrex\.test\//, c.sectionTitle);
+});
+
+await test("a clinical-claims question finds the store's claim, the study's author and the study link", async () => {
+  const hits = await lexicalStoreKnowledge("demo.myshopify.com", "Are Aetrex Premium Memory Foam Orthotics clinically proven to reduce knee, hip and back pain?");
+  const text = hits.map((c) => c.content).join("\n");
+  assert.match(text, /clinically proven to reduce common foot pains as well as pain in the back, hip, knee and ankle/);
+  assert.match(text, /tandfonline\.com|case-premmem/);
+  const who = await lexicalStoreKnowledge("demo.myshopify.com", "who conducted the clinical study");
+  assert.ok(who.some((c) => /Dr\. George Ampat/.test(c.content)));
+  const pf = await lexicalStoreKnowledge("demo.myshopify.com", "exercises for plantar fasciitis");
+  assert.ok(pf.some((c) => /Towel Curls/.test(c.content)));
+});
+
+await test("admin list labels blog articles", async () => {
+  const list = await listStoreKnowledge("demo.myshopify.com");
+  assert.deepEqual([...new Set(list.map((d) => d.kind))].sort(), ["Article", "Page", "Policy"]);
+  assert.ok(list.some((d) => d.kind === "Article" && d.url === "https://www.aetrex.test/blogs/news/aetrex-news-2024"));
+});
+
+await test("re-sync with nothing changed keeps every chunk (no re-embedding); one edit replaces only that article", async () => {
+  const before = new Map(chunks.map((c) => [c.id, c.sourceFileId]));
+  const same = await syncStoreKnowledge({ admin: siteAdmin(), shop: "demo.myshopify.com", fetchImpl: stubFetch({}), log: () => {} });
+  assert.equal(same.added, 0);
+  assert.equal(same.removed, 0);
+  assert.deepEqual(chunks.map((c) => c.id).sort(), [...before.keys()].sort());
+  const edited = ARTICLES.map((a) => (a.handle === "aetrex-news-2024" ? { ...a, body: a.body.replace("national survey", "2025 national survey") } : a));
+  const r = await syncStoreKnowledge({ admin: siteAdmin({ articles: edited }), shop: "demo.myshopify.com", fetchImpl: stubFetch({}), log: () => {} });
+  assert.ok(r.added >= 1 && r.removed === r.added, JSON.stringify(r));
+  const kept = chunks.filter((c) => before.has(c.id));
+  assert.ok(kept.every((c) => c.sourceFileId !== "store:article:news/aetrex-news-2024"));
+  assert.ok(chunks.some((c) => /2025 national survey/.test(c.content)));
+});
+
+await test("if articles can't be read this time, the articles already learned stay", async () => {
+  const had = chunks.filter((c) => c.fileType === "store_article").length;
+  const r = await syncStoreKnowledge({ admin: siteAdmin({ articlesOk: false }), shop: "demo.myshopify.com", fetchImpl: stubFetch({}), log: () => {} });
+  assert.equal(r.ok, true);
+  assert.equal(chunks.filter((c) => c.fileType === "store_article").length, had);
+});
+
+await test("without theme access, every thin page is read live — no cap on how many", async () => {
+  chunks.length = 0;
+  const many = Array.from({ length: 160 }, (_, i) => ({ title: `Tech ${i}`, handle: `tech-${i}`, body: "", isPublished: true, templateSuffix: `tech-${i}` }));
+  const web = Object.fromEntries(many.map((p) => [`https://www.aetrex.test/pages/${p.handle}`, shell(`<h1>Tech ${p.handle}</h1><p>${"Aetrex technology explained in detail for comfort and support. ".repeat(4)}</p>`)]));
+  const fetched = [];
+  const r = await syncStoreKnowledge({ admin: fakeAdmin({ pages: many, themes: false }), shop: "demo.myshopify.com", fetchImpl: stubFetch(web, fetched), log: () => {} });
+  assert.equal(fetched.filter((u) => /\/pages\/tech-/.test(u)).length, 160);
+  assert.equal(r.docs, 161, "160 pages + the refund policy");
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

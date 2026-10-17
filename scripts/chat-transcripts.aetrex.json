@@ -1068,5 +1068,75 @@
         }
       }
     ]
+  },
+  {
+    "name": "clinical claims are answered from the store's own case-study page",
+    "turns": [
+      {
+        "user": "Are Aetrex Premium Memory Foam Orthotics clinically proven to reduce foot, knee, hip and back pain?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "clinically proven",
+              "clinical study",
+              "case study"
+            ],
+            "mustNotMatch": "wasn't able to find|couldn't find|not sure|no (specific )?(clinical )?stud",
+            "mustMatch": "Ampat|Liverpool|tandfonline|case-premmem|clinical-studies"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "clinical claims are never stretched past what the page says",
+    "turns": [
+      {
+        "user": "Will Aetrex orthotics cure my plantar fasciitis? Is it guaranteed?",
+        "expect": {
+          "text": {
+            "mustNotMatch": "\\bwill cure\\b|\\bcures\\b|guaranteed to (cure|fix|heal)|100% effective"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "shipping FAQs built in the theme are known",
+    "turns": [
+      {
+        "user": "where do you ship from and do you ship to PO boxes?",
+        "expect": {
+          "text": {
+            "mustMatch": "New Jersey|Missouri",
+            "mustIncludeAny": [
+              "P.O. box",
+              "PO box",
+              "P.O. Box",
+              "PO Box"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "blog articles answer foot-health questions",
+    "turns": [
+      {
+        "user": "what exercises help plantar fasciitis?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "towel",
+              "calf stretch",
+              "ball roll",
+              "heel raise",
+              "stretch"
+            ]
+          }
+        }
+      }
+    ]
   }
 ]

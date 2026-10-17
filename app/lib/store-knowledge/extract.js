@@ -1,8 +1,10 @@
 // Store knowledge — turn storefront HTML into clean, sectioned text. Pure.
 //
-// Policies and page bodies come from the Admin API as HTML; theme-built pages
-// (sections, not a body) are fetched from the live storefront. Either way we
-// keep headings as "## …" lines so the chunker splits on real sections, and
+// Policies, page bodies and blog articles come from the Admin API as HTML;
+// theme-built pages (sections, not a body) are read from the theme's page
+// template, or from the live storefront. Either way we keep headings as
+// "## …" lines so the chunker splits on real sections, keep links to outside
+// sources (a published study, a PDF) so the assistant can point to them, and
 // drop everything that isn't content (scripts, menus, footers, forms, and the
 // duplicate mobile/desktop blocks themes render).
 
@@ -20,7 +22,26 @@ export function decodeEntities(s) {
 
 const DROP_BLOCKS = ["script", "style", "noscript", "svg", "template", "iframe", "head", "header", "footer", "nav", "form", "button", "select", "dialog"];
 
-export function htmlToText(html) {
+const SHARE_LINK = /\/(?:sharer|share|intent)\b|\/pin\/create|[?&]share=/i;
+const bareHost = (h) => String(h || "").toLowerCase().replace(/^www\./, "");
+
+// "Read the study" → "Read the study (https://doi.org/…)" for links that leave
+// the store; links back into the store (menus, old URLs) are just text.
+function keepOutsideLinks(s, ownHosts) {
+  const own = (ownHosts || []).map(bareHost).filter(Boolean);
+  return s.replace(/<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (m, href, inner) => {
+    const label = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    let url;
+    try { url = new URL(decodeEntities(href)); } catch { return inner; }
+    if (!/^https?:$/.test(url.protocol) || SHARE_LINK.test(url.href)) return inner;
+    const host = bareHost(url.hostname);
+    if (own.some((o) => host === o || host.endsWith(`.${o}`))) return inner;
+    if (!label) return " ";
+    return label.includes(url.href) ? inner : `${inner} (${url.href})`;
+  });
+}
+
+export function htmlToText(html, { ownHosts = [] } = {}) {
   let s = String(html || "");
   if (!s.trim()) return "";
   // Prefer the page's main content when the theme marks it.
@@ -32,6 +53,7 @@ export function htmlToText(html) {
   }
   // Common non-content regions themes leave inside <main>.
   s = s.replace(/<([a-z0-9]+)\b[^>]*(?:aria-hidden="true"|class="[^"]*\b(?:visually-hidden|cookie|announcement|breadcrumb|newsletter|drawer|modal|popup)\b[^"]*")[^>]*>[\s\S]*?<\/\1>/gi, " ");
+  s = keepOutsideLinks(s, ownHosts);
   s = s
     .replace(/<h[1-4]\b[^>]*>([\s\S]*?)<\/h[1-4]>/gi, (_, t) => `\n\n## ${t.replace(/<[^>]+>/g, " ").trim()}\n\n`)
     .replace(/<li\b[^>]*>/gi, "\n- ")
@@ -54,6 +76,83 @@ export function htmlToText(html) {
     lines.push(line);
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// ── Theme page templates (templates/page.<suffix>.json) ──────────
+// Theme-built pages keep their words in section settings. Walk the sections
+// in display order (skipping hidden ones) and keep the text settings, plus
+// each button/link with its label, so a "Read the study" button becomes
+// "Read the study: https://…". Styling settings (sizes, colors, alignment…)
+// are never text.
+const TEXT_KEY = /(?:^|_)(?:heading|subheading|title|subtitle|text|description|content|caption|richtext|html|question|answer|quote|body|message|footnote|disclaimer|note|liquid)(?:_\d+)?$/;
+const NOT_TEXT_KEY = /size|tag|font|color|colour|alignment|position|style|scribble|highlight|spacing|capitalize|width|height|gradient|padding|opacity|parallax|layout|ratio|icon/;
+const LINK_KEY = /(?:^|_)(?:link|url)(?:_\d+)?$/;
+
+export function parseThemeJson(raw) {
+  const s = String(raw || "").replace(/^\s*\/\*[\s\S]*?\*\//, "");
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+function themeLink(value, domain) {
+  const v = String(value || "").trim();
+  const m = v.match(/^shopify:\/\/(pages|collections|products|blogs)\/(.+)$/);
+  if (m) return `${domain}/${m[1]}/${m[2]}`;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("/") && !v.startsWith("//")) return `${domain}${v}`;
+  return "";
+}
+
+function settingsText(settings = {}, domain) {
+  const out = [];
+  for (const [key, value] of Object.entries(settings || {})) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (LINK_KEY.test(key) && !/video/.test(key)) {
+      const url = themeLink(value, domain);
+      if (!url) continue;
+      const label = String(settings[key.replace(LINK_KEY, (x) => x.replace(/link|url/, "label"))] || settings.label || "").trim();
+      out.push(label ? `${label}: ${url}` : url);
+      continue;
+    }
+    if (!TEXT_KEY.test(key) || NOT_TEXT_KEY.test(key)) continue;
+    // Liquid placeholders render store data we read elsewhere; drop them.
+    const cleaned = value.replace(/\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g, " ");
+    // Single lower-case tokens ("none", "circle", "primary") are option
+    // values; a one-word heading ("Shipping") is still text.
+    if (!/\s|</.test(cleaned.trim()) && !(/heading|title/.test(key) && /[A-Z]/.test(cleaned))) continue;
+    let text = /</.test(cleaned) ? htmlToText(`<div>${cleaned}</div>`) : cleaned.trim();
+    // A one-line heading/title setting starts a section, like an <h2> would.
+    if (/heading|title/.test(key) && !text.includes("\n") && text.length < 120 && !text.startsWith("## ")) text = `## ${text}`;
+    if (text) out.push(text);
+  }
+  return out;
+}
+
+export function themeTemplateText(template, { domain = "" } = {}) {
+  const t = typeof template === "string" ? parseThemeJson(template) : template;
+  if (!t || typeof t.sections !== "object") return "";
+  const parts = [];
+  const order = Array.isArray(t.order) ? t.order : Object.keys(t.sections);
+  for (const id of order) {
+    const sec = t.sections[id];
+    if (!sec || sec.disabled) continue;
+    parts.push(...settingsText(sec.settings, domain));
+    const blocks = sec.blocks || {};
+    const blockOrder = Array.isArray(sec.block_order) ? sec.block_order : Object.keys(blocks);
+    for (const bid of blockOrder) {
+      const b = blocks[bid];
+      if (!b || b.disabled) continue;
+      parts.push(...settingsText(b.settings, domain));
+    }
+  }
+  const lines = [];
+  const seen = new Set();
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(p);
+  }
+  return lines.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function parseSitemap(xml) {

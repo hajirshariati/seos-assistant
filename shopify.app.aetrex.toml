@@ -43,7 +43,7 @@ api_version = "2026-04"
 
 [access_scopes]
 # write_orders: the orders/create handler runs tagsAdd on attributed orders.
-scopes = "read_customers,read_metaobjects,read_orders,read_products,write_orders,read_content,read_legal_policies,read_reports"
+scopes = "read_customers,read_metaobjects,read_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_themes"
 
 [auth]
 redirect_urls = [
