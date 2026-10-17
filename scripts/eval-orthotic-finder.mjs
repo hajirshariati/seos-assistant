@@ -9,7 +9,8 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine } from "../app/lib/orthotic-finder.js";
+import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder } from "../app/lib/orthotic-finder.js";
+import { finderToolDef } from "../app/lib/orthotic-finder.server.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/aetrex-orthotics.json", import.meta.url), "utf8"));
 const catalog = buildOrthoticCatalog(fixture.products.map(productFromNode));
@@ -123,6 +124,59 @@ test("men's pick prefers the men's product over a unisex one when both exist", (
 test("missing gender or unknown line → asks instead of guessing", () => {
   assert.ok(pick({ line: "speed", arch: "flat_low", ball_of_foot_pain: "no" }).error);
   assert.ok(pick({ line: "nope", gender: "men" }).error);
+});
+
+console.log("\nFITs (FITFinder)");
+// FITFinder's default FITs, as its storefront config returns them.
+const FF = sanitizeFitfinder({
+  fits: [
+    { key: "A", label: "FIT A", code: "20", name: "Posted Support", description: "An angled (posted) heel that supports flat feet." },
+    { key: "B", label: "FIT B", code: "00", name: "Cushioned Support", description: "Neutral, cushioned arch support." },
+    { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support", description: "Neutral support with a metatarsal pad." },
+    { key: "D", label: "FIT D", code: "25", name: "Maximum Support — Posted + Metatarsal", description: "Flat-foot support plus a metatarsal pad." },
+  ],
+  questions: [{ text: "Do you have flat feet?", helpText: "Look at a wet footprint.", options: [{ label: "Yes", sublabel: "Flat feet" }, { label: "No / Unsure" }] }],
+  saved: { key: "d", label: "FIT D", code: "25" },
+});
+const fpick = (answers) => pickOrthotic(catalog, answers, { fits: FF.fits });
+test("FITFinder data is cleaned and the saved FIT kept", () => {
+  assert.equal(FF.fits.length, 4);
+  assert.equal(FF.saved, "D");
+  assert.equal(sanitizeFitfinder({ fits: [{ key: "<x>", label: "", code: "abc" }] }), null);
+  assert.ok(!JSON.stringify(sanitizeFitfinder({ fits: [{ key: "A", label: "FIT A", code: "20", name: "<script>x</script>" }] })).includes("<"));
+});
+test("flat feet + ball-of-foot pain → FIT D, without needing a product yet", () => {
+  const r = fpick({ arch: "flat_low", ball_of_foot_pain: "yes" });
+  assert.equal(r.fit.label, "FIT D");
+  assert.ok(!r.pick);
+});
+test("each answer pair gives the FIT FITFinder would give", () => {
+  const want = { "flat_low|no": "A", "medium_high|no": "B", "medium_high|yes": "C", "flat_low|yes": "D" };
+  for (const [k, v] of Object.entries(want)) {
+    const [arch, met] = k.split("|");
+    assert.equal(fpick({ arch, ball_of_foot_pain: met }).fit.key, v, k);
+  }
+});
+test("a saved FIT stands in for the arch and ball-of-foot questions", () => {
+  const r = fpick({ line: "speed", gender: "women", fit: "D" });
+  assert.ok(r.pick.title.includes("Speed Posted") && r.pick.title.includes("Metatarsal"), r.pick.title);
+  assert.equal(r.pick.fit, "FIT D");
+});
+test("the pick names its FIT", () => {
+  assert.equal(fpick({ line: "train", gender: "men", arch: "medium_high", ball_of_foot_pain: "yes" }).pick.fit, "FIT C");
+});
+test("no FIT yet → asks the two questions instead of guessing", () => {
+  assert.ok(fpick({ arch: "flat_low" }).error);
+});
+test("Claude's tool knows the FITs, the store's questions and the saved FIT", () => {
+  const tree = { intent: "orthotic", definition: { finder: catalog } };
+  const def = finderToolDef(tree, { fitfinder: FF });
+  assert.match(def.description, /FIT D — Maximum Support/);
+  assert.match(def.description, /Do you have flat feet\?/);
+  assert.match(def.description, /ALREADY HAS A FIT: FIT D/);
+  assert.deepEqual(def.input_schema.properties.fit.enum, ["A", "B", "C", "D"]);
+  const plain = finderToolDef(tree);
+  assert.ok(!/FIT D/.test(plain.description) && !plain.input_schema.properties.fit, "no FIT talk without FITFinder");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

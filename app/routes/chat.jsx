@@ -11,6 +11,7 @@ import { getTodayMessageCount } from "../models/ChatUsage.server";
 import { canSendMessage } from "../lib/billing.server";
 import { leanChatResponse } from "../lib/lean/respond.server.js";
 import { sanitizeHistory } from "../lib/lean/history.js";
+import { sanitizeFitfinder } from "../lib/orthotic-finder.js";
 
 const RATE_LIMIT_PER_IP_SHOP = parseInt(process.env.RATE_LIMIT_PER_IP_SHOP, 10) || 20;
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60_000;
@@ -168,5 +169,6 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     loggedInCustomerId,
     supportUrl: typeof body.support_url === "string" ? body.support_url : "",
     supportLabel: typeof body.support_label === "string" ? body.support_label : "",
+    fitfinder: sanitizeFitfinder(body.fitfinder),
   });
 }

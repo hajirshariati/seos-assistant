@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 add-to-cart');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 fitfinder-compact');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -524,6 +524,7 @@ try{
 function toggle(force){
 isOpen=typeof force==='boolean'?force:!isOpen;
 if(isOpen){
+  loadFitfinder();
   launcher.classList.add('hidden');
   panel.classList.add('open');
   overlay.classList.add('visible');
@@ -729,7 +730,8 @@ function choiceButtonsHtml(options){
   return choicesWrap(ch);
 }
 
-function vizSparkle(){return '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.6 4.8L18 8.4l-4.4 1.6L12 15l-1.6-4.9L6 8.4l4.4-1.6z"/><path d="M19 14l.8 2.4L22 17.2l-2.2.8L19 20l-.8-2L16 17.2l2.2-.8z" opacity=".7"/></svg>';}
+/* A clean outline garment — "see it in an outfit". */
+function vizIcon(){return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 3.5 16 2a4 4 0 0 1-8 0L3.6 3.5a2 2 0 0 0-1.3 2.2l.6 3.5a1 1 0 0 0 1 .8H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.1a1 1 0 0 0 1-.8l.6-3.5a2 2 0 0 0-1.3-2.2z"/></svg>';}
 function vizImageIcon(){return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';}
 function vizLoadingHtml(step){
   // Reuses the `.ai-chat-viz-result` shell so the loading state occupies the
@@ -761,7 +763,7 @@ function vizResultHtml(src){
 function vizErrorHtml(msg){
   return '<div style="margin-top:10px;border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:13px 15px;background:#fff">'+
     '<div style="font-size:13px;color:#555;margin-bottom:9px">'+esc(msg||'Could not create the preview.')+'</div>'+
-    '<button class="ai-chat-viz-retry" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;background:var(--ai-chat-primary,#2d6b4f)">'+vizSparkle()+'Try again</button>'+
+    '<button class="ai-chat-viz-retry" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;background:var(--ai-chat-primary,#2d6b4f)">Try again</button>'+
   '</div>';
 }
 
@@ -784,19 +786,15 @@ function vizLabel(cta){
 function injectVizButton(card,cta){
   if(!card||card.querySelector('.ai-chat-viz-btn'))return;
   // "See It Styled" is a SECONDARY action sitting BESIDE "Add to cart" (the
-  // primary). Soft warm-outline styling, smaller visual weight, no heavy
-  // shadow — it must never read as the main buy CTA. The button stops click
-  // propagation so it never triggers the card's other actions.
-  var viz=document.createElement('span');
+  // primary): a quiet outline button (.ai-chat-viz-btn in the stylesheet) that
+  // must never read as the main buy CTA. The button stops click propagation
+  // so it never triggers the card's other actions.
+  var viz=document.createElement('button');
+  viz.type='button';
   viz.className='ai-chat-viz-btn';
-  viz.setAttribute('role','button');viz.setAttribute('tabindex','0');
-  viz.style.cssText='display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.01em;white-space:nowrap;background:#F4E8D3;border:1px solid #C9A76D;color:#8A6632';
-  viz.innerHTML=vizSparkle()+'<span>'+esc(vizLabel(cta))+'</span>';
-  viz.addEventListener('mouseenter',function(){viz.style.background='#EAD8B8'});
-  viz.addEventListener('mouseleave',function(){viz.style.background='#F4E8D3'});
+  viz.innerHTML=vizIcon()+'<span>'+esc(vizLabel(cta))+'</span>';
   var go=function(e){if(e){e.preventDefault();e.stopPropagation();}runVisualize(cta,card)};
   viz.addEventListener('click',go);
-  viz.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){go(e)}});
   var viewCta=card.querySelector('.ai-chat-product-cta');
   if(viewCta&&viewCta.parentNode&&getComputedStyle(viewCta).display!=='none'){
     // Wrap "Add to cart" + "See It Styled" in a single flex row so they sit
@@ -804,16 +802,13 @@ function injectVizButton(card,cta){
     // cart) when the card is too narrow / on mobile.
     var row=document.createElement('div');
     row.className='ai-chat-viz-actions';
-    row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:4px';
     viewCta.parentNode.insertBefore(row,viewCta);
-    viewCta.style.margin='0';
     row.appendChild(viewCta);
     row.appendChild(viz);
   }else{
     // Legacy layout hides "View product" — fall back to placing the
     // button in the info area.
     var info=card.querySelector('.ai-chat-product-info')||card;
-    viz.style.marginTop='8px';
     info.appendChild(viz);
   }
 }
@@ -1474,6 +1469,64 @@ showStreamError('I\'m experiencing high traffic right now. Please try again in a
 if(errorRetryCount>=3){setTimeout(function(){showKlaviyoForm('Stay Connected')},500)}
 }
 
+/* ── FITFinder: the shopper's FIT and the store's FIT names ──
+   FITFinder (Aetrex's product-page fit quiz) keeps each shopper's FIT in
+   fitfinder_fit (session/local storage) and, for logged-in shoppers, on their
+   profile. Its storefront config carries the store's FIT names, copy and quiz
+   questions. Sent with each message so the assistant speaks in FITs and skips
+   questions the shopper already answered; a FIT worked out in the chat is
+   saved back so product pages open on it. No FITFinder → nothing changes. */
+var FF_KEY='fitfinder_fit',ff=null,ffLoading=null;
+function loadFitfinder(){
+  if(ffLoading)return ffLoading;
+  ffLoading=fetch(SHOP_ROOT+'apps/fitfinder/config?type=Orthotics&visitor='+encodeURIComponent(getSess()),{credentials:'same-origin',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():null})
+    .then(function(d){
+      if(!d||d.enabled!==true||!Array.isArray(d.fits)||!d.fits.length)return null;
+      ff={
+        fits:d.fits.map(function(f){return{key:f.key,label:f.label,code:f.code,name:f.name,description:f.description}}),
+        questions:((d.quiz&&d.quiz.questions)||[]).map(function(q){return{text:q.text,helpText:q.helpText,options:(q.options||[]).map(function(o){return{label:o.label,sublabel:o.sublabel}})}}),
+        saved:d.savedFit&&d.savedFit.key?String(d.savedFit.key):null,
+        loggedIn:d.loggedIn===true
+      };
+      return ff;
+    })
+    .catch(function(){return null});
+  return ffLoading;
+}
+function ffStored(){
+  var raw=null;
+  try{raw=sessionStorage.getItem(FF_KEY)}catch(e){}
+  if(raw==null){try{raw=localStorage.getItem(FF_KEY)}catch(e){}}
+  try{var v=JSON.parse(raw||'null');return v&&v.key&&v.hint!==true?v:null}catch(e){return null}
+}
+function ffPayload(){
+  if(!ff)return null;
+  var local=ffStored();/* a save on this device is the newest choice */
+  return{fits:ff.fits,questions:ff.questions,saved:{key:(local&&local.key)||ff.saved||''}};
+}
+/* The same consent rule FITFinder follows: remember across visits only when
+   preference cookies are allowed (OneTrust group C0003 or Shopify's banner). */
+function ffMayRemember(){
+  var g=window.OnetrustActiveGroups||window.OptanonActiveGroups;
+  if(typeof g==='string')return g.indexOf('C0003')!==-1;
+  try{var cp=window.Shopify&&window.Shopify.customerPrivacy;if(cp&&typeof cp.preferencesProcessingAllowed==='function')return cp.preferencesProcessingAllowed()===true}catch(e){}
+  return false;
+}
+function ffSave(key){
+  if(!ff)return;
+  var f=null;
+  for(var i=0;i<ff.fits.length;i++){if(ff.fits[i].key===key)f=ff.fits[i]}
+  if(!f)return;
+  var v=JSON.stringify({key:f.key,label:f.label,code:f.code,savedAt:Date.now()});
+  try{sessionStorage.setItem(FF_KEY,v)}catch(e){}
+  if(ffMayRemember()){try{localStorage.setItem(FF_KEY,v)}catch(e){}}
+  if(ff.loggedIn){
+    fetch(SHOP_ROOT+'apps/fitfinder/fit',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({fitKey:f.key})}).catch(function(){});
+  }
+  ff.saved=f.key;
+}
+
 var streamWatchdog=null;
 function clearWatchdog(){if(streamWatchdog){clearTimeout(streamWatchdog);streamWatchdog=null}}
 function streamResponse(msg){
@@ -1489,6 +1542,9 @@ streamWatchdog=setTimeout(function(){
 var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,history:messages.slice(-20).map(function(m){var out={role:m.role,content:m.content};if(m.role==='assistant'&&m.products&&m.products.length){out.products=m.products.slice(0,10).map(function(p){return{handle:p.handle||'',title:p.title||'',url:p.url||'',image:p.image||'',price:p.price||'',price_formatted:p.price_formatted||'',compare_at_price:p.compare_at_price||'',category:p.category||p._category||'',gender:p.gender||p._gender||''}})}return out})};
 if(SUPPORT_URL)body.support_url=SUPPORT_URL;
 if(SUPPORT_LABEL)body.support_label=SUPPORT_LABEL;
+var ffData=ffPayload();
+if(ffData)body.fitfinder=ffData;
+else loadFitfinder();
 fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'text/event-stream'},body:JSON.stringify(body),signal:abortCtrl.signal}).then(function(r){
 if(!r.ok){
   if(r.headers.get('content-type')&&r.headers.get('content-type').includes('text/event-stream'))return handleSSE(r);
@@ -1543,6 +1599,9 @@ if(p.type==='suggestions'&&p.questions&&p.questions.length){
 if(p.type==='fit_report'&&p.recommendedSize){
   var _d=p.display==='percent'?'percent':(p.display==='hide'?'hide':'bar');
   fitReport={handle:p.handle||'',productTitle:p.productTitle||'',size:p.recommendedSize,confidence:Math.max(0,Math.min(100,parseInt(p.confidence,10)||0)),reasons:Array.isArray(p.reasons)?p.reasons:[],display:_d};
+}
+if(p.type==='fitfinder_fit'&&p.key){
+  ffSave(String(p.key));
 }
 if(p.type==='klaviyo_form'){
   setTimeout(function(){showKlaviyoForm('Stay Connected')},300);

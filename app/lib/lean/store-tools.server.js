@@ -85,6 +85,7 @@ export async function buildLeanStoreExtras({
   loggedInCustomerId = null,
   messages = [],
   latestUserMessage = "",
+  fitfinder = null, // the shopper's FITFinder data, from the widget (sanitized)
   log = (l) => console.log(l),
 }) {
   const vip = Boolean(loggedInCustomerId && accessToken && config.vipModeEnabled === true);
@@ -108,7 +109,7 @@ export async function buildLeanStoreExtras({
     getKnowledgeFilesWithContent(shop),
     getActiveCampaigns(shop),
     vip ? fetchCustomerContext({ shop, accessToken, customerId: loggedInCustomerId, orderLimit: 5 }) : Promise.resolve(null),
-    buildRecommenderTools(shop, { decisionTreeEnabled: config.decisionTreeEnabled === true }),
+    buildRecommenderTools(shop, { decisionTreeEnabled: config.decisionTreeEnabled === true, fitfinder }),
   ]);
   for (const [label, r] of [["rules", rulesRes], ["campaigns", campaignsRes], ["customer", customerRes], ["recommenders", recRes]]) {
     if (r.status === "rejected") log(`[lean] store extras: ${label} unavailable — ${r.reason?.message || r.reason}`);
@@ -179,6 +180,7 @@ export async function buildLeanStoreExtras({
       conversationText,
       latestUserText: latestUserMessage,
       messages,
+      fitfinder,
     }));
   }
 

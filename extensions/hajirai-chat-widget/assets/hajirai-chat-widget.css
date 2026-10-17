@@ -2682,3 +2682,159 @@ a.ai-chat-product-title {
   color: var(--ai-chat-product-cta-text, #fff);
   text-decoration: none;
 }
+
+/* ================================================================
+   COMPACT CARDS — one tight, consistent card in every layout
+   ================================================================
+   Comes last (and scoped to the bubble) so it settles the older layered
+   showcase / featured-card rules: smaller image, one button height,
+   "See It Styled" as a quiet outline beside the black Add to cart. */
+.ai-chat-msg-bubble .ai-chat-viz-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 34px !important;
+  margin: 0;
+  padding: 0 11px !important;
+  border: 1px solid rgba(0, 0, 0, 0.16) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: var(--ai-chat-text, #1a1a1a) !important;
+  font: inherit;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .ai-chat-msg-bubble .ai-chat-viz-btn:hover {
+    background: #f6f6f6 !important;
+    border-color: rgba(0, 0, 0, 0.32) !important;
+  }
+}
+.ai-chat-msg-bubble .ai-chat-viz-btn:focus-visible {
+  outline: 2px solid var(--ai-chat-primary, #2d6b4f);
+  outline-offset: 2px;
+}
+.ai-chat-msg-bubble .ai-chat-viz-btn svg {
+  flex: 0 0 auto;
+}
+.ai-chat-msg-bubble .ai-chat-viz-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+  margin-top: 8px;
+}
+.ai-chat-msg-bubble .ai-chat-viz-actions .ai-chat-product-cta {
+  margin: 0 !important;
+}
+.ai-chat-msg-bubble .ai-chat-product-cta {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Single recommendation: thumbnail left, details right — at every width. */
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child {
+  display: grid !important;
+  grid-template-columns: 72px minmax(0, 1fr) !important;
+  grid-template-areas: "img info" !important;
+  column-gap: 12px !important;
+  row-gap: 0 !important;
+  align-items: start !important;
+  flex: 0 0 100% !important;
+  box-sizing: border-box;
+  padding: 12px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
+  grid-area: img !important;
+  width: 72px !important;
+  height: 72px !important;
+  flex: none !important;
+  aspect-ratio: 1 / 1;
+  align-self: start !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info {
+  grid-area: info !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  gap: 2px !important;
+  width: auto !important;
+  min-width: 0;
+  padding: 0 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-title {
+  margin: 0 !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+  min-height: 0 !important;
+  -webkit-line-clamp: 2 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-price {
+  margin: 2px 0 0 !important;
+  font-size: 14px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-cta {
+  align-self: flex-start !important;
+  width: auto !important;
+  min-width: 0 !important;
+  margin-top: 10px !important;
+  padding: 0 16px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions {
+  margin-top: 10px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
+  align-self: flex-start !important;
+  margin-top: 8px !important;
+}
+
+/* Several cards: a shorter image and tighter text. */
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
+  height: auto !important;
+  aspect-ratio: 4 / 3 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-info {
+  padding: 8px 10px 10px !important;
+  gap: 4px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-view-link {
+  margin-top: 4px;
+}
+@media (max-width: 600px) {
+  .ai-chat-msg-bubble .ai-chat-product-cta,
+  .ai-chat-msg-bubble .ai-chat-viz-btn {
+    min-height: 36px !important;
+  }
+}
+/* Add to cart and See It Styled side by side, each its own width. */
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card .ai-chat-viz-actions .ai-chat-product-cta {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 14px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
+  aspect-ratio: 16 / 11 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img img {
+  max-height: 100%;
+  object-fit: contain;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card .ai-chat-viz-actions .ai-chat-viz-btn {
+  flex: 0 0 auto !important;
+  width: auto !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
+  background: #fff !important;
+}

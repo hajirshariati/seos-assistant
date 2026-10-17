@@ -46,14 +46,16 @@ test("CTA is renamed to 'See It Styled' (old name migrated, not shown)", () => {
   assert.match(label, /!==\s*'Visualize My Look'/, "old default must migrate to the new name");
 });
 
-test("CTA is styled as a SECONDARY warm-outline action (not the buy CTA)", () => {
+test("CTA is a SECONDARY outline action (not the buy CTA)", () => {
   const body = fnBody("injectVizButton");
-  assert.match(body, /#F4E8D3/, "soft warm fill");
-  assert.match(body, /1px solid #C9A76D/, "subtle warm border");
-  assert.match(body, /#8A6632/, "warm text");
-  assert.match(body, /#EAD8B8/, "hover fill");
-  assert.doesNotMatch(body, /box-shadow/, "no heavy shadow on the secondary CTA");
-  assert.doesNotMatch(body, /linear-gradient/, "no loud gradient fill");
+  assert.match(body, /createElement\('button'\)/, "a real button");
+  assert.match(body, /ai-chat-viz-btn/, "styled by the stylesheet class");
+  assert.doesNotMatch(body, /cssText|box-shadow|linear-gradient/, "no inline, heavy or loud styling");
+  const css = readFileSync(new URL("../extensions/hajirai-chat-widget/assets/hajirai-chat-widget.css", import.meta.url), "utf8");
+  const start = css.indexOf("\n.ai-chat-msg-bubble .ai-chat-viz-btn {");
+  const rule = css.slice(start, css.indexOf("}", start));
+  assert.match(rule, /background: #fff/, "white fill");
+  assert.match(rule, /border: 1px solid/, "thin outline");
 });
 
 test("clicking 'See It Styled' stops propagation (never navigates the card)", () => {
@@ -251,7 +253,7 @@ test("the mobile changes are SCOPED to the media query — desktop card stays ve
 });
 
 test("the widget carries a current build marker (so the live version is verifiable)", () => {
-  assert.match(SRC, /\[hajirai-widget\] build 2026-10-17 add-to-cart/, "console build marker bumped for this change");
+  assert.match(SRC, /\[hajirai-widget\] build 2026-10-17 fitfinder-compact/, "console build marker bumped for this change");
 });
 
 // ── PRD 2026-06-29: stability — single-flight, cancellation, no runaway repaint ──

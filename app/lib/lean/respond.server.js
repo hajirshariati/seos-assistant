@@ -62,6 +62,7 @@ export function leanChatResponse({
   loggedInCustomerId = null,
   supportUrl = "",
   supportLabel = "",
+  fitfinder = null,
 }) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -89,7 +90,7 @@ export function leanChatResponse({
         const model = config.anthropicModel || "claude-sonnet-4-6";
         const [catalog, extras] = await Promise.all([
           loadLeanCatalog(shop),
-          buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage })
+          buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
               return { tools: [], similarAttributes: [], systemBlock: "" };

@@ -261,11 +261,86 @@ function genderFits(itemGender, want) {
   return itemGender === GENDER_LABEL[want] || itemGender === "Unisex";
 }
 
+// ── FITs (FITFinder) ─────────────────────────────────────────────────────
+// FITFinder names the same four versions as FITs: by default FIT A = 20
+// (posted), B = 00 (cushioned), C = 05 (cushioned + metatarsal pad), D = 25
+// (posted + metatarsal pad). The storefront chat reads the store's live FIT
+// names, quiz questions and the shopper's saved FIT from FITFinder and sends
+// them along; this keeps them short and well-formed (it came from a browser).
+const cut = (v, n) => clean(v).replace(/[<>{}]/g, "").slice(0, n);
+
+export function sanitizeFitfinder(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const fits = (Array.isArray(raw.fits) ? raw.fits : [])
+    .map((f) => ({
+      key: String(f?.key || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 2),
+      label: cut(f?.label, 30),
+      code: String(f?.code || "").replace(/\D/g, "").slice(0, 2),
+      name: cut(f?.name, 80),
+      description: cut(f?.description, 300),
+    }))
+    .filter((f) => f.key && f.label && f.code.length === 2)
+    .slice(0, 8);
+  if (fits.length === 0) return null;
+  const questions = (Array.isArray(raw.questions) ? raw.questions : [])
+    .map((q) => ({
+      text: cut(q?.text, 160),
+      help: cut(q?.helpText || q?.help, 400),
+      options: (Array.isArray(q?.options) ? q.options : []).map((o) => cut([o?.label, o?.sublabel].filter(Boolean).join(" — "), 70)).filter(Boolean).slice(0, 4),
+    }))
+    .filter((q) => q.text)
+    .slice(0, 4);
+  const savedKey = String(raw.saved?.key || "").toUpperCase();
+  const saved = fits.find((f) => f.key === savedKey) || null;
+  return { fits, questions, saved: saved ? saved.key : null };
+}
+
+// The FIT code of a version: arch + metatarsal pad, in Aetrex's numbering.
+export function fitCode({ arch, metSupport }) {
+  if (!arch) return null;
+  return arch === "flat_low" ? (metSupport ? "25" : "20") : (metSupport ? "05" : "00");
+}
+
+function fromCode(code) {
+  return { arch: code === "20" || code === "25" ? "flat_low" : "medium_high", ball_of_foot_pain: code === "05" || code === "25" ? "yes" : "no" };
+}
+
+function fitInfo(fits, code) {
+  const f = (fits || []).find((x) => x.code === code);
+  return f ? { key: f.key, label: f.label, name: f.name, description: f.description } : null;
+}
+
 // answers: { line, gender: men|women|kids, arch: flat_low|medium_high|not_sure,
-//            ball_of_foot_pain: yes|no }
+//            ball_of_foot_pain: yes|no, fit: FIT key }
 // available(handle) → false drops products that aren't for sale right now.
-export function pickOrthotic(catalog, answers = {}, { available = () => true } = {}) {
+// fits: the store's FITs (sanitizeFitfinder) — picks then carry their FIT, a
+// known FIT stands in for arch + ball-of-foot, and with no line yet the
+// answer is just the shopper's FIT.
+export function pickOrthotic(catalog, answers = {}, { available = () => true, fits = null } = {}) {
   const lines = catalog?.lines || [];
+  const givenFit = fits && answers.fit ? fits.find((f) => f.key === String(answers.fit).toUpperCase()) : null;
+  if (givenFit) {
+    const implied = fromCode(givenFit.code);
+    answers = {
+      ...answers,
+      arch: answers.arch === "flat_low" || answers.arch === "medium_high" ? answers.arch : implied.arch,
+      ball_of_foot_pain: answers.ball_of_foot_pain === "yes" || answers.ball_of_foot_pain === "no" ? answers.ball_of_foot_pain : implied.ball_of_foot_pain,
+    };
+  }
+  const archKnown = answers.arch === "flat_low" || answers.arch === "medium_high";
+  const metKnown = answers.ball_of_foot_pain === "yes" || answers.ball_of_foot_pain === "no";
+
+  if (!answers.line && fits) {
+    if (!archKnown || !metKnown) {
+      return { error: "To work out their FIT, ask whether they have flat feet and whether they have ball-of-foot pain (one question at a time)." };
+    }
+    const fit = fitInfo(fits, fitCode({ arch: answers.arch, metSupport: answers.ball_of_foot_pain === "yes" }));
+    return {
+      fit,
+      instruction: "Tell them their FIT and what it means in a sentence. To choose the exact orthotic, ask who it's for and which shoes it's for (if you don't know yet), then call again with the line.",
+    };
+  }
+
   const line = lines.find((l) => l.id === answers.line);
   if (!line) return { error: `Unknown line "${answers.line}". Use one of: ${lines.map((l) => l.id).join(", ")}.` };
   const gender = String(answers.gender || "").toLowerCase();
@@ -285,7 +360,6 @@ export function pickOrthotic(catalog, answers = {}, { available = () => true } =
     };
   }
 
-  const archKnown = answers.arch === "flat_low" || answers.arch === "medium_high";
   const wantArch = archKnown ? answers.arch : "medium_high";
   const wantMet = String(answers.ball_of_foot_pain || "").toLowerCase() === "yes";
   const exactGender = GENDER_LABEL[gender];
@@ -313,9 +387,16 @@ export function pickOrthotic(catalog, answers = {}, { available = () => true } =
     price: i.price,
     arch: i.arch ? ARCH_LABEL[i.arch] : "any arch",
     metatarsalPad: i.metSupport,
+    ...(fits && fitInfo(fits, fitCode(i)) ? { fit: fitInfo(fits, fitCode(i)).label } : {}),
   });
+  // The shopper's FIT from their answers (not the product's — those differ
+  // only when a version doesn't exist, which the notes already say).
+  const theirFit = fits && archKnown && metKnown
+    ? fitInfo(fits, fitCode({ arch: answers.arch, metSupport: wantMet }))
+    : null;
   return {
     line: line.name,
+    ...(theirFit ? { fit: theirFit } : {}),
     pick: fmt(pick),
     otherVersions: ranked.slice(1).filter((i) => i.gender === pick.gender || i.gender === "Unisex").slice(0, 3).map(fmt),
     notes,

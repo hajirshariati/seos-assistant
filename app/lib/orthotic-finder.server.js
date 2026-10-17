@@ -108,13 +108,42 @@ export function isFinderTree(tree) {
   return tree?.definition?.kind === FINDER_KIND && Array.isArray(tree.definition?.finder?.lines);
 }
 
-export function finderToolDef(tree) {
+function fitSection(fitfinder) {
+  if (!fitfinder?.fits?.length) return "";
+  const parts = [
+    "\n\nFITs — this store sizes orthotic support as FITs (the same ones the FIT finder on product pages uses). " +
+    "Use these names and explain them in these words when asked \"what's a FIT?\" or \"which FIT is right for me?\":\n" +
+    fitfinder.fits.map((f) => `- ${f.label} — ${f.name}: ${f.description}`).join("\n"),
+  ];
+  if (fitfinder.questions?.length) {
+    parts.push(
+      "The store's own FIT questions (ask them this way; offer the 'how do I know' tip if they're unsure):\n" +
+      fitfinder.questions.map((q) => `- ${q.text}${q.options.length ? ` (${q.options.join(" / ")})` : ""}${q.help ? ` How to tell: ${q.help}` : ""}`).join("\n"),
+    );
+  }
+  parts.push("To work out a FIT, call this tool with arch and ball_of_foot_pain (no line needed) — it returns the FIT and saves it for them.");
+  const saved = fitfinder.saved && fitfinder.fits.find((f) => f.key === fitfinder.saved);
+  if (saved) {
+    parts.push(
+      `THIS CUSTOMER ALREADY HAS A FIT: ${saved.label} (${saved.name}), saved from the FIT finder. That answers arch and ball-of-foot pain — ` +
+      `pass fit "${saved.key}" and don't ask those again. Mention it naturally ("Going by your ${saved.label}…") and that they can change it if something's different.`,
+    );
+  }
+  return parts.join("\n");
+}
+
+export function finderToolDef(tree, { fitfinder = null } = {}) {
   const lines = tree.definition.finder.lines;
+  const fits = fitfinder?.fits || [];
   return {
     name: `recommend_${tree.intent}`,
     description:
-      "Find the right orthotic (insole) for the customer. Use it whenever they want help choosing one.\n\n" +
-      "You need four things. Ask only for what you don't know yet — one short question per message, with tap choices:\n" +
+      "Find the right orthotic (insole) for the customer. Use it whenever they want help choosing one, or ask about FITs.\n\n" +
+      "Sound like an experienced, friendly orthotic fit specialist: warm, calm and sure of yourself, in plain words. " +
+      "Briefly acknowledge what they told you (\"Ball-of-foot pain is really common in heels — good news, that's easy to support.\"), " +
+      "ask one short question per message with tap choices, and when you recommend, say in a sentence or two why it suits them. " +
+      "No jargon without a plain explanation, no long lists, no medical promises.\n\n" +
+      "You need four things. Ask only for what you don't know yet:\n" +
       "1. Who it's for: men, women or kids.\n" +
       "2. The shoes or activity it's for (running, gym, dress shoes, heels, work boots, cleats, everyday sneakers…).\n" +
       "3. Arch type: flat/low (also: flat feet, overpronation, feet roll inward), medium/high, or not sure.\n" +
@@ -124,8 +153,9 @@ export function finderToolDef(tree) {
       "without a removable insole, heels or slim dress shoes → the dress, fashion or thin lines; extra cushioning → memory foam — " +
       "and call this tool. It picks the exact version for their arch and ball-of-foot pain and checks it's for sale; show what it returns. " +
       "Plantar fasciitis or heel pain doesn't change the line — answer the four questions as usual. " +
-      "Open sandals can only hold an insert if the footbed comes out and there's room — say so honestly and offer supportive sandals instead.\n\n" +
-      "Lines in this store:\n" + lines.map((l) => `- ${describeLine(l)}`).join("\n"),
+      "Open sandals can only hold an insert if the footbed comes out and there's room — say so honestly and offer supportive sandals instead." +
+      fitSection(fitfinder) +
+      "\n\nLines in this store:\n" + lines.map((l) => `- ${describeLine(l)}`).join("\n"),
     input_schema: {
       type: "object",
       properties: {
@@ -133,8 +163,9 @@ export function finderToolDef(tree) {
         gender: { type: "string", enum: ["men", "women", "kids"] },
         arch: { type: "string", enum: ["flat_low", "medium_high", "not_sure"] },
         ball_of_foot_pain: { type: "string", enum: ["yes", "no"] },
+        ...(fits.length ? { fit: { type: "string", enum: fits.map((f) => f.key), description: "Their FIT, when they already know it (stands in for arch and ball-of-foot pain)." } } : {}),
       },
-      required: ["line", "gender", "arch", "ball_of_foot_pain"],
+      required: fits.length ? [] : ["line", "gender", "arch", "ball_of_foot_pain"],
     },
   };
 }
@@ -148,10 +179,15 @@ async function availableHandles(shop, handles) {
   return new Set(rows.filter((r) => !/^(draft|archived)$/i.test(r.status || "")).map((r) => r.handle));
 }
 
-export async function runFinderTool({ tree, shop, input }) {
+export async function runFinderTool({ tree, shop, input, fitfinder = null }) {
   const catalog = tree.definition.finder;
   const forSale = await availableHandles(shop, catalog.items.map((i) => i.handle));
-  const result = pickOrthotic(catalog, input || {}, { available: (h) => forSale.has(h) });
+  const result = pickOrthotic(catalog, input || {}, { available: (h) => forSale.has(h), fits: fitfinder?.fits || null });
   if (result.pick) await incrementCompletedCount(shop, tree.id);
+  // A FIT worked out in the chat is saved to FITFinder by the widget, so
+  // product pages open on it too.
+  if (result.fit && result.fit.key !== fitfinder?.saved) {
+    return { ...result, _events: [{ type: "fitfinder_fit", key: result.fit.key }] };
+  }
   return result;
 }
