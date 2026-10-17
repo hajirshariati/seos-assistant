@@ -87,5 +87,19 @@ export function verifyLeanAnswer({
     issues.push({ code: "missing_cards", detail: "You named products but didn't call show_products. Show the ones you recommend." });
   }
 
+  // 4. Discounts and promo codes must come from the store (promotions,
+  // store info, tool output) — an invented "20% off" or code costs money.
+  const known = String(knowledgeText || "").toLowerCase();
+  const badOffers = [];
+  for (const m of body.matchAll(/(\d{1,2})\s?%\s?off\b/gi)) {
+    if (!new RegExp(`\\b${m[1]}\\s?%`).test(known)) badOffers.push(m[0]);
+  }
+  for (const m of body.matchAll(/\b(?:code|coupon)\s*:?\s*["“']?([A-Z0-9][A-Z0-9-]{3,})\b/g)) {
+    if (/[A-Z]/.test(m[1]) && /\d|[A-Z]{4,}/.test(m[1]) && !known.includes(m[1].toLowerCase())) badOffers.push(m[1]);
+  }
+  if (badOffers.length) {
+    issues.push({ code: "unverified_offer", detail: `These offers aren't in the store's promotions or info: ${[...new Set(badOffers)].join(", ")}. Only mention discounts and codes the store lists.` });
+  }
+
   return issues;
 }
