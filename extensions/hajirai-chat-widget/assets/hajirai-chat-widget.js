@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 siri-design');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 bubble-clear');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -218,14 +218,18 @@ document.body.appendChild(overlay);
 document.body.appendChild(panel);
 document.body.appendChild(launcher);
 
-/* Bubble mode: remembered per shopper. The bubble keeps clear of other
-   apps' floating buttons in its corner (help chat, feedback tabs): it sits
-   just above the highest one it would otherwise overlap. */
+/* Bubble mode: the × folds the bar into a bubble for the rest of this
+   visit. Tapping the bubble opens the chat and brings the bar back; a new
+   visit starts with the bar. The bubble keeps clear of other apps'
+   floating buttons in its corner (help chat, feedback tabs): it sits just
+   above the highest one it would otherwise overlap. */
 var LBUBBLE_KEY='hajirai_launcher_bubble';
+try{localStorage.removeItem(LBUBBLE_KEY)}catch(e){}/* was remembered forever */
 function setLauncherBubble(on){
-  try{if(on)localStorage.setItem(LBUBBLE_KEY,'1');else localStorage.removeItem(LBUBBLE_KEY)}catch(e){}
+  try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
   launcher.classList.toggle('is-bubble',!!on);
   launcher.setAttribute('aria-label',on?'Open the AI shopping assistant':'Open the shopping assistant chat');
+  if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
   placeLauncher();
 }
 function floatingAt(x,y){
@@ -272,18 +276,15 @@ function placeLauncher(){
     launcher.style.bottom=Math.round(window.innerHeight-top+12)+'px';
   }
 }
-try{if(localStorage.getItem(LBUBBLE_KEY)==='1')launcher.classList.add('is-bubble')}catch(e){}
+try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1'){launcher.classList.add('is-bubble');launcher.title='Ask AI'}}catch(e){}
 window.addEventListener('resize',placeLauncher);
-/* Other apps' buttons (Zendesk and the like) often load well after us:
-   check again as the page settles and whenever something is added to it. */
-[1500,4000,8000,15000].forEach(function(ms){setTimeout(placeLauncher,ms)});
-var placeTimer=null;
-try{
-  new MutationObserver(function(){
-    if(!launcher.classList.contains('is-bubble'))return;
-    clearTimeout(placeTimer);placeTimer=setTimeout(placeLauncher,400);
-  }).observe(document.body,{childList:true});
-}catch(e){}
+/* Other apps' buttons (Zendesk and the like) load late — often only after
+   the first scroll or tap — and fade or slide in, so no single moment is
+   the right one to look. While the bubble shows, check every couple of
+   seconds (a few rectangle reads; nothing moves unless it has to). */
+setInterval(function(){
+  if(launcher.classList.contains('is-bubble')&&!document.hidden)placeLauncher();
+},2000);
 
 /* Hide on mobile if configured */
 var isMobileHidden=false;
@@ -1808,10 +1809,11 @@ sendBtn.disabled=false;
 /* Events */
 launcher.addEventListener('click',function(e){
 if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true);return}
+if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
 toggle(true);
 });
 closeBtn.addEventListener('click',function(){toggle(false)});
-launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();toggle(true)}});
+launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
 overlay.addEventListener('click',function(){toggle(false)});
 sendBtn.addEventListener('click',sendMessage);
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
