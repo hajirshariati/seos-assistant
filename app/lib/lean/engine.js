@@ -254,6 +254,13 @@ export async function runLeanTurn({
   };
 
   const call = callModel || ((req) => anthropic.messages.create(req));
+  // Claude often writes its reply in the same step as showing cards ("Here's
+  // the Felicity in burgundy" + show_products) and then ends with nothing
+  // more to say — that text is the reply. Text written alongside a lookup
+  // ("Let me check…") is not: new facts are on the way.
+  let draft = "";
+  let askedForText = false;
+  const PRESENTING = new Set(["show_products", "contact_support"]);
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     // Last hop, or running out of time: no more tools — answer with what we have.
@@ -266,7 +273,10 @@ export async function runLeanTurn({
     addUsage(usage, resp.usage);
     const content = Array.isArray(resp.content) ? resp.content : [];
     conv.push({ role: "assistant", content });
+    const said = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
     const toolUses = content.filter((b) => b.type === "tool_use");
+    if (toolUses.some((t) => !PRESENTING.has(t.name))) draft = "";
+    else if (said) draft = said;
     if (toolUses.length > 0) {
       const results = [];
       for (const tu of toolUses) {
@@ -280,7 +290,18 @@ export async function runLeanTurn({
       if (resp.stop_reason === "tool_use" && !mustAnswer) continue;
     }
 
-    text = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    text = said || draft;
+    if (!text && !askedForText && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
+      // Ended without a word for the customer: ask once for the reply.
+      askedForText = true;
+      if (content.length === 0) conv.pop(); // the API rejects empty assistant turns
+      const ask = { type: "text", text: "(Now write your reply to the customer. Any cards you chose are shown under it.)" };
+      const last = conv[conv.length - 1];
+      if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), ask];
+      else conv.push({ role: "user", content: [ask] });
+      log("[lean] no reply text — asking for it");
+      continue;
+    }
     const issues = verifyLeanAnswer({
       text,
       shownHandles: shown,
@@ -291,6 +312,7 @@ export async function runLeanTurn({
     });
     if (issues.length > 0 && !retried && Date.now() - started < deadlineMs) {
       retried = true;
+      draft = ""; // the rejected reply must not come back as the answer
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
         role: "user",
@@ -303,7 +325,7 @@ export async function runLeanTurn({
   }
 
   if (!text) {
-    log(`[lean] no final text after ${MAX_HOPS} hops`);
+    log("[lean] no reply text — sent the fallback message");
     text = "Sorry — I couldn't finish that one. Could you try asking again?";
   }
 

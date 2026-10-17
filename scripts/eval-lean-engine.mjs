@@ -398,6 +398,34 @@ await test("analytics: a turn records what it was about (never the customer's wo
   assert.deepEqual(week.tools, [{ label: "Guided finder", count: 1 }]);
   assert.equal(summarizeWeek([]).empty, true);
 });
+await test("production 2026-10-16: reply written with the cards, then an empty last step → that reply is sent (not 'Sorry')", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"] })] },
+    { stop_reason: "end_turn", content: [txt("The Ashley wedge comes in wide.")] }, // named a product, no cards → rewrite
+    { stop_reason: "tool_use", content: [tu("t2", "search_products", { query: "wide wedge", categories: ["wedges/heels"] })] },
+    { stop_reason: "tool_use", content: [txt("Yes — the Ashley in navy comes in wide."), tu("t3", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]] })] },
+    { stop_reason: "end_turn", content: [] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Does it come in wide width?" }], latestUserMessage: "Does it come in wide width?", callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.equal(r.text, "Yes — the Ashley in navy comes in wide.");
+  assert.equal(r.cards.length, 1);
+  assert.ok(!logs.some((l) => l.includes("fallback")), logs.join("\n"));
+});
+await test("narration next to a search ('Let me check…') is never sent as the reply; Claude is asked once instead", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [txt("Let me check that for you."), tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"] })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]] })] },
+    { stop_reason: "end_turn", content: [] },
+    { stop_reason: "end_turn", content: [txt("The Ashley wedge in navy is a great dressy pick.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "dressy wedge" }], latestUserMessage: "dressy wedge", callModel: s.callModel, log: quiet });
+  assert.equal(r.text, "The Ashley wedge in navy is a great dressy pick.");
+  const lastReq = s.requests.at(-1).messages;
+  assert.equal(lastReq.at(-1).role, "user");
+  assert.match(JSON.stringify(lastReq.at(-1)), /write your reply/);
+  assert.ok(lastReq.every((m) => !(m.role === "assistant" && Array.isArray(m.content) && m.content.length === 0)), "no empty assistant turn sent to the API");
+});
 await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
   const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));
   const s = scripted([...loop, { stop_reason: "end_turn", content: [txt("Here's what I found in sandals.")] }]);
