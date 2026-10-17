@@ -928,7 +928,7 @@ a.ai-chat-welcome__hint--link:hover {
 @media (hover: hover) {
   .ai-chat-suggest-btn:hover {
     border-color: var(--ai-chat-primary, #2d6b4f);
-    background: rgba(45, 107, 79, 0.08);
+    background: rgba(13, 13, 18, 0.08);
   }
 }
 
@@ -1967,7 +1967,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
   flex: 0 0 140px;
   min-width: 0;
   padding-left: 12px;
-  border-left: 1px dashed rgba(45, 107, 79, 0.28);
+  border-left: 1px dashed rgba(13, 13, 18, 0.28);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2007,7 +2007,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--ai-chat-primary, #2d6b4f), #3a8a66);
+  background: var(--seos-glow, linear-gradient(90deg, #0d0d12, #3a3a44));
   border-radius: 999px;
   transition: width 500ms ease;
 }
@@ -2024,7 +2024,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
     padding: 8px 0 0;
     margin-top: 4px;
     border-left: none;
-    border-top: 1px dashed rgba(45, 107, 79, 0.28);
+    border-top: 1px dashed rgba(13, 13, 18, 0.28);
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -2038,8 +2038,8 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
 .ai-chat-fit-card {
   margin-top: 12px;
   padding: 14px 14px 12px;
-  background: linear-gradient(135deg, rgba(45, 107, 79, 0.06), rgba(45, 107, 79, 0.02));
-  border: 1px solid rgba(45, 107, 79, 0.18);
+  background: linear-gradient(135deg, rgba(13, 13, 18, 0.06), rgba(13, 13, 18, 0.02));
+  border: 1px solid rgba(13, 13, 18, 0.18);
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.45;
@@ -2109,7 +2109,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--ai-chat-primary, #2d6b4f), #3a8a66);
+  background: var(--seos-glow, linear-gradient(90deg, #0d0d12, #3a3a44));
   border-radius: 999px;
   transition: width 600ms ease;
 }
@@ -2172,7 +2172,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
 .ai-chat-launcher-text:focus-visible {
   outline: 2px solid var(--ai-chat-primary, #2d6b4f) !important;
   outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(45, 107, 79, 0.18) !important;
+  box-shadow: 0 0 0 4px rgba(13, 13, 18, 0.18) !important;
 }
 
 /* Honor reduced-motion preference for the launcher / message animations. */
@@ -3014,4 +3014,461 @@ a.ai-chat-product-title {
   .ai-chat-launcher.is-bubble .ai-chat-twinkle {
     animation: none;
   }
+}
+
+/* ======================================================================
+   DESIGN SYSTEM — "Siri" (ink, soft surfaces, glow only for the AI)
+   ======================================================================
+   One visual language for everything the shopper sees:
+     ink      #0d0d12 — primary buttons, the shopper's messages, the bubble
+     surfaces #f5f5f7 — the assistant's messages, image wells, soft chips
+     lines    hairline borders, never heavy outlines
+     glow     the pink → blue → teal light of the bubble, used only for AI
+              moments (the bubble, the bar's mark, typing, the welcome ring)
+   Every button is a pill; cards and messages share one corner radius.
+   This block comes last so it settles the older layered rules. */
+.ai-chat-panel,
+.ai-chat-launcher,
+.ai-chat-overlay {
+  --seos-ink: #0d0d12;
+  --seos-ink-hover: #26262d;
+  --seos-text: #1d1d1f;
+  --seos-text-2: #6e6e73;
+  --seos-surface: #f5f5f7;
+  --seos-line: rgba(0, 0, 0, 0.08);
+  --seos-line-strong: rgba(0, 0, 0, 0.16);
+  --seos-glow: linear-gradient(120deg, #ff4fa3 0%, #a35cff 35%, #3d7bff 65%, #29e0d0 100%);
+  --seos-radius: 18px;
+  --seos-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* The older variables everything else reads, mapped onto the system. */
+  --ai-chat-primary: var(--seos-ink);
+  --ai-chat-accent: var(--seos-ink);
+  --ai-chat-color-primary: var(--seos-ink);
+  --ai-chat-msg-user: var(--seos-ink);
+  --ai-chat-msg-assistant: var(--seos-surface);
+  --ai-chat-text: var(--seos-text);
+  --ai-chat-text-light: var(--seos-text-2);
+  --ai-chat-border: var(--seos-line);
+  --ai-chat-cta-bg: var(--seos-surface);
+  --ai-chat-cta-text: var(--seos-ink);
+  --ai-chat-cta-bg-val: var(--seos-surface);
+  --ai-chat-cta-text-val: var(--seos-ink);
+  --ai-chat-product-cta-bg: var(--seos-ink);
+  --ai-chat-product-cta-text: #fff;
+  --ai-chat-radius: 22px;
+}
+.ai-chat-panel {
+  font-family: var(--seos-font);
+  color: var(--seos-text);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(13, 13, 18, 0.22), 0 2px 8px rgba(13, 13, 18, 0.08);
+  -webkit-font-smoothing: antialiased;
+}
+.ai-chat-overlay.visible {
+  background: rgba(13, 13, 18, 0.32) !important;
+}
+
+/* ---------- Header ---------- */
+.ai-chat-panel .ai-chat-header {
+  border-bottom: 1px solid var(--seos-line);
+}
+.ai-chat-panel .ai-chat-header__name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--seos-text);
+}
+.ai-chat-panel .ai-chat-header__avatar {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(163, 92, 255, 0.55);
+}
+.ai-chat-panel .ai-chat-header__login-pill,
+.ai-chat-panel .ai-chat-header__vip-pill {
+  background: var(--seos-surface) !important;
+  color: var(--seos-text) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  font-weight: 600;
+}
+.ai-chat-panel .ai-chat-header__btn {
+  color: var(--seos-text-2);
+  border-radius: 999px;
+}
+
+/* ---------- Welcome ---------- */
+.ai-chat-panel .ai-chat-welcome__avatar {
+  border: 0 !important;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 6px transparent;
+  background: var(--seos-ink);
+  position: relative;
+  overflow: visible;
+}
+.ai-chat-panel .ai-chat-welcome__avatar::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: var(--seos-glow);
+  z-index: -1;
+  filter: blur(6px);
+  opacity: 0.55;
+  animation: seosAura 6s ease-in-out infinite alternate;
+}
+.ai-chat-panel .ai-chat-welcome__avatar img {
+  border-radius: 50%;
+}
+@keyframes seosAura {
+  from { transform: rotate(0deg) scale(1); opacity: 0.45; }
+  to { transform: rotate(180deg) scale(1.06); opacity: 0.7; }
+}
+.ai-chat-panel .ai-chat-welcome__name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--seos-text);
+}
+.ai-chat-panel .ai-chat-welcome__tagline {
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-welcome__greeting-cta {
+  color: var(--seos-text);
+  font-weight: 600;
+}
+.ai-chat-panel .ai-chat-welcome__cta-btn {
+  border-radius: 999px !important;
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  border: 0 !important;
+  padding: 10px 18px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  min-height: 42px;
+  width: auto !important;
+  max-width: 100%;
+  white-space: normal;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.12);
+}
+.ai-chat-panel .ai-chat-welcome__ctas {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px !important;
+}
+.ai-chat-panel .ai-chat-welcome__cta-btn .cta-plus {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+.ai-chat-panel .ai-chat-welcome__qp-label {
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-welcome__qp-btn {
+  border-radius: 999px !important;
+  background: var(--seos-surface) !important;
+  border: 0 !important;
+  color: var(--seos-text) !important;
+  font-weight: 500;
+}
+.ai-chat-panel .ai-chat-welcome__hint,
+.ai-chat-panel .ai-chat-welcome__hint--link {
+  color: var(--seos-text-2) !important;
+}
+
+/* ---------- Messages ---------- */
+.ai-chat-panel .ai-chat-msg-bubble {
+  border-radius: 20px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.ai-chat-panel .ai-chat-msg--user .ai-chat-msg-bubble {
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  border-bottom-right-radius: 6px;
+}
+.ai-chat-panel .ai-chat-msg--assistant .ai-chat-msg-bubble {
+  background: var(--seos-surface) !important;
+  color: var(--seos-text) !important;
+  border-bottom-left-radius: 6px;
+}
+.ai-chat-panel .ai-chat-msg-avatar {
+  box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px rgba(163, 92, 255, 0.35);
+  border-radius: 50%;
+}
+
+/* Typing: three glow-colored dots. */
+.ai-chat-panel .ai-chat-typing-dot {
+  background: #a35cff !important;
+}
+.ai-chat-panel .ai-chat-typing-dot:nth-child(1) { background: #ff4fa3 !important; }
+.ai-chat-panel .ai-chat-typing-dot:nth-child(3) { background: #3d7bff !important; }
+
+/* ---------- Choices, suggestions, links, feedback ---------- */
+.ai-chat-panel .ai-chat-choice-btn {
+  border-radius: 999px !important;
+  background: #fff !important;
+  border: 1px solid var(--seos-line-strong) !important;
+  color: var(--seos-text) !important;
+  font-weight: 500 !important;
+  min-height: 38px;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-choice-btn:hover {
+    background: var(--seos-ink) !important;
+    border-color: var(--seos-ink) !important;
+    color: #fff !important;
+  }
+}
+.ai-chat-panel .ai-chat-suggestions {
+  border-top: 1px solid var(--seos-line) !important;
+}
+.ai-chat-panel .ai-chat-suggestions-label {
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-suggest-btn {
+  background: #fff !important;
+  border: 1px solid var(--seos-line) !important;
+  border-radius: 14px !important;
+  color: var(--seos-text) !important;
+  font-weight: 500 !important;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-suggest-btn:hover {
+    border-color: var(--seos-line-strong) !important;
+  }
+}
+.ai-chat-panel .suggest-plus {
+  color: #a35cff !important;
+}
+.ai-chat-panel .ai-chat-cta-btn {
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  padding: 13px 18px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+.ai-chat-panel .ai-chat-fb-btn {
+  border-radius: 999px !important;
+  border: 1px solid var(--seos-line) !important;
+  background: #fff !important;
+  color: var(--seos-text-2) !important;
+}
+.ai-chat-panel .ai-chat-products-arrow {
+  background: var(--seos-ink) !important;
+}
+
+/* ---------- Input ---------- */
+.ai-chat-panel .ai-chat-input-area {
+  border-top: 1px solid var(--seos-line);
+}
+.ai-chat-panel .ai-chat-input-wrap {
+  background: var(--seos-surface) !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ai-chat-panel .ai-chat-input-wrap:focus-within {
+  background: #fff !important;
+  border-color: var(--seos-line-strong) !important;
+}
+.ai-chat-panel .ai-chat-input {
+  color: var(--seos-text) !important;
+}
+.ai-chat-panel .ai-chat-input-icon {
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-send {
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+}
+.ai-chat-panel .ai-chat-footer {
+  color: var(--seos-text-2);
+}
+
+/* ---------- Product cards: one tile everywhere ---------- */
+.ai-chat-panel .ai-chat-product-card {
+  border: 1px solid var(--seos-line) !important;
+  border-radius: var(--seos-radius) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+.ai-chat-panel .ai-chat-products--showcase .ai-chat-product-card .ai-chat-product-img {
+  background: var(--seos-surface) !important;
+}
+.ai-chat-panel .ai-chat-products--showcase .ai-chat-product-card .ai-chat-product-img img {
+  mix-blend-mode: multiply;
+}
+.ai-chat-panel .ai-chat-product-title {
+  color: var(--seos-text) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em;
+}
+.ai-chat-panel .ai-chat-product-price {
+  color: var(--seos-text);
+  font-weight: 600;
+}
+.ai-chat-panel .ai-chat-product-cta,
+.ai-chat-panel .ai-chat-atc-add,
+.ai-chat-panel .ai-chat-atc-primary {
+  border-radius: 999px !important;
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  min-height: 40px !important;
+  font-weight: 600 !important;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-product-cta:hover,
+  .ai-chat-panel .ai-chat-atc-add:not([disabled]):hover,
+  .ai-chat-panel .ai-chat-atc-primary:hover {
+    background: var(--seos-ink-hover) !important;
+    opacity: 1;
+  }
+}
+.ai-chat-panel .ai-chat-atc-add[disabled] {
+  background: var(--seos-surface) !important;
+  color: var(--seos-text-2) !important;
+}
+.ai-chat-panel .ai-chat-viz-btn {
+  border-radius: 999px !important;
+  min-height: 40px !important;
+  border: 1px solid var(--seos-line-strong) !important;
+}
+.ai-chat-panel .ai-chat-viz-btn svg {
+  color: #a35cff;
+}
+.ai-chat-panel .ai-chat-view-link {
+  color: var(--seos-text-2) !important;
+  font-size: 12.5px !important;
+}
+.ai-chat-panel .ai-chat-atc-panel {
+  border: 1px solid var(--seos-line) !important;
+  border-radius: var(--seos-radius) !important;
+  box-shadow: none !important;
+}
+.ai-chat-panel .ai-chat-atc-panel.is-inline {
+  border: 0 !important;
+  border-top: 1px solid var(--seos-line) !important;
+  border-radius: 0 !important;
+}
+.ai-chat-panel .ai-chat-atc-val {
+  border-radius: 12px !important;
+  border: 1px solid var(--seos-line-strong) !important;
+}
+.ai-chat-panel .ai-chat-atc-val.is-on {
+  background: var(--seos-ink) !important;
+  border-color: var(--seos-ink) !important;
+  color: #fff !important;
+}
+.ai-chat-panel .ai-chat-atc-val.is-out {
+  border-color: var(--seos-line) !important;
+  background: #fafafa !important;
+}
+.ai-chat-panel .ai-chat-atc-check {
+  background: var(--seos-ink) !important;
+}
+
+/* A single recommendation is the same tile as in a carousel, just alone:
+   image well on top, name and price, the buttons, the link. */
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 0 0 272px !important;
+  width: 272px !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  grid-template-columns: none !important;
+  grid-template-areas: none !important;
+  box-shadow: none !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 11 !important;
+  border-radius: 0 !important;
+  grid-row: auto !important;
+  padding: 0 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img img {
+  padding: 10px;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  padding: 12px 14px 14px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-title {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  margin: 0 !important;
+  align-self: auto !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-price {
+  font-size: 14px !important;
+  margin: 0 !important;
+  align-self: auto !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions {
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions > *,
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info > .ai-chat-product-cta {
+  width: 100% !important;
+  flex: 0 0 auto !important;
+  margin-top: 10px;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions > * {
+  margin-top: 0 !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
+  align-self: center !important;
+  margin-top: 8px !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-atc-panel.is-inline {
+  margin: 0 14px 14px !important;
+  padding-top: 12px !important;
+}
+/* Carousel cards: the same insides. */
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-cta {
+  width: 100% !important;
+}
+
+/* ---------- Launcher bar: the AI mark instead of a photo ---------- */
+.ai-chat-launcher {
+  border: 1px solid var(--seos-line) !important;
+  box-shadow: 0 8px 28px rgba(13, 13, 18, 0.14), 0 1px 3px rgba(13, 13, 18, 0.08) !important;
+  font-family: var(--seos-font);
+}
+.ai-chat-launcher.is-bubble {
+  border: 0 !important;
+}
+.ai-chat-launcher__icon.is-orb {
+  position: relative;
+  overflow: hidden;
+  background: var(--seos-ink) !important;
+  color: #fff;
+}
+.ai-chat-launcher__icon.is-orb .ai-chat-orb-glow {
+  filter: blur(4px);
+}
+.ai-chat-launcher__icon.is-orb svg {
+  position: relative;
+  width: 15px !important;
+  height: 15px !important;
+}
+.ai-chat-launcher__text {
+  color: var(--seos-text-2) !important;
+  font-family: var(--seos-font) !important;
+}
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
 }

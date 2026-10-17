@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 siri-orb');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 siri-design');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -174,7 +174,7 @@ launcher.setAttribute('aria-label','Open the shopping assistant chat');
 /* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
-launcher.innerHTML='<div class="ai-chat-launcher__icon">'+avatarImg+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
   '<span class="ai-chat-launcher__orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</span>';
 
 /* Build panel */
@@ -718,7 +718,7 @@ function vizLoadingHtml(step){
   return '<div class="ai-chat-viz-result ai-chat-viz-loading">'+
     '<div style="display:flex;align-items:center;gap:8px;padding:14px 14px 10px">'+
       '<span class="ai-chat-viz-spin"></span>'+
-      '<span class="ai-chat-viz-step" style="font-size:13px;color:#2d6b4f;font-weight:600">'+esc(step)+'</span>'+
+      '<span class="ai-chat-viz-step" style="font-size:13px;color:#1d1d1f;font-weight:600">'+esc(step)+'</span>'+
     '</div>'+
     '<div class="ai-chat-viz-loading-fill">'+
       '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#b8b8b8;display:flex;flex-direction:column;align-items:center;gap:4px">'+vizImageIcon()+'<span style="font-size:11px;color:#a0a0a0">Creating your preview…</span></span>'+
@@ -738,7 +738,7 @@ function vizResultHtml(src){
 function vizErrorHtml(msg){
   return '<div style="margin-top:10px;border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:13px 15px;background:#fff">'+
     '<div style="font-size:13px;color:#555;margin-bottom:9px">'+esc(msg||'Could not create the preview.')+'</div>'+
-    '<button class="ai-chat-viz-retry" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:0;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;background:var(--ai-chat-primary,#2d6b4f)">Try again</button>'+
+    '<button class="ai-chat-viz-retry" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:0;border-radius:999px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;background:var(--ai-chat-primary,#2d6b4f)">Try again</button>'+
   '</div>';
 }
 
@@ -971,15 +971,15 @@ function injectVizOptions(host,cta,card){
   var scenes=(cta&&cta.scenes&&cta.scenes.length)?cta.scenes:DEFAULT_VIZ_SCENES;
   var wrap=document.createElement('div');
   wrap.className='ai-chat-viz-options';
-  wrap.style.cssText='display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #E7DAC1;border-radius:12px;background:#FCFAF6;box-sizing:border-box';
+  wrap.style.cssText='display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:18px;background:#fff;box-sizing:border-box';
   var head=document.createElement('div');
   head.className='ai-chat-viz-options-title';
   head.textContent='Style the look';
-  head.style.cssText='font-size:13px;color:#5C4A2A;font-weight:700;letter-spacing:.01em';
+  head.style.cssText='font-size:13px;color:#1d1d1f;font-weight:600;letter-spacing:-.01em';
   var help=document.createElement('div');
   help.className='ai-chat-viz-options-help';
   help.textContent='Choose a setting';
-  help.style.cssText='font-size:11px;color:#9A8A6A;margin-top:-4px';
+  help.style.cssText='font-size:11px;color:#6e6e73;margin-top:-4px';
   wrap.appendChild(head);
   wrap.appendChild(help);
   var seg=document.createElement('div');
@@ -994,12 +994,12 @@ function injectVizOptions(host,cta,card){
     chip.textContent=s.label;
     // Quiet, Apple-style pill — small (~32px) and fully rounded, not a CTA block.
     // Wraps cleanly. (The .ai-chat-viz-opt rule also enforces this with !important.)
-    chip.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 10px;border:1px solid #C9A76D;border-radius:999px;background:#fff;color:#8A6632;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;box-sizing:border-box;transition:background .15s,color .15s';
+    chip.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 10px;border:1px solid rgba(0,0,0,.16);border-radius:999px;background:#fff;color:#1d1d1f;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;box-sizing:border-box;transition:background .15s,color .15s';
     chip.addEventListener('click',function(e){
       if(e){e.preventDefault();e.stopPropagation();}
       var kids=seg.children;
-      for(var i=0;i<kids.length;i++){kids[i].style.background='#fff';kids[i].style.color='#8A6632';kids[i].setAttribute('aria-pressed','false');}
-      chip.style.background='#C9A76D';chip.style.color='#fff';chip.setAttribute('aria-pressed','true');
+      for(var i=0;i<kids.length;i++){kids[i].style.background='#fff';kids[i].style.color='#1d1d1f';kids[i].setAttribute('aria-pressed','false');}
+      chip.style.background='#0d0d12';chip.style.color='#fff';chip.setAttribute('aria-pressed','true');
       var c2={productHandle:cta.productHandle,productTitle:cta.productTitle||'',styleContext:s.ctx,label:cta.label,scenes:cta.scenes};
       vizFetch(host,c2,card);
     });
@@ -1126,7 +1126,9 @@ var preKeys=pre?Object.keys(pre):[];
 var preLabel=preKeys.map(function(k){return esc(String(pre[k]))}).join(' \u00b7 ');
 /* "Select size" until every option the product has (size, width…) is known. */
 var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preKeys.some(function(k){return k.toLowerCase()===String(n).toLowerCase()})});
-var ctaText=toPick.length?'Select '+toPick.map(function(n){return String(n).toLowerCase()}).join(' & '):'Add to cart';
+/* One short label for every card ("Select size"); the picker asks for the rest. */
+var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
+var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
@@ -1419,7 +1421,7 @@ if(!b)return;
 var formHtml='<div class="ai-chat-klaviyo-form" style="margin-top:12px;padding:16px;background:#f8f8f8;border-radius:10px">'
 +'<input type="email" class="ai-kl-email" placeholder="Email address" aria-label="Email address" autocomplete="email" required style="display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:8px;box-sizing:border-box" />'
 +'<input type="tel" class="ai-kl-phone" placeholder="Phone number (optional)" aria-label="Phone number, optional" autocomplete="tel" style="display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:10px;box-sizing:border-box" />'
-+'<button class="ai-kl-submit" type="submit" style="display:block;width:100%;padding:12px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Subscribe</button>'
++'<button class="ai-kl-submit" type="submit" style="display:block;width:100%;padding:12px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Subscribe</button>'
 +'<div class="ai-kl-status" role="status" aria-live="polite" style="font-size:12px;margin-top:8px;text-align:center;display:none"></div>'
 +'</div>';
 b.insertAdjacentHTML('beforeend',formHtml);
@@ -1441,7 +1443,7 @@ submitBtn.addEventListener('click',function(){
     body:JSON.stringify({data:{type:'subscription',attributes:{custom_source:'SEoS Assistant Chat',profile:{data:{type:'profile',attributes:profileAttrs}}},relationships:{list:{data:{type:'list',id:KLAVIYO_LIST_ID}}}}})
   }).then(function(r){
     if(r.ok||r.status===202){
-      form.innerHTML='<div style="text-align:center;padding:12px;color:#2d6b4f;font-weight:600;font-size:14px">You\'re subscribed!</div>';
+      form.innerHTML='<div style="text-align:center;padding:12px;color:#1d1d1f;font-weight:600;font-size:14px">You\'re subscribed!</div>';
     } else {
       r.text().then(function(t){console.error('[klaviyo] status='+r.status,t)});
       statusEl.style.display='block';statusEl.style.color='#c00';statusEl.textContent='Something went wrong ('+r.status+'). Please try again.';

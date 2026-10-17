@@ -253,7 +253,7 @@ test("the mobile changes are SCOPED to the media query — desktop card stays ve
 });
 
 test("the widget carries a current build marker (so the live version is verifiable)", () => {
-  assert.match(SRC, /\[hajirai-widget\] build 2026-10-17 siri-orb/, "console build marker bumped for this change");
+  assert.match(SRC, /\[hajirai-widget\] build 2026-10-17 siri-design/, "console build marker bumped for this change");
 });
 
 // ── PRD 2026-06-29: stability — single-flight, cancellation, no runaway repaint ──
@@ -376,7 +376,7 @@ test("scene panel is a distinct 'Style the look' panel with a 'Choose a setting'
   const body = fnBody("injectVizOptions");
   assert.match(body, /Style the look/, "panel header");
   assert.match(body, /Choose a setting/, "helper text");
-  assert.match(body, /border:1px solid #E7DAC1/, "subtle bordered panel, visually separate from the card");
+  assert.match(body, /border:1px solid rgba\(0,0,0,\.08\)/, "subtle hairline-bordered panel, visually separate from the card");
   assert.doesNotMatch(body, /box-shadow/, "no heavy shadow");
 });
 
