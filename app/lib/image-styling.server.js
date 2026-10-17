@@ -61,24 +61,24 @@ export function isImageProviderSupported(provider) {
   return provider === "gemini" || provider === "openai";
 }
 
-// The fidelity-locked stylist prompt. The product image is the
-// authority; the text only governs the SCENE around it. A calm, worn,
-// standing shot from the reference's own angle keeps the product faithful;
-// mid-stride action shots made models invent feet, ankles and the other
-// shoe's unseen side.
+// The fidelity-locked stylist prompt. The product image is the authority;
+// the text only governs the look around it. "See It Styled" means the whole
+// outfit: a full-length fashion photo of one person, standing naturally, with
+// the shoes still the sharpest, most noticeable thing in the frame.
 export function buildStylistPrompt({ productTitle, styleContext }) {
   const ctx = String(styleContext || "").trim();
   const sceneLine = ctx
-    ? `Set the scene where the shopper said they'll wear it: "${ctx}" (a trip or beach → a sunny boardwalk; hiking → a trail; the gym or running → a track or city path; a wedding or evening → an elegant venue; work → a bright modern office floor). Keep it simple and believable.`
-    : "Pick a simple, believable setting that suits this footwear (sneakers → a sunlit city sidewalk or park path, sandals → a boardwalk, boots → an autumn path, dress shoes or heels → a polished interior floor).";
+    ? `Style the outfit and the setting for where the shopper said they'll wear it: "${ctx}" (a trip or beach → a sunny boardwalk; hiking → a trail; the gym or running → a park path in activewear; a wedding or evening → an elegant venue in dressy clothes; work → a bright modern office in smart-casual clothes). Keep it simple and believable.`
+    : "Pick an outfit and a simple, believable setting that suit this footwear (sneakers → casual clothes on a sunlit city sidewalk, sandals → a summer outfit on a boardwalk, boots → autumn layers on a tree-lined path, dress shoes or heels → an elegant outfit in a polished interior).";
   return [
-    "Create ONE photorealistic lifestyle photo of this exact footwear being worn, in the style of a premium footwear brand's website.",
+    "Create ONE photorealistic full-length fashion photo of a single person wearing this exact footwear, in the style of a premium footwear brand's lookbook.",
     "The attached image(s) show the SAME single product; the first image is the main view.",
     `Product: ${String(productTitle || "the shoe").trim()}.`,
     "THE PRODUCT MUST NOT CHANGE: identical shape, silhouette, color, materials, texture and fine details — keep every pattern, knit, perforation, stitching, embellishment, sparkle, sole color and logo exactly as in the reference. Do not simplify, smooth out, recolor or redesign anything.",
-    "POSE AND FRAMING: the person stands in a relaxed, natural stance with the weight on both feet (one foot can be slightly forward). Show the pair from the side / three-quarter angle that matches the main reference photo. Crop from about mid-calf down, camera low near the ground, so the shoes fill most of the frame and sit sharp in the foreground. Exactly two feet, correctly matched left and right, natural ankles.",
-    "SCENE: " + sceneLine + " The clothing and setting are quiet supporting context; nothing covers the shoes.",
-    "PHOTO QUALITY: natural soft daylight, true-to-life color, crisp focus on the shoes, gently blurred background, high resolution, clean editorial look. No motion blur, no text, no watermarks, no extra logos, no distorted soles or toes.",
+    "FRAMING: show the whole person head to toe, standing naturally in a relaxed pose, camera at about knee height so the shoes sit large and close in the lower part of the frame. The shoes are the focal point: sharpest focus, best light, unobstructed (no long hems, bags or objects covering them), seen from a side or three-quarter angle like the main reference photo. Exactly two feet, correctly matched left and right.",
+    "OUTFIT: a complete, tasteful outfit that complements the shoes' color and style without competing with them.",
+    "SCENE: " + sceneLine,
+    "PHOTO QUALITY: natural soft daylight, true-to-life color, gently blurred background, high resolution, clean editorial look. Natural, realistic face and hands. No text, watermarks or extra logos, no distorted soles or toes.",
   ].join("\n");
 }
 

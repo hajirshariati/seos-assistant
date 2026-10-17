@@ -30,12 +30,13 @@ const geminiImage = { candidates: [{ content: { parts: [{ inlineData: { mimeType
 const base = { productTitle: "Carly Arch Support Sneaker - Wine Sparkle", productImageUrls: ["https://cdn.example/1.png", "https://cdn.example/2.png", "https://cdn.example/3.png", "https://cdn.example/4.png"] };
 
 console.log("\nprompt");
-await test("a calm worn shot from the product's own angle — no forced walking pose", () => {
+await test("a full-length styled look, with the shoes still the focus", () => {
   const p = buildStylistPrompt({ productTitle: "Carly", styleContext: "" });
-  assert.match(p, /relaxed, natural stance/);
-  assert.match(p, /angle that matches the main reference photo/);
+  assert.match(p, /full-length fashion photo/);
+  assert.match(p, /whole person head to toe/);
+  assert.match(p, /shoes are the focal point/);
   assert.match(p, /Exactly two feet/);
-  assert.doesNotMatch(p, /mid-stride|WALKING/);
+  assert.doesNotMatch(p, /mid-stride|WALKING|mid-calf down/);
 });
 await test("fine details are named so they aren't smoothed away", () => {
   assert.match(buildStylistPrompt({ productTitle: "x" }), /sparkle, sole color and logo/);

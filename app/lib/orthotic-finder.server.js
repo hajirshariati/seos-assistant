@@ -112,6 +112,7 @@ function fitSection(fitfinder) {
   if (!fitfinder?.fits?.length) return "";
   const parts = [
     "\n\nFITs — this store sizes orthotic support as FITs (the same ones the FIT finder on product pages uses). " +
+    "A FIT describes an orthotic insert only — never use it to describe shoes or sandals. " +
     "Use these names and explain them in these words when asked \"what's a FIT?\" or \"which FIT is right for me?\":\n" +
     fitfinder.fits.map((f) => `- ${f.label} — ${f.name}: ${f.description}`).join("\n"),
   ];
@@ -153,7 +154,7 @@ export function finderToolDef(tree, { fitfinder = null } = {}) {
       "without a removable insole, heels or slim dress shoes → the dress, fashion or thin lines; extra cushioning → memory foam — " +
       "and call this tool. It picks the exact version for their arch and ball-of-foot pain and checks it's for sale; show what it returns. " +
       "Plantar fasciitis or heel pain doesn't change the line — answer the four questions as usual. " +
-      "Open sandals can only hold an insert if the footbed comes out and there's room — say so honestly and offer supportive sandals instead." +
+      "Orthotic inserts can't be worn in sandals or other open shoes. Never suggest, offer or pair an orthotic with sandals; when the customer asks for one, say so kindly and offer sandals with built-in arch support instead. When you're showing sandals, don't bring up orthotics at all." +
       fitSection(fitfinder) +
       "\n\nLines in this store:\n" + lines.map((l) => `- ${describeLine(l)}`).join("\n"),
     input_schema: {

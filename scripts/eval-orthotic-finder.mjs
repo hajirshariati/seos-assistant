@@ -126,6 +126,13 @@ test("missing gender or unknown line → asks instead of guessing", () => {
   assert.ok(pick({ line: "nope", gender: "men" }).error);
 });
 
+test("orthotics are never offered for sandals", () => {
+  const def = finderToolDef({ intent: "orthotic", definition: { finder: catalog } });
+  assert.match(def.description, /can't be worn in sandals/);
+  assert.match(def.description, /Never suggest, offer or pair an orthotic with sandals/);
+  assert.doesNotMatch(def.description, /can only hold an insert/);
+});
+
 console.log("\nFITs (FITFinder)");
 // FITFinder's default FITs, as its storefront config returns them.
 const FF = sanitizeFitfinder({
@@ -174,6 +181,7 @@ test("Claude's tool knows the FITs, the store's questions and the saved FIT", ()
   assert.match(def.description, /FIT D — Maximum Support/);
   assert.match(def.description, /Do you have flat feet\?/);
   assert.match(def.description, /ALREADY HAS A FIT: FIT D/);
+  assert.match(def.description, /A FIT describes an orthotic insert only/, "FITs never describe shoes or sandals");
   assert.deepEqual(def.input_schema.properties.fit.enum, ["A", "B", "C", "D"]);
   const plain = finderToolDef(tree);
   assert.ok(!/FIT D/.test(plain.description) && !plain.input_schema.properties.fit, "no FIT talk without FITFinder");
