@@ -10,6 +10,7 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { getTodayMessageCount } from "../models/ChatUsage.server";
 import { canSendMessage } from "../lib/billing.server";
 import { leanChatResponse } from "../lib/lean/respond.server.js";
+import { sanitizeHistory } from "../lib/lean/history.js";
 
 const RATE_LIMIT_PER_IP_SHOP = parseInt(process.env.RATE_LIMIT_PER_IP_SHOP, 10) || 20;
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60_000;
@@ -59,33 +60,6 @@ if (!globalThis.__shopagentRateSweeper) {
     }
   }, RATE_LIMIT_WINDOW_MS);
   globalThis.__shopagentRateSweeper.unref?.();
-}
-
-// Inbound history from the widget: drop stray role markers, and note which
-// product cards were shown under each assistant reply so "the second one"
-// and follow-ups about shown products resolve.
-function sanitizeHistory(history) {
-  const out = [];
-  for (const turn of Array.isArray(history) ? history : []) {
-    if (!turn?.role || !turn?.content) continue;
-    if (turn.role !== "user" && turn.role !== "assistant") continue;
-    let content = String(turn.content).replace(/^\s*(?:Human|Assistant)\s*:\s*/i, "");
-    content = content.replace(/\n\s*(?:Human|Assistant)\s*:\s*/gi, "\n");
-    if (turn.role === "assistant" && Array.isArray(turn.products) && turn.products.length > 0) {
-      const shown = turn.products
-        .slice(0, 10)
-        .map((p, i) => {
-          const title = String(p?.title || "").trim();
-          if (!title) return null;
-          const price = String(p?.price_formatted || p?.price || "").trim();
-          return `${i + 1}. ${title}${price ? ` (${price})` : ""}`;
-        })
-        .filter(Boolean);
-      if (shown.length > 0) content += `\n\n[Product cards displayed with this reply: ${shown.join("; ")}]`;
-    }
-    out.push({ role: turn.role, content });
-  }
-  return out;
 }
 
 export const loader = async () => {

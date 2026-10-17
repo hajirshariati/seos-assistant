@@ -32,7 +32,8 @@ const PRICE_RE = /\$\s?(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)/g;
 export function verifyLeanAnswer({
   text = "",
   shownHandles = [],
-  seenProducts = [],      // products returned by tools this turn (catalog products)
+  seenProducts = [],      // products the reply may name: found this turn or shown before
+  freshProducts = null,   // found this turn and not shown to the customer before
   priorTitles = [],       // titles shown in earlier turns (history)
   familyIndex = new Map(),
   knowledgeText = "",     // store info, promotions, order/review/recommender tool output this turn
@@ -76,8 +77,9 @@ export function verifyLeanAnswer({
     issues.push({ code: "unverified_price", detail: `These prices don't match any product or store info you looked up: ${[...new Set(badPrices)].map((v) => `$${v}`).join(", ")}.` });
   }
 
-  // 3. Recommending products found this turn → show their cards.
-  const recommendsSeen = seenProducts.some((p) => {
+  // 3. Recommending products found this turn → show their cards. Products the
+  // customer has already seen as cards can be talked about without re-showing.
+  const recommendsSeen = (freshProducts || seenProducts).some((p) => {
     const f = styleFamily(p.style);
     return f && new RegExp(`(^|[^A-Za-z])${f}([^A-Za-z]|$)`).test(body);
   });

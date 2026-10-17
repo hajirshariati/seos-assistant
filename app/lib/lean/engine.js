@@ -12,7 +12,7 @@ import { leanSearch, productDetails, similarProducts } from "./search.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
-import { applyMedicalDisclaimer, medicalDisclaimerRequired } from "../medical-disclaimer.js";
+import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
 const MAX_CARDS = 4;
@@ -156,6 +156,8 @@ export async function runLeanTurn({
     .filter(Boolean);
 
   const seen = new Map(priorProducts.map((p) => [p.handle, p])); // handles Claude may show
+  // Styles the customer already saw as cards (any colorway of them counts).
+  const priorStyles = new Set(priorProducts.map((p) => p.style.toLowerCase()));
   const seenThisTurn = new Map();
   let shown = [];
   let followUps = [];
@@ -309,6 +311,7 @@ export async function runLeanTurn({
       text,
       shownHandles: shown,
       seenProducts: [...seen.values()],
+      freshProducts: [...seenThisTurn.values()].filter((p) => !priorStyles.has(p.style.toLowerCase())),
       priorTitles,
       familyIndex,
       knowledgeText,
@@ -332,9 +335,13 @@ export async function runLeanTurn({
     text = "Sorry — I couldn't finish that one. Could you try asking again?";
   }
 
-  // The note is for customers who brought up pain or a condition — not for a
-  // fashion question whose answer happens to mention orthotics.
-  if (medicalDisclaimerRequired({ workflow: "condition_recommendation", message: latestUserMessage, text: "" })) {
+  // The note is for customers who brought up pain, a condition or orthotics —
+  // not for a fashion question whose answer happens to mention orthotics — and
+  // once per conversation, not under every reply.
+  if (
+    medicalDisclaimerRequired({ workflow: "condition_recommendation", message: latestUserMessage, text: "" }) &&
+    !disclaimerAlreadyShown(messages)
+  ) {
     text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
   }
 

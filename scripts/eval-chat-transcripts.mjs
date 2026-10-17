@@ -175,7 +175,8 @@ async function postTurn({ message, history, sessionId }) {
     session_id: sessionId,
     shop_domain: shop,
     assistant_name: process.env.CHAT_TRANSCRIPT_ASSISTANT_NAME || "The Fit Concierge",
-    history: history.slice(-20).map((m) => ({ role: m.role, content: m.content })),
+    // Same shape the storefront widget sends: cards shown under each reply ride along.
+    history: history.slice(-20).map((m) => ({ role: m.role, content: m.content, ...(m.products?.length ? { products: m.products } : {}) })),
   };
   if (process.env.CHAT_TRANSCRIPT_SUPPORT_URL) body.support_url = process.env.CHAT_TRANSCRIPT_SUPPORT_URL;
   if (process.env.CHAT_TRANSCRIPT_SUPPORT_LABEL) body.support_label = process.env.CHAT_TRANSCRIPT_SUPPORT_LABEL;
@@ -343,7 +344,7 @@ async function runScenario(scenario, index) {
     turnResults.push({ turn: i + 1, user: turn.user, payload, failures });
 
     history.push({ role: "user", content: String(turn.user) });
-    history.push({ role: "assistant", content: payload.text || "" });
+    history.push({ role: "assistant", content: payload.text || "", products: payload.products || [] });
 
     if (verbose || failures.length > 0) {
       console.log(`\n[${scenario.name}] turn ${i + 1}: ${turn.user}`);

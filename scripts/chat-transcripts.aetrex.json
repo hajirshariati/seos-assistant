@@ -682,5 +682,219 @@
         }
       }
     ]
+  },
+  {
+    "name": "multi-topic: sneakers → orthotics → back to the same sneakers",
+    "turns": [
+      {
+        "user": "i need women's black sneakers for walking",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      },
+      {
+        "user": "do you also sell orthotics? i have plantar fasciitis",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "orthotic",
+              "insole",
+              "insert"
+            ],
+            "mustNotMatch": "\\b(will|can|guaranteed to) (cure|fix|heal)\\b"
+          },
+          "products": {
+            "allTitleOrHandleMustMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      },
+      {
+        "user": "for my everyday sneakers, women's, medium arch, no other foot issues",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      },
+      {
+        "user": "ok back to the sneakers you showed me first — do any come in wide?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "wide",
+              "width"
+            ]
+          },
+          "products": {
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "multi-topic: shopping for two people keeps each person's line",
+    "turns": [
+      {
+        "user": "sandals for me please, i'm a women's 8",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "\\d{3,4}[wu]\\b|women\\b|unisex|silicone",
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      },
+      {
+        "user": "now something for my husband, sneakers",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "\\d{3,4}[mu]\\b|(?<!wo)men\\b|unisex|silicone",
+            "atLeastOneTitleOrHandleMustMatch": "sneaker"
+          }
+        }
+      },
+      {
+        "user": "and orthotics for him too, for those sneakers",
+        "expect": {
+          "text": {
+            "mustNotInclude": [
+              "women's orthotic"
+            ]
+          },
+          "products": {
+            "allTitleOrHandleMustMatch": "\\d{3,4}[mu]\\b|(?<!wo)men\\b|unisex|silicone"
+          }
+        }
+      },
+      {
+        "user": "going back to my sandals — anything in navy?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "navy",
+              "blue",
+              "don't have",
+              "no navy",
+              "not in navy"
+            ]
+          },
+          "products": {
+            "allTitleOrHandleMustMatch": "\\d{3,4}[wu]\\b|women\\b|unisex|silicone",
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "multi-topic: orthotics for sandals is answered honestly, then supportive sandals",
+    "turns": [
+      {
+        "user": "do you have orthotics i can put in my sandals?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "sandal"
+            ],
+            "mustNotMatch": "(this|these|the) (orthotic|insole|insert)s? (will |would )?(fit|work) (great |well |perfectly )?(in|with) (your )?sandals"
+          },
+          "products": {
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      },
+      {
+        "user": "ok then show me sandals with good arch support",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "multi-topic: a product from earlier is still 'it' after an orthotic detour",
+    "turns": [
+      {
+        "user": "show me the chase sneaker",
+        "expect": {
+          "products": {
+            "min": 1,
+            "atLeastOneTitleOrHandleMustMatch": "chase"
+          }
+        }
+      },
+      {
+        "user": "what orthotic would go with it? i'm a man with flat feet",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "orthotic",
+              "insole",
+              "insert"
+            ]
+          }
+        }
+      },
+      {
+        "user": "and does the chase come in white?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "chase",
+              "white"
+            ]
+          },
+          "products": {
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "multi-topic: a policy question in the middle doesn't lose the shopping thread",
+    "turns": [
+      {
+        "user": "men's sneakers please",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "\\d{3,4}[mu]\\b|(?<!wo)men\\b|unisex|silicone"
+          }
+        }
+      },
+      {
+        "user": "what's your return policy?",
+        "expect": {
+          "text": {
+            "mustIncludeAny": [
+              "return"
+            ]
+          },
+          "products": {
+            "max": 0
+          }
+        }
+      },
+      {
+        "user": "cool — show me the first sneaker in a different color",
+        "expect": {
+          "products": {
+            "min": 1,
+            "allTitleOrHandleMustMatch": "\\d{3,4}[mu]\\b|(?<!wo)men\\b|unisex|silicone",
+            "allTitleOrHandleMustNotMatch": "orthotics\\b|insole|\\bl{1,2}\\d{3,4}[mwu]-m"
+          }
+        }
+      }
+    ]
   }
 ]

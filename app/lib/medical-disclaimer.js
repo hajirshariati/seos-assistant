@@ -64,3 +64,9 @@ export function applyMedicalDisclaimer({ workflow = "", message = "", text = "" 
   if (DISCLAIMER_PRESENT_RE.test(t)) return { text: t, applied: false };
   return { text: `${t} ${MEDICAL_DISCLAIMER_TEXT}`, applied: true };
 }
+
+// Shown once per conversation: true when an earlier assistant reply already
+// carried the note (the widget sends earlier replies back as history).
+export function disclaimerAlreadyShown(messages = []) {
+  return messages.some((m) => m?.role === "assistant" && typeof m.content === "string" && DISCLAIMER_PRESENT_RE.test(m.content));
+}

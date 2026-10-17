@@ -124,7 +124,8 @@ async function postTurn({ message, history, sessionId }) {
     session_id: sessionId,
     shop_domain: shop,
     assistant_name: process.env.CHAT_TRANSCRIPT_ASSISTANT_NAME || "The Fit Concierge",
-    history: history.slice(-20).map((m) => ({ role: m.role, content: m.content })),
+    // Same shape the storefront widget sends: cards shown under each reply ride along.
+    history: history.slice(-20).map((m) => ({ role: m.role, content: m.content, ...(m.products?.length ? { products: m.products } : {}) })),
   };
 
   let attempt = 0;
@@ -158,6 +159,31 @@ async function postTurn({ message, history, sessionId }) {
 // Each persona has: name, opening (first message), goal (what the customer wants),
 // strategy (how they evolve over turns), traps (things they'll try to break).
 const PERSONAS = [
+  // ── Multi-topic sessions: footwear ⇄ orthotics, several people, returning to earlier items ──
+  {
+    name: "shoes-orthotics-shoes",
+    opening: "i need comfortable women's sneakers for walking",
+    goal: "One session: sneakers, then orthotics for them, then back to the SAME sneakers. The bot must keep each topic's facts straight.",
+    strategy: "Turn 2 'do you also have orthotics? i have plantar fasciitis'. Answer any orthotic questions briefly (women's, everyday sneakers, medium arch). Then 'ok back to the sneakers you showed first — the second one, does it come in wide?'. Then 'and in black?'.",
+  },
+  {
+    name: "two-people-two-topics",
+    opening: "sandals for me, i'm a women's 8",
+    goal: "Shop for self then husband then back to self. Each person's line (women's/men's) must never leak into the other's products.",
+    strategy: "Turn 2 'now my husband needs sneakers, he's a 10.5'. Turn 3 'and orthotics for him for those sneakers'. Turn 4 'back to my sandals, anything in navy?'. Turn 5 'what size did i say i was?'.",
+  },
+  {
+    name: "orthotic-then-matching-shoe",
+    opening: "which orthotic is best for flat feet? it's for me, a man",
+    goal: "Orthotic first, then a shoe that fits it, then a question tying the two together.",
+    strategy: "Answer the orthotic questions. Then 'what sneakers would that orthotic fit in?'. Then 'will it fit in the first one you showed?'. Then 'ok what about sandals instead'.",
+  },
+  {
+    name: "topic-whiplash",
+    opening: "do you have red wedges?",
+    goal: "Rapid topic changes; every answer must address the LATEST request, not an earlier one.",
+    strategy: "Turn 2 'what's your return policy'. Turn 3 'orthotics for heel pain?'. Turn 4 'nevermind, the wedges — any in black?'. Turn 5 'is the first wedge you showed on sale?'.",
+  },
   {
     name: "confused-first-timer",
     opening: "hi i need new shoes",
@@ -480,7 +506,7 @@ async function runConversation(persona, convoIndex) {
     }
 
     const botText = payload.text || "";
-    history.push({ role: "assistant", content: botText });
+    history.push({ role: "assistant", content: botText, products: payload.products || [] });
     lastSuggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
 
     let bugs = structuralBugs({ payload, lastUserMessage: userMessage, fullHistory: history });

@@ -29,6 +29,7 @@ const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/ver
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
+const { sanitizeHistory } = await import("../app/lib/lean/history.js");
 
 let passed = 0;
 let failed = 0;
@@ -425,6 +426,103 @@ await test("narration next to a search ('Let me check…') is never sent as the 
   assert.equal(lastReq.at(-1).role, "user");
   assert.match(JSON.stringify(lastReq.at(-1)), /write your reply/);
   assert.ok(lastReq.every((m) => !(m.role === "assistant" && Array.isArray(m.content) && m.content.length === 0)), "no empty assistant turn sent to the API");
+});
+// One shopper, several topics: each turn goes through the same history path as
+// the storefront widget (text + the cards shown under each reply).
+async function runSession(turns, { extraTools = [] } = {}) {
+  const widgetHistory = [];
+  const results = [];
+  for (const t of turns) {
+    const s = scripted(t.script);
+    const logs = [];
+    const r = await runLeanTurn({
+      catalog, model: "m",
+      messages: [...sanitizeHistory(widgetHistory), { role: "user", content: t.user }],
+      latestUserMessage: t.user, extraTools, callModel: s.callModel, log: (l) => logs.push(l),
+    });
+    results.push({ r, s, logs });
+    widgetHistory.push({ role: "user", content: t.user });
+    widgetHistory.push({ role: "assistant", content: r.text, products: r.cards.map((c) => ({ title: c.title, price_formatted: c.price_formatted, handle: c.handle })) });
+  }
+  return results;
+}
+await test("multi-topic session: sandals → orthotic → husband's sneakers → back to sandals → orthotic follow-up", async () => {
+  const finder = {
+    definition: { name: "recommend_orthotic", description: "finder", input_schema: { type: "object", properties: { gender: { type: "string" }, useCase: { type: "string" } } } },
+    run: async (input) => ({ product: { handle: H["Women's Train Orthotics W/ Metatarsal Support"], title: "Women's Train Orthotics W/ Metatarsal Support" }, attributesUsed: input }),
+  };
+  const sav = H["Savannah Adjustable Quarter Strap Sandal - Red"];
+  const savBlack = H["Savannah Adjustable Quarter Strap Sandal - Black"];
+  const orth = H["Women's Train Orthotics W/ Metatarsal Support"];
+  const chase = H["Chase Arch Support Sneaker - Red"];
+  const [t1, t2, t3, t4, t5] = await runSession([
+    { user: "women's sandals for plantar fasciitis", script: [
+      { stop_reason: "tool_use", content: [tu("a", "search_products", { query: "sandal", categories: ["sandals"], conditions: ["plantar fasciitis"], gender: "women" })] },
+      { stop_reason: "tool_use", content: [txt("The Savannah in red has built-in arch support."), tu("b", "show_products", { handles: [sav] })] },
+      { stop_reason: "end_turn", content: [] },
+    ] },
+    { user: "do you also have orthotics for my sneakers?", script: [
+      { stop_reason: "tool_use", content: [tu("c", "recommend_orthotic", { gender: "Women", useCase: "athletic_general" })] },
+      { stop_reason: "tool_use", content: [tu("d", "show_products", { handles: [orth] })] },
+      { stop_reason: "end_turn", content: [txt("For your sneakers, this orthotic adds arch and ball-of-foot support.")] },
+    ] },
+    { user: "and something for my husband, sneakers", script: [
+      { stop_reason: "tool_use", content: [tu("e", "search_products", { query: "sneaker", categories: ["sneakers"], gender: "men" })] },
+      { stop_reason: "tool_use", content: [tu("f", "show_products", { handles: [chase] })] },
+      { stop_reason: "end_turn", content: [txt("For him, the Chase sneaker has arch support built in.")] },
+    ] },
+    { user: "going back to the sandals — does the Savannah come in black?", script: [
+      { stop_reason: "tool_use", content: [tu("g", "get_product_details", { handle: sav })] },
+      { stop_reason: "tool_use", content: [tu("h", "show_products", { handles: [savBlack] })] },
+      { stop_reason: "end_turn", content: [txt("Yes — the Savannah comes in black too, same $129.95.")] },
+    ] },
+    { user: "is the orthotic from before $69.95?", script: [
+      { stop_reason: "end_turn", content: [txt("Yes, the Women's Train Orthotics are $69.95, and they fit most sneakers with a removable insole.")] },
+    ] },
+  ], { extraTools: [finder] });
+
+  // 1: reply written with the cards is kept; condition question gets the medical note.
+  assert.match(t1.r.text, /Savannah in red/);
+  assert.deepEqual(t1.r.cards.map((c) => c.handle), [sav]);
+  assert.match(t1.r.text, /medical|doctor|podiatrist|professional/i, "medical note on a condition question");
+  // 2: the finder's product can be shown; the note was already given in this chat → not repeated.
+  assert.deepEqual(t2.r.cards.map((c) => c.handle), [orth]);
+  assert.doesNotMatch(t2.r.text, /podiatrist|doctor/i, "medical note once per conversation");
+  // 3: the husband's request starts clean — the model sees every earlier card, and the
+  //    search it ran is exactly its own (men's sneakers), nothing carried in by code.
+  const req3 = JSON.stringify(t3.s.requests[0].messages);
+  assert.match(req3, /Product cards displayed with this reply: 1\. Savannah Adjustable Quarter Strap Sandal - Red \(\$129\.95\)/);
+  assert.match(req3, /Women's Train Orthotics/);
+  assert.ok(t3.logs.some((l) => l.includes('"gender":"men"') && !l.includes("plantar")), t3.logs.join("\n"));
+  assert.deepEqual(t3.r.cards.map((c) => c.handle), [chase]);
+  // 4: back to an earlier topic — the earlier card is known, its other colorway is found, price verified.
+  assert.deepEqual(t4.r.cards.map((c) => c.handle), [savBlack]);
+  assert.equal(t4.r.retried, false, "no rewrite: Savannah and $129.95 are facts");
+  // 5: a follow-up about a product already shown needs no new search and no re-shown card.
+  assert.equal(t5.r.retried, false, t5.logs.join("\n"));
+  assert.deepEqual(t5.r.issues, []);
+  assert.equal(t5.r.cards.length, 0);
+});
+await test("follow-up about an already-shown product: talking about it needs no re-shown card; a NEW product does", async () => {
+  const history = [
+    { role: "user", content: "red sandals" },
+    { role: "assistant", content: "The Savannah in red is a great pick.", products: [{ title: "Savannah Adjustable Quarter Strap Sandal - Red", price_formatted: "$129.95" }] },
+  ];
+  const ok = scripted([
+    { stop_reason: "tool_use", content: [tu("a", "get_product_details", { handle: H["Savannah Adjustable Quarter Strap Sandal - Red"] })] },
+    { stop_reason: "end_turn", content: [txt("Yes — the Savannah's straps adjust, so it works well for wider feet.")] },
+  ]);
+  const r1 = await runLeanTurn({ catalog, model: "m", messages: [...sanitizeHistory(history), { role: "user", content: "is it good for wide feet?" }], latestUserMessage: "is it good for wide feet?", callModel: ok.callModel, log: quiet });
+  assert.equal(r1.retried, false);
+  const fresh = scripted([
+    { stop_reason: "tool_use", content: [tu("a", "search_products", { query: "boot", categories: ["boots"] })] },
+    { stop_reason: "end_turn", content: [txt("The Margot boot is another option.")] },
+    { stop_reason: "tool_use", content: [tu("b", "show_products", { handles: [H["Margot Lace-Up Boot - Dark Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Margot boot is another warm option.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: [...sanitizeHistory(history), { role: "user", content: "any boots?" }], latestUserMessage: "any boots?", callModel: fresh.callModel, log: quiet });
+  assert.equal(r2.retried, true, "a newly found product named without its card still triggers the rewrite");
+  assert.equal(r2.cards.length, 1);
 });
 await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
   const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));
