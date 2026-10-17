@@ -195,7 +195,10 @@ export async function runLeanTurn({
       for (const c of input.colors || []) topic("color", c);
       for (const c of input.activities || []) topic("activity", c);
       if (input.on_sale) topic("sale", "");
-      for (const p of result.products) mentions.push({ handle: p.handle, title: p.title, tool: "search_products" });
+      // Top results only, once per turn — enough to rank what people look for.
+      for (const p of result.products.slice(0, 3)) {
+        if (!mentions.some((m) => m.handle === p.handle && m.tool === "search_products")) mentions.push({ handle: p.handle, title: p.title, tool: "search_products" });
+      }
       log(`[lean] search ${JSON.stringify(input)} → total=${result.total_matches} returned=${result.products.length}${result.if_relaxed ? ` if_relaxed=${JSON.stringify(result.if_relaxed)}` : ""}`);
       return result;
     }

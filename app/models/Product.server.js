@@ -7,12 +7,6 @@ import {
   resolveProductAttributes,
   resolveVariantAttributes,
 } from "./AttributeMapping.server";
-import {
-  rebuildCatalogFactsForProduct,
-  deleteCatalogFactsForProduct,
-  rebuildAllCatalogFacts,
-  rebuildCatalogFacetIndex,
-} from "../lib/catalog-facts.server";
 import { syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
 import { fetchMetafieldDefinitions } from "../lib/metafield-definitions.server.js";
 
@@ -142,13 +136,28 @@ function mapVariantFields(v, mappings) {
   return fields;
 }
 
+// True when every incoming field already holds the same value — the row is
+// left alone, so a nightly sync of an unchanged catalog writes (almost)
+// nothing. Errs toward writing: any doubt counts as a change.
+function sameFields(existing, fields) {
+  if (!existing) return false;
+  // Key order ignored: Postgres stores JSON with its keys reordered.
+  const stable = (v) => (Array.isArray(v) ? v.map(stable)
+    : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, stable(v[k])])) : v);
+  const norm = (v) => (v instanceof Date ? v.toISOString() : v && typeof v === "object" ? JSON.stringify(stable(v)) : v ?? null);
+  return Object.entries(fields).every(([k, v]) => norm(existing[k]) === norm(v));
+}
+
 async function upsertProduct(shop, node, mappings = null) {
   const fields = mapProductFields(node, mappings);
-  const product = await prisma.product.upsert({
-    where: { shop_shopifyId: { shop, shopifyId: fields.shopifyId } },
-    update: { ...fields, updatedAt: new Date() },
-    create: { shop, ...fields },
-  });
+  const current = await prisma.product.findUnique({ where: { shop_shopifyId: { shop, shopifyId: fields.shopifyId } } });
+  const product = sameFields(current, fields)
+    ? current
+    : await prisma.product.upsert({
+        where: { shop_shopifyId: { shop, shopifyId: fields.shopifyId } },
+        update: { ...fields, updatedAt: new Date() },
+        create: { shop, ...fields },
+      });
 
   const variants = (node.variants?.nodes || []).map((v) => mapVariantFields(v, mappings));
   const incomingIds = new Set(variants.map((v) => v.shopifyId));
@@ -157,18 +166,16 @@ async function upsertProduct(shop, node, mappings = null) {
     where: { productId: product.id, NOT: { shopifyId: { in: Array.from(incomingIds) } } },
   });
 
+  const existing = new Map(
+    (await prisma.productVariant.findMany({ where: { productId: product.id } })).map((v) => [v.shopifyId, v]),
+  );
   for (const v of variants) {
+    if (sameFields(existing.get(v.shopifyId), v)) continue;
     await prisma.productVariant.upsert({
       where: { productId_shopifyId: { productId: product.id, shopifyId: v.shopifyId } },
       update: { ...v, updatedAt: new Date() },
       create: { productId: product.id, ...v },
     });
-  }
-
-  try {
-    await rebuildCatalogFactsForProduct(shop, product.id);
-  } catch (err) {
-    console.error(`[catalog-facts] upsert rebuild failed for ${product.id}:`, err?.message || err);
   }
 
   return product;
@@ -241,15 +248,7 @@ export async function deleteProductByShopifyId(shop, shopifyId) {
   const gid = typeof shopifyId === "string" && shopifyId.startsWith("gid://")
     ? shopifyId
     : `gid://shopify/Product/${shopifyId}`;
-  const existing = await prisma.product.findFirst({ where: { shop, shopifyId: gid }, select: { id: true } });
   await prisma.product.deleteMany({ where: { shop, shopifyId: gid } });
-  if (existing?.id) {
-    try {
-      await deleteCatalogFactsForProduct(shop, existing.id);
-    } catch (err) {
-      console.error(`[catalog-facts] delete failed for ${existing.id}:`, err?.message || err);
-    }
-  }
 }
 
 export async function getCatalogSyncState(shop) {
@@ -356,13 +355,6 @@ export async function syncCatalog(admin, shop) {
 
       if (!page.pageInfo.hasNextPage) break;
       cursor = page.pageInfo.endCursor;
-    }
-
-    try {
-      await rebuildAllCatalogFacts(shop);
-      await rebuildCatalogFacetIndex(shop);
-    } catch (err) {
-      console.error(`[catalog-facts] full rebuild failed for ${shop}:`, err?.message || err);
     }
 
     await setSyncState(shop, {

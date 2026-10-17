@@ -21,8 +21,6 @@ export const action = async ({ request }) => {
     db.chatFeedback.deleteMany({ where: { shop } }),
     db.chatProductMention.deleteMany({ where: { shop } }),
     db.chatTopic.deleteMany({ where: { shop } }),
-    db.catalogFact.deleteMany({ where: { shop } }),
-    db.catalogFacetIndex.deleteMany({ where: { shop } }),
     // Every shop-scoped table — ChatConversion holds a Shopify
     // customerId, so leaving it behind is a privacy-compliance gap;
     // the rest were added after the original delete list and drifted.
@@ -31,11 +29,6 @@ export const action = async ({ request }) => {
     db.campaign.deleteMany({ where: { shop } }),
     db.decisionTree.deleteMany({ where: { shop } }),
     db.knowledgeChunk.deleteMany({ where: { shop } }),
-    db.claimRule.deleteMany({ where: { shop } }),
-    db.categoryGroup.deleteMany({ where: { shop } }),
-    db.colorFamily.deleteMany({ where: { shop } }),
-    db.productViewerPing.deleteMany({ where: { shop } }),
-    db.recentPurchase.deleteMany({ where: { shop } }),
   ]);
 
   return new Response();

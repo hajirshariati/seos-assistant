@@ -37,7 +37,7 @@ import { buildMetafieldChoices } from "../lib/metafield-picker";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import prisma from "../db.server";
 import { computeCatalogCoverage, COVERAGE_SOURCE_LABELS } from "../lib/catalog-coverage.js";
-import { extractMerchantConditionTags } from "../lib/catalog-facts.server";
+import { extractMerchantConditionTags } from "../lib/condition-tags";
 import { backfillShopEmbeddings, resolveShopEmbedding } from "../lib/embeddings.server";
 import BrandHeader from "../components/BrandHeader";
 import { nextScheduledSyncAt } from "../lib/catalog-sync-scheduler.server";

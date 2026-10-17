@@ -148,3 +148,13 @@ export async function getReplyCostSample(shop, { days = 60 } = {}) {
     model: r.model,
   }));
 }
+
+// Usage rows older than ~13 months (a year of analytics plus margin).
+export async function cleanupOldUsage() {
+  const cutoff = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+  try {
+    await prisma.chatUsage.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  } catch (err) {
+    console.error("[ChatUsage] cleanup error:", err?.message);
+  }
+}
