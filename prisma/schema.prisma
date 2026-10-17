@@ -230,6 +230,11 @@ model Product {
   status           String?
   featuredImageUrl String?
   attributesJson   Json?
+  // Semantic search vector (pgvector), written and read with raw SQL. Its
+  // ivfflat index (Product_embedding_idx) lives in the migrations only —
+  // never run `prisma db push` / `migrate dev` against production.
+  embedding          Unsupported("vector(1024)")?
+  embeddingUpdatedAt DateTime?        @db.Timestamp(6)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   variants         ProductVariant[]
@@ -326,6 +331,22 @@ model ChatUsage {
   createdAt                DateTime @default(now())
 
   @@index([shop])
+  @@index([shop, createdAt])
+}
+
+// One row per storefront request outcome (chat turn or styled image):
+// whether it worked, how long it took, and why it failed. No message text,
+// no customer data. Powers Health & Readiness; kept 30 days.
+model ChatHealthEvent {
+  id        String   @id @default(cuid())
+  shop      String
+  route     String   @default("chat") // chat | visualize
+  ok        Boolean
+  latencyMs Int      @default(0)
+  errorKind String? // rate_limit | upstream | network | billing | unknown | no_api_key | daily_cap | shopper_rate_limited | client_left | generation_failed
+  internal  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
   @@index([shop, createdAt])
 }
 
@@ -492,6 +513,8 @@ model KnowledgeChunk {
   content            String
   embeddingProvider  String?
   embeddingUpdatedAt DateTime?
+  // pgvector, written and read with raw SQL.
+  embedding          Unsupported("vector(1024)")?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

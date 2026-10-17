@@ -275,7 +275,8 @@ async function setSyncState(shop, patch) {
 const STALE_SYNC_MS = 15 * 60 * 1000;
 
 async function claimSync(shop) {
-  await prisma.catalogSyncState.upsert({ where: { shop }, update: {}, create: { shop } });
+  // ON CONFLICT DO NOTHING — two callers creating the row at once can't collide.
+  await prisma.catalogSyncState.createMany({ data: [{ shop }], skipDuplicates: true });
   const { count } = await prisma.catalogSyncState.updateMany({
     where: {
       shop,

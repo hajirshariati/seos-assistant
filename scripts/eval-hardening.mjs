@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
 import { safeExternalUrl } from "../app/lib/external-url.js";
+import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
 
 let pass = 0;
 let fail = 0;
@@ -43,6 +44,15 @@ test("http, credentials and internal addresses are refused", () => {
     "https://u:p@fit.example.com/", "https://db.internal/", "not a url", ""]) {
     assert.equal(safeExternalUrl(u), null, u);
   }
+});
+
+console.log("\nClaude model ids");
+test("deprecated stored models run on the current model of the same tier", () => {
+  assert.equal(chatModel("claude-sonnet-4-20250514"), "claude-sonnet-4-6");
+  assert.equal(chatModel("claude-opus-4-20250514"), "claude-opus-4-7");
+  assert.equal(chatModel(""), "claude-sonnet-4-6");
+  assert.equal(chatModel("made-up-model"), "claude-sonnet-4-6");
+  for (const m of ALLOWED_MODELS) assert.equal(chatModel(m), m);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

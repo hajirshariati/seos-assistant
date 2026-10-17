@@ -18,6 +18,7 @@ export const action = async ({ request }) => {
     db.catalogSyncState.deleteMany({ where: { shop } }),
     db.productEnrichment.deleteMany({ where: { shop } }),
     db.chatUsage.deleteMany({ where: { shop } }),
+    db.chatHealthEvent.deleteMany({ where: { shop } }),
     db.chatFeedback.deleteMany({ where: { shop } }),
     db.chatProductMention.deleteMany({ where: { shop } }),
     db.chatTopic.deleteMany({ where: { shop } }),

@@ -11,6 +11,7 @@ import { leanChatResponse } from "../lib/lean/respond.server.js";
 import { sanitizeHistory, withoutTrailingCopy } from "../lib/lean/history.js";
 import { sanitizeFitfinder } from "../lib/orthotic-finder.js";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
+import { recordHealth } from "../models/ChatHealth.server";
 
 // Real questions are short; very long pastes would crowd out the context.
 const MAX_MESSAGE_CHARS = 2000;
@@ -54,6 +55,7 @@ export const action = async ({ request }) => {
 async function handleChatPost({ shop, sessionAccessToken, request, internal = false }) {
   const rate = checkIpShopRate(shop, clientIp(request));
   if (!rate.ok) {
+    recordHealth({ shop, ok: false, errorKind: "shopper_rate_limited", internal });
     return Response.json(
       { error: "rate_limited", retryAfter: rate.retryAfter },
       { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
@@ -62,6 +64,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
 
   const config = await getShopConfig(shop);
   if (!config.anthropicApiKey) {
+    recordHealth({ shop, ok: false, errorKind: "no_api_key", internal });
     return Response.json(
       { error: "AI engine API key not configured. Set it in the app admin under Settings." },
       { status: 503 },
@@ -72,6 +75,7 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
   if (!internal && config.dailyCapEnabled && config.dailyCapMessages > 0) {
     const todayCount = await getTodayMessageCount(shop);
     if (todayCount >= config.dailyCapMessages) {
+      recordHealth({ shop, ok: false, errorKind: "daily_cap" });
       return Response.json(
         {
           error: "daily_cap_reached",

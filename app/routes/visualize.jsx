@@ -15,6 +15,7 @@ import { generateStyledImage, isImageProviderSupported } from "../lib/image-styl
 import { getProductImageUrls } from "../models/Product.server";
 import { recordImageUsage } from "../models/ChatUsage.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
+import { recordHealth } from "../models/ChatHealth.server";
 
 // Each image is paid for by the store: a few per shopper per minute is plenty
 // for real use, and the whole store is capped too.
@@ -34,6 +35,7 @@ export const action = async ({ request }) => {
     const rate = checkIpShopRate(shop, clientIp(request), { scope: "visualize", limit: PER_SHOPPER_PER_MIN });
     const storeRate = rate.ok ? checkIpShopRate(shop, "*", { scope: "visualize-store", limit: PER_STORE_PER_MIN }) : rate;
     if (!storeRate.ok) {
+      recordHealth({ shop, route: "visualize", ok: false, errorKind: "shopper_rate_limited" });
       return Response.json(
         { ok: false, message: "Lots of styling requests right now — please try again in a minute." },
         { status: 429, headers: { "Retry-After": String(storeRate.retryAfter) } },
@@ -118,6 +120,7 @@ export const action = async ({ request }) => {
         `[visualize] ${shop} generation failed (${provider}) after ${Date.now() - reqStart}ms:`,
         err?.message || err,
       );
+      recordHealth({ shop, route: "visualize", ok: false, errorKind: "generation_failed", latencyMs: Date.now() - reqStart });
       return Response.json(
         { ok: false, message: "The styling preview couldn't be generated right now. Please try again." },
         { status: 502 },
@@ -127,6 +130,7 @@ export const action = async ({ request }) => {
       `[visualize] ${shop} ok provider=${result.provider} totalMs=${Date.now() - reqStart} payloadChars=${result.payloadChars || 0}`,
     );
 
+    recordHealth({ shop, route: "visualize", ok: true, latencyMs: Date.now() - reqStart });
     // Meter the image cost (merchant pays the provider directly).
     recordImageUsage({ shop, provider: result.provider, costUsd: result.costUsd }).catch((e) =>
       console.error("[visualize] usage record failed:", e?.message || e),
@@ -134,6 +138,8 @@ export const action = async ({ request }) => {
 
     return Response.json({ ok: true, imageDataUrl: result.imageDataUrl });
   } catch (e) {
+    // Shopify's signature check rejects by throwing a Response.
+    if (e instanceof Response) throw e;
     console.error("[visualize] error:", e?.message || e);
     return Response.json({ ok: false, message: "Something went wrong." }, { status: 500 });
   }

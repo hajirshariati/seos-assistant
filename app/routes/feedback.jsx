@@ -37,6 +37,8 @@ export const action = async ({ request }) => {
 
     return Response.json({ ok: true });
   } catch (e) {
+    // Shopify's signature check rejects by throwing a Response.
+    if (e instanceof Response) throw e;
     console.error("[feedback] error:", e);
     return Response.json({ error: "Failed to record feedback" }, { status: 500 });
   }

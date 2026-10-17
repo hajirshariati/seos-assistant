@@ -20,6 +20,7 @@ import {
 import { CheckCircleIcon } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { ALLOWED_MODELS, chatModel } from "../lib/claude-models.js";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import { backfillShopEmbeddings } from "../lib/embeddings.server";
 import prisma from "../db.server";
@@ -35,7 +36,7 @@ export const loader = async ({ request }) => {
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
     hasAnthropicKey: config.anthropicApiKey !== "",
-    anthropicModel: config.anthropicModel,
+    anthropicModel: chatModel(config.anthropicModel),
     showFollowUps: config.showFollowUps !== false,
     showFeedback: config.showFeedback !== false,
     hasYotpoKey: config.yotpoApiKey !== "",
@@ -112,7 +113,7 @@ export const action = async ({ request }) => {
   }
 
   const model = formData.get("anthropicModel");
-  if (model) data.anthropicModel = model;
+  if (model && ALLOWED_MODELS.has(String(model))) data.anthropicModel = String(model);
 
 
   const yotpoKey = formData.get("yotpoApiKey");

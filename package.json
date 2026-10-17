@@ -26,7 +26,8 @@
     "eval:cost-estimator": "node scripts/eval-cost-estimator.mjs",
     "eval:ci": "node scripts/run-evals.mjs",
     "eval:all": "node scripts/run-evals.mjs --all",
-    "eval": "node scripts/run-evals.mjs"
+    "eval": "node scripts/run-evals.mjs",
+    "test:integration": "node scripts/e2e/server-integration.mjs"
   },
   "type": "module",
   "engines": {

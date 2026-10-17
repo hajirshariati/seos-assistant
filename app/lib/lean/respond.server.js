@@ -15,6 +15,8 @@ import { supportChatLabel } from "../support-handoff.js";
 import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
 import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
+import { recordHealth } from "../../models/ChatHealth.server.js";
+import { chatModel } from "../claude-models.js";
 import { buildShopAllLink } from "./shop-all.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
@@ -82,6 +84,8 @@ export function leanChatResponse({
       const ping = () => { try { controller.enqueue(encoder.encode(": ping\n\n")); } catch { /* client gone */ } };
       ping();
       const heartbeat = setInterval(ping, 8000);
+      const turnStarted = Date.now();
+      const health = (ok, errorKind = null) => recordHealth({ shop, route: "chat", ok, errorKind, internal, latencyMs: Date.now() - turnStarted });
       try {
         // CS-team cheat code: exact phrase → list every live promotion.
         const cheat = String(config.campaignCheatCode || "").trim().toLowerCase();
@@ -89,12 +93,13 @@ export function leanChatResponse({
           send({ type: "text", text: formatCampaignsForCS(await getActiveCampaigns(shop), new Date()) });
           send({ type: "products", products: [] });
           send({ type: "done" });
+          health(true);
           return;
         }
 
         // Retries happen once, in withAnthropicRetry — not again inside the SDK.
         const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 0 });
-        const model = config.anthropicModel || "claude-sonnet-4-6";
+        const model = chatModel(config.anthropicModel);
         const [catalog, extras] = await Promise.all([
           loadLeanCatalog(shop),
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder })
@@ -151,6 +156,7 @@ export function leanChatResponse({
           });
         }
         send({ type: "done" });
+        health(true);
         // Test chats are recorded for the cost estimate only (internal flag).
         recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls, internal })
           .catch((err) => console.error("[lean] usage log error:", err?.message));
@@ -164,11 +170,13 @@ export function leanChatResponse({
       } catch (err) {
         if (abort.signal.aborted) {
           console.log(`[lean] turn stopped shop=${shop}: the shopper left`);
+          health(false, "client_left");
           return;
         }
         console.error("[lean] turn failed:", err?.stack || err?.message || err);
         const classified = classifyAnthropicError(err);
         if (classified.kind === "rate_limit" && !internal) incrementRateLimitHits(shop).catch(() => {});
+        health(false, classified.kind);
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });
       } finally {
         clearInterval(heartbeat);

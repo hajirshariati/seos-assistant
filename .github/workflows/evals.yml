@@ -13,6 +13,20 @@ jobs:
   evals:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A real Postgres (with pgvector) for the database-backed suite
+    # (scripts/eval-db.mjs): migrations apply from scratch, then the store
+    # isolation, sync and health checks run against it.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: seos_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seos_test
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +43,14 @@ jobs:
       # `generate`; the offline evals never touch the database.)
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seos_test
+
+      - name: Lint
+        run: npm run lint
 
       - name: Run offline eval suite
         run: npm run eval:ci

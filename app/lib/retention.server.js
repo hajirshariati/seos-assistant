@@ -2,6 +2,7 @@ import { cleanupOldFeedback } from "../models/ChatFeedback.server";
 import { cleanupOldMentions } from "../models/ChatProductMention.server";
 import { cleanupOldTopics } from "../models/ChatTopic.server";
 import { cleanupOldUsage } from "../models/ChatUsage.server";
+import { cleanupOldHealth } from "../models/ChatHealth.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +27,7 @@ async function runOnce() {
   } catch (err) {
     console.error("[retention] cleanupOldUsage failed:", err?.message || err);
   }
+  await cleanupOldHealth();
 }
 
 // Idempotent: a single timer per Node process. The guard survives HMR in dev
