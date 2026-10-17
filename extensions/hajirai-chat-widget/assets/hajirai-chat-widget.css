@@ -2890,19 +2890,20 @@ a.ai-chat-product-title {
 .ai-chat-launcher.is-bubble {
   left: auto !important;
   right: 20px !important;
-  width: 56px !important;
-  height: 56px;
+  width: 48px !important;
+  height: 48px;
   max-width: none !important;
   padding: 0;
   gap: 0;
   justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: #111;
+  background: #0d0d12;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
   overflow: hidden;
   transform: none !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.25s ease, bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  /* No transition on position: placement measures where the bubble is. */
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.25s ease;
 }
 .ai-chat-launcher--bottom-left.is-bubble {
   right: auto !important;
@@ -2934,34 +2935,69 @@ a.ai-chat-product-title {
   height: 100%;
   color: #fff;
 }
-/* A soft band of light slowly circling inside the bubble… */
-.ai-chat-launcher.is-bubble .ai-chat-launcher__orb::before {
-  content: "";
+/* Siri-style glow: three soft, blurred lights drifting slowly behind the
+   sparkle and blending into each other — calm, alive, never a sweep. */
+.ai-chat-orb-glow {
   position: absolute;
-  inset: -30%;
-  background: conic-gradient(from 0deg, transparent 0deg, transparent 220deg, rgba(255, 255, 255, 0.22) 290deg, transparent 340deg);
-  animation: aiChatOrbSpin 5s linear infinite;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  filter: blur(7px);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  will-change: transform;
 }
-/* …and the sparkle gently breathing, its small star twinkling. */
+.ai-chat-orb-glow--1 {
+  left: -8%;
+  top: -6%;
+  background: radial-gradient(circle, #ff4fa3 0%, rgba(255, 79, 163, 0) 70%);
+  animation: aiChatGlow1 7s ease-in-out infinite alternate;
+}
+.ai-chat-orb-glow--2 {
+  right: -10%;
+  bottom: -8%;
+  background: radial-gradient(circle, #3d7bff 0%, rgba(61, 123, 255, 0) 70%);
+  animation: aiChatGlow2 9s ease-in-out infinite alternate;
+}
+.ai-chat-orb-glow--3 {
+  left: 18%;
+  bottom: -14%;
+  background: radial-gradient(circle, #29e0d0 0%, rgba(41, 224, 208, 0) 70%);
+  animation: aiChatGlow3 11s ease-in-out infinite alternate;
+}
+@keyframes aiChatGlow1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30%, 22%) scale(1.15); }
+  100% { transform: translate(12%, 42%) scale(0.95); }
+}
+@keyframes aiChatGlow2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-34%, -18%) scale(0.9); }
+  100% { transform: translate(-14%, -40%) scale(1.1); }
+}
+@keyframes aiChatGlow3 {
+  0% { transform: translate(0, 0) scale(0.9); }
+  50% { transform: translate(-20%, -36%) scale(1.1); }
+  100% { transform: translate(24%, -24%) scale(1); }
+}
+/* The sparkle sits on top, breathing very gently; its small star twinkles. */
 .ai-chat-launcher.is-bubble .ai-chat-launcher__orb svg {
   position: relative;
-  width: 24px;
-  height: 24px;
-  animation: aiChatOrbBreathe 3.2s ease-in-out infinite;
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35));
+  animation: aiChatOrbBreathe 4s ease-in-out infinite;
 }
 .ai-chat-launcher.is-bubble .ai-chat-twinkle {
   transform-origin: 19px 5px;
-  animation: aiChatTwinkle 3.2s ease-in-out infinite;
-}
-@keyframes aiChatOrbSpin {
-  to { transform: rotate(360deg); }
+  animation: aiChatTwinkle 4s ease-in-out infinite;
 }
 @keyframes aiChatOrbBreathe {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  50% { transform: scale(1.06); }
 }
 @keyframes aiChatTwinkle {
-  0%, 100% { opacity: 0.45; transform: scale(0.8); }
+  0%, 100% { opacity: 0.5; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1.1); }
 }
 @media (max-width: 600px) {
@@ -2973,7 +3009,7 @@ a.ai-chat-product-title {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-launcher.is-bubble .ai-chat-launcher__orb::before,
+  .ai-chat-orb-glow,
   .ai-chat-launcher.is-bubble .ai-chat-launcher__orb svg,
   .ai-chat-launcher.is-bubble .ai-chat-twinkle {
     animation: none;

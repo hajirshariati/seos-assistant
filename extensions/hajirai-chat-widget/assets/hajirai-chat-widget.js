@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 ai-bubble');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 siri-orb');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -175,7 +175,7 @@ launcher.setAttribute('aria-label','Open the shopping assistant chat');
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
 launcher.innerHTML='<div class="ai-chat-launcher__icon">'+avatarImg+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
-  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiSparkle()+'</span>';
+  '<span class="ai-chat-launcher__orb" aria-hidden="true"><i class="ai-chat-orb-glow ai-chat-orb-glow--1"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--2"></i><i class="ai-chat-orb-glow ai-chat-orb-glow--3"></i>'+aiSparkle()+'</span>';
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);
@@ -244,12 +244,29 @@ function floatingAt(x,y){
   }
   return found;
 }
+/* Fixed-position floating things near the bubble (direct children of <body>
+   and any fixed iframes — help-chat widgets are usually one of those). */
+function floatingNear(r){
+  var out=[];
+  var cands=[].slice.call(document.body.children).concat([].slice.call(document.querySelectorAll('iframe')));
+  for(var i=0;i<cands.length;i++){
+    var el=cands[i];
+    if(el===launcher||el===panel||el===overlay||launcher.contains(el)||panel.contains(el))continue;
+    var cs=getComputedStyle(el);
+    if(cs.position!=='fixed'||cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0)continue;
+    var b=el.getBoundingClientRect();
+    if(!b.width||!b.height||b.width*b.height>window.innerWidth*window.innerHeight*0.25)continue;
+    if(b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom)continue;
+    out.push(b);
+  }
+  return out;
+}
 function placeLauncher(){
   launcher.style.bottom='';
   if(!launcher.classList.contains('is-bubble'))return;
   for(var pass=0;pass<4;pass++){
     var r=launcher.getBoundingClientRect();
-    var hits=[].concat(floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
+    var hits=[].concat(floatingNear(r),floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
     if(!hits.length)return;
     var top=Math.min.apply(null,hits.map(function(h){return h.top}));
     launcher.style.bottom=Math.round(window.innerHeight-top+12)+'px';
@@ -257,8 +274,16 @@ function placeLauncher(){
 }
 try{if(localStorage.getItem(LBUBBLE_KEY)==='1')launcher.classList.add('is-bubble')}catch(e){}
 window.addEventListener('resize',placeLauncher);
-/* Other apps' buttons often load after us. */
-setTimeout(placeLauncher,1500);setTimeout(placeLauncher,4000);
+/* Other apps' buttons (Zendesk and the like) often load well after us:
+   check again as the page settles and whenever something is added to it. */
+[1500,4000,8000,15000].forEach(function(ms){setTimeout(placeLauncher,ms)});
+var placeTimer=null;
+try{
+  new MutationObserver(function(){
+    if(!launcher.classList.contains('is-bubble'))return;
+    clearTimeout(placeTimer);placeTimer=setTimeout(placeLauncher,400);
+  }).observe(document.body,{childList:true});
+}catch(e){}
 
 /* Hide on mobile if configured */
 var isMobileHidden=false;
