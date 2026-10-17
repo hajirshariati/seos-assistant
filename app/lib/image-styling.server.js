@@ -8,15 +8,23 @@
 // to alter it, and we feed the actual catalog image as the reference.
 //
 // Two providers, merchant-selected (like the embeddings provider):
-//   - gemini  → Google "Nano Banana" (Gemini 2.5 Flash Image): best at
-//               keeping a reference subject identical while restyling.
-//   - openai  → gpt-image-1 image edits.
+//   - gemini  → Google's current Flash image model ("Nano Banana"), with
+//               the previous generation as automatic fallback.
+//   - openai  → gpt-image-1.5 edits, with gpt-image-1 as fallback.
+// The newer models keep a reference product far more faithful; the
+// fallback only kicks in when the merchant's key can't use them.
 //
 // The merchant pays their own provider directly; we only meter it.
 // Model ids are env-overridable so they can be bumped without a deploy.
 
-const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
-const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+const GEMINI_IMAGE_MODELS = (process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image-preview,gemini-2.5-flash-image")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const OPENAI_IMAGE_MODELS = (process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5,gpt-image-1")
+  .split(",").map((m) => m.trim()).filter(Boolean);
+// Portrait 2:3 matches the chat's tall preview column (a square image was
+// cropped at the sides and enlarged to fill it, which also made it look soft)
+// and OpenAI's 1024x1536.
+const IMAGE_ASPECT_RATIO = process.env.VISUALIZE_ASPECT_RATIO || "2:3";
 
 // Hard ceilings so a slow/hung provider can't leave a socket open
 // forever (the app proxy kills the upstream connection long before
@@ -28,7 +36,9 @@ const IMAGE_FETCH_TIMEOUT_MS = Number(process.env.VISUALIZE_IMAGE_FETCH_TIMEOUT_
 // How many reference angles to feed the image model. More views = more
 // faithful product reproduction; capped so the request stays well within
 // the proxy window. Env-overridable.
-const MAX_REFERENCE_IMAGES = Math.max(1, Number(process.env.VISUALIZE_MAX_REFERENCE_IMAGES) || 4);
+// Galleries often end with lifestyle or detail shots that blur what the
+// product looks like — the first few are the clean product angles.
+const MAX_REFERENCE_IMAGES = Math.max(1, Number(process.env.VISUALIZE_MAX_REFERENCE_IMAGES) || 3);
 
 // AbortSignal.timeout (Node 17.3+) — a self-arming abort that fires after
 // `ms` and rejects the fetch with a TimeoutError we translate below.
@@ -52,25 +62,23 @@ export function isImageProviderSupported(provider) {
 }
 
 // The fidelity-locked stylist prompt. The product image is the
-// authority; the text only governs the SCENE around it.
-function buildStylistPrompt({ productTitle, styleContext }) {
+// authority; the text only governs the SCENE around it. A calm, worn,
+// standing shot from the reference's own angle keeps the product faithful;
+// mid-stride action shots made models invent feet, ankles and the other
+// shoe's unseen side.
+export function buildStylistPrompt({ productTitle, styleContext }) {
   const ctx = String(styleContext || "").trim();
   const sceneLine = ctx
-    ? `Choose the setting from BOTH the footwear style AND what the shopper told us they need it for: "${ctx}". If the shopper named a destination, occasion, activity, or weather, set the scene THERE (e.g. they mentioned hiking or a mountain → a real mountain trail; a beach or vacation → a sunny boardwalk or sand path; the gym or running → a track or city street; a wedding or evening out → an elegant venue). Match the environment to what they actually said.`
-    : "Choose a real-world setting that naturally suits this style of footwear (boots → outdoor trail, sandals → sunny boardwalk, sneakers → city street or park, heels → elegant evening venue).";
+    ? `Set the scene where the shopper said they'll wear it: "${ctx}" (a trip or beach → a sunny boardwalk; hiking → a trail; the gym or running → a track or city path; a wedding or evening → an elegant venue; work → a bright modern office floor). Keep it simple and believable.`
+    : "Pick a simple, believable setting that suits this footwear (sneakers → a sunlit city sidewalk or park path, sandals → a boardwalk, boots → an autumn path, dress shoes or heels → a polished interior floor).";
   return [
-    "You are a professional footwear stylist creating ONE photorealistic action shot for an online shopper.",
-    "The attached image(s) are the EXACT product to feature. When several images are attached they are MULTIPLE ANGLES OF THE SAME single product (top/front/side) — not different products. The footwear is the HERO of the shot and must dominate the frame.",
-    "ABSOLUTE RULE — DO NOT CHANGE THE PRODUCT: reproduce it exactly as shown across the reference angles — identical shape, silhouette, color, materials, texture, hardware, stitching, patterns, logos, and proportions. Do not redesign, recolor, restyle, embellish, add, or remove anything on the product itself.",
-    `The product is: ${String(productTitle || "the item").trim()}.`,
-    "MOTION (required): show a person WALKING — captured mid-stride in natural motion, one foot stepping forward with the weight shifting, as if photographed in the middle of a walk. NEVER a static standing, seated, or posed-still shot. The person should always read as moving.",
-    "SCENE: " + sceneLine,
-    "COMPOSITION RULES (critical — the footwear must be unmistakably the focus):",
-    "- Use a CLOSE, feet-forward crop framed from roughly the knee or mid-calf down, following the feet in motion. Show the shoes LARGE and crisp — they should occupy about half the frame and sit in the sharp foreground. NEVER a full-length head-to-toe shot that shrinks the shoes to a small detail.",
-    "- Keep the footwear razor-sharp and perfectly lit even while walking: freeze the shoes crisply. Any motion blur belongs ONLY in the background, NEVER on the product.",
-    "- The person, clothing, and environment are SUPPORTING CONTEXT only — secondary, and never obscuring, cropping, or visually competing with the footwear.",
-    "- Shallow depth of field: footwear razor-sharp, background gently soft with a subtle sense of movement.",
-    "Keep the product pixel-faithful to the reference angles. Photorealistic, natural lighting, clean modern editorial quality. No text, watermarks, or added logos.",
+    "Create ONE photorealistic lifestyle photo of this exact footwear being worn, in the style of a premium footwear brand's website.",
+    "The attached image(s) show the SAME single product; the first image is the main view.",
+    `Product: ${String(productTitle || "the shoe").trim()}.`,
+    "THE PRODUCT MUST NOT CHANGE: identical shape, silhouette, color, materials, texture and fine details — keep every pattern, knit, perforation, stitching, embellishment, sparkle, sole color and logo exactly as in the reference. Do not simplify, smooth out, recolor or redesign anything.",
+    "POSE AND FRAMING: the person stands in a relaxed, natural stance with the weight on both feet (one foot can be slightly forward). Show the pair from the side / three-quarter angle that matches the main reference photo. Crop from about mid-calf down, camera low near the ground, so the shoes fill most of the frame and sit sharp in the foreground. Exactly two feet, correctly matched left and right, natural ankles.",
+    "SCENE: " + sceneLine + " The clothing and setting are quiet supporting context; nothing covers the shoes.",
+    "PHOTO QUALITY: natural soft daylight, true-to-life color, crisp focus on the shoes, gently blurred background, high resolution, clean editorial look. No motion blur, no text, no watermarks, no extra logos, no distorted soles or toes.",
   ].join("\n");
 }
 
@@ -83,9 +91,30 @@ async function fetchImageAsBase64(url) {
   return { base64: buf.toString("base64"), mimeType: contentType.split(";")[0].trim(), bytes: buf };
 }
 
+// A model the key can't use (not found / not allowed / unknown option) is
+// answered immediately with a 4xx — safe to retry on the next model.
+function modelUnavailable(status, detail) {
+  return (status === 404 || status === 400 || status === 403) &&
+    /model|not found|not supported|unsupported|permission|access|unknown|invalid/i.test(detail || "");
+}
+
 async function generateWithGemini({ apiKey, prompt, images }) {
+  let lastErr;
+  for (const model of GEMINI_IMAGE_MODELS) {
+    try {
+      return await geminiOnce({ apiKey, prompt, images, model });
+    } catch (err) {
+      lastErr = err;
+      if (!err?.retryNextModel) throw err;
+      console.warn(`[image-styling] gemini model ${model} unavailable, trying next: ${err.message.slice(0, 160)}`);
+    }
+  }
+  throw lastErr;
+}
+
+async function geminiOnce({ apiKey, prompt, images, model }) {
   const endpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   // Feed every reference angle we have. Multiple views (top/front/side) let
   // the model reproduce the product faithfully instead of inventing the
   // sides a single photo never showed.
@@ -95,8 +124,8 @@ async function generateWithGemini({ apiKey, prompt, images }) {
   }
   const body = {
     contents: [{ parts: reqParts }],
-    // Ask for an image back.
-    generationConfig: { responseModalities: ["IMAGE"] },
+    // Ask for an image back, portrait.
+    generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: IMAGE_ASPECT_RATIO } },
   };
   const res = await fetch(endpoint, {
     method: "POST",
@@ -106,7 +135,9 @@ async function generateWithGemini({ apiKey, prompt, images }) {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Gemini image API ${res.status}: ${detail.slice(0, 300)}`);
+    const err = new Error(`Gemini image API ${res.status} (${model}): ${detail.slice(0, 300)}`);
+    err.retryNextModel = modelUnavailable(res.status, detail);
+    throw err;
   }
   const json = await res.json();
   const parts = json?.candidates?.[0]?.content?.parts || [];
@@ -118,32 +149,36 @@ async function generateWithGemini({ apiKey, prompt, images }) {
 }
 
 async function generateWithOpenAI({ apiKey, prompt, images }) {
-  // OpenAI edits take the primary reference only (single-image request kept
-  // byte-for-byte stable); the multi-angle win applies to the Gemini path.
-  const image = images[0];
-  // gpt-image-1 edits: multipart form with the reference image + prompt.
-  // gpt-image-1 default quality is "auto" → "high", which routinely runs
-  // 40-60s and blows past the app-proxy/request window (prod trace
-  // 2026-06-24: 45s timeout). "low" cuts that to ~10-20s with quality
-  // that's fine for a styling preview; env-overridable if a merchant
-  // wants to trade speed for fidelity.
+  let lastErr;
+  for (const model of OPENAI_IMAGE_MODELS) {
+    try {
+      return await openaiOnce({ apiKey, prompt, images, model });
+    } catch (err) {
+      lastErr = err;
+      if (!err?.retryNextModel) throw err;
+      console.warn(`[image-styling] openai model ${model} unavailable, trying next: ${err.message.slice(0, 160)}`);
+    }
+  }
+  throw lastErr;
+}
+
+async function openaiOnce({ apiKey, prompt, images, model, fidelity = true }) {
+  // gpt-image edits take the reference image(s) plus the prompt. The older
+  // gpt-image-1 needs "low" quality to finish inside the request window;
+  // gpt-image-1.5 is several times faster, so it runs at "medium" — the
+  // difference between a soft, muddy preview and a crisp one.
+  const legacy = model === "gpt-image-1";
   const form = new FormData();
-  form.append("model", OPENAI_IMAGE_MODEL);
+  form.append("model", model);
   form.append("prompt", prompt);
-  form.append("size", "1024x1024");
-  form.append("quality", process.env.OPENAI_IMAGE_QUALITY || "low");
-  // input_fidelity=high is the single most important fidelity lever for
-  // gpt-image-1 edits: it forces the model to PRESERVE the reference
-  // image's fine details (the product's exact shape, color, materials,
-  // hardware) instead of loosely re-imagining it. Default ("low") is why
-  // styled products came back looking nothing like the real item. Costs a
-  // little more latency/tokens; env-overridable to dial back if needed.
-  form.append("input_fidelity", process.env.OPENAI_IMAGE_INPUT_FIDELITY || "high");
-  form.append(
-    "image",
-    new Blob([image.bytes], { type: image.mimeType || "image/png" }),
-    "product.png",
-  );
+  form.append("size", "1024x1536");
+  form.append("quality", process.env.OPENAI_IMAGE_QUALITY || (legacy ? "low" : "medium"));
+  // input_fidelity=high keeps the reference product's fine details instead
+  // of loosely re-imagining it.
+  if (fidelity) form.append("input_fidelity", process.env.OPENAI_IMAGE_INPUT_FIDELITY || "high");
+  for (const [i, image] of images.slice(0, legacy ? 1 : images.length).entries()) {
+    form.append(legacy ? "image" : "image[]", new Blob([image.bytes], { type: image.mimeType || "image/png" }), `product-${i + 1}.png`);
+  }
   const res = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -152,7 +187,13 @@ async function generateWithOpenAI({ apiKey, prompt, images }) {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`OpenAI image API ${res.status}: ${detail.slice(0, 300)}`);
+    // A model that doesn't take the fidelity option: same model without it.
+    if (fidelity && res.status === 400 && /input_fidelity/i.test(detail)) {
+      return openaiOnce({ apiKey, prompt, images, model, fidelity: false });
+    }
+    const err = new Error(`OpenAI image API ${res.status} (${model}): ${detail.slice(0, 300)}`);
+    err.retryNextModel = modelUnavailable(res.status, detail);
+    throw err;
   }
   const json = await res.json();
   const b64 = json?.data?.[0]?.b64_json;
