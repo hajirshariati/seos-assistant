@@ -90,18 +90,6 @@
   margin-right: 10px;
 }
 
-.ai-chat-launcher__icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.ai-chat-launcher__icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
 .ai-chat-launcher__text {
   flex: 1;
   font-size: 15px;
@@ -118,32 +106,6 @@
   outline: none !important;
   -webkit-appearance: none !important;
   appearance: none !important;
-}
-
-.ai-chat-launcher__send {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--ai-chat-primary);
-  color: #fff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-@media (hover: hover) {
-  .ai-chat-launcher__send:hover {
-    opacity: 0.85;
-  }
-}
-
-.ai-chat-launcher__send svg {
-  width: 16px;
-  height: 16px;
 }
 
 .ai-chat-launcher__close {
@@ -206,10 +168,6 @@
   left: 50%;
   transform: translateX(-50%) translateY(12px) scale(0.98);
   transform-origin: bottom center;
-}
-
-.ai-chat-panel--bottom-center.open {
-  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .ai-chat-panel--bottom-left {
@@ -306,12 +264,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ai-chat-header__login-pill {
-  background: #f3f4f6;
-  color: #4b5563;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
+
 @media (hover: hover) {
   .ai-chat-header__login-pill:hover {
     background: #e5e7eb;
@@ -493,38 +446,6 @@
 
 .ai-chat-welcome__tagline:empty {
   display: none;
-}
-
-.ai-chat-welcome__tagline-icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--ai-chat-primary);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-chat-welcome__tagline-icon svg {
-  width: 10px;
-  height: 10px;
-}
-
-.ai-chat-welcome__greeting {
-  font-size: 15px;
-  color: var(--ai-chat-text);
-  line-height: 1.55;
-  padding: 0 12px;
-  margin-bottom: 18px;
-  max-width: 460px;
-}
-
-.ai-chat-welcome__cta-label {
-  font-size: 13px;
-  color: var(--ai-chat-text-light);
-  margin-bottom: 12px;
-  font-weight: 500;
 }
 
 .ai-chat-welcome__ctas {
@@ -728,7 +649,6 @@ a.ai-chat-welcome__hint--link:hover {
    you can scroll back and see what was offered. */
 .ai-chat-choices.is-stale,
 .ai-chat-suggestions.is-stale,
-.ai-chat-welcome__qps.is-stale,
 .ai-chat-welcome__ctas.is-stale,
 .ai-chat-dead-end.is-stale {
   opacity: 0.45;
@@ -856,20 +776,6 @@ a.ai-chat-welcome__hint--link:hover {
 }
 
 /* ---------- Suggested follow-up questions ---------- */
-.ai-chat-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-  /* Border-top intentionally NOT set here. The section divider is
-     drawn inline beside the label by .ai-chat-suggestions-label::after,
-     not stacked as a full-width hairline above the label. The
-     'border-top: none' below is defensive against older deployed
-     CSS being served from cache; once the new build lands and the
-     CDN flushes it's a no-op. */
-  border-top: none;
-  padding-top: 0;
-}
 
 /* Subtle "Customers also asked" eyebrow with the section divider
    line extending to the right of the text — same pattern as a
@@ -1073,12 +979,6 @@ a.ai-chat-welcome__hint--link:hover {
   color: var(--ai-chat-primary);
 }
 
-.ai-chat-msg--assistant .ai-chat-msg-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .ai-chat-msg-bubble {
   padding: 10px 14px;
   border-radius: 14px;
@@ -1087,18 +987,6 @@ a.ai-chat-welcome__hint--link:hover {
   word-break: break-word;
   min-width: 0;
   max-width: 100%;
-}
-
-.ai-chat-msg--user .ai-chat-msg-bubble {
-  background: var(--ai-chat-msg-user);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-
-.ai-chat-msg--assistant .ai-chat-msg-bubble {
-  background: var(--ai-chat-msg-assistant);
-  color: var(--ai-chat-text);
-  border-bottom-left-radius: 4px;
 }
 
 .ai-chat-msg-bubble p {
@@ -1216,9 +1104,6 @@ a.ai-chat-welcome__hint--link:hover {
 
 /* The "View product" CTA only shows in showcase style. Hide by
    default so the legacy horizontal layout is unchanged. */
-.ai-chat-product-cta {
-  display: none;
-}
 
 /* ================================================================
    PRODUCT CARDS — SHOWCASE STYLE (opt-in via merchant setting)
@@ -1320,40 +1205,17 @@ a.ai-chat-welcome__hint--link:hover {
    below keeps the simpler full-width vertical layout for narrow
    screens (horizontal looks cramped under ~600px). */
 @media (min-width: 601px) {
-  .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    flex: 0 0 100%;
-    flex-direction: row;
-    gap: 0;
-    align-items: stretch;
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
-    width: 160px;
-    flex: 0 0 160px;
-    aspect-ratio: 1 / 1;
-    align-self: flex-start;
-  }
+  
+  
   .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info {
     flex: 1 1 auto;
     padding: 16px 18px;
     justify-content: center;
     gap: 8px;
   }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-title {
-    font-size: 15px;
-    -webkit-line-clamp: 3;
-    min-height: 0;
-    line-height: 1.35;
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-price {
-    font-size: 16px;
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-cta {
-    margin-top: 6px;
-    padding: 10px 16px;
-    font-size: 13px;
-    align-self: flex-start;
-    min-width: 140px;
-  }
+  
+  
+  
 }
 
 /* "Visualize My Look" sits on the SAME line as "View product".
@@ -1361,16 +1223,7 @@ a.ai-chat-welcome__hint--link:hover {
    side by side inside the card. Force both children to size to their
    content (not stretch to full width) regardless of the card layout
    the row lands in (vertical showcase, horizontal :only-child, etc.). */
-.ai-chat-viz-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  /* stretch (not center) so Visualize matches the View product CTA's
-     height exactly, regardless of each button's own padding. */
-  align-items: stretch;
-  margin-top: 4px;
-  width: 100%;
-}
+
 .ai-chat-viz-actions .ai-chat-product-cta {
   display: inline-flex !important;
   align-items: center;
@@ -1378,9 +1231,6 @@ a.ai-chat-welcome__hint--link:hover {
   flex: 0 1 auto;
   width: auto;
   margin: 0;
-}
-.ai-chat-viz-actions .ai-chat-viz-btn {
-  flex: 0 1 auto;
 }
 
 /* Showcase nav arrows — black circle, white chevron, vertically
@@ -1454,9 +1304,7 @@ a.ai-chat-welcome__hint--link:hover {
   .ai-chat-products--showcase .ai-chat-product-card {
     flex: 0 0 64%;
   }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    flex: 0 0 100%;
-  }
+  
 
   /* ── Mobile product cards: clean Apple-style white tiles ──
      The product IMAGE WELL is pure WHITE (no gray gutters/bars) and the photo
@@ -1470,12 +1318,7 @@ a.ai-chat-welcome__hint--link:hover {
   }
 
   /* Carousel (multi-card) card shell. */
-  .ai-chat-products--showcase .ai-chat-product-card {
-    background: #fff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 12px;
-    overflow: hidden;
-  }
+  
   /* Carousel image well: white, flex-centered, capped height — no 1/1 square.
      Kept TIGHT (just a little padding) so the photo fills the well instead of
      floating in a big empty box. */
@@ -1502,9 +1345,7 @@ a.ai-chat-welcome__hint--link:hover {
     display: block;
   }
   /* Tighten the gap between the photo and the title. */
-  .ai-chat-products--showcase .ai-chat-product-info {
-    padding-top: 8px;
-  }
+  
 
   /* Single featured card → compact 3-row grid:
        "img title"
@@ -1517,46 +1358,13 @@ a.ai-chat-welcome__hint--link:hover {
      .ai-chat-viz-actions row) and the without-viz case (the bare View product
      CTA). (Desktop's :only-child row lives in the min-width:601px block and is
      unaffected.) */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
-    grid-template-areas:
-      "img title"
-      "img price"
-      "cta cta";
-    column-gap: 14px;
-    row-gap: 2px;
-    align-items: center;
-    padding: 14px;
-    box-sizing: border-box;
-  }
+  
   /* Compact white image well — fixed, centered, no wasted space around the photo.
      Spans the title+price rows and centers vertically beside them. */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
-    grid-area: img;
-    width: 88px;
-    height: 88px;
-    align-self: center;
-    background: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    overflow: hidden;
-    aspect-ratio: auto;
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img img {
-    width: auto;
-    height: auto;
-    max-width: 80px;
-    max-height: 80px;
-    object-fit: contain;
-    display: block;
-  }
+  
+  
   /* Dissolve info so its children become grid items of the card. */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info {
-    display: contents;
-  }
+  
   /* Title bottom-aligned, price top-aligned → they sit together as a tight pair
      vertically centered next to the image (no floating gaps). */
   .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-title {
@@ -1595,35 +1403,13 @@ a.ai-chat-welcome__hint--link:hover {
   }
   /* Inside the actions row the View product CTA must NOT also carry the row's
      top margin (the row owns the spacing). */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions .ai-chat-product-cta {
-    margin: 0;
-  }
+  
   /* Consistent Apple-style button sizing for BOTH CTAs — same height, padding,
      radius, and font so they read as a matched pair. */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-cta {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 38px;
-    padding: 8px 16px;
-    border-radius: 9px;
-    font-size: 13px;
-    line-height: 1.2;
-    box-sizing: border-box;
-  }
+  
   /* See It Styled carries INLINE styles from injectVizButton (padding/radius/
      font), so its sizing must use !important to match View product exactly. */
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-btn {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    min-height: 38px !important;
-    padding: 8px 16px !important;
-    border-radius: 9px !important;
-    font-size: 13px !important;
-    line-height: 1.2;
-    box-sizing: border-box;
-  }
+  
 }
 
 /* ---------- Typing indicator ---------- */
@@ -1828,10 +1614,12 @@ a.ai-chat-welcome__hint--link:hover {
   visibility: visible;
 }
 
-/* ---------- Cart drawer z-index management ---------- */
-body:has(#CartDrawer:not([hidden])) .ai-chat-launcher,
-body:has(#CartDrawer:not([hidden])) .ai-chat-panel,
-body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
+/* ---------- Cart drawer open: the chat steps behind it ----------
+   Only while the drawer is open — Dawn-style themes keep #CartDrawer in
+   the page (never [hidden]), so "exists" would mean "always". */
+body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[open], #CartDrawer.is-open) .ai-chat-launcher,
+body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[open], #CartDrawer.is-open) .ai-chat-panel,
+body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[open], #CartDrawer.is-open) .ai-chat-overlay {
   z-index: 25 !important;
 }
 
@@ -1914,10 +1702,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
     grid-template-columns: 1fr 1fr !important;
   }
 
-  .ai-chat-welcome__cta-btn {
-    padding: 12px 12px;
-    font-size: 13px;
-  }
+  
 
   .ai-chat-messages {
     padding: 12px 12px 8px;
@@ -2163,13 +1948,9 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
 /* Accessibility: visible focus rings for keyboard navigation. We intentionally
    override the earlier `outline: none !important` for :focus-visible only —
    pointer focus stays clean, keyboard focus is loud. */
-.ai-chat-launcher__send:focus-visible,
 .ai-chat-send:focus-visible,
 .ai-chat-welcome__cta-btn:focus-visible,
-.ai-chat-product-card:focus-visible,
-.ai-chat-quickpick:focus-visible,
-.ai-chat-followup:focus-visible,
-.ai-chat-launcher-text:focus-visible {
+.ai-chat-product-card:focus-visible {
   outline: 2px solid var(--ai-chat-primary, #2d6b4f) !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 4px rgba(13, 13, 18, 0.18) !important;
@@ -2178,11 +1959,8 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
 /* Honor reduced-motion preference for the launcher / message animations. */
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-launcher,
-  .ai-chat-window,
-  .ai-chat-message,
   .ai-chat-product-card,
   .ai-chat-welcome__cta-btn,
-  .ai-chat-launcher__send,
   .ai-chat-send {
     transition: none !important;
     animation: none !important;
@@ -2195,13 +1973,7 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
    The card is no longer one big link: image + title link to the
    product, "Add to cart" (.ai-chat-product-cta) is the primary action
    in every layout, "View product" a quiet underlined link. */
-a.ai-chat-product-img {
-  display: block;
-}
-a.ai-chat-product-title {
-  color: var(--ai-chat-text);
-  text-decoration: none;
-}
+
 .ai-chat-product-variant {
   display: block;
   margin-top: 2px;
@@ -2268,9 +2040,7 @@ a.ai-chat-product-title {
 .ai-chat-products--showcase .ai-chat-view-link {
   align-self: center;
 }
-.ai-chat-product-card.is-picking {
-  border-color: var(--ai-chat-product-cta-bg, #000);
-}
+
 /* "See It Styled" row: the primary Add to cart keeps its own width. */
 .ai-chat-viz-actions .ai-chat-product-cta {
   flex: 1 1 auto;
@@ -2281,12 +2051,8 @@ a.ai-chat-product-title {
   .ai-chat-products--showcase .ai-chat-product-card {
     flex: 0 0 calc((100% - 20px) / 2.3);
   }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    flex: 0 0 100%;
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
-    align-self: flex-start;
-  }
+  
+  
 }
 /* The info column is width:100% + padding — count the padding inside the
    card (it was ~22px wider than the card, hidden by overflow). */
@@ -2299,23 +2065,6 @@ a.ai-chat-product-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-@media (max-width: 600px) {
-  .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    grid-template-areas:
-      "img title"
-      "img price"
-      "cta cta"
-      "view view";
-  }
-  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
-    grid-area: view;
-    justify-self: start;
-    margin-top: 8px;
-  }
-  .ai-chat-product-cta {
-    min-height: 40px;
-  }
 }
 
 /* ---------- Option picker (opens under the cards) ---------- */
@@ -2523,11 +2272,7 @@ a.ai-chat-product-title {
   color: var(--ai-chat-text);
   text-decoration: none;
 }
-.ai-chat-msg-bubble a.ai-chat-view-link,
-.ai-chat-msg-bubble a.ai-chat-atc-secondary {
-  color: var(--ai-chat-text);
-  text-decoration: underline;
-}
+
 .ai-chat-msg-bubble a.ai-chat-atc-primary {
   color: var(--ai-chat-product-cta-text, #fff);
   text-decoration: none;
@@ -2582,9 +2327,7 @@ a.ai-chat-product-title {
   width: 100%;
   margin-top: 8px;
 }
-.ai-chat-msg-bubble .ai-chat-viz-actions .ai-chat-product-cta {
-  margin: 0 !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-product-cta {
   min-height: 34px;
   padding: 0 14px;
@@ -2630,23 +2373,13 @@ a.ai-chat-product-title {
   min-height: 0 !important;
   -webkit-line-clamp: 2 !important;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-price {
-  margin: 2px 0 0 !important;
-  font-size: 14px !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-cta {
   align-self: flex-start !important;
   width: auto !important;
   min-width: 0 !important;
   margin-top: 10px !important;
   padding: 0 16px !important;
-}
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions {
-  margin-top: 10px !important;
-}
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
-  align-self: flex-start !important;
-  margin-top: 8px !important;
 }
 
 /* Several cards: a shorter image and tighter text. */
@@ -2661,19 +2394,9 @@ a.ai-chat-product-title {
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-view-link {
   margin-top: 4px;
 }
-@media (max-width: 600px) {
-  .ai-chat-msg-bubble .ai-chat-product-cta,
-  .ai-chat-msg-bubble .ai-chat-viz-btn {
-    min-height: 36px !important;
-  }
-}
+
 /* Add to cart and See It Styled side by side, each its own width. */
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card .ai-chat-viz-actions .ai-chat-product-cta {
-  flex: 0 0 auto !important;
-  width: auto !important;
-  margin: 0 !important;
-  padding: 0 14px !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
   aspect-ratio: 16 / 11 !important;
 }
@@ -2681,10 +2404,7 @@ a.ai-chat-product-title {
   max-height: 100%;
   object-fit: contain;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card .ai-chat-viz-actions .ai-chat-viz-btn {
-  flex: 0 0 auto !important;
-  width: auto !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-img {
   background: #fff !important;
 }
@@ -2752,35 +2472,12 @@ a.ai-chat-product-title {
   font-weight: 600 !important;
   letter-spacing: -0.01em;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-price {
-  font-size: 15px !important;
-  margin-top: 4px !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-cta,
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-btn {
   min-height: 36px !important;
   border-radius: 999px !important;
   padding: 0 16px !important;
-}
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions,
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child > .ai-chat-product-info > .ai-chat-product-cta {
-  margin-top: 12px !important;
-}
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
-  margin-top: 10px !important;
-  font-size: 12.5px;
-  color: var(--ai-chat-text-light, #6b7280);
-}
-@media (max-width: 600px) {
-  .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child {
-    grid-template-columns: 88px minmax(0, 1fr) !important;
-    column-gap: 14px !important;
-    padding: 12px !important;
-  }
-  .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
-    width: 88px !important;
-    height: 88px !important;
-  }
 }
 
 /* A card being chosen from: a quiet ring, not a heavy black border. */
@@ -2834,12 +2531,7 @@ a.ai-chat-product-title {
   height: auto !important;
   min-height: 0 !important;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-img {
-  grid-row: 1 / span 2;
-}
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info {
-  display: contents !important;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-title {
   grid-area: title;
   align-self: end;
@@ -2854,9 +2546,7 @@ a.ai-chat-product-title {
   grid-area: actions;
   margin-top: 14px !important;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions {
-  flex-wrap: nowrap;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions .ai-chat-product-cta,
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info > .ai-chat-product-cta {
   flex: 1 1 auto !important;
@@ -2866,6 +2556,7 @@ a.ai-chat-product-title {
   align-self: stretch !important;
 }
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions .ai-chat-viz-btn {
+  flex-shrink: 0 !important;
   min-height: 40px !important;
 }
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
@@ -3069,9 +2760,7 @@ a.ai-chat-product-title {
 }
 
 /* ---------- Header ---------- */
-.ai-chat-panel .ai-chat-header {
-  border-bottom: 1px solid var(--seos-line);
-}
+
 .ai-chat-panel .ai-chat-header__name {
   font-size: 15px;
   font-weight: 600;
@@ -3126,13 +2815,7 @@ a.ai-chat-product-title {
   letter-spacing: -0.02em;
   color: var(--seos-text);
 }
-.ai-chat-panel .ai-chat-welcome__tagline {
-  color: var(--seos-text-2);
-}
-.ai-chat-panel .ai-chat-welcome__greeting-cta {
-  color: var(--seos-text);
-  font-weight: 600;
-}
+
 .ai-chat-panel .ai-chat-welcome__cta-btn {
   border-radius: 999px !important;
   background: var(--seos-ink) !important;
@@ -3157,9 +2840,7 @@ a.ai-chat-product-title {
 .ai-chat-panel .ai-chat-welcome__cta-btn .cta-plus {
   color: rgba(255, 255, 255, 0.7) !important;
 }
-.ai-chat-panel .ai-chat-welcome__qp-label {
-  color: var(--seos-text-2);
-}
+
 .ai-chat-panel .ai-chat-welcome__qp-btn {
   border-radius: 999px !important;
   background: var(--seos-surface) !important;
@@ -3256,9 +2937,7 @@ a.ai-chat-product-title {
 }
 
 /* ---------- Input ---------- */
-.ai-chat-panel .ai-chat-input-area {
-  border-top: 1px solid var(--seos-line);
-}
+
 .ai-chat-panel .ai-chat-input-wrap {
   background: var(--seos-surface) !important;
   border: 1px solid transparent !important;
@@ -3270,20 +2949,6 @@ a.ai-chat-product-title {
   background: #fff !important;
   border-color: var(--seos-line-strong) !important;
 }
-.ai-chat-panel .ai-chat-input {
-  color: var(--seos-text) !important;
-}
-.ai-chat-panel .ai-chat-input-icon {
-  color: var(--seos-text-2);
-}
-.ai-chat-panel .ai-chat-send {
-  background: var(--seos-ink) !important;
-  color: #fff !important;
-  border-radius: 50% !important;
-}
-.ai-chat-panel .ai-chat-footer {
-  color: var(--seos-text-2);
-}
 
 /* ---------- Product cards: one tile everywhere ---------- */
 .ai-chat-panel .ai-chat-product-card {
@@ -3293,9 +2958,7 @@ a.ai-chat-product-title {
   box-shadow: none !important;
   overflow: hidden;
 }
-.ai-chat-panel .ai-chat-products--showcase .ai-chat-product-card .ai-chat-product-img {
-  background: var(--seos-surface) !important;
-}
+
 .ai-chat-panel .ai-chat-products--showcase .ai-chat-product-card .ai-chat-product-img img {
   mix-blend-mode: multiply;
 }
@@ -3416,12 +3079,7 @@ a.ai-chat-product-title {
   gap: 8px !important;
   margin-top: 10px !important;
 }
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions > *,
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-product-info > .ai-chat-product-cta {
-  width: 100% !important;
-  flex: 0 0 auto !important;
-  margin-top: 10px;
-}
+
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions > * {
   margin-top: 0 !important;
 }
@@ -3433,11 +3091,6 @@ a.ai-chat-product-title {
   margin: 0 14px 14px !important;
   padding-top: 12px !important;
 }
-/* Carousel cards: the same insides. */
-.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:not(:only-child) .ai-chat-product-cta {
-  width: 100% !important;
-}
-
 /* ---------- Launcher bar: the AI mark instead of a photo ---------- */
 .ai-chat-launcher {
   border: 1px solid var(--seos-line) !important;
@@ -3471,4 +3124,17 @@ a.ai-chat-product-title {
   max-width: none !important;
   max-height: none !important;
   object-fit: contain !important;
+}
+
+/* Touch screens of any width (iPad too): 16px keeps Safari from zooming
+   into the page when the message box is tapped. */
+@media (pointer: coarse) {
+  .ai-chat-panel .ai-chat-input {
+    font-size: 16px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-welcome__avatar::before {
+    animation: none;
+  }
 }

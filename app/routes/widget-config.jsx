@@ -60,10 +60,8 @@ export const loader = async ({ request }) => {
     return Response.json(
       {
         hideOnUrls,
-        klaviyoFormId: config.klaviyoFormId || "",
         klaviyoCompanyId: config.klaviyoCompanyId || "",
         klaviyoListId: config.klaviyoListId || "",
-        vipModeEnabled: config.vipModeEnabled === true,
         showLoginPill: config.showLoginPill !== false,
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,

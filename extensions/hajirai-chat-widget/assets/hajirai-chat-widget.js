@@ -4,19 +4,11 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 bubble-clear');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 audit-cleanup');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
 var C=window.__AI_CHAT_CONFIG||{};
-
-/* Apply merchant colors as CSS variables (overrides theme block defaults). */
-var _rootStyle=document.documentElement.style;
-if(C.colorPrimary) _rootStyle.setProperty('--ai-chat-color-primary', C.colorPrimary);
-if(C.colorAccent)  _rootStyle.setProperty('--ai-chat-color-accent',  C.colorAccent);
-if(C.colorCtaBg)   _rootStyle.setProperty('--ai-chat-cta-bg',        C.colorCtaBg);
-if(C.colorCtaText) _rootStyle.setProperty('--ai-chat-cta-text',      C.colorCtaText);
-if(C.colorCtaHover)_rootStyle.setProperty('--ai-chat-cta-hover',     C.colorCtaHover);
 
 var CHAT_URL='/apps/hajirai/chat';
 var FEEDBACK_URL='/apps/hajirai/feedback';
@@ -37,13 +29,14 @@ function matchesHideRule(rules){
   return false;
 }
 
+/* Set when this page is one the store hides the assistant on. */
+var HIDDEN_BY_URL=false;
 var _cachedRules=null;
 try{_cachedRules=JSON.parse(sessionStorage.getItem(HRK))}catch(e){}
 if(_cachedRules&&matchesHideRule(_cachedRules))return;
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
-  if(d.klaviyoFormId)KLAVIYO_FORM_ID=d.klaviyoFormId;
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -60,13 +53,14 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
      render in default style until the fetch resolves. */
   try{localStorage.setItem(PCSK,PRODUCT_CARD_STYLE)}catch(e){}
   if(d.showLoginPill===false){
-    SHOW_LOGIN_PILL=false;
     var pill=document.querySelector('.ai-chat-header__login-pill,.ai-chat-header__vip-pill');
     if(pill)pill.style.display='none';
   }
   var rules=d.hideOnUrls||[];
   try{sessionStorage.setItem(HRK,JSON.stringify(rules))}catch(e){}
   if(matchesHideRule(rules)){
+    HIDDEN_BY_URL=true;
+    if(isOpen&&typeof toggle==='function')toggle(false);
     var l=document.querySelector('.ai-chat-launcher');
     var p=document.querySelector('.ai-chat-panel');
     var o=document.querySelector('.ai-chat-overlay');
@@ -82,7 +76,6 @@ var GREETCTA=C.greetingCta||'What can I help you find today?';
 var AVATAR=C.avatarUrl||'';
 var BANNER=C.bannerUrl||'';
 var NAME=C.assistantName||'AI Shopping Assistant';
-var TAG=C.assistantTagline||'';
 var LPLACE=C.launcherPlaceholder||'How can I help you today?';
 var IPLACE=C.inputPlaceholder||'How can I help you today?';
 var POS=C.widgetPosition||'bottom-center';
@@ -106,9 +99,7 @@ var SUPPORT_URL=C.supportUrl||'';
 var SUPPORT_LABEL=C.supportLabel||'Contact customer service';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
 var CUST_NAME=C.customerFirstName||'';
-var CUST_ID=C.customerId||null;
 var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';
-var SHOW_LOGIN_PILL=true;
 // "horizontal" = legacy thumbnail-left layout, capped at 3 cards.
 // "showcase" = square image on top, scroll-snap row, up to 10 cards.
 // Set from /widget-config response; merchants pick this in the admin.
@@ -116,7 +107,6 @@ var SHOW_LOGIN_PILL=true;
 // page refresh renders with the right style before fetch resolves.
 var PRODUCT_CARD_STYLE='horizontal';
 try{var _cachedStyle=localStorage.getItem(PCSK);if(_cachedStyle==='showcase')PRODUCT_CARD_STYLE='showcase'}catch(e){}
-var KLAVIYO_FORM_ID='';
 var KLAVIYO_COMPANY_ID='';
 var KLAVIYO_LIST_ID='';
 /* Welcome-panel intro effect. Overridden by /widget-config response.
@@ -139,9 +129,14 @@ function el(t,cl,h){var e=document.createElement(t);if(cl)e.className=cl;if(h)e.
 function esc(s){var d=document.createElement('div');d.appendChild(document.createTextNode(s));return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function fmt(c){return'$'+(c/100).toFixed(2)}
 function safeUrl(u){var s=String(u||'').replace(/\s+/g,'');return /^(https?:\/\/|\/)/i.test(s)?s.replace(/"/g,'&quot;'):''}
-function md(t){if(!t)return'';return t.replace(/^\s*\|[\s\-:|]+\|\s*$/gm,'').replace(/\|[\s\-:|]{3,}\|/g,'').replace(/\|([^|\n]+(?:\|[^|\n]+)+)\|/g,function(_,row){var cells=row.split('|').map(function(s){return s.trim()}).filter(Boolean);if(cells.length<2)return cells.join('');return '\n- **'+cells[0]+'** — '+cells.slice(1).join(' — ')}).replace(/([^\n])[ \t]+(\*\*[^*\n]+?:\*\*)/g,'$1\n\n$2').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){var u=safeUrl(url);return u?'<a href="'+u+'" target="_blank" rel="noopener">'+txt+'</a>':txt}).replace(/^[-*] (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')}
+/* Links the assistant writes: never protocol-relative (//other-site). */
+function safeLink(u){var s=String(u||'').replace(/\s+/g,'');return /^\/\//.test(s)?'':safeUrl(s)}
+function md(t){if(!t)return'';return t.replace(/^\s*\|[\s\-:|]+\|\s*$/gm,'').replace(/\|[\s\-:|]{3,}\|/g,'').replace(/\|([^|\n]+(?:\|[^|\n]+)+)\|/g,function(_,row){var cells=row.split('|').map(function(s){return s.trim()}).filter(Boolean);if(cells.length<2)return cells.join('');return '\n- **'+cells[0]+'** — '+cells.slice(1).join(' — ')}).replace(/([^\n])[ \t]+(\*\*[^*\n]+?:\*\*)/g,'$1\n\n$2').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(_,txt,url){var u=safeLink(url);return u?'<a href="'+u+'" target="_blank" rel="noopener">'+txt+'</a>':txt}).replace(/^[-*] (.+)$/gm,'<li>$1</li>').replace(/(<li>.*<\/li>)/gs,'<ul>$1</ul>').replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')}
 
-function getSess(){var id=localStorage.getItem(SK);if(!id){id='sess_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);localStorage.setItem(SK,id)}return id}
+/* Storage can be blocked (private modes, strict cookie settings): the
+   session id then lives in memory for this page. */
+var _memSess='';
+function getSess(){var id='';try{id=localStorage.getItem(SK)||''}catch(e){}if(!id)id=_memSess;if(!id){id='sess_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(SK,id)}catch(e){}}_memSess=id;return id}
 function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.slice(-50)))}catch(e){}}
 function loadH(){try{return JSON.parse(localStorage.getItem(HK))||[]}catch(e){return[]}}
 
@@ -185,11 +180,12 @@ panel.style.width=panelW+'px';
 panel.style.maxWidth='calc(100vw - 16px)';
 panel.setAttribute('role','dialog');
 panel.setAttribute('aria-label','AI Shopping Assistant');
+panel.setAttribute('aria-modal','true');
 // Inherit page language so screen readers announce content correctly.
 // Falls back to <html lang> or 'en' if neither is set.
 panel.setAttribute('lang',(document.documentElement.getAttribute('lang')||navigator.language||'en').split('-')[0]);
 
-var headerAv=AVATAR?'<div class="ai-chat-header__avatar"><img src="'+AVATAR+'" alt="'+esc(NAME)+'"></div>':'<div class="ai-chat-header__avatar ai-chat-header__avatar--placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>';
+var headerAv=safeUrl(AVATAR)?'<div class="ai-chat-header__avatar"><img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'"></div>':'<div class="ai-chat-header__avatar ai-chat-header__avatar--placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>';
 
 var loginPillHtml='';
 if(CUST_LOGGED_IN&&CUST_NAME){
@@ -203,7 +199,7 @@ panel.innerHTML=
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea></div><button class="ai-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>'+
-(DISCL?'<div class="ai-chat-footer">'+esc(DISCL)+' <a href="'+esc(PRIVURL)+'">Privacy Policy</a></div>':'');
+(DISCL?'<div class="ai-chat-footer">'+esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a></div>':'');
 
 /* Build overlay */
 var overlay=el('div','ai-chat-overlay');
@@ -297,7 +293,7 @@ function checkMobileHide(){
     panel.style.display='none';
     overlay.style.display='none';
     isMobileHidden=true;
-  }else if(!mobile&&isMobileHidden){
+  }else if(!mobile&&isMobileHidden&&!HIDDEN_BY_URL){
     launcher.style.display='';
     panel.style.display='';
     overlay.style.display='';
@@ -312,6 +308,7 @@ document.addEventListener('click',function(e){
   var trigger=e.target.closest('[data-open-ai-chat]');
   if(!trigger)return;
   e.preventDefault();
+  if(HIDDEN_BY_URL)return;
   if(isMobileHidden){
     launcher.style.display='';panel.style.display='';overlay.style.display='';isMobileHidden=false;
   }
@@ -356,30 +353,8 @@ try{
 
 var isOpen=false,isStreaming=false,messages=loadH(),abortCtrl=null;
 var lastUserMessage='',errorRetryCount=0;
-var IDLE_TIMEOUT=5*60*1000;
-var LMK='hajirai_chat_last_msg';
-var idleTimedOut=false;
-function stampLastMsg(){try{localStorage.setItem(LMK,''+Date.now())}catch(e){}}
-function getLastMsg(){try{return parseInt(localStorage.getItem(LMK),10)||0}catch(e){return 0}}
-function clearLastMsg(){try{localStorage.removeItem(LMK)}catch(e){}}
-function checkIdleOnOpen(){
-  if(messages.length===0||idleTimedOut)return;
-  var last=getLastMsg();
-  if(last&&(Date.now()-last)>=IDLE_TIMEOUT){
-    showIdleTimeout();
-  }
-}
-function showIdleTimeout(){
-  if(idleTimedOut||isStreaming||messages.length===0)return;
-  idleTimedOut=true;
-  var txt="It looks like you've been away for a bit. Would you like to continue or start fresh?";
-  messages.push({role:'assistant',content:txt});
-  var md=appendMsg('assistant',txt);
-  var bb=$('.ai-chat-msg-bubble',md);
-  if(bb)bb.insertAdjacentHTML('beforeend',deadEndHtml());
-  inputEl.disabled=true;inputEl.placeholder='Choose an option above';sendBtn.disabled=true;
-  saveH(messages);scrollBottom();
-}
+/* An old "away for a while" marker from earlier versions — not used. */
+try{localStorage.removeItem('hajirai_chat_last_msg')}catch(e){}
 
 /* Multilingual rotator for the welcome CTA. Lead frame is whatever
    the merchant typed in the theme block (defaults to English). The
@@ -512,26 +487,44 @@ function restoreFloaters(){
   hiddenFloaters=[];
 }
 
+/* Keyboard: Tab stays inside the open chat, and closing returns focus to
+   what opened it. The faded-out launcher can't be tabbed to. */
+var focusBeforeOpen=null;
+function focusables(){return [].filter.call(panel.querySelectorAll('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'),function(n){return n.offsetParent!==null})}
+panel.addEventListener('keydown',function(e){
+  if(e.key!=='Tab'||!isOpen)return;
+  var f=focusables();if(!f.length)return;
+  var first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+});
 function toggle(force){
-isOpen=typeof force==='boolean'?force:!isOpen;
+var want=typeof force==='boolean'?force:!isOpen;
+if(want&&HIDDEN_BY_URL)return;
+isOpen=want;
 if(isOpen){
+  focusBeforeOpen=document.activeElement;
   loadFitfinder();
   launcher.classList.add('hidden');
+  launcher.setAttribute('tabindex','-1');launcher.setAttribute('aria-hidden','true');
   panel.classList.add('open');
   overlay.classList.add('visible');
   document.body.classList.add('ai-chat-blurred');
   hideFloaters();
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
-  checkIdleOnOpen();
   playWelcomeIntro();
 }else{
   panel.classList.remove('open');
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');
+  launcher.setAttribute('tabindex','0');launcher.removeAttribute('aria-hidden');
   document.body.classList.remove('ai-chat-blurred');
   restoreFloaters();
   menu.style.display='none';
+  var back=focusBeforeOpen&&document.body.contains(focusBeforeOpen)&&focusBeforeOpen!==document.body?focusBeforeOpen:launcher;
+  focusBeforeOpen=null;
+  try{back.focus({preventScroll:true})}catch(e){}
 }
 }
 
@@ -693,7 +686,9 @@ function initChoicesScroll(container){
   if(prev)prev.addEventListener('click',function(e){e.preventDefault();step(-1)});
   if(next)next.addEventListener('click',function(e){e.preventDefault();step(1)});
   container.addEventListener('scroll',update,{passive:true});
-  window.addEventListener('resize',update);
+  /* One window listener per row, removed once the row leaves the page. */
+  function onResize(){if(!document.body.contains(container)){window.removeEventListener('resize',onResize);return}update()}
+  window.addEventListener('resize',onResize);
   /* Initial paint may not have measured layout yet — defer one frame. */
   requestAnimationFrame(update);
   setTimeout(update,150);
@@ -1073,7 +1068,7 @@ function vizError(host,cta,msg,card){
   if(r)r.addEventListener('click',function(){vizFetch(host,cta,card)});
 }
 function ctaHtml(linkCTA){
-return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:14px 16px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border-radius:10px;text-decoration:none;text-align:center;font-size:14px;font-weight:600;line-height:1.3" href="'+esc(linkCTA.url)+'" target="_blank" rel="noopener">'+esc(linkCTA.label||'Visit Support Hub')+' &rarr;</a>';
+return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:14px 16px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border-radius:10px;text-decoration:none;text-align:center;font-size:14px;font-weight:600;line-height:1.3" href="'+esc(safeUrl(linkCTA.url)||'#')+'" target="_blank" rel="noopener">'+esc(linkCTA.label||'Visit Support Hub')+' &rarr;</a>';
 }
 // Central support-chat opener. Prefer a live-chat provider (Zendesk, Intercom,
 // Gorgias) and only fall back to the Support Hub URL when none is present.
@@ -1120,7 +1115,7 @@ return d;
 function prodCard(p){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
-var u=p.url||(p.handle?(SHOP_ROOT+'products/'+p.handle):'#');
+var u=safeUrl(p.url)||(p.handle?(SHOP_ROOT+'products/'+encodeURIComponent(p.handle)):'#');
 var pr=esc(p.price_formatted||(p.price?fmt(p.price):''));
 var cp=p.compare_at_price?esc(fmt(p.compare_at_price)):'';
 var pre=(p.preselect&&typeof p.preselect==='object')?p.preselect:null;
@@ -1358,7 +1353,6 @@ inputEl.value='';inputEl.style.height='auto';
 sendBtn.disabled=true;isStreaming=true;
 typingEl.classList.add('visible');
 scrollBottom();
-stampLastMsg();
 streamResponse(text);
 }
 
@@ -1461,7 +1455,7 @@ scrollBottom();
 
 function showHighTraffic(){
 showStreamError('I\'m experiencing high traffic right now. Please try again in a moment.');
-if(errorRetryCount>=3){setTimeout(function(){showKlaviyoForm('Stay Connected')},500)}
+if(errorRetryCount>=3){later(function(){showKlaviyoForm('Stay Connected')},500)}
 }
 
 /* ── FITFinder: the shopper's FIT and the store's FIT names ──
@@ -1523,18 +1517,25 @@ function ffSave(key){
 }
 
 var streamWatchdog=null;
+/* The last 20 turns before this message (it's sent separately). */
+function historyFor(msg){var h=messages.slice(-21);var last=h[h.length-1];if(last&&last.role==='user'&&last.content===msg)h.pop();return h.slice(-20)}
 function clearWatchdog(){if(streamWatchdog){clearTimeout(streamWatchdog);streamWatchdog=null}}
-function streamResponse(msg){
-if(abortCtrl)abortCtrl.abort();
+/* Gives up only after 90s with nothing from the server — the server sends a
+   keep-alive every few seconds, so a long but healthy answer never trips it. */
+function armWatchdog(){
 clearWatchdog();
-abortCtrl=new AbortController();
 streamWatchdog=setTimeout(function(){
   if(isStreaming&&abortCtrl){
     try{abortCtrl.abort()}catch(e){}
     showStreamError('This is taking longer than expected. Please try again.');
   }
 },90000);
-var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,history:messages.slice(-20).map(function(m){var out={role:m.role,content:m.content};if(m.role==='assistant'&&m.products&&m.products.length){out.products=m.products.slice(0,10).map(function(p){return{handle:p.handle||'',title:p.title||'',url:p.url||'',image:p.image||'',price:p.price||'',price_formatted:p.price_formatted||'',compare_at_price:p.compare_at_price||'',category:p.category||p._category||'',gender:p.gender||p._gender||''}})}return out})};
+}
+function streamResponse(msg){
+if(abortCtrl)abortCtrl.abort();
+abortCtrl=new AbortController();
+armWatchdog();
+var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,history:historyFor(msg).map(function(m){var out={role:m.role,content:m.content};if(m.role==='assistant'&&m.products&&m.products.length){out.products=m.products.slice(0,10).map(function(p){return{handle:p.handle||'',title:p.title||'',url:p.url||'',image:p.image||'',price:p.price||'',price_formatted:p.price_formatted||'',compare_at_price:p.compare_at_price||'',category:p.category||p._category||'',gender:p.gender||p._gender||''}})}return out})};
 if(SUPPORT_URL)body.support_url=SUPPORT_URL;
 if(SUPPORT_LABEL)body.support_label=SUPPORT_LABEL;
 var ffData=ffPayload();
@@ -1544,7 +1545,7 @@ fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept
 if(!r.ok){
   if(r.headers.get('content-type')&&r.headers.get('content-type').includes('text/event-stream'))return handleSSE(r);
   return r.json().catch(function(){return{}}).then(function(d){
-    throw new Error(d.message||'Something went wrong. Please try again.');
+    var err=new Error(d.message||'');err.status=r.status;err.code=d.error||'';throw err;
   });
 }
 var ct=r.headers.get('content-type')||'';
@@ -1554,6 +1555,10 @@ return r.json().then(function(d){handleJSON(d)});
 clearWatchdog();
 if(e.name==='AbortError')return;
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
+/* The store's own limits and settings: say so plainly — retrying won't help. */
+if(e.status===429&&e.code==='rate_limited'){showStreamError('You\'re sending messages quickly — please wait a few seconds and try again.');return}
+if(e.status===402||e.status===503||(e.status===429&&e.code==='daily_cap_reached')){showStreamError(e.message||'The assistant isn\'t available right now. Our customer service team will be glad to help.');return}
+if(e.status===413||e.status===400){showStreamError('That message couldn\'t be sent. Please try a shorter question, or start a new chat from the menu.');return}
 showHighTraffic();
 });
 }
@@ -1568,12 +1573,10 @@ for(var i=0;i<lines.length;i++){
 var line=lines[i].trim();
 if(!line.startsWith('data: '))continue;
 var data=line.slice(6);
-if(data==='[DONE]'){finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);return true}
 try{
 var p=JSON.parse(data);
-if(p.type==='text'||p.type==='content_block_delta'){
-  var tc=p.text||(p.delta&&p.delta.text)||'';
-  full+=tc;
+if(p.type==='text'){
+  full+=p.text||'';
 }
 if(p.type==='products'&&p.products){
   /* Each products event is the FULL card set (server contract: last one wins) — replace, never append. */
@@ -1584,9 +1587,6 @@ if(p.type==='link'&&p.url){
 }
 if(p.type==='support_cta'){
   supportCta={label:p.label||'Chat with Aetrex Support',fallbackUrl:p.fallbackUrl||SUPPORT_URL||''};
-}
-if(p.type==='choices'&&p.options&&p.options.length){
-  buffChoices=p.options;
 }
 if(p.type==='suggestions'&&p.questions&&p.questions.length){
   buffSugg=p.questions;
@@ -1599,21 +1599,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
 }
 if(p.type==='klaviyo_form'){
-  setTimeout(function(){showKlaviyoForm('Stay Connected')},300);
-}
-if(p.type==='action'&&p.action==='open_zendesk'){
-  setTimeout(function(){toggle(false);if(typeof window.zE==='function'){window.zE('webWidget','show');window.zE('webWidget','open')}},1500);
-}
-if(p.type==='action'&&p.action==='show_dead_end'){
-  typingEl.classList.remove('visible');
-  if(!msgDiv)msgDiv=appendMsg('assistant','It looks like I\'m having trouble finding what you need.');
-  var bubble=$('.ai-chat-msg-bubble',msgDiv);
-  if(bubble){
-    bubble.insertAdjacentHTML('beforeend',deadEndHtml());
-  }
-  inputEl.disabled=true;inputEl.placeholder='Choose an option above';sendBtn.disabled=true;
-  setTimeout(function(){showKlaviyoForm('Stay Connected')},500);
-  scrollBottom();
+  later(function(){showKlaviyoForm('Stay Connected')},300);
 }
 if(p.type==='visualize_cta'&&p.productHandle){
   vizCta={productHandle:p.productHandle,productTitle:p.productTitle||'',styleContext:p.styleContext||'',label:p.label||'See It Styled',scenes:(p.scenes&&p.scenes.length)?p.scenes:null,sceneGroup:p.sceneGroup||'',productCategory:p.productCategory||''};
@@ -1625,7 +1611,7 @@ if(p.type==='error'){
 }
 }catch(e){}
 }return false}
-function read(){reader.read().then(function(r){if(r.done){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('I\'m having trouble right now. Please try again.');return}var done=proc(decoder.decode(r.value,{stream:true}));if(!done)read()}).catch(function(e){if(e.name!=='AbortError'){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('Connection lost. Please try again.')}})}
+function read(){reader.read().then(function(r){armWatchdog();if(r.done){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('I\'m having trouble right now. Please try again.');return}var done=proc(decoder.decode(r.value,{stream:true}));if(!done)read()}).catch(function(e){if(e.name!=='AbortError'){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('Connection lost. Please try again.')}})}
 read();
 }
 
@@ -1689,7 +1675,8 @@ function stripDanglingMd(s){
   s=s.replace(/(^|[\s—–-])\*(?=[\s.,!?;:)]|$)/g,'$1');
   s=s.split('\n').map(function(ln){
     if(((ln.match(/\*\*/g)||[]).length)%2)ln=ln.replace(/\*\*/g,'');
-    if(((ln.match(/(?<!\*)\*(?!\*)/g)||[]).length)%2)ln=ln.replace(/(?<!\*)\*(?!\*)/g,'');
+    /* Lone * (not part of **): an odd count means a stray one — drop them. */
+    if(((ln.match(/\*+/g)||[]).filter(function(r){return r.length===1}).length)%2)ln=ln.replace(/\*+/g,function(r){return r.length===1?'':r});
     return ln;
   }).join('\n');
   return s.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+([.,!?;:])/g,'$1').replace(/([—–-])\s+([.,!?;:])/g,'$2').trim();
@@ -1746,7 +1733,9 @@ if(fitReport&&fitReport.size&&mDiv){
   if(frb){
     var _h=(fitReport.handle||'').replace(/"/g,'');
     var matchProd=_h?frb.querySelector('.ai-chat-product-card[data-handle="'+_h+'"]'):null;
-    if(matchProd){
+    /* Showcase cards have no room for the inline snippet (hidden there):
+       show the full fit card under the reply instead. */
+    if(matchProd&&!matchProd.closest('.ai-chat-products--showcase')){
       matchProd.classList.add('has-fit');
       matchProd.insertAdjacentHTML('beforeend',fitSnippetHtml(fitReport));
     }else{
@@ -1789,13 +1778,17 @@ if(prods&&prods.length>0&&mDiv){
 scrollMsgTop(mDiv);
 }
 
+/* Delayed UI for the current chat only — "Clear chat" cancels it. */
+var chatGen=0;
+function later(fn,ms){var g=chatGen;setTimeout(function(){if(g===chatGen)fn()},ms)}
 function clearChat(){
-messages=[];localStorage.removeItem(HK);localStorage.removeItem(SK);
+chatGen++;clearWatchdog();
+messages=[];_memSess='';try{localStorage.removeItem(HK);localStorage.removeItem(SK)}catch(e){}
 msgsEl.innerHTML='';buildWelcome();
 if(isOpen)playWelcomeIntro();
 if(abortCtrl){abortCtrl.abort();abortCtrl=null}
 isStreaming=false;typingEl.classList.remove('visible');
-idleTimedOut=false;clearLastMsg();
+
 errorRetryCount=0;lastUserMessage='';
 /* Always restore the input — dead-end paths (error retries, banned-
    reply fallbacks, support/new-chat dead-ends) disable inputEl and
@@ -1820,7 +1813,8 @@ sendBtn.addEventListener('click',sendMessage);
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 inputEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&isOpen)toggle(false)});
-menuBtn.addEventListener('click',function(e){e.stopPropagation();menu.style.display=menu.style.display==='none'?'block':'none'});
+menuBtn.setAttribute('aria-haspopup','true');menuBtn.setAttribute('aria-expanded','false');
+menuBtn.addEventListener('click',function(e){e.stopPropagation();var show=menu.style.display==='none';menu.style.display=show?'block':'none';menuBtn.setAttribute('aria-expanded',show?'true':'false')});
 menu.addEventListener('click',function(e){var item=e.target.closest('[data-action]');if(!item)return;if(item.dataset.action==='clear')clearChat();menu.style.display='none'});
 document.addEventListener('click',function(){menu.style.display='none'});
 msgsEl.addEventListener('click',function(e){
