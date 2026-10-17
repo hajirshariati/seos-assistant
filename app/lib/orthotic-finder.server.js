@@ -4,7 +4,6 @@
 // the real catalog in scripts/fixtures/aetrex-orthotics.json).
 
 import prisma from "../db.server.js";
-import { ADMIN_API_VERSION } from "./admin-api-version.js";
 import { buildOrthoticCatalog, describeLine, pickOrthotic, productFromNode } from "./orthotic-finder.js";
 import { getDecisionTreeByIntent, incrementCompletedCount, saveDecisionTree } from "../models/DecisionTree.server.js";
 
@@ -29,26 +28,11 @@ export const ORTHOTIC_PRODUCTS_QUERY = `
   }
 `;
 
-// graphql(query, variables) → data, from the app's admin client…
+// graphql(query, variables) → data, from the app's admin client.
 export function adminGraphql(admin) {
   return async (query, variables) => {
     const resp = await admin.graphql(query, { variables });
     const json = await resp.json();
-    if (json?.errors?.length) throw new Error(json.errors.map((e) => e?.message).join("; "));
-    return json.data;
-  };
-}
-
-// …or from a stored offline token.
-export function tokenGraphql({ shop, accessToken }) {
-  return async (query, variables) => {
-    const res = await fetch(`https://${shop}/admin/api/${ADMIN_API_VERSION}/graphql.json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": accessToken },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!res.ok) throw new Error(`Shopify ${res.status}`);
-    const json = await res.json();
     if (json?.errors?.length) throw new Error(json.errors.map((e) => e?.message).join("; "));
     return json.data;
   };

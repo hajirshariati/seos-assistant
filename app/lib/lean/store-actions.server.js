@@ -2,6 +2,7 @@
 // customer's orders, size advice (fit predictor), Yotpo reviews and
 // AfterShip return insights. Offered to Claude as tools by store-tools.server.js.
 
+import { safeExternalUrl } from "../external-url.js";
 import prisma from "../../db.server.js";
 import { fetchCustomerContext } from "../customer-context.server.js";
 import {
@@ -309,7 +310,8 @@ async function getFitRecommendation({ handle, customerSizeHint }, ctx) {
     external: Number.isFinite(cfg.externalWeight) ? cfg.externalWeight : 0.1,
   };
   const minConfidence = Number.isFinite(cfg.minConfidence) ? cfg.minConfidence : 50;
-  const externalUrl = typeof cfg.externalUrl === "string" ? cfg.externalUrl.trim() : "";
+  // Re-checked here too: settings saved before the check existed.
+  const externalUrl = safeExternalUrl(cfg.externalUrl) || "";
   const externalAuthHeader = typeof cfg.externalAuthHeader === "string" ? cfg.externalAuthHeader.trim() : "";
 
   const product = await prisma.product.findFirst({

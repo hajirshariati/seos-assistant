@@ -44,14 +44,14 @@ export const loader = async ({ request }) => {
       /* malformed json — fall through with empty array */
     }
 
-    // Welcome-CTA rotator. Generate translations once per phrase change
-    // (cached on ShopConfig). Skip the call when the merchant has the
-    // rotator off — saves the lookup. Wrapped in try/catch because a
-    // translation failure must never fail widget-config.
+    // Welcome-line rotator: translations of the phrase the widget shows
+    // (sent as ?cta=, from the theme editor). Cached on ShopConfig; never
+    // waits on the model, and a failure never fails widget-config.
     let greetingCtaTranslations = [];
     if (config.rotateGreetingCta !== false) {
       try {
-        greetingCtaTranslations = await getGreetingCtaTranslations(config);
+        const phrase = new URL(request.url).searchParams.get("cta") || "";
+        greetingCtaTranslations = getGreetingCtaTranslations(config, phrase);
       } catch (err) {
         console.error("[widget-config] greeting translation skipped:", err?.message || err);
       }

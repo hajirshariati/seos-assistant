@@ -14,6 +14,12 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { generateStyledImage, isImageProviderSupported } from "../lib/image-styling.server";
 import { getProductImageUrls } from "../models/Product.server";
 import { recordImageUsage } from "../models/ChatUsage.server";
+import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
+
+// Each image is paid for by the store: a few per shopper per minute is plenty
+// for real use, and the whole store is capped too.
+const PER_SHOPPER_PER_MIN = 4;
+const PER_STORE_PER_MIN = 40;
 
 export const loader = async () => {
   return Response.json({ error: "Method not allowed. Use POST." }, { status: 405 });
@@ -24,6 +30,15 @@ export const action = async ({ request }) => {
     const { session } = await authenticate.public.appProxy(request);
     if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
     const shop = session.shop;
+
+    const rate = checkIpShopRate(shop, clientIp(request), { scope: "visualize", limit: PER_SHOPPER_PER_MIN });
+    const storeRate = rate.ok ? checkIpShopRate(shop, "*", { scope: "visualize-store", limit: PER_STORE_PER_MIN }) : rate;
+    if (!storeRate.ok) {
+      return Response.json(
+        { ok: false, message: "Lots of styling requests right now — please try again in a minute." },
+        { status: 429, headers: { "Retry-After": String(storeRate.retryAfter) } },
+      );
+    }
 
     const config = await getShopConfig(shop);
     if (!config?.visualizeLookEnabled) {
@@ -58,9 +73,10 @@ export const action = async ({ request }) => {
     // client). Scoped to this shop.
     const product = await prisma.product.findFirst({
       where: { shop, handle },
-      select: { title: true, featuredImageUrl: true, shopifyId: true },
+      select: { title: true, featuredImageUrl: true, shopifyId: true, status: true },
     });
-    if (!product?.featuredImageUrl) {
+    // Only products the store is selling — never a draft or archived one.
+    if (!product?.featuredImageUrl || /^(draft|archived)$/i.test(product.status || "")) {
       return Response.json(
         { ok: false, message: "We couldn't find an image for that product to style." },
         { status: 404 },

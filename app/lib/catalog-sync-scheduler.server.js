@@ -7,8 +7,8 @@ import prisma from "../db.server";
 // full catalog sync per shop every night at SYNC_HOUR_UTC, staggered
 // 30s apart so multiple shops don't hammer the API together.
 //
-// syncCatalog itself sets status=running at start, so an overlapping
-// manual sync or webhook-triggered full sync simply no-ops the extras.
+// syncCatalog claims the shop's sync atomically, so an overlapping manual
+// or webhook-triggered sync steps aside instead of running twice.
 // Set DISABLE_CATALOG_SYNC_SCHEDULER=true to turn the nightly run off.
 
 export const SYNC_HOUR_UTC = 3;

@@ -1,20 +1,35 @@
 import crypto from "crypto";
 import prisma from "../db.server";
 
+// Keyed with the app's secret, so a stored hash can't be turned back into
+// an IP address by hashing every possible one.
 function hashValue(value) {
   if (!value) return null;
-  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 16);
+  return crypto.createHmac("sha256", process.env.ENCRYPTION_KEY || "seos").update(value).digest("hex").slice(0, 16);
+}
+
+// Shoppers sometimes type contact details; the stored transcript doesn't keep them.
+export function redactContactDetails(text) {
+  return String(text || "")
+    .replace(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/gi, "[email]")
+    .replace(/\+?\(?\d[\d\s().-]{7,}\d/g, "[number]");
 }
 
 export async function recordFeedback({ shop, sessionId, vote, botResponse, products, conversation, ip }) {
+  const transcript = Array.isArray(conversation)
+    ? conversation
+      .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: redactContactDetails(String(m.content || "").slice(0, 300)) }))
+    : null;
   return prisma.chatFeedback.create({
     data: {
       shop,
       sessionId,
       vote,
-      botResponse: (botResponse || "").slice(0, 500),
-      products: (products || []).slice(0, 5),
-      conversation: conversation ? JSON.stringify(conversation) : null,
+      botResponse: redactContactDetails((botResponse || "").slice(0, 500)),
+      products: (products || []).slice(0, 5).map((p) => String(typeof p === "string" ? p : p?.title || "").slice(0, 200)),
+      conversation: transcript ? JSON.stringify(transcript) : null,
       userHash: hashValue(ip),
     },
   });

@@ -452,7 +452,7 @@ export async function executeRecommenderTool({ toolName, input, shop, trees, con
       error:
         "Orthotic inserts don't fit in open-construction sandals — the catalog doesn't have a sandal-compatible insert. " +
         "Tell the customer honestly that orthotics aren't designed for sandals, then offer to show ARCH-SUPPORTIVE SANDALS instead " +
-        "(the merchant's Sandals category has built-in support — call search_products with category='Sandals' and gender filter " +
+        "(the merchant's Sandals category has built-in support — call search_products with categories ['Sandals'] and the gender " +
         "from context). Do NOT pick a non-sandal orthotic and pretend it fits.",
       sandalIncompatible: true,
       attributesUsed: input,
@@ -644,11 +644,10 @@ export async function executeRecommenderTool({ toolName, input, shop, trees, con
   // earlier turns leaking into a later, unrelated query — e.g. a
   // turn 1 "ball-of-foot pain" forced metSupport=true on a turn 5
   // plantar-fasciitis-dress query, resolving to Fashion-for-Heels
-  // instead of the correct PF specialty SKU. The full conversation
-  // text is still used for the sandal-incompatibility guard above
-  // (intentional — that guard is about overall context). Falls
-  // back to conversationText if the caller didn't pass latestUserText
-  // so existing call sites don't regress.
+  // instead of the correct PF specialty SKU. (The sandal guard above
+  // reads the latest message only, for the same reason.) Falls back to
+  // conversationText — the shopper's own messages — when the latest
+  // message carries no clinical words.
   // Production trace: customer said "i have flat feet with ball of foot
   // pain" on turn 1, then answered chip questions for 4 turns. On the
   // resolve turn `latestUserText` is just "Women" (the gender chip) —

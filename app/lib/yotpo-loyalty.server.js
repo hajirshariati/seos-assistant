@@ -37,7 +37,7 @@ export async function fetchYotpoLoyalty({ apiKey, guid, email }) {
       accept: "application/json",
     };
     if (guid) headers["x-guid"] = guid;
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
     if (!res.ok) {
       if (res.status === 404) {
         cacheSet(cacheKey, null);

@@ -1,7 +1,7 @@
 // Offline eval runner (audit #8).
 //
-// 60+ eval-*.mjs exist but only a handful were wired into npm scripts, so a
-// regression could land green. This globs EVERY eval-*.mjs, runs the offline
+// Every eval-*.mjs is picked up automatically, so no suite can be left out
+// of the gate. This globs EVERY eval-*.mjs, runs the offline
 // ones, and exits non-zero if any fail — the single gate CI runs on every PR.
 //
 // Excluded (env-gated — needs a live endpoint, not a code regression):

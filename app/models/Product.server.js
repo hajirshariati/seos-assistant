@@ -268,8 +268,32 @@ async function setSyncState(shop, patch) {
   });
 }
 
+// One sync per shop at a time. The state row is claimed in a single
+// conditional update, so a second caller (manual refresh, nightly run,
+// webhook burst) sees it taken and steps aside. A sync that stopped
+// updating its row for a while (its process died) can be taken over.
+const STALE_SYNC_MS = 15 * 60 * 1000;
+
+async function claimSync(shop) {
+  await prisma.catalogSyncState.upsert({ where: { shop }, update: {}, create: { shop } });
+  const { count } = await prisma.catalogSyncState.updateMany({
+    where: {
+      shop,
+      OR: [
+        { status: { notIn: ["running", "stopping"] } },
+        { updatedAt: { lt: new Date(Date.now() - STALE_SYNC_MS) } },
+      ],
+    },
+    data: { status: "running", lastError: null, syncedSoFar: 0, updatedAt: new Date() },
+  });
+  return count === 1;
+}
+
 export async function syncCatalog(admin, shop) {
-  await setSyncState(shop, { status: "running", lastError: null, syncedSoFar: 0 });
+  if (!(await claimSync(shop))) {
+    console.log(`[syncCatalog] ${shop}: a sync is already running — skipped`);
+    return { ok: true, alreadyRunning: true };
+  }
   try {
     const mappings = await getAttributeMappings(shop);
     const types = await metafieldTypes(admin, shop).catch(() => null);
@@ -290,6 +314,7 @@ export async function syncCatalog(admin, shop) {
     let cursor = null;
     let totalSeen = 0;
     let throttleRetries = 0;
+    const seenIds = new Set();
     while (true) {
       const current = await prisma.catalogSyncState.findUnique({ where: { shop } });
       if (current?.status === "stopping") {
@@ -349,6 +374,7 @@ export async function syncCatalog(admin, shop) {
 
       for (const node of page.nodes) {
         await upsertProduct(shop, node, mappings);
+        seenIds.add(node.id);
         totalSeen += 1;
       }
 
@@ -356,6 +382,14 @@ export async function syncCatalog(admin, shop) {
 
       if (!page.pageInfo.hasNextPage) break;
       cursor = page.pageInfo.endCursor;
+    }
+
+    // A complete pass saw every product in Shopify; anything else here was
+    // deleted there (a missed delete webhook), so the chat stops linking it.
+    // (Postgres takes up to ~32k values in one list; past that, skip.)
+    if (seenIds.size > 0 && seenIds.size < 30000) {
+      const removed = await prisma.product.deleteMany({ where: { shop, shopifyId: { notIn: [...seenIds] } } });
+      if (removed.count) console.log(`[syncCatalog] ${shop}: removed ${removed.count} product(s) no longer in Shopify`);
     }
 
     await setSyncState(shop, {

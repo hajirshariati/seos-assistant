@@ -65,7 +65,13 @@ export function leanChatResponse({
   fitfinder = null,
 }) {
   const encoder = new TextEncoder();
+  // When the shopper leaves (closes the tab, the widget gives up), the turn
+  // stops: no more model calls are made or billed.
+  const abort = new AbortController();
   const stream = new ReadableStream({
+    cancel() {
+      abort.abort();
+    },
     async start(controller) {
       const send = (obj) => {
         try { controller.enqueue(encoder.encode(sse(obj))); } catch { /* client gone */ }
@@ -86,7 +92,8 @@ export function leanChatResponse({
           return;
         }
 
-        const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 1 });
+        // Retries happen once, in withAnthropicRetry — not again inside the SDK.
+        const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 0 });
         const model = config.anthropicModel || "claude-sonnet-4-6";
         const [catalog, extras] = await Promise.all([
           loadLeanCatalog(shop),
@@ -96,7 +103,8 @@ export function leanChatResponse({
               return { tools: [], similarAttributes: [], systemBlock: "" };
             }),
         ]);
-        console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} msg="${String(latestUserMessage).slice(0, 80)}"`);
+        // No message text in the logs — shoppers type emails, order numbers, health details.
+        console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length}`);
         const result = await runLeanTurn({
           shop,
           config: { ...config, supportUrl: supportUrl || config.supportUrl, supportLabel: supportLabel || config.supportLabel },
@@ -108,7 +116,10 @@ export function leanChatResponse({
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
           similarAttributes: extras.similarAttributes,
-          callModel: (req) => withAnthropicRetry(() => anthropic.messages.create(req)),
+          callModel: (req) => {
+            if (abort.signal.aborted) throw new Error("client disconnected");
+            return withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal }));
+          },
         });
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
@@ -151,6 +162,10 @@ export function leanChatResponse({
           logTopics(shop, result.topics).catch(() => {});
         }
       } catch (err) {
+        if (abort.signal.aborted) {
+          console.log(`[lean] turn stopped shop=${shop}: the shopper left`);
+          return;
+        }
         console.error("[lean] turn failed:", err?.stack || err?.message || err);
         const classified = classifyAnthropicError(err);
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });

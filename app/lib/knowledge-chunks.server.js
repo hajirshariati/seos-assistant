@@ -114,10 +114,12 @@ export async function rebuildChunksForFile(prisma, { shop, sourceFileId, fileTyp
   if (!shop || !fileType) return { skipped: true, reason: "missing shop or fileType" };
   if (!provider || !apiKey) return { skipped: true, reason: "no embedding provider" };
 
+  // The same set the wipe below replaces — never the shop's other chunks.
+  const ownChunks = sourceFileId ? { shop, sourceFileId } : { shop, fileType, sourceFileId: null };
   const chunks = chunkKnowledgeFile(content);
   if (chunks.length === 0) {
-    await prisma.knowledgeChunk.deleteMany({ where: { shop, sourceFileId: sourceFileId || undefined } });
-    return { processed: 0, removed: 0 };
+    const removed = await prisma.knowledgeChunk.deleteMany({ where: ownChunks });
+    return { processed: 0, removed: removed.count };
   }
 
   // Embed everything first; if it fails, leave the existing chunks
@@ -133,13 +135,9 @@ export async function rebuildChunksForFile(prisma, { shop, sourceFileId, fileTyp
     return { failed: chunks.length, error: "vector count mismatch" };
   }
 
-  // Wipe + replace. Done as a transaction so a failed mid-write
-  // can't leave the table half-empty.
-  const removed = await prisma.knowledgeChunk.deleteMany({
-    where: sourceFileId
-      ? { shop, sourceFileId }
-      : { shop, fileType, sourceFileId: null },
-  });
+  // Wipe + replace, only once every chunk has its vector — a provider
+  // failure above leaves the old chunks in place.
+  const removed = await prisma.knowledgeChunk.deleteMany({ where: ownChunks });
 
   let processed = 0;
   for (let i = 0; i < chunks.length; i++) {

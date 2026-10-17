@@ -4,10 +4,16 @@ import { buildLeanCatalog } from "./catalog.js";
 
 const TTL_MS = 5 * 60 * 1000;
 const cache = new Map(); // shop → { at, catalog }
+const loading = new Map(); // shop → promise, so simultaneous chats share one load
 
 export async function loadLeanCatalog(shop) {
   const hit = cache.get(shop);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.catalog;
+  if (!loading.has(shop)) loading.set(shop, load(shop).finally(() => loading.delete(shop)));
+  return loading.get(shop);
+}
+
+async function load(shop) {
   const rows = await prisma.product.findMany({
     where: { shop, NOT: { status: { in: ["DRAFT", "draft", "ARCHIVED", "archived"] } } },
     select: {
@@ -15,7 +21,9 @@ export async function loadLeanCatalog(shop) {
       featuredImageUrl: true, attributesJson: true,
       variants: { select: { price: true, compareAtPrice: true, inventoryQty: true, optionsJson: true } },
     },
-    take: 5000,
+    // Newest first, so a store past the limit loses its oldest products, not random ones.
+    orderBy: { updatedAt: "desc" },
+    take: 10000,
   });
   const catalog = buildLeanCatalog(rows, { shop });
   cache.set(shop, { at: Date.now(), catalog });

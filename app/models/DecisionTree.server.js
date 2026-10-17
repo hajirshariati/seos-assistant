@@ -120,7 +120,10 @@ export async function saveDecisionTree(shop, { id, name, intent, triggerPhrases,
   }
 
   if (id) {
-    return prisma.decisionTree.update({ where: { id }, data });
+    // Only this shop's recommender — an id from another shop changes nothing.
+    const { count } = await prisma.decisionTree.updateMany({ where: { id, shop }, data });
+    if (count !== 1) throw new Error("recommender not found");
+    return prisma.decisionTree.findFirst({ where: { id, shop } });
   }
   return prisma.decisionTree.create({ data: { ...data, shop } });
 }
@@ -130,27 +133,13 @@ export async function deleteDecisionTree(shop, id) {
   await prisma.decisionTree.deleteMany({ where: { id, shop } });
 }
 
-// Atomic counter bumps. Called from the chat layer when a tree
-// session starts (first question shown) and again when it completes
-// (resolver returns a SKU). Failures are swallowed — analytics
-// counters must never break a customer turn.
-export async function incrementStartedCount(shop, id) {
-  if (!shop || !id) return;
-  try {
-    await prisma.decisionTree.update({
-      where: { id },
-      data: { startedCount: { increment: 1 } },
-    });
-  } catch {
-    /* ignore */
-  }
-}
-
+// Counts finished recommendations (the finder returned a product). Never
+// breaks a customer turn.
 export async function incrementCompletedCount(shop, id) {
   if (!shop || !id) return;
   try {
-    await prisma.decisionTree.update({
-      where: { id },
+    await prisma.decisionTree.updateMany({
+      where: { id, shop },
       data: { completedCount: { increment: 1 } },
     });
   } catch {

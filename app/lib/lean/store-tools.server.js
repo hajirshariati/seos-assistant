@@ -90,7 +90,12 @@ export async function buildLeanStoreExtras({
 }) {
   const vip = Boolean(loggedInCustomerId && accessToken && config.vipModeEnabled === true);
   const fitPredictorConfig = parseJson(config.fitPredictorConfig, {});
-  const conversationText = messages.map((m) => (typeof m?.content === "string" ? m.content : "")).join(" ");
+  // What the shopper said — never the assistant's own questions, whose
+  // options ("Ball-of-foot pain?") would read as the shopper's answers.
+  const conversationText = messages
+    .filter((m) => m?.role === "user")
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .join(" ");
   const similarAttributes = parseJson(config.similarMatchAttributes, []);
   const ctx = {
     shop,

@@ -167,7 +167,7 @@ export const action = async ({ request }) => {
     }
 
     const saved = await saveKnowledgeFile(session.shop, { fileName, fileType, fileSize, content });
-    await deleteEnrichmentsBySourceFile(saved.id);
+    await deleteEnrichmentsBySourceFile(session.shop, saved.id);
 
     let enrichmentMessage = "";
     let skuWarning = false;
@@ -208,13 +208,14 @@ export const action = async ({ request }) => {
   }
 
   if (intent === "delete_file") {
-    const fileId = formData.get("fileId");
-    await deleteEnrichmentsBySourceFile(fileId);
+    const fileId = String(formData.get("fileId") || "");
+    if (!fileId) return { error: "fileId required" };
+    await deleteEnrichmentsBySourceFile(session.shop, fileId);
     // Drop chunks before the parent file row — KnowledgeChunk has no
     // FK to KnowledgeFile (sourceFileId is a plain string), so this
     // keeps the orphan-row count at zero without a cascade.
     await prisma.knowledgeChunk.deleteMany({ where: { shop: session.shop, sourceFileId: fileId } });
-    await deleteKnowledgeFile(fileId);
+    await deleteKnowledgeFile(session.shop, fileId);
     return { deleted: true };
   }
 

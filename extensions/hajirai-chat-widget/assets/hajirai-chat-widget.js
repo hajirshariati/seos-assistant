@@ -41,11 +41,12 @@ var _cachedRules=null;
 try{_cachedRules=JSON.parse(sessionStorage.getItem(HRK))}catch(e){}
 if(_cachedRules&&matchesHideRule(_cachedRules))return;
 
-fetch(CONFIG_URL).then(function(r){return r.json()}).then(function(d){
+/* ?cta= is the welcome line shown here, so its translations match it. */
+fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.klaviyoFormId)KLAVIYO_FORM_ID=d.klaviyoFormId;
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
-  if(d.productCardStyle==='showcase')PRODUCT_CARD_STYLE='showcase';
+  if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
   if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
      the server echo (both must agree to enable rotation). When ready,

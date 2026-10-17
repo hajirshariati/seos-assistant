@@ -33,10 +33,10 @@ import {
   parseCsvToMasterIndex,
   diffMasterIndex,
 } from "../lib/mapping-csv.server";
-import { syncOrthoticFinder, tokenGraphql } from "../lib/orthotic-finder.server";
-import prisma from "../db.server";
+import { adminGraphql, syncOrthoticFinder } from "../lib/orthotic-finder.server";
 import BrandHeader from "../components/BrandHeader";
 import { getShopPlan } from "../lib/billing.server";
+import { safeExternalUrl } from "../lib/external-url.js";
 import { PlanGate } from "../components/PlanGate";
 import { RecommenderTables } from "../components/RecommenderEditor";
 
@@ -59,10 +59,13 @@ export const loader = async ({ request }) => {
       updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : t.updatedAt,
     })),
     fitPredictorEnabled: config.fitPredictorEnabled === true,
+    // The auth header is a secret: the page only learns whether one is saved.
     fitPredictorConfig: (() => {
       try {
         const v = JSON.parse(config.fitPredictorConfig || "{}");
-        return v && typeof v === "object" ? v : {};
+        if (!v || typeof v !== "object") return {};
+        const { externalAuthHeader, ...rest } = v;
+        return { ...rest, externalAuthHeaderSet: Boolean(externalAuthHeader) };
       } catch {
         return {};
       }
@@ -72,7 +75,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -247,9 +250,8 @@ export const action = async ({ request }) => {
   // own SKU codes. Nothing to map by hand.
   if (intent === "sync_orthotic_finder") {
     try {
-      const accessToken = await getOfflineToken(session.shop);
-      if (!accessToken) return { error: "No offline session for this shop. Re-install the app to refresh the token." };
-      const result = await syncOrthoticFinder({ shop: session.shop, graphql: tokenGraphql({ shop: session.shop, accessToken }) });
+      // The library's admin client: its token is always current.
+      const result = await syncOrthoticFinder({ shop: session.shop, graphql: adminGraphql(admin) });
       return result.ok ? { finderSynced: result } : { error: result.error };
     } catch (err) {
       return { error: "Sync failed: " + (err?.message || "unknown") };
@@ -274,9 +276,20 @@ export const action = async ({ request }) => {
           externalWeight: Number.isFinite(parsed.externalWeight) ? Math.max(0, Math.min(1, parsed.externalWeight)) : 0.1,
           minConfidence: Number.isFinite(parsed.minConfidence) ? Math.max(0, Math.min(100, parsed.minConfidence)) : 50,
           display: parsed.display === "percent" || parsed.display === "bar" || parsed.display === "hide" ? parsed.display : "bar",
-          externalUrl: typeof parsed.externalUrl === "string" ? parsed.externalUrl.trim() : "",
-          externalAuthHeader: typeof parsed.externalAuthHeader === "string" ? parsed.externalAuthHeader.trim() : "",
+          externalUrl: "",
+          externalAuthHeader: "",
         };
+        const url = typeof parsed.externalUrl === "string" ? parsed.externalUrl.trim() : "";
+        if (url) {
+          clean.externalUrl = safeExternalUrl(url);
+          if (!clean.externalUrl) return { error: "The endpoint must be a public https:// address." };
+          // Blank means "keep the saved header"; it's never sent to the page.
+          const typed = typeof parsed.externalAuthHeader === "string" ? parsed.externalAuthHeader.trim() : "";
+          let saved = "";
+          const current = await getShopConfig(session.shop);
+          try { saved = JSON.parse(current.fitPredictorConfig || "{}")?.externalAuthHeader || ""; } catch { /* none */ }
+          clean.externalAuthHeader = typed || saved;
+        }
         await updateShopConfig(session.shop, { fitPredictorConfig: JSON.stringify(clean) });
         return { saved: true };
       }
@@ -286,17 +299,6 @@ export const action = async ({ request }) => {
 
   return { error: "Unknown action" };
 };
-
-// Look up the most recent offline access token for a shop. The same
-// pattern the chat layer uses — every Shopify-side call goes through
-// the offline session so the token survives admin sign-out/in cycles.
-async function getOfflineToken(shop) {
-  const session = await prisma.session.findFirst({
-    where: { shop, isOnline: false, accessToken: { not: "" } },
-    orderBy: { expires: "desc" },
-  });
-  return session?.accessToken || null;
-}
 
 function SectionHeading({ eyebrow, title, description }) {
   return (
@@ -980,7 +982,7 @@ function FitPredictorCard({ enabled, config }) {
   const [minConf, setMinConf] = useState(String(config?.minConfidence ?? 50));
   const [display, setDisplay] = useState(config?.display === "percent" ? "percent" : "bar");
   const [externalUrl, setExternalUrl] = useState(config?.externalUrl || "");
-  const [externalAuth, setExternalAuth] = useState(config?.externalAuthHeader || "");
+  const [externalAuth, setExternalAuth] = useState("");
 
   const toggle = (checked) => {
     setIsOn(checked);
@@ -1098,9 +1100,9 @@ function FitPredictorCard({ enabled, config }) {
                   label="Auth header (optional)"
                   value={externalAuth}
                   onChange={setExternalAuth}
-                  placeholder="Authorization: Bearer xxxx"
+                  placeholder={config?.externalAuthHeaderSet ? "Saved — leave blank to keep it" : "Authorization: Bearer xxxx"}
                   autoComplete="off"
-                  helpText="Format: Header-Name: value"
+                  helpText="Format: Header-Name: value. Clearing the endpoint removes it."
                 />
               </FormLayout>
             </BlockStack>

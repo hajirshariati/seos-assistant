@@ -62,8 +62,18 @@ function cacheGet(key) {
   return entry.v;
 }
 
+// Holds customers' order details, so it stays small: expired entries are
+// dropped as new ones come in, and the oldest go first past the limit.
+const CACHE_MAX = 500;
 function cacheSet(key, v) {
-  CACHE.set(key, { v, t: Date.now() });
+  const now = Date.now();
+  CACHE.set(key, { v, t: now });
+  if (CACHE.size <= CACHE_MAX) return;
+  for (const [k, e] of CACHE) if (now - e.t > TTL_MS) CACHE.delete(k);
+  for (const k of CACHE.keys()) {
+    if (CACHE.size <= CACHE_MAX) break;
+    CACHE.delete(k);
+  }
 }
 
 function formatMoney(moneyObj) {
@@ -104,6 +114,7 @@ export async function fetchCustomerContext({ shop, accessToken, customerId, orde
         query: CUSTOMER_QUERY,
         variables: { id: gid, orderLimit },
       }),
+      signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) {
       console.warn(`[customer-context] Admin API ${res.status} for ${shop}`);

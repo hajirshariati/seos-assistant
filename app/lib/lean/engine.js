@@ -251,7 +251,7 @@ export async function runLeanTurn({
       const r = await lookupStoreInfo(String(input.query || ""));
       if (r?.text) knowledgeText += `\n${r.text}`;
       topic(r?.found ? "store_question" : "unanswered", String(input.query || "").toLowerCase());
-      log(`[lean] store-info "${String(input.query || "").slice(0, 60)}" found=${Boolean(r?.found)}`);
+      log(`[lean] store-info found=${Boolean(r?.found)}`);
       return r?.found ? { found: true, info: r.text } : { found: false, note: "No store info on this. Say you're not sure and point to customer service." };
     }
     if (name === "contact_support") {
@@ -268,7 +268,8 @@ export async function runLeanTurn({
       topic("tool", name);
       markSeen([...collectHandles(result)]);
       knowledgeText += `\n${JSON.stringify(result).slice(0, 6000)}`;
-      log(`[lean] ${name} ${JSON.stringify(input).slice(0, 120)} → ${result.error ? `error: ${String(result.error).slice(0, 120)}` : "ok"}`);
+      // Input keys only: store tools take order numbers and other customer details.
+      log(`[lean] ${name} {${Object.keys(input || {}).join(",")}} → ${result.error ? `error: ${String(result.error).slice(0, 120)}` : "ok"}`);
       return result;
     }
     return { error: `Unknown tool ${name}` };
@@ -332,7 +333,8 @@ export async function runLeanTurn({
       familyIndex,
       knowledgeText,
     });
-    if (issues.length > 0 && !retried && Date.now() - started < deadlineMs) {
+    // A rewrite needs a step left to happen in; on the last step the issues stand.
+    if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;
       draft = ""; // the rejected reply must not come back as the answer
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);

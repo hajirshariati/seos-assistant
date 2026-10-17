@@ -39,7 +39,10 @@ export async function saveCampaign(shop, { id, name, content, startsAt, endsAt }
   if (+data.endsAt <= +data.startsAt) throw new Error("endsAt must be after startsAt");
 
   if (id) {
-    return prisma.campaign.update({ where: { id }, data });
+    // Only this shop's campaign — an id from another shop changes nothing.
+    const { count } = await prisma.campaign.updateMany({ where: { id, shop }, data });
+    if (count !== 1) throw new Error("campaign not found");
+    return prisma.campaign.findFirst({ where: { id, shop } });
   }
   return prisma.campaign.create({ data: { ...data, shop } });
 }

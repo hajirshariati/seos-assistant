@@ -29,9 +29,9 @@ export async function upsertEnrichmentsFromCsv(shop, file, content) {
   return { matched: matchedSkus.size, total: extracted.rows.length, skuColumn: extracted.skuColumn };
 }
 
-export async function deleteEnrichmentsBySourceFile(sourceFileId) {
-  if (!sourceFileId) return { count: 0 };
-  return prisma.productEnrichment.deleteMany({ where: { sourceFileId } });
+export async function deleteEnrichmentsBySourceFile(shop, sourceFileId) {
+  if (!shop || !sourceFileId) return { count: 0 };
+  return prisma.productEnrichment.deleteMany({ where: { shop, sourceFileId } });
 }
 
 export async function countEnrichmentsByShop(shop) {

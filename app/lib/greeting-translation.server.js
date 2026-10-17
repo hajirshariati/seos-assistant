@@ -6,11 +6,11 @@
 // Cache shape (stored as JSON string in ShopConfig.greetingCtaTranslations):
 //   {
 //     phrase: "<verbatim greetingCta the cache was generated from>",
-//     results: [{ code, dir, text }, ...]  // one entry per TARGET_LANGUAGES below
+//     results: [{ code, dir, text }, ...]  // the TARGET_LANGUAGES the model returned
 //   }
 //
-// Cache invalidation: if the cached `phrase` doesn't equal the current
-// merchant greetingCta, regenerate. Languages are fixed (not configurable
+// Cache invalidation: if the cached `phrase` doesn't equal the phrase the
+// widget shows, regenerate. Languages are fixed (not configurable
 // per merchant) to keep the system simple and the cost bounded — six
 // translations per merchant phrase change.
 
@@ -31,49 +31,47 @@ const TARGET_LANGUAGES = [
 
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
-// Public entry point. Returns an array of {code, dir, text} or [] if
-// translation is unavailable (e.g. no API key, model error). The widget
-// is responsible for treating an empty array as "rotator off".
-export async function getGreetingCtaTranslations(config) {
-  const phrase = String(config?.greetingCta || "").trim();
+// Public entry point. Returns an array of {code, dir, text}, or [] while the
+// translations aren't ready (the widget then shows the phrase in English).
+// Never waits on the model: a missing translation is made in the background
+// and is there on a later page view. The phrase is the one the widget shows
+// (the theme editor's welcome line), bounded, and the store makes at most
+// one translation call every few minutes, whatever phrases come in.
+const MAX_PHRASE_CHARS = 160;
+const RETRY_AFTER_MS = 10 * 60 * 1000;
+const lastAttempt = new Map(); // shop -> ms
+
+export function getGreetingCtaTranslations(config, requestedPhrase) {
+  const phrase = String(requestedPhrase || config?.greetingCta || "").trim().slice(0, MAX_PHRASE_CHARS);
   if (!phrase) return [];
 
-  // Read cache. Match on exact phrase — any edit invalidates.
   let cached = null;
   try { cached = JSON.parse(config?.greetingCtaTranslations || "{}"); } catch { /* */ }
-  if (cached && cached.phrase === phrase && Array.isArray(cached.results) && cached.results.length === TARGET_LANGUAGES.length) {
+  if (cached && cached.phrase === phrase && Array.isArray(cached.results) && cached.results.length > 0) {
     return cached.results;
   }
 
   const apiKey = config?.anthropicApiKey;
-  if (!apiKey) return cached?.results || [];
-
-  let results;
-  try {
-    results = await translatePhrase(phrase, apiKey);
-  } catch (err) {
-    console.error("[greeting-translation] failed:", err?.message || err);
-    // Fall back to whatever's cached (even if stale) so the widget still
-    // has something to rotate; never throw to the widget-config caller.
-    return cached?.results || [];
+  const now = Date.now();
+  if (apiKey && now - (lastAttempt.get(config.shop) || 0) > RETRY_AFTER_MS) {
+    lastAttempt.set(config.shop, now);
+    translatePhrase(phrase, apiKey)
+      .then((results) => {
+        if (!results.length) return;
+        return prisma.shopConfig.update({
+          where: { shop: config.shop },
+          data: { greetingCtaTranslations: JSON.stringify({ phrase, results }) },
+        });
+      })
+      .catch((err) => console.error("[greeting-translation] failed:", err?.message || err));
   }
-
-  // Persist cache. Best-effort — if the write fails, still return the
-  // results so this request gets the value.
-  prisma.shopConfig
-    .update({
-      where: { shop: config.shop },
-      data: { greetingCtaTranslations: JSON.stringify({ phrase, results }) },
-    })
-    .catch((err) => console.error("[greeting-translation] cache write failed:", err?.message || err));
-
-  return results;
+  return [];
 }
 
 // Single Haiku call returns all six translations as JSON. Prompt is
 // strict about output shape so we don't have to do prose parsing.
 async function translatePhrase(phrase, apiKey) {
-  const anthropic = new Anthropic({ apiKey });
+  const anthropic = new Anthropic({ apiKey, timeout: 15000, maxRetries: 1 });
   const langList = TARGET_LANGUAGES
     .map((l) => `- ${l.code} (${l.name})`)
     .join("\n");

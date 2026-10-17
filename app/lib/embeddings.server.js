@@ -79,6 +79,7 @@ export async function embedTexts(provider, apiKey, texts, { inputType = "documen
     method: "POST",
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!res.ok) {
