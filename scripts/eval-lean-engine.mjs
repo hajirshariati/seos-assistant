@@ -562,6 +562,9 @@ await test("add to cart: show_products with the stated size → the card is read
   assert.deepEqual(r.cards[0].preselect, { Size: "8 US" });
   assert.equal(r.cards[1].preselect, undefined, "no size stated for that card");
   assert.ok(buildLeanTools({}).find((t) => t.name === "show_products").input_schema.properties.options);
+  const opts = catalog.products.find((p) => p.handle === r.cards[0].handle).options;
+  const multi = Object.keys(opts).filter((k) => opts[k].length > 1);
+  assert.deepEqual(r.cards[0].choose || [], multi, "the card lists the options a shopper must pick (its button reads 'Select size')");
 });
 await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
   const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));

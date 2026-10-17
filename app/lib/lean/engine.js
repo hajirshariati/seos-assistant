@@ -100,8 +100,14 @@ function addUsage(total, u = {}) {
 }
 
 export function toCard(p, preselect = null) {
+  // Options the shopper has to pick before adding (e.g. Size, Width) — the
+  // card's button reads "Select size" until they're chosen.
+  const choose = Object.entries(p.options || {})
+    .filter(([name, values]) => values.length > 1 && !/^title$/i.test(name))
+    .map(([name]) => name);
   return {
     ...(preselect ? { preselect } : {}),
+    ...(choose.length ? { choose } : {}),
     title: p.title,
     url: p.url,
     handle: p.handle,

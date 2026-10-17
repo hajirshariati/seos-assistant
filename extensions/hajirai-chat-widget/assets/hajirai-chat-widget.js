@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 calm-intro');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 card-v2');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -412,6 +412,28 @@ function playWelcomeIntro(){
   setTimeout(function(){welcomeEl.classList.remove('is-intro')},1400);
 }
 
+/* Other apps' floating buttons (help chat, accessibility, reviews) can sit
+   above every layer of the page; blurred behind the open chat they show up
+   as smudges on top of it. Hide those while the chat is open, restore after. */
+var hiddenFloaters=[];
+function hideFloaters(){
+  var ours=parseInt(getComputedStyle(overlay).zIndex,10)||0;
+  var kids=document.body.children;
+  for(var i=0;i<kids.length;i++){
+    var el=kids[i];
+    if(el===panel||el===overlay||el===launcher||el.contains(panel))continue;
+    var cs=getComputedStyle(el);
+    if((cs.position==='fixed'||cs.position==='sticky')&&cs.visibility!=='hidden'&&(parseInt(cs.zIndex,10)||0)>=ours){
+      hiddenFloaters.push([el,el.style.visibility]);
+      el.style.visibility='hidden';
+    }
+  }
+}
+function restoreFloaters(){
+  for(var i=0;i<hiddenFloaters.length;i++)hiddenFloaters[i][0].style.visibility=hiddenFloaters[i][1];
+  hiddenFloaters=[];
+}
+
 function toggle(force){
 isOpen=typeof force==='boolean'?force:!isOpen;
 if(isOpen){
@@ -420,6 +442,7 @@ if(isOpen){
   panel.classList.add('open');
   overlay.classList.add('visible');
   document.body.classList.add('ai-chat-blurred');
+  hideFloaters();
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   checkIdleOnOpen();
@@ -429,6 +452,7 @@ if(isOpen){
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');
   document.body.classList.remove('ai-chat-blurred');
+  restoreFloaters();
   menu.style.display='none';
 }
 }
@@ -1025,11 +1049,14 @@ var cp=p.compare_at_price?esc(fmt(p.compare_at_price)):'';
 var pre=(p.preselect&&typeof p.preselect==='object')?p.preselect:null;
 var preKeys=pre?Object.keys(pre):[];
 var preLabel=preKeys.map(function(k){return esc(String(pre[k]))}).join(' \u00b7 ');
+/* "Select size" until every option the product has (size, width…) is known. */
+var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preKeys.some(function(k){return k.toLowerCase()===String(n).toLowerCase()})});
+var ctaText=toPick.length?'Select '+toPick.map(function(n){return String(n).toLowerCase()}).join(' & '):'Add to cart';
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
   '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
-  '<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="Add '+t+(preLabel?', '+preLabel+',':'')+' to cart">Add to cart</button>'+
+  '<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>'+
   '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
 '</div>';
 return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(img)+'"'+(pre?' data-preselect="'+esc(JSON.stringify(pre))+'"':'')+'>'+imgHtml+infoHtml+'</div>';
@@ -1119,7 +1146,7 @@ function startAddToCart(card,btn){
 }
 function closeAtcPanel(panel){
   if(!panel)return;
-  var card=panel._card;if(card)card.classList.remove('is-picking');
+  var card=panel._card;if(card){card.classList.remove('is-picking');card.classList.remove('has-inline-picker')}
   if(panel.parentNode)panel.parentNode.removeChild(panel);
 }
 function openAtcPanel(card,product,m,sel,state){
@@ -1134,10 +1161,20 @@ function openAtcPanel(card,product,m,sel,state){
   var title=card.getAttribute('data-title')||'';
   var url=card.getAttribute('data-url')||'#';
   var img=card.getAttribute('data-image')||'';
-  var anchor=card.closest('.ai-chat-viz-host')||card.closest('.ai-chat-products-wrap')||card.closest('.ai-chat-products')||card;
-  if(anchor.parentNode)anchor.parentNode.insertBefore(panel,anchor.nextSibling);else bubble.appendChild(panel);
+  /* A lone card opens its picker inside itself (one tidy unit); with
+     several cards it opens under the row, naming the product. */
+  var inline=!card.closest('.ai-chat-viz-host')&&card.parentNode&&card.parentNode.children.length===1;
+  if(inline){
+    panel.classList.add('is-inline');
+    card.classList.add('has-inline-picker');
+    card.appendChild(panel);
+  }else{
+    var anchor=card.closest('.ai-chat-viz-host')||card.closest('.ai-chat-products-wrap')||card.closest('.ai-chat-products')||card;
+    if(anchor.parentNode)anchor.parentNode.insertBefore(panel,anchor.nextSibling);else bubble.appendChild(panel);
+  }
   var priceOf=function(){var v=m&&selectionComplete(m,sel)?variantFor(m,sel):null;return v?fmt(v.price):(product?fmt(product.price):'')};
   function head(){
+    if(inline)return '';
     return '<div class="ai-chat-atc-head">'+
       (img?'<img class="ai-chat-atc-thumb" src="'+esc(img)+'" alt="">':'')+
       '<div class="ai-chat-atc-headtext"><div class="ai-chat-atc-title">'+esc(title)+'</div><div class="ai-chat-atc-price">'+esc(priceOf())+'</div></div>'+
@@ -1184,7 +1221,10 @@ function openAtcPanel(card,product,m,sel,state){
     panel.innerHTML=head()+
       (st.note||st.error?'<div class="ai-chat-atc-note'+(st.error?' is-error':'')+'" role="'+(st.error?'alert':'status')+'">'+esc(st.error||st.note)+'</div>':'')+
       groups+
-      '<button type="button" class="ai-chat-atc-add" data-atc-add'+(canAdd?'':' disabled')+'>'+addLabel+'</button>';
+      '<div class="ai-chat-atc-addrow">'+
+        '<button type="button" class="ai-chat-atc-add" data-atc-add'+(canAdd?'':' disabled')+'>'+addLabel+'</button>'+
+        (inline?'<button type="button" class="ai-chat-atc-text" data-atc-close>Cancel</button>':'')+
+      '</div>';
   }
   panel.addEventListener('click',function(e){
     e.stopPropagation();
