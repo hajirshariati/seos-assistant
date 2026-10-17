@@ -14,9 +14,8 @@
 //
 // 3. RETRIEVE top-K chunks for a query string via cosine similarity
 //    in pgvector. Returns chunks above SIMILARITY_THRESHOLD,
-//    sorted by relevance. Caller (chat-prompt.server.js) injects
-//    these into the system prompt instead of dumping the whole
-//    knowledge corpus.
+//    sorted by relevance. The lean engine's store-info lookup
+//    (lean/respond.server.js) returns them to Claude on demand.
 
 import { embedText, embedTexts, vectorLiteral, resolveShopEmbedding, EMBEDDING_DIMENSIONS } from "./embeddings.server.js";
 
@@ -284,9 +283,3 @@ export function lexicalRetrieveChunks(knowledge = [], query = "", { limit = 3, m
   return scored.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 }
 
-// Convenience: count how many chunks a shop has embedded. Used by
-// the backfill script and the admin UI to display progress.
-export async function countShopChunks(prisma, shop) {
-  if (!shop) return 0;
-  return prisma.knowledgeChunk.count({ where: { shop } });
-}

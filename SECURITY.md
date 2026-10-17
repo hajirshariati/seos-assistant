@@ -14,7 +14,7 @@ privacy policy (that lives at `/privacy`).
   (stored in our PostgreSQL database).
 - **Protected customer data**: a signed-in shopper's **name, email,
   address**, and **order history** — accessed **live** from Shopify's
-  Admin API / Customer Account API to answer that shopper's own
+  Admin API to answer that shopper's own
   questions. **We do not persist customer PII in our database**; it is
   used in-session and discarded.
 

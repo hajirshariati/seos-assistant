@@ -3,10 +3,8 @@
 // extracts every product/SKU/brand-line claim the AI made, and flags
 // claims that don't resolve to a real product or variant.
 //
-// This complements the runtime guards in chat.jsx (extractOrphanSkus,
-// stripMissingSkus, looksLikeDefinitionalHallucination). Those run
-// per-response and prevent a hallucination from reaching the customer.
-// THIS script gives you a post-hoc, batch view of how often the
+// This complements the lean engine's runtime fact check
+// (verifyLeanAnswer), which runs per response. THIS script gives you a post-hoc, batch view of how often the
 // hallucination patterns are firing, what the model is making up, and
 // whether the runtime guards are catching it — useful before a demo.
 //
@@ -43,8 +41,7 @@ const jsonOnly = hasFlag("json");
 // audit catches the same shapes the chat strips at request time.
 const SKU_PATTERN = /\b[A-Z]{1,2}\d{3,5}[A-Z]?\b/g;
 
-// Definitional-hallucination shape (from chat-helpers.server.js).
-// Lifted verbatim — keeping the audit aligned with the runtime guard.
+// Definitional-hallucination shape ("X is our premium line…").
 const DEFINITIONAL_RE = /\b(?:[A-Z][\w-]{2,}\s+(?:is|are)\s+(?:our|an?|the)\s+(?:premium|signature|exclusive|new|advanced|patented|proprietary|flagship|line|technology|orthotic|insole|footbed|brand|collection|series))\b/g;
 
 const { default: prisma } = await import("../app/db.server.js");

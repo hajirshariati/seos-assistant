@@ -63,6 +63,7 @@ export const loader = async ({ request }) => {
         klaviyoCompanyId: config.klaviyoCompanyId || "",
         klaviyoListId: config.klaviyoListId || "",
         showLoginPill: config.showLoginPill !== false,
+        showFeedback: config.showFeedback !== false,
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,

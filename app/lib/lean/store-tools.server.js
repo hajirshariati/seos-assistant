@@ -184,7 +184,6 @@ export async function buildLeanStoreExtras({
       trees: rec.trees || [],
       conversationText,
       latestUserText: latestUserMessage,
-      messages,
       fitfinder,
     }));
   }

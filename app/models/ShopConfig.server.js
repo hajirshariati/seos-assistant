@@ -46,14 +46,17 @@ export async function updateShopConfig(shop, data) {
   return decryptConfig(saved);
 }
 
+// Counts shoppers turned away by the store's AI provider rate limit this
+// month — the home page warns the merchant when it's happening.
 export async function incrementRateLimitHits(shop) {
   const now = new Date();
   const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const config = await prisma.shopConfig.findUnique({ where: { shop }, select: { rateLimitHitsMonth: true } });
-  if (config?.rateLimitHitsMonth === month) {
-    await prisma.shopConfig.update({ where: { shop }, data: { rateLimitHits: { increment: 1 } } });
-  } else {
-    await prisma.shopConfig.update({ where: { shop }, data: { rateLimitHits: 1, rateLimitHitsMonth: month } });
+  const { count } = await prisma.shopConfig.updateMany({
+    where: { shop, rateLimitHitsMonth: month },
+    data: { rateLimitHits: { increment: 1 } },
+  });
+  if (count === 0) {
+    await prisma.shopConfig.updateMany({ where: { shop }, data: { rateLimitHits: 1, rateLimitHitsMonth: month } });
   }
 }
 

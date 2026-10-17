@@ -2,7 +2,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 // GDPR: Shopify forwards customer data-access requests here. Chat
-// interactions are anonymized via a SHA-256 hash of the source IP and
+// interactions are keyed by a secret-keyed hash of the source IP and
 // are not linked to any Shopify customer identity. The ONE per-customer
 // datum we hold is the Shopify customer id on chat-attributed order
 // conversions (webhooks/orders/create → ChatConversion) — return those
@@ -19,6 +19,9 @@ export const action = async ({ request }) => {
         select: { orderId: true, orderName: true, totalAmount: true, currency: true, createdAt: true },
       })
     : [];
+  // Shopify doesn't relay the response body to the merchant: this log line
+  // is the operator's record to send the merchant what we hold.
+  console.log(`[gdpr-data-request] shop=${shop} customer=${customerId || "-"} records=${conversions.length} (chat-attributed order conversions)`);
 
   return Response.json({
     shop_domain: shop,

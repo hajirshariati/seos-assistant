@@ -21,7 +21,7 @@ Claude.
   Store theme app extension (app embed, `target: body`). Vanilla JS, no
   framework. Talks to `/apps/hajirai/chat` via Shopify's app proxy.
 - **Public endpoints**
-  - `app/routes/chat.jsx` — rate limit, plan quota and daily cap, then the
+  - `app/routes/chat.jsx` — rate limit, request size and daily cap, then the
     chat engine (streamed as server-sent events)
   - `app/routes/feedback.jsx` — thumbs up/down, IP hashed
   - `app/routes/widget-config.jsx` — runtime config for the widget
@@ -76,8 +76,9 @@ live under `app/routes/webhooks.*.jsx` and use
 | `app/uninstalled`                    | Purges every shop-scoped table          |
 | `app/scopes_update`                  | Updates the session scope               |
 | `products/{create,update,delete}`    | Mirrors catalog into the local cache    |
-| `customers/data_request` (GDPR)      | Returns JSON acknowledging no PII held  |
-| `customers/redact` (GDPR)            | No-op (no customer-keyed records)       |
+| `orders/create`                      | Records chat-attributed orders          |
+| `customers/data_request` (GDPR)      | Returns/logs the customer's conversions |
+| `customers/redact` (GDPR)            | Removes the customer id from conversions|
 | `shop/redact` (GDPR)                 | Purges every shop-scoped table          |
 
 ## Merchant settings (admin)

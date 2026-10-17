@@ -266,7 +266,6 @@ async function getReturnInsights({ handle }, { shop, aftershipApiKey }) {
 // fitPredictorEnabled=true. Aggregates review fit data, return sizing reasons,
 // customer order history, and an optional merchant-configured external fit
 // API into a single size recommendation with a confidence score.
-// FIT_PREDICTOR_TOOL schema lives in chat-tool-schemas.js (re-exported above).
 
 function roundToHalf(n) {
   if (!Number.isFinite(n)) return null;
@@ -573,7 +572,6 @@ async function getFitRecommendation({ handle, customerSizeHint }, ctx) {
 // and the shop has vipModeEnabled. Operates strictly on the HMAC-verified
 // loggedInCustomerId from the request context — never accepts a customer id
 // from the AI's arguments.
-// CUSTOMER_ORDERS_TOOL schema lives in chat-tool-schemas.js (re-exported above).
 
 function normalizeOrderNumber(raw) {
   return String(raw || "").replace(/[^0-9a-z]/gi, "").toLowerCase();

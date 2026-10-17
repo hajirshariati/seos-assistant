@@ -259,10 +259,4 @@ export function similarProducts(catalog, { handle, attributes = [], limit = 6, m
   return { reference: ref.title, matched_on: ["category", "line", ...want], products: out };
 }
 
-// Same-style lookup used to resolve "that style" when only a style name is known.
-export function findByStyle(catalog, name) {
-  const want = lc(name);
-  return (catalog?.products || []).filter((p) => p.inStock && lc(p.style).includes(want));
-}
-
 export { styleName };

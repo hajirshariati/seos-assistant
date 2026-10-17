@@ -28,10 +28,6 @@ export function isProviderSupported(provider) {
   return provider === "voyage" || provider === "openai";
 }
 
-export function providerLabel(provider) {
-  return PROVIDERS[provider]?.label || "";
-}
-
 // Embed an array of texts in one API call. Returns array of vectors
 // (each is a number[] of length EMBEDDING_DIMENSIONS), aligned with the
 // input order. Throws on auth/network/rate-limit errors so callers can

@@ -467,6 +467,8 @@ function DecisionTreesCard({ enabled, trees }) {
     if (fetcher.data?.saved && fetcher.data?.treeId && editing) {
       setEditing(null);
     }
+    // Runs when a save responds — not when the editor opens or closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data]);
 
   const openAdvanced = () => {
@@ -819,6 +821,8 @@ function MappingCsvSection({ treeId, onApplied }) {
   // Save doesn't put the old rows back.
   useEffect(() => {
     if (applied && Array.isArray(applyFetcher.data.masterIndex)) onApplied?.(applyFetcher.data.masterIndex);
+    // Once per upload response; onApplied is a new function every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyFetcher.data]);
   const applyError = applyFetcher.data?.error;
 

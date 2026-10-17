@@ -108,9 +108,6 @@ export const loader = async ({ request }) => {
       (config.embeddingProvider === "openai" && config.openaiApiKey)
     )),
     semanticProvider: config.embeddingProvider || "",
-    categoryGroupsCount: (() => {
-      try { return (JSON.parse(config.categoryGroups || "[]") || []).length; } catch { return 0; }
-    })(),
     // Status-cluster fields
     catalogSyncStatus: syncState.status || "idle",
     catalogLastError: syncState.lastError || "",
@@ -1506,7 +1503,7 @@ export default function Home() {
     storeKnowledgeCount, hasSupportLink, productsSynced,
     productsCount, totalCost, totalMessages, avgCostPerMessage,
     feedbackTotal, satisfactionRate, rateLimitHits,
-    semanticEnabled, semanticProvider, categoryGroupsCount,
+    semanticEnabled, semanticProvider,
     conversionCount, conversionRevenue, conversionCurrency,
     catalogSyncStatus, catalogLastError, lastSyncedAt, hoursSinceSync,
     recommenderActive, enabledRecommenderCount,
@@ -2601,7 +2598,6 @@ export default function Home() {
                 storeKnowledgeCount={storeKnowledgeCount}
                 hasSupportLink={hasSupportLink}
                 productsSynced={productsSynced}
-                categoryGroupsCount={categoryGroupsCount}
                 semanticEnabled={semanticEnabled}
                 semanticProvider={semanticProvider}
                 themeEditorUrl={themeEditorUrl}

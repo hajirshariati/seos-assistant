@@ -44,7 +44,7 @@ export function htmlToText(html) {
   const lines = [];
   const seen = new Set();
   for (const raw of s.split(/\n/)) {
-    const line = raw.replace(/[ \t ]+/g, " ").replace(/\s+\|\s*$/, "").trim();
+    const line = raw.replace(/[ \t\u00a0]+/g, " ").replace(/\s+\|\s*$/, "").trim();
     if (!line) { if (lines.length && lines[lines.length - 1] !== "") lines.push(""); continue; }
     if (/^##\s*$/.test(line) || /^-\s*$/.test(line)) continue;
     // Themes render the same block twice (mobile + desktop); keep the first.

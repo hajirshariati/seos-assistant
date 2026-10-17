@@ -133,7 +133,6 @@ export const loader = async ({ request }) => {
     embeddingProvider,
     embeddedCount,
     similarMatchAttributes: safeParse(config.similarMatchAttributes, []),
-    deduplicateColors: config.deduplicateColors,
     productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
   };
 };
@@ -272,12 +271,6 @@ export const action = async ({ request }) => {
       return { deleted: true, embeddingsStale: true, syncStarted: true };
     }
     return { deleted: true, embeddingsStale: true };
-  }
-
-  if (intent === "toggle_dedup") {
-    const value = formData.get("deduplicateColors") === "true";
-    await updateShopConfig(session.shop, { deduplicateColors: value });
-    return { saved: true };
   }
 
   if (intent === "set_card_style") {
@@ -870,15 +863,8 @@ function CatalogSyncCard({ data }) {
 }
 
 
-function DisplayCard({ deduplicateColors, productCardStyle }) {
-  const fetcher = useFetcher();
+function DisplayCard({ productCardStyle }) {
   const styleFetcher = useFetcher();
-  const handleDedup = (checked) => {
-    const fd = new FormData();
-    fd.set("intent", "toggle_dedup");
-    fd.set("deduplicateColors", String(checked));
-    fetcher.submit(fd, { method: "post" });
-  };
   const handleStyleChange = (value) => {
     const fd = new FormData();
     fd.set("intent", "set_card_style");
@@ -906,19 +892,16 @@ function DisplayCard({ deduplicateColors, productCardStyle }) {
 
         <Divider />
 
-        <Checkbox label="Deduplicate colors in search results"
-          helpText="When enabled, products that differ only by color show a single card instead of one per color variant. Useful when each color is a separate Shopify product."
-          checked={deduplicateColors} onChange={handleDedup} />
         <Box background="bg-surface-secondary" padding="300" borderRadius="200">
           <BlockStack gap="150">
             <Text as="p" variant="bodySm" tone="subdued">
-              <strong>How dedup works:</strong> the app groups products by everything before the last dash in the title. For this to work, your product titles must follow this format:
+              <strong>One card per style:</strong> products that differ only by color show as a single card, with the other colors offered alongside. The app groups products by everything before the last dash in the title, so titles should follow this format:
             </Text>
             <Text as="p" variant="bodySm">
               <code>Product Name - Color</code>
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
-              Examples: <code>Chase Arch Support Sneaker - Black</code>, <code>Chase Arch Support Sneaker - White</code> → shown as one card. If your titles don't use this pattern, leave this off.
+              Examples: <code>Chase Arch Support Sneaker - Black</code>, <code>Chase Arch Support Sneaker - White</code> → shown as one card.
             </Text>
           </BlockStack>
         </Box>
@@ -1063,7 +1046,7 @@ export default function Catalog() {
             description="What “similar” means for your products, and how cards look in the chat."
           />
           <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
-          <DisplayCard deduplicateColors={data.deduplicateColors} productCardStyle={data.productCardStyle} />
+          <DisplayCard productCardStyle={data.productCardStyle} />
         </BlockStack>
 
         <BlockStack gap="400">

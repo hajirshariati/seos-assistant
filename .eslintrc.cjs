@@ -17,7 +17,7 @@ module.exports = {
   env: {
     browser: true,
     commonjs: true,
-    es6: true,
+    es2022: true,
   },
   ignorePatterns: ["!**/.server", "!**/.client"],
 
@@ -50,6 +50,11 @@ module.exports = {
       },
       rules: {
         "react/no-unknown-property": ["error", { ignore: ["variant"] }],
+        // Plain JavaScript app: no PropTypes, and copy uses real quotes.
+        "react/prop-types": "off",
+        "react/no-unescaped-entities": "off",
+        // Best-effort calls (storage, analytics) swallow errors on purpose.
+        "no-empty": ["error", { allowEmptyCatch: true }],
       },
     },
 
@@ -84,6 +89,10 @@ module.exports = {
         ".graphqlrc.{js,ts}",
         "shopify.server.{js,ts}",
         "**/*.server.{js,ts}",
+        // Route modules run on the server (loaders, actions, webhooks).
+        "app/routes/**/*.{js,jsx}",
+        "app/root.jsx",
+        "scripts/**/*.{js,mjs}",
       ],
       env: {
         node: true,

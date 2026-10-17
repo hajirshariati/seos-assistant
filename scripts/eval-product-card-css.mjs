@@ -39,9 +39,6 @@ function mobileBlock() {
   throw new Error("could not bound the mobile @media block");
 }
 
-// Everything OUTSIDE any max-width media query — i.e. the desktop base rules.
-// (Good enough to confirm desktop sizing wasn't altered.)
-const DESKTOP = CSS.split("@media (max-width:")[0] + CSS.split("@media (max-width: 600px)")[0];
 
 console.log("\nmobile compact product-card invariants\n");
 

@@ -226,6 +226,7 @@ export function buildOrthoticCatalog(products = []) {
   lines.sort((a, b) => a.name.localeCompare(b.name));
   return {
     lines,
+    // eslint-disable-next-line no-unused-vars -- stem/family are build-time only
     items: items.map(({ stem, family, ...rest }) => rest),
     skipped,
   };

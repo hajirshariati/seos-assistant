@@ -37,6 +37,7 @@ if(_cachedRules&&matchesHideRule(_cachedRules))return;
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
+  if(d.showFeedback===false)SHOW_FEEDBACK=false;
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -107,6 +108,8 @@ var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';
 // page refresh renders with the right style before fetch resolves.
 var PRODUCT_CARD_STYLE='horizontal';
 try{var _cachedStyle=localStorage.getItem(PCSK);if(_cachedStyle==='showcase')PRODUCT_CARD_STYLE='showcase'}catch(e){}
+/* Helpful / Not helpful under replies — the admin's "feedback buttons" setting. */
+var SHOW_FEEDBACK=true;
 var KLAVIYO_COMPANY_ID='';
 var KLAVIYO_LIST_ID='';
 /* Welcome-panel intro effect. Overridden by /widget-config response.
@@ -1761,7 +1764,7 @@ if(sugg&&sugg.length>0&&mDiv){
 }
 if(prods&&prods.length>0&&mDiv){
   var fb=$('.ai-chat-msg-bubble',mDiv);
-  if(fb&&!$('.ai-chat-feedback',fb)){
+  if(SHOW_FEEDBACK&&fb&&!$('.ai-chat-feedback',fb)){
     fb.insertAdjacentHTML('beforeend','<div class="ai-chat-feedback"><button class="ai-chat-fb-btn" data-vote="up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg> Helpful</button><button class="ai-chat-fb-btn" data-vote="down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg> Not helpful</button></div>');
     fb.querySelectorAll('.ai-chat-fb-btn').forEach(function(btn){
       btn.addEventListener('click',function(){

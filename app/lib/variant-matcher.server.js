@@ -1,7 +1,6 @@
 // Variant-aware matcher (Phase B continuation).
 //
-// catalog-matcher.server.js handles PRODUCT-level scope (gender,
-// category, color). This module owns VARIANT-level truth (size,
+// This module owns VARIANT-level truth (size,
 // width, SKU, inventoryQty) so the resolver, search filters,
 // product-details handler, and fit-predictor all canonicalize the
 // same way.
@@ -148,7 +147,7 @@ export function canonicalizeVariantConstraints(input = {}) {
   return { size: size || null, width: width || null, sku: sku || null };
 }
 
-// Availability semantics preserved from chat-tools.server.js:
+// Availability semantics:
 //   inventoryQty > 0  → in_stock
 //   inventoryQty == 0 → out_of_stock
 //   inventoryQty == null (untracked) → untracked (treated as available)

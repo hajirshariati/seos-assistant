@@ -18,15 +18,6 @@ const DEFAULT_PRICING = MODEL_PRICING["claude-sonnet-4-6"];
 // voyage-3 and text-embedding-3-small respectively.
 const EMBEDDING_PRICING = { voyage: 0.06, openai: 0.02 };
 
-// Cost of an embedding API call. Returns 0 for unknown providers or
-// missing/zero token counts so callers can pass through unconditionally.
-export function computeEmbeddingCost(provider, tokens) {
-  const rate = EMBEDDING_PRICING[provider];
-  const n = Number(tokens);
-  if (!rate || !Number.isFinite(n) || n <= 0) return 0;
-  return (n * rate) / 1_000_000;
-}
-
 export function computeCost(model, usage) {
   const p = MODEL_PRICING[model] || DEFAULT_PRICING;
   const input = ((usage.input_tokens || 0) * p.input) / 1_000_000;
@@ -34,16 +25,6 @@ export function computeCost(model, usage) {
   const cacheRead = ((usage.cache_read_input_tokens || 0) * p.cacheRead) / 1_000_000;
   const cacheWrite = ((usage.cache_creation_input_tokens || 0) * p.cacheWrite) / 1_000_000;
   return input + output + cacheRead + cacheWrite;
-}
-
-export function getModelLabel(model) {
-  if (model?.includes("haiku")) return "Haiku 4.5";
-  if (model?.includes("opus-4-8")) return "Opus 4.8";
-  if (model?.includes("opus-4-7")) return "Opus 4.7";
-  if (model?.includes("opus-4-6")) return "Opus 4.6";
-  if (model?.includes("opus")) return "Opus 4";
-  if (model?.includes("sonnet-4-6")) return "Sonnet 4.6";
-  return "Sonnet 4";
 }
 
 export { MODEL_PRICING, EMBEDDING_PRICING };

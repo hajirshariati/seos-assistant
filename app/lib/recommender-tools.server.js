@@ -397,7 +397,7 @@ async function filterMasterIndexByShop(shop, masterIndex) {
 // into a tool_result block. The product card travels back via the
 // dedicated card-extraction path the chat layer already has, so we
 // also surface `product` directly for that side channel.
-export async function executeRecommenderTool({ toolName, input, shop, trees, conversationText, latestUserText, messages, sessionMemoryExplicit, fitfinder = null }) {
+export async function executeRecommenderTool({ toolName, input, shop, trees, conversationText, latestUserText, sessionMemoryExplicit, fitfinder = null }) {
   if (!toolName || !toolName.startsWith("recommend_")) {
     return { error: "not a recommender tool" };
   }

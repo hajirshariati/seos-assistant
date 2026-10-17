@@ -16,7 +16,6 @@ import {
   Badge,
   Divider,
   Checkbox,
-  FormLayout,
 } from "@shopify/polaris";
 import { CheckCircleIcon } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";

@@ -170,13 +170,8 @@ model ShopConfig {
   // determinism. Empty = feature disabled.
   campaignCheatCode   String   @default("")
 
-  // RAG over knowledge files. When true, chat-prompt.server.js
-  // retrieves the top-K most semantically relevant KnowledgeChunk
-  // rows for the customer's latest message and injects only those
-  // — instead of dumping every knowledge file in every prompt.
-  // Default OFF: feature must be opted into per-shop. Requires
-  // semantic search (embeddingProvider + apiKey) + a successful
-  // backfill (npm run backfill:knowledge-chunks) before enabling.
+  // Unused: knowledge retrieval runs whenever the store has an embedding
+  // provider (lean/respond.server.js). Kept until a migration drops it.
   knowledgeRagEnabled Boolean  @default(false)
 
   // Decision Tree Engine — clinical/expert funnels (e.g. Aetrex's
@@ -422,10 +417,8 @@ model ChatConversion {
 // funnel). Each tree owns one intent slug — e.g. "orthotic",
 // "mattress" — and a deterministic resolver that maps collected
 // attribute answers to a master SKU (or short ranked list). Trees
-// are interactive: while one is active, chat.jsx bypasses the LLM
-// and returns each next question directly. Multiple trees per shop
-// supported; intent collisions fall back to the existing
-// category-intent disambiguation in chat-prompt.server.js.
+// are offered to Claude as recommend_<intent> tools (Claude asks the
+// questions; the resolver or catalog finder picks the product).
 //
 // `definition` is a JSON document validated by
 // app/lib/decision-tree-schema.server.js. Shape (high-level):
@@ -476,7 +469,7 @@ model DecisionTree {
 }
 
 // One row per chunk of a merchant's knowledge file (FAQs, brand
-// voice, rules, etc.). Used by the RAG path in chat-prompt.server.js
+// voice, rules, etc.). Used by the store-info lookup (lean/respond.server.js)
 // — instead of injecting the entire knowledge corpus on every turn
 // (~10-30K chars), we embed each chunk once and retrieve the top-K
 // most semantically relevant ones for the customer's current message.

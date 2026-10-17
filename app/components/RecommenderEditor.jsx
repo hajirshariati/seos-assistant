@@ -12,7 +12,6 @@ import {
   TextField,
   Select,
   Button,
-  Checkbox,
   Badge,
   Box,
 } from "@shopify/polaris";
@@ -170,7 +169,8 @@ function QuestionsTable({ definition, onChange }) {
 
 // ── Which product for which answers ──────────────────────────────────────
 function ProductTable({ definition, onChange }) {
-  const masterIndex = definition.resolver?.masterIndex || [];
+  const rawIndex = definition.resolver?.masterIndex;
+  const masterIndex = useMemo(() => rawIndex || [], [rawIndex]);
   const columns = useMemo(() => tableColumns(masterIndex), [masterIndex]);
   const options = useMemo(() => answerOptions(definition), [definition]);
   const [filter, setFilter] = useState("");

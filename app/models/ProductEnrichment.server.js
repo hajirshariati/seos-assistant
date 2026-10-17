@@ -43,10 +43,3 @@ export async function countEnrichmentsBySourceFile(sourceFileId) {
   return prisma.productEnrichment.count({ where: { sourceFileId } });
 }
 
-export async function getEnrichmentsBySkus(shop, skus) {
-  if (!skus || skus.length === 0) return [];
-  return prisma.productEnrichment.findMany({
-    where: { shop, sku: { in: skus } },
-    select: { sku: true, data: true },
-  });
-}

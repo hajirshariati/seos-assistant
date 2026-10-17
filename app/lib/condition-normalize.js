@@ -40,7 +40,3 @@ export function conditionFromText(text, { allowNone = false } = {}) {
   return null;
 }
 
-// Whether a free-text snippet names ANY foot condition at all.
-export function statesAnyCondition(text) {
-  return conditionFromText(text) != null;
-}

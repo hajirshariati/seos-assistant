@@ -172,7 +172,7 @@ export default function PrivacyPolicy() {
           <li>Maintaining the storefront&apos;s own privacy policy and any legally required notices, including disclosure of the use of an AI chat assistant and automated processing, and any consent or cookie banners required in the merchant&apos;s jurisdictions.</li>
           <li>Establishing the lawful basis for processing shopper data on their storefront, and complying with the privacy, consumer-protection, accessibility, and marketing laws that apply to their store and customers.</li>
           <li>The accuracy and legality of all content the assistant is configured to communicate — product data, prices, claims, policies, knowledge files, and custom rules all come from the merchant&apos;s store and uploads.</li>
-          <li>The third-party accounts the merchant connects. AI and integration API keys (Anthropic, OpenAI or Voyage AI, Klaviyo, Yotpo, Aftership) are the <strong>merchant&apos;s own accounts</strong>: data sent to those providers is processed under the merchant&apos;s own agreements with them, and enabling or disabling each integration is entirely in the merchant&apos;s control.</li>
+          <li>The third-party accounts the merchant connects. AI and integration accounts (Anthropic, OpenAI or Voyage AI, Google Gemini, Klaviyo, Yotpo, Aftership) are the <strong>merchant&apos;s own accounts</strong>: data sent to those providers is processed under the merchant&apos;s own agreements with them, and enabling or disabling each integration is entirely in the merchant&apos;s control.</li>
           <li>Responding to shopper rights requests as controller. The app supports this automatically through Shopify&apos;s privacy webhook system (see §8) and the merchant&apos;s admin controls.</li>
         </ul>
 
@@ -187,12 +187,12 @@ export default function PrivacyPolicy() {
         </ul>
         <p>When a shopper uses the chat widget on the storefront:</p>
         <ul>
-          <li>Chat messages are processed transiently to generate AI responses. They are not stored in our database after the reply is delivered, except in the feedback case described below. Brief operational logs at our hosting provider may capture message fragments for debugging and abuse prevention and rotate automatically.</li>
+          <li>Chat messages are processed transiently to generate AI responses. They are not stored in our database after the reply is delivered, except in the feedback case described below. Operational logs at our hosting provider record that a message was handled (store, length, timing) but not the message text, and rotate automatically.</li>
           <li>We do not build shopper profiles and do not store shopper names, emails, or addresses. The one customer-linked record we keep is described below: when a chat-assisted session leads to an order, the order&apos;s Shopify customer ID is recorded for the merchant&apos;s conversion reporting.</li>
           <li>Anonymous usage metrics (message count, AI model used, token usage, cost, tool calls) are recorded per store for billing and analytics. Test conversations run by the merchant from the app&apos;s admin are flagged internal and are not recorded in analytics or counted against plan usage.</li>
-          <li>If the shopper rates a response thumbs-up or thumbs-down, the conversation up to that point is stored alongside the rating so the merchant can review what the AI got right or wrong. The stored conversation is keyed only by a hashed source-IP identifier — not by customer ID, email, or any other identifier — and is automatically deleted after 90 days.</li>
+          <li>If the shopper rates a response thumbs-up or thumbs-down, the conversation up to that point is stored alongside the rating so the merchant can review what the AI got right or wrong. Email addresses and phone numbers in it are replaced with placeholders before it is stored. It is keyed only by a one-way, secret-keyed hash of the source IP — not by customer ID, email, or any other identifier — and is automatically deleted after 90 days.</li>
           <li>When an order is attributed to a chat session, we record the order ID, order name, amount, currency, and the Shopify customer ID so the merchant&apos;s dashboard can report chat-driven revenue. The customer ID is removed automatically when Shopify sends a customer-redaction request, and all conversion records are deleted on store redaction or uninstall.</li>
-          <li>If the merchant enables VIP Mode and the shopper is logged in, the assistant fetches the shopper&apos;s first name, order history, loyalty balance (Yotpo), and segment data (Klaviyo) per conversation to personalize replies. This data is used in-memory for the response and is not stored in our database.</li>
+          <li>If the merchant enables VIP Mode and the shopper is logged in, the assistant fetches the shopper&apos;s first name, order history and loyalty balance (Yotpo) per conversation to personalize replies. This data is used in-memory for the response and is not stored in our database.</li>
           <li>Shoppers should not enter sensitive personal information (such as health, financial, or government-ID details) into the chat. Messages are processed only to generate a reply and are not used for any other purpose.</li>
         </ul>
 
@@ -203,7 +203,7 @@ export default function PrivacyPolicy() {
           <li>When semantic search is enabled, product text and the shopper&apos;s search query are sent to the merchant&apos;s configured embedding provider to compute similarity vectors. Only the text needed for matching is sent; no shopper identity accompanies it.</li>
           <li>Knowledge files, attribute mappings, search rules, and category exclusions are included in the AI system prompt to improve answer quality and constrain results to the merchant&apos;s catalog.</li>
           <li>Usage data powers the merchant&apos;s analytics dashboard, plan limits, and billing.</li>
-          <li>Customer email (when the shopper is logged in and VIP Mode is enabled) is used only server-side to look up loyalty and segment data from the merchant&apos;s Klaviyo and Yotpo accounts. It is not stored in our database and is not placed in the AI prompt.</li>
+          <li>Customer email (when the shopper is logged in) is used server-side to look up loyalty data in the merchant&apos;s Yotpo account. When a signed-in shopper asks about their own orders and the merchant has set a branded tracking or returns page, the links the assistant gives them include their order number and email (so the page can find the order); those links pass through the AI provider as part of the reply. The email is not stored in our database.</li>
           <li>We do not sell, rent, or share personal information with third parties for their own marketing purposes, and we do not use chat content to train AI models.</li>
         </ul>
 
@@ -218,7 +218,9 @@ export default function PrivacyPolicy() {
         <ul>
           <li><strong>Anthropic (Claude API)</strong> — chat messages are sent for AI processing under the merchant&apos;s API account. Per Anthropic&apos;s API terms, API content is not used to train models. <a href="https://www.anthropic.com/privacy" rel="noreferrer">anthropic.com/privacy</a></li>
           <li><strong>OpenAI or Voyage AI (optional, embeddings)</strong> — product text and shopper search queries for semantic matching. <a href="https://openai.com/policies/privacy-policy" rel="noreferrer">openai.com/privacy</a> · <a href="https://www.voyageai.com/privacy" rel="noreferrer">voyageai.com/privacy</a></li>
-          <li><strong>Klaviyo (optional)</strong> — shopper segment lookups for personalization. <a href="https://www.klaviyo.com/privacy" rel="noreferrer">klaviyo.com/privacy</a></li>
+          <li><strong>Google Gemini or OpenAI (optional, &quot;See It Styled&quot; images)</strong> — the product&apos;s photos and the shopper&apos;s description of where they&apos;ll wear it are sent to generate a styled preview image. No shopper identity is sent. <a href="https://policies.google.com/privacy" rel="noreferrer">policies.google.com/privacy</a> · <a href="https://openai.com/policies/privacy-policy" rel="noreferrer">openai.com/privacy</a></li>
+          <li><strong>Klaviyo (optional)</strong> — if the merchant enables the in-chat sign-up form, the email (and optional phone number) the shopper types is sent from their browser directly to the merchant&apos;s Klaviyo list; it does not pass through or stay on our servers. <a href="https://www.klaviyo.com/privacy" rel="noreferrer">klaviyo.com/privacy</a></li>
+          <li><strong>Merchant&apos;s fit service (optional)</strong> — if the merchant connects an external size-advice service, it receives the store domain, the product handle and, for a signed-in shopper, their Shopify customer ID.</li>
           <li><strong>Yotpo (optional)</strong> — loyalty points, tier, and rewards lookups. <a href="https://www.yotpo.com/privacy-policy" rel="noreferrer">yotpo.com/privacy-policy</a></li>
           <li><strong>Aftership (optional)</strong> — tracking links route to the merchant&apos;s branded tracking page.</li>
         </ul>
@@ -242,7 +244,7 @@ export default function PrivacyPolicy() {
 
         <h2>7. Data retention</h2>
         <ul>
-          <li>Chat usage records are retained for the analytics period defined by the merchant&apos;s plan (7, 90, or 180 days).</li>
+          <li>Chat usage records (anonymous counts, tokens and cost) are retained for up to 400 days so the merchant can compare year over year, then deleted automatically.</li>
           <li>Product catalog data (including embeddings) is retained while the app is installed and updated in real time via Shopify webhooks.</li>
           <li>Knowledge files (and their derived chunks and embeddings) are retained until deleted by the merchant.</li>
           <li>Feedback data (including any conversation captured under §3) is automatically deleted after 90 days.</li>

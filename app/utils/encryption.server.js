@@ -51,6 +51,3 @@ export function decrypt(stored) {
   return plaintext.toString("utf8");
 }
 
-export function isEncrypted(stored) {
-  return typeof stored === "string" && stored.startsWith(PREFIX);
-}

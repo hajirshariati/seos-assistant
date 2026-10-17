@@ -4,7 +4,7 @@
 // Any turn that answers a CONDITION/PAIN/ORTHOTIC question must carry a short,
 // fixed, professional disclaimer that the model cannot override, rewrite, or
 // omit — it is appended by CODE at the final emit, after every validator,
-// scrub, and repair has run. Pure + testable (same pattern as sales-voice.js).
+// scrub, and repair has run. Pure + testable.
 //
 // Scope: deliberately NOT every condition_recommendation turn — "cute sandals
 // for vacation" plans to condition_recommendation but is not medical. The
@@ -36,8 +36,7 @@ const MEDICAL_ANSWER_WORKFLOWS = new Set([
 ]);
 
 // The fixed disclaimer. One sentence, professional, comfort-positioned —
-// NEVER phrased as medical capability (it must not trip the sales-voice
-// unsupported-medical-claim detector).
+// NEVER phrased as medical capability.
 export const MEDICAL_DISCLAIMER_TEXT =
   "Just a note: our recommendations are for comfort and support — for persistent " +
   "or severe foot pain, please check with a podiatrist or your doctor.";

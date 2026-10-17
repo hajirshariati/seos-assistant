@@ -2,7 +2,7 @@
 // understands (text → products → done), so no storefront change is needed.
 import Anthropic from "@anthropic-ai/sdk";
 import prisma from "../../db.server.js";
-import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
+import { getKnowledgeFilesWithContent, incrementRateLimitHits } from "../../models/ShopConfig.server.js";
 import { recordChatUsage } from "../../models/ChatUsage.server.js";
 import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessage } from "../anthropic-resilience.server.js";
@@ -168,6 +168,7 @@ export function leanChatResponse({
         }
         console.error("[lean] turn failed:", err?.stack || err?.message || err);
         const classified = classifyAnthropicError(err);
+        if (classified.kind === "rate_limit" && !internal) incrementRateLimitHits(shop).catch(() => {});
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });
       } finally {
         clearInterval(heartbeat);

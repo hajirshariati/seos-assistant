@@ -1184,7 +1184,6 @@ export default function Onboarding() {
       "",
       "  Search Engine on Steroids · SEoS Assistant",
       "  Built with caffeine and a stubborn refusal to ship hallucinations.",
-      "  Curious how it works? See app/lib/chat-tools.server.js",
       "",
     ].join("\n");
     // eslint-disable-next-line no-console
@@ -1262,11 +1261,14 @@ export default function Onboarding() {
         <header className="hero">
           <div className="hero-inner">
             <div className="hero-brand">
+              {/* Easter egg (mouse only, decorative). */}
+              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
               <img src={seosLogo} alt="SEoS" onClick={onLogoClick} />
               <span className="hero-brand-name">SEoS Assistant · Setup guide</span>
             </div>
             <h1>
               {"Set up your "}
+              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
               <span
                 className={"seos" + (boosted ? " is-boosted" : "")}
                 onClick={() => setBoosted(true)}
@@ -1285,7 +1287,7 @@ export default function Onboarding() {
 
         <main>
           <div className="container">
-            <nav className="phase-nav" role="tablist" aria-label="Setup phases">
+            <div className="phase-nav" role="tablist" aria-label="Setup phases">
               {grouped.map((phase, idx) => (
                 <button
                   key={phase.id}
@@ -1299,7 +1301,7 @@ export default function Onboarding() {
                   <span>{phase.name}</span>
                 </button>
               ))}
-            </nav>
+            </div>
 
             {active ? (
               <section aria-labelledby={`phase-${active.id}-heading`}>
@@ -1399,6 +1401,7 @@ export default function Onboarding() {
       </div>
 
       {eggMsg ? (
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
         <div className="egg-chat" role="status" onClick={() => setEggMsg(null)}>
           <div className="egg-chat-head">
             <img src={seosLogo} alt="" aria-hidden="true" />

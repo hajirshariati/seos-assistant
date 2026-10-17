@@ -87,6 +87,3 @@ export function matchColorValues(colorValues = [], wants = []) {
   return null;
 }
 
-export function isColorFilterKey(key) {
-  return /^(colou?r|colou?r[\s_-]?family|colou?r_fallback)$/i.test(String(key || "").trim());
-}
