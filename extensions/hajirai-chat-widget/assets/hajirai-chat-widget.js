@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-17 card-v2');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 ai-bubble');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -162,11 +162,20 @@ return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',he
 var avatarImg=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
+/* A clean AI sparkle: one four-point star and a small twinkle. */
+function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
 /* Build launcher */
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
 launcher.style.width=LWIDTH+'px';
 launcher.style.maxWidth='calc(100vw - 32px)';
-launcher.innerHTML='<div class="ai-chat-launcher__icon">'+avatarImg+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button class="ai-chat-launcher__close" aria-label="Dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+launcher.setAttribute('role','button');
+launcher.setAttribute('tabindex','0');
+launcher.setAttribute('aria-label','Open the shopping assistant chat');
+/* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
+   a small dark circle with a softly breathing AI sparkle — remembered
+   across pages. */
+launcher.innerHTML='<div class="ai-chat-launcher__icon">'+avatarImg+'</div><span class="ai-chat-launcher__text">'+esc(LPLACE)+'</span><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiSparkle()+'</span>';
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);
@@ -208,6 +217,48 @@ panel.appendChild(menu);
 document.body.appendChild(overlay);
 document.body.appendChild(panel);
 document.body.appendChild(launcher);
+
+/* Bubble mode: remembered per shopper. The bubble keeps clear of other
+   apps' floating buttons in its corner (help chat, feedback tabs): it sits
+   just above the highest one it would otherwise overlap. */
+var LBUBBLE_KEY='hajirai_launcher_bubble';
+function setLauncherBubble(on){
+  try{if(on)localStorage.setItem(LBUBBLE_KEY,'1');else localStorage.removeItem(LBUBBLE_KEY)}catch(e){}
+  launcher.classList.toggle('is-bubble',!!on);
+  launcher.setAttribute('aria-label',on?'Open the AI shopping assistant':'Open the shopping assistant chat');
+  placeLauncher();
+}
+function floatingAt(x,y){
+  var found=[];
+  var list=document.elementsFromPoint?document.elementsFromPoint(x,y):[];
+  var vw=window.innerWidth,vh=window.innerHeight;
+  for(var i=0;i<list.length;i++){
+    var el=list[i];
+    if(el===document.body||el===document.documentElement||launcher.contains(el)||panel.contains(el)||el===overlay)continue;
+    var r=el.getBoundingClientRect();
+    if(r.width*r.height>vw*vh*0.25)continue;/* page content, not a floating button */
+    for(var a=el;a&&a!==document.body;a=a.parentElement){
+      var pos=getComputedStyle(a).position;
+      if(pos==='fixed'||pos==='sticky'){found.push(r);break}
+    }
+  }
+  return found;
+}
+function placeLauncher(){
+  launcher.style.bottom='';
+  if(!launcher.classList.contains('is-bubble'))return;
+  for(var pass=0;pass<4;pass++){
+    var r=launcher.getBoundingClientRect();
+    var hits=[].concat(floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
+    if(!hits.length)return;
+    var top=Math.min.apply(null,hits.map(function(h){return h.top}));
+    launcher.style.bottom=Math.round(window.innerHeight-top+12)+'px';
+  }
+}
+try{if(localStorage.getItem(LBUBBLE_KEY)==='1')launcher.classList.add('is-bubble')}catch(e){}
+window.addEventListener('resize',placeLauncher);
+/* Other apps' buttons often load after us. */
+setTimeout(placeLauncher,1500);setTimeout(placeLauncher,4000);
 
 /* Hide on mobile if configured */
 var isMobileHidden=false;
@@ -630,8 +681,7 @@ function choiceButtonsHtml(options){
   return choicesWrap(ch);
 }
 
-/* A clean outline garment — "see it in an outfit". */
-function vizIcon(){return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 3.5 16 2a4 4 0 0 1-8 0L3.6 3.5a2 2 0 0 0-1.3 2.2l.6 3.5a1 1 0 0 0 1 .8H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.1a1 1 0 0 0 1-.8l.6-3.5a2 2 0 0 0-1.3-2.2z"/></svg>';}
+function vizIcon(){return aiSparkle().replace('<svg ','<svg width="15" height="15" ');}
 function vizImageIcon(){return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';}
 function vizLoadingHtml(step){
   // Reuses the `.ai-chat-viz-result` shell so the loading state occupies the
@@ -1730,10 +1780,11 @@ sendBtn.disabled=false;
 
 /* Events */
 launcher.addEventListener('click',function(e){
-if(e.target.closest('.ai-chat-launcher__close')){launcher.classList.add('hidden');return}
+if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true);return}
 toggle(true);
 });
 closeBtn.addEventListener('click',function(){toggle(false)});
+launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();toggle(true)}});
 overlay.addEventListener('click',function(){toggle(false)});
 sendBtn.addEventListener('click',sendMessage);
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});

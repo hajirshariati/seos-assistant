@@ -2877,3 +2877,105 @@ a.ai-chat-product-title {
 .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card.has-inline-picker .ai-chat-product-info > .ai-chat-product-cta {
   display: none !important;
 }
+
+/* ================================================================
+   LAUNCHER — in front of other apps; the × folds it into a bubble
+   ================================================================ */
+.ai-chat-launcher {
+  z-index: 2147483647;
+}
+.ai-chat-launcher__orb {
+  display: none;
+}
+.ai-chat-launcher.is-bubble {
+  left: auto !important;
+  right: 20px !important;
+  width: 56px !important;
+  height: 56px;
+  max-width: none !important;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #111;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  transform: none !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.25s ease, bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.ai-chat-launcher--bottom-left.is-bubble {
+  right: auto !important;
+  left: 20px !important;
+}
+.ai-chat-launcher.is-bubble > :not(.ai-chat-launcher__orb) {
+  display: none !important;
+}
+@media (hover: hover) {
+  .ai-chat-launcher.is-bubble:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28), 0 2px 4px rgba(0, 0, 0, 0.18);
+  }
+}
+.ai-chat-launcher.is-bubble.hidden {
+  opacity: 0;
+  transform: scale(0.8) !important;
+}
+.ai-chat-launcher.is-bubble:focus-visible {
+  outline: 2px solid var(--ai-chat-primary, #2d6b4f);
+  outline-offset: 3px;
+}
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+}
+/* A soft band of light slowly circling inside the bubble… */
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 220deg, rgba(255, 255, 255, 0.22) 290deg, transparent 340deg);
+  animation: aiChatOrbSpin 5s linear infinite;
+}
+/* …and the sparkle gently breathing, its small star twinkling. */
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb svg {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  animation: aiChatOrbBreathe 3.2s ease-in-out infinite;
+}
+.ai-chat-launcher.is-bubble .ai-chat-twinkle {
+  transform-origin: 19px 5px;
+  animation: aiChatTwinkle 3.2s ease-in-out infinite;
+}
+@keyframes aiChatOrbSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes aiChatOrbBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@keyframes aiChatTwinkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@media (max-width: 600px) {
+  .ai-chat-launcher.is-bubble {
+    right: 16px !important;
+  }
+  .ai-chat-launcher--bottom-left.is-bubble {
+    left: 16px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-launcher.is-bubble .ai-chat-launcher__orb::before,
+  .ai-chat-launcher.is-bubble .ai-chat-launcher__orb svg,
+  .ai-chat-launcher.is-bubble .ai-chat-twinkle {
+    animation: none;
+  }
+}
