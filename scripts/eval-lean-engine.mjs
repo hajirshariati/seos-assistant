@@ -342,7 +342,7 @@ await test("order lookup: products and prices from the order are facts, not inve
 await test("guided finder result can be shown as a card; widget events pass through", async () => {
   const finder = {
     definition: { name: "recommend_orthotic", description: "finder", input_schema: { type: "object", properties: {} } },
-    run: async () => ({ masterSku: "L100W", product: { handle: H["Women's Train Orthotics W/ Metatarsal Support"], title: "Women's Train Orthotics W/ Metatarsal Support" }, _events: [{ type: "fit_report", recommendedSize: "W8" }] }),
+    run: async () => ({ line: "Train", pick: { handle: H["Women's Train Orthotics W/ Metatarsal Support"], title: "Women's Train Orthotics W/ Metatarsal Support" }, notes: [], _events: [{ type: "fit_report", recommendedSize: "W8" }] }),
   };
   const s = scripted([
     { stop_reason: "tool_use", content: [tu("t1", "recommend_orthotic", { gender: "women" })] },

@@ -1,0 +1,3160 @@
+{
+ "note": "Live Aetrex orthotic catalog (read-only snapshot, 2026-10-17) in the shape fetchOrthoticProducts returns.",
+ "products": [
+  {
+   "title": "Men's Active Orthotics W/ Metatarsal Support",
+   "handle": "l1905m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1905M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Active Posted Orthotics",
+   "handle": "l1920m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1920M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Active Posted Orthotics W/ Metatarsal Support",
+   "handle": "l1925m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1925M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Active Orthotics - Insole for Athletic Footwear",
+   "handle": "l1900m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1900M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Active Posted Orthotics",
+   "handle": "l1920w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1920W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Active Posted Orthotics W/ Metatarsal Support",
+   "handle": "l1925w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1925W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Active Orthotics - Insole for Athletic Footwear",
+   "handle": "l1900w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1900W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Active Orthotics W/ Metatarsal Support",
+   "handle": "l1905w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1905W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers, and Intermediate Activties</li><li>Best for: Walking shoes, Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Active Orthotics are designed with shock absorption and superior cushioning to provide comfort and support in athletic, walking and casual footwear. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Casual Comfort Posted Orthotics W/ Metatarsal Support",
+   "handle": "l625m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L625M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed to provide maximum foot comfort and protection in casual and comfort footwear. These tri-density orthotics feature a high-tech Carbosan\u00ae top cover that cushions the foot and absorbs shock forces. This innovative material is anti-odor and anti-bacterial to help keep your feet in a healthy, clean environment. Aetrex Casual Orthotics are light-weight, resilient and provide unmatched support "
+   }
+  },
+  {
+   "title": "Men's Casual Comfort Posted Orthotics",
+   "handle": "l620m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L620M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed to provide maximum foot comfort and protection in casual and comfort footwear. These tri-density orthotics feature a high-tech Carbosan\u00ae top cover that cushions the foot and absorbs shock forces. This innovative material is anti-odor and anti-bacterial to help keep your feet in a healthy, clean environment. Aetrex Casual Orthotics are light-weight, resilient and provide unmatched support "
+   }
+  },
+  {
+   "title": "Men's Casual Comfort Orthotics W/ Metatarsal Support",
+   "handle": "l605m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L605M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed to provide maximum foot comfort and protection in casual and comfort footwear. These tri-density orthotics feature a high-tech Carbosan\u00ae top cover that cushions the foot and absorbs shock forces. This innovative material is anti-odor and anti-bacterial to help keep your feet in a healthy, clean environment. Aetrex Casual Orthotics are light-weight, resilient and provide unmatched support "
+   }
+  },
+  {
+   "title": "Men's Casual Orthotics - Insole For Everyday Shoes",
+   "handle": "l600m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L600M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed to provide maximum foot comfort and protection in casual and comfort footwear. These tri-density orthotics feature a high-tech Carbosan\u00ae top cover that cushions the foot and absorbs shock forces. This innovative material is anti-odor and anti-bacterial to help keep your feet in a healthy, clean environment. Aetrex Casual Orthotics are light-weight, resilient and provide unmatched support "
+   }
+  },
+  {
+   "title": "Women's Casual Comfort Posted Orthotics",
+   "handle": "l620w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L620W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Casual Comfort Orthotics are designed for everyday wear and provides optimal support and cushioning. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics are best for sneakers, walking shoes, everyday shoes and boots."
+   }
+  },
+  {
+   "title": "Women's Casual Comfort Posted Orthotics W/ Metatarsal Support",
+   "handle": "l625w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L625W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Casual Comfort Orthotics are designed for everyday wear and provides optimal support and cushioning. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics are best for sneakers, walking shoes, everyday shoes and boots."
+   }
+  },
+  {
+   "title": "Women's Casual Comfort Orthotics W/ Metatarsal Support",
+   "handle": "l605w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L605W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Casual Comfort Orthotics are designed for everyday wear and provides optimal support and cushioning. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics are best for sneakers, walking shoes, everyday shoes and boots."
+   }
+  },
+  {
+   "title": "Women's Casual Orthotics - Insole For Everyday Shoes",
+   "handle": "l600w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L600W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday Activities</li><li>Best for: Sneakers, Walking shoes, Everyday shoes and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Casual Comfort Orthotics are designed for everyday wear and provides optimal support and cushioning. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics are best for sneakers, walking shoes, everyday shoes and boots."
+   }
+  },
+  {
+   "title": "Unisex Cleats Orthotics - Insole for Sports",
+   "handle": "l1200u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1200D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals playing sports such as baseball, soccer or football</li><li>Best for: Athletic footwear and Cleats</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Cleat Orthotics are the first collection engineered specifically to perform in cleated athletic footwear for sports such as soccer, football and baseball. This orthotic features advanced material technology to help lessen fatigue to your feet and ankles while helping to absorb the shock and friction often associated with blisters."
+   }
+  },
+  {
+   "title": "Unisex Cleats Med/High Arch W/ Metatarsal Support",
+   "handle": "l1205u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1205D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals playing sports such as baseball, soccer or football</li><li>Best for: Athletic footwear and Cleats</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Cleat Orthotics are the first collection engineered specifically to perform in cleated athletic footwear for sports such as soccer, football and baseball. This orthotic features advanced material technology to help lessen fatigue to your feet and ankles while helping to absorb the shock and friction often associated with blisters."
+   }
+  },
+  {
+   "title": "Unisex Cleats Posted Orthotics",
+   "handle": "l1220u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1220D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals playing sports such as baseball, soccer or football</li><li>Best for: Athletic footwear and Cleats</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Cleat Orthotics are the first collection engineered specifically to perform in cleated athletic footwear for sports such as soccer, football and baseball. This orthotic features advanced material technology to help lessen fatigue to your feet and ankles while helping to absorb the shock and friction often associated with blisters."
+   }
+  },
+  {
+   "title": "Men's Conform Orthotics - Insole For Low-risk Diabetes",
+   "handle": "l200m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L200M06",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Men's Conform Orthotics W/ Metatarsal Support",
+   "handle": "l205m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L205M06",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Ball of Foot Pain\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Men's Conform Posted Orthotics W/ Metatarsal Support",
+   "handle": "l225m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L225M06",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Ball of Foot Pain\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Men's Conform Posted Orthotics",
+   "handle": "l220m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L220M06",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Men's Compete Orthotics W/ Metatarsal Support",
+   "handle": "l405m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L405M06",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Men's Compete Orthotics - Insoles for Active Lifestyles",
+   "handle": "l400m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L400M06",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Golfers, Hikers, Walkers and Everyday Activities</li><li>Best for: Golf Shoes, Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption. Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pro"
+   }
+  },
+  {
+   "title": "Men's Compete Posted Orthotics W/ Metatarsal Support",
+   "handle": "l425m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L425M06",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Men's Compete Posted Orthotics",
+   "handle": "l420m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L420M06",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Women's Compete Orthotics W/ Metatarsal Support",
+   "handle": "l405w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L405W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\",\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Women's Compete Orthotics - Insoles for Active Lifestyles",
+   "handle": "l400w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L400W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Golfers, Hikers, Walkers and Everyday Activities</li><li>Best for: Golf Shoes, Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Pro-Shox\u00ae top cover for superior cushioning and shock absorption.  Pro-Shox\u2019s high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot problems."
+   }
+  },
+  {
+   "title": "Women's Compete Posted Orthotics W/ Metatarsal Support",
+   "handle": "l425w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L425W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Women's Compete Posted Orthotics",
+   "handle": "l420w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L420W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Hikers, Walkers and Everyday Activities</li><li>Best for: Hiking boots, Walking shoes, Everyday shoes, sneakers and boots</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Designed specifically for comfort, support and weight redistribution in athletic, walking and comfort footwear.  These tri-density orthotics feature a Copper Guard top cover and a layer of Pro-Shox\u00ae for superior cushioning and shock absorption.  Copper Guard's high-tech polyester fibers wick moisture away from the foot and provide a cool, friction free surface to prevent blisters and other foot pr"
+   }
+  },
+  {
+   "title": "Women's Conform Orthotics W/ Metatarsal Support",
+   "handle": "l205w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L205W04",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Ball of Foot Pain\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Women's Conform Orthotics -  Insole For Low-risk Diabetes",
+   "handle": "l200w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L200W04",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Women's Conform Posted Orthotics W/ Metatarsal Support",
+   "handle": "l225w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L225W05",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Ball of Foot Pain\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Women's Conform Posted Orthotics",
+   "handle": "l220w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L220W04",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Those with diabetes related foot issues</li><li>Best for: Sneakers and Everyday Shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Conform Orthotics are designed to help comfort and protect those with diabetes related foot issues. Constructed with a Plastazote\u00ae top cover that customizes to the foot during the gait cycle and transfers pressure away from hot spots for extra protection. These orthotics feature a molded cork blended core and a Plastazote X-Firm bottom for superior resilience and shock absorption. This orth"
+   }
+  },
+  {
+   "title": "Men's Dress Orthotics W/ Metatarsal Support",
+   "handle": "l505m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L505M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Dress Posted Orthotics",
+   "handle": "l520m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L520M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Dress Posted Orthotics W/ Metatarsal Support",
+   "handle": "l525m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L525M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Dress Orthotics - 3/4 Insole for Dress Shoes",
+   "handle": "l500m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L500M06",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Dress Orthotics W/ Metatarsal Support",
+   "handle": "l505w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L505W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex arch support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis."
+   }
+  },
+  {
+   "title": "Women's Dress Posted Orthotics",
+   "handle": "l520w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L520W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Dress Posted Orthotics W/ Metatarsal Support",
+   "handle": "l525w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L525W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex arch support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis."
+   }
+  },
+  {
+   "title": "Women's Dress Orthotics - 3/4 Insole for Dress Shoes",
+   "handle": "l500w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L500W04",
+      "price": "64.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Shoes with narrow toe areas or no removable depth</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Dress Orthotics are designed to provide maximum support in footwear with narrow toe areas or that does not have a removable foot beds. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Extreme Comfort Orthotics - Insoles for Superior Cushioning",
+   "handle": "l6200m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L6200M06",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Athletic Activities</li><li>Best for: Sports shoes, athletic shoes, sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Heel Pain\",\"Plantar Fasciitis\"]"
+   },
+   "summary": {
+    "value": "Aetrex Extreme Comfort Orthotics are engineered to provide superior cushioning under foot so you can feel like you are walking on pillows. Featuring slow recovery IQ150\u2122 Memory Foam, these orthotics immediately customize to your feet to help offer a pressure free environment in your shoes. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help preve"
+   }
+  },
+  {
+   "title": "Women's Extreme Comfort Orthotics - Insoles for Superior Cushioning",
+   "handle": "l6200w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L6200W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Athletic Activities</li><li>Best for: Sports shoes, athletic shoes, sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Extreme Comfort Orthotics are engineered to provide superior cushioning under foot so you can feel like you are walking on pillows. Featuring slow recovery IQ150\u2122 Memory Foam, these orthotics immediately customize to your feet to help offer a pressure free environment in your shoes. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help preve"
+   }
+  },
+  {
+   "title": "Women's Fashion Orthotics W/ Metatarsal Support",
+   "handle": "l105w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L105W05",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Pumps, Heels, Ballet Flats, Dress shoes and shoes with no removable foot bed</li><li>How to Use: Begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "<p>Aetrex Women\u2019s Fashion Orthotics help provide much needed comfort and support for your favorite fashion footwear. These innovative orthotics are flexible, ultra light-weight and designed for support and pressure relief. The unique Cobra shape and built-in signature Aetrex Arch Support comfortably balances your feet and helps provide proper body alignment. Made from soft, breathable full grain l"
+   }
+  },
+  {
+   "title": "Women's Fashion Orthotics - Insole for Heels",
+   "handle": "l100w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L100W05",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Dress shoes and shoes with no removable foot bed</li><li>How to Use: Begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Women\u2019s Fashion Orthotics help provide much needed comfort and support for your favorite fashion footwear. These innovative orthotics are flexible, ultra light-weight and designed for support and pressure relief. The unique Cobra shape and built-in signature Aetrex Arch&#160;Support comfortably balances your feet and helps provide proper body alignment. Made from soft, breathable full grain"
+   }
+  },
+  {
+   "title": "Women's Fashion Posted Orthotics - Insole for Dress Shoes",
+   "handle": "l120w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L120W05",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Dress shoes and shoes with no removable foot bed</li><li>How to Use: Begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Plantar Fasciitis\",\"High Instep\",\"Arch Pain\",\"Heel Pain\",\"Pregnancy\"]"
+   },
+   "summary": {
+    "value": "Aetrex Women\u2019s Fashion Orthotics help provide much needed comfort and support for your favorite fashion footwear. These innovative orthotics are flexible, ultra light-weight and designed for support and pressure relief. The unique Cobra shape and built-in signature Aetrex Arch Support comfortably balances your feet and helps provide proper body alignment. Made from soft, breathable full grain leat"
+   }
+  },
+  {
+   "title": "Men's In-Style Orthotics - Insole for Dress Shoes",
+   "handle": "l100m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L100M08",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Dress shoes and shoes with no removable foot bed</li><li>How to Use: Begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex In-Style Orthotics are designed for providing support in fashion forward shoes that have little or no removable depth. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's In-Style Orthotics W/ Metatarsal Support",
+   "handle": "l105m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L105M08",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals and Fashionistas</li><li>Best for: Pumps, Heels, Ballet Flats, Dress shoes and shoes with no removable foot bed</li><li>To use your Fashion Orthotics, begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex In-Style Orthotics are designed for providing support in fashion forward shoes that have little or no removable depth. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's In-Style Posted Orthotics - Insole for Dress Shoes",
+   "handle": "l120m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L120M08",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Professionals</li><li>Best for: Dress shoes and shoes with no removable foot bed</li><li>How to Use: Begin by removing the footbed in your shoes, if possible. Replace the insole with your Aetrex Fashion Orthotics. When placing your new Cobra shaped orthotics in your shoes, make sure the arch is placed on the inside of the shoe.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Plantar Fasciitis\",\"High Instep\",\"Arch Pain\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex In-Style Orthotics are designed for providing support in fashion forward shoes that have little or no removable depth. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Memory Foam Orthotics - Insole for Extra Cushioning",
+   "handle": "l2200m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2200M07",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs, and those who are on their feet often</li><li>Best for: Everyday shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia.  L2200 - Our neutral orthotic option, great "
+   }
+  },
+  {
+   "title": "Men's Memory Foam Posted Orthotics",
+   "handle": "l2220m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2220M07",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs, and those who are on their feet often</li><li>Best for: Everyday shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Memory Foam Orthotics W/ Metatarsal Support",
+   "handle": "l2205m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2205M07",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs, and those who are on their feet often</li><li>Best for: Everyday shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Memory Foam Posted Orthotics W/ Metatarsal Support",
+   "handle": "l2225m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2225M07",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs, and those who are on their feet often</li><li>Best for: Everyday shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Memory Foam Posted Orthotics",
+   "handle": "l2220w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2220W05",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday Shoes and Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Memory Foam Posted Orthotics W/ Metatarsal Support",
+   "handle": "l2225w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2225W05",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday Shoes and Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Women's Memory Foam Orthotics - Insole for Extra Cushioning",
+   "handle": "l2200w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2200W05",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday Shoes and Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Memory Foam Orthotics W/ Metatarsal Support",
+   "handle": "l2205w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2205W05",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday Shoes and Sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Memory Foam Orthotics are designed to provide extraordinary comfort and support for those who are on their feet frequently and are experiencing pain or discomfort. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Performance Comfort Orthotics - Insoles for Athletic Activities",
+   "handle": "l2900m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2900M07",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\",\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Athletic Activities</li><li>Best for: Sports shoes, athletic shoes, sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Heel Pain\",\"Plantar Fasciitis\"]"
+   },
+   "summary": {
+    "value": "Aetrex Performance Comfort Orthotics are engineered to help you stay injury free to maintain your fitness levels and overall health. These light-weight, resilient orthotics provide superior cushioning, shock absorption, and arch support during high impact activities. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain suc"
+   }
+  },
+  {
+   "title": "Women's Performance Comfort Orthotics - Insoles for Athletic Activities",
+   "handle": "l2900w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2900W05",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\",\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Athletic Activities</li><li>Best for: Sports shoes, athletic shoes, sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Performance Comfort Orthotics are engineered to help you stay injury free to maintain your fitness levels and overall health. These light-weight, resilient orthotics provide superior cushioning, shock absorption, and arch support during high impact activities. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain suc"
+   }
+  },
+  {
+   "title": "Men's Premium Casual Orthotics - Insoles for Everyday Activities",
+   "handle": "l1600m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1600M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": null,
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday activities</li><li>Best for: Everyday causal shoes, Walking shoes and Boots.</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Casual Orthotics are engineered with slow recovery IQ150 Memory Foam, that immediately customizes to your foot to help offer a pressure free environment in your shoes. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Premium Casual Orthotics - Insoles for Everyday Activities",
+   "handle": "l1600w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1600W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": null,
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Everyday activities</li><li>Best for: Everyday causal shoes, Walking shoes and Boots.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Casual Orthotics are engineered with slow recovery IQ150 Memory Foam, that immediately customizes to your foot to help offer a pressure free environment in your shoes. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Premium Memory Foam Posted Orthotics W/ Metatarsal Support",
+   "handle": "l2325m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2325M07",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Premium Memory Foam Posted Orthotics",
+   "handle": "l2320m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2320M07",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Premium Memory Foam Orthotics - Insole for Extra Comfort",
+   "handle": "l2300m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2300M07",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Premium Memory Foam Orthotics W/ Metatarsal Support",
+   "handle": "l2305m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2305M07",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday causal shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue.This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Women's Premium Memory Foam Posted Orthotics",
+   "handle": "l2320w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2320W05",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Premium Memory Foam Posted Orthotics W/ Metatarsal Support",
+   "handle": "l2325w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2325W05",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Women's Premium Memory Foam Orthotics - Insole for Extra Comfort",
+   "handle": "l2300w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2300W05",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday causal shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Premium Memory Foam Orthotics W/ Metatarsal Support",
+   "handle": "l2305w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2305W05",
+      "price": "79.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>The most memory foam of any orthotic we sell</li><li>Recommended for: Walkers, Nurses, Doctors, Teachers, Chefs and those who are on their feet often</li><li>Best for: Everyday casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Premium Memory Foam Orthotics are designed to provide ultimate comfort and cushioning with 43% more memory foam in the forefoot for those experiencing foot discomfort or fatigue. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Speed Posted Orthotics W/ Metatarsal Support",
+   "handle": "l725m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L725M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Men's Speed Orthotics - Insole For Running",
+   "handle": "l700m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L700M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Men's Speed Orthotics W/ Metatarsal Support",
+   "handle": "l705m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L705M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Men's Speed Posted Orthotics",
+   "handle": "l720m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L720M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Women's Speed Posted Orthotics",
+   "handle": "l720w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L720W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Women's Speed Posted Orthotics W/ Metatarsal Support",
+   "handle": "l725w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L725W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Women's Speed Orthotics - Insole For Running",
+   "handle": "l700w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L700W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Women's Speed Orthotics W/ Metatarsal Support",
+   "handle": "l705w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L705W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Running\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Running, Cross Country, HIIT workouts, Sprints, Interval Training</li><li>Best for: Running shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Speed Orthotics are designed for runners that want to enhance their competitive edge. Our Speed Orthotic will help prevent injury, alleviate discomfort and help reduce fatigue while running. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. These orthotics a"
+   }
+  },
+  {
+   "title": "Unisex Thinsoles Orthotics - Insole for Shoes Without Removable Insoles",
+   "handle": "l1300u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1300D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals with shoes that have little or no removable depth</li><li>Best for: Dress shoes, Shoes with no removable footbed or with narrow toe areas</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Thinsoles Orthotics are designed to provide maximum comfort and support in footwear styles that offer little or no removable depth. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Unisex Thinsoles Posted Orthotics",
+   "handle": "l1320u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1320D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals with shoes that have little or no removable depth</li><li>Best for: Dress shoes, Shoes with no removable footbed or with narrow toe areas</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Thinsoles Orthotics are designed to provide maximum comfort and support in footwear styles that offer little or no removable depth. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Unisex Thinsoles Orthotics W/ Metatarsal Support",
+   "handle": "l1305u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1305D",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Social\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals with shoes that have little or no removable depth</li><li>Best for: Dress shoes, Shoes with no removable footbed or with narrow toe areas</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Thinsoles Orthotics are designed to provide maximum comfort and support in footwear styles that offer little or no removable depth. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Train Orthotics W/ Metatarsal Support",
+   "handle": "l805m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L805M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym Workouts, Training Sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Train Posted Orthotics",
+   "handle": "l820m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L820M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym Workouts, Training Sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Train Posted Orthotics W/ Metatarsal Support",
+   "handle": "l825m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L825M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym Workouts, Training Sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Train Orthotics - Insole for Exercise",
+   "handle": "l800m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L800M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym Workouts, Training Sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Train Posted Orthotics",
+   "handle": "l820w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L820W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym workouts and Training sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Train Posted Orthotics W/ Metatarsal Support",
+   "handle": "l825w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L825W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym workouts and Training sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Train Orthotics - Insole for Exercise",
+   "handle": "l800w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L800W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym workouts and Training sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Train Orthotics W/ Metatarsal Support",
+   "handle": "l805w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L805W05",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Gym workouts and Training sessions</li><li>Best for: Gym sneakers, Training shoes, Athletic sneakers, Tennis shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Train Orthotics are designed for gym goers wanting comfort and injury prevention during workouts and training sessions. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Women's Plantar Fasciitis Kit",
+   "handle": "women-plantar-fasciitis-kit",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "PFKW05",
+      "price": "145.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Aetrex Orthotic Flips: Built-In Arch Support and designed using light-weight UltraSKY EVA Foam for comfort  durability *Color & Style May Vary</li><li>Flips have a contoured rearfoot to cradle your heel and relieve pressure</li><li>Aetrex Foot Roller: Made from premium materials to help ease pain and promote foot health</li><li>Aetrex Orthotics: Posted heel to help align your body  prevent pain</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "The Aetrex Plantar Fasciitis Kit contains four essential tools to help relieve and prevent Plantar Fasciitis. \n1. Aetrex Premium Orthotics - The best-selling Aetrex Orthotics are designed to help keep the foot in the neutral position throughout the gait cycle and to reduce stretching of the plantar fascia. Within days of use, most people begin experience relief from the pain or discomfort.\n2. Aetr"
+   }
+  },
+  {
+   "title": "Women's Orthotics for Metatarsalgia",
+   "handle": "metatarsalgia-orthotics-women",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L6205W04",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals with metatarsalgia or ball of foot pain</li><li>Best for: Sports shoes, athletic shoes, sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\"]"
+   },
+   "summary": {
+    "value": "Aetrex Metatarsalgia Orthotics are specifically designed to relieve ball-of-foot discomfort with slow recovery memory foam and with a metatarsal pad. These orthotics will immediately customize to your feet to offer a pressure-free environment in your shoes. In addition the strategically placed arch support aligns your body to help support your body from the ground up.  What is metatarsalgia? - Met"
+   }
+  },
+  {
+   "title": "Women's Orthotics for Overpronation",
+   "handle": "overpronation-orthotics-women",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L4640W04",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended For: Individuals with Overpronation, flat feet or low arches</li><li>Best For: Sneakers, Walking shoes, Everyday shoes, boots, and casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Overpronation Orthotics are designed specifically to reduce shock, control overpronation and provide maximum comfort. These orthotics are engineered with medial posting for rearfoot control to help with overpronation.  What is Overpronation? - Overpronation is a common biomechanical condition. It is typically experienced by those with flat feet or low arches and occurs when the arch collaps"
+   }
+  },
+  {
+   "title": "Men's Work Orthotics W/ Metatarsal Support",
+   "handle": "l4605m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L4605M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended For: Standing on concrete, standing for long periods, and those who are on their feet often.</li><li>Best For: Work Boots</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Work Orthotics are designed to help provide the stability and cushioning needed to keep you comfortable, injury-free, and performing your best on the job while standing on concrete for long periods of time. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Work Orthotics -Insoles for all day comfort",
+   "handle": "l4600m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L4600M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended For: Standing on concrete, standing for long periods, and those who are on their feet often.</li><li>Best For: Work Boots</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Work Orthotics are designed to help provide the stability and cushioning needed to keep you comfortable, injury-free, and performing your best on the job while standing on concrete for long periods of time. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Men's Work Posted Orthotics",
+   "handle": "l4620m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L4620M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Work\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended For: Standing on concrete, standing for long periods, and those who are on their feet often.</li><li>Best For: Work Boots</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Work Orthotics are designed to help provide the stability and cushioning needed to keep you comfortable, injury-free, and performing your best on the job while standing on concrete for long periods of time. This orthotic features our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Unisex Edge Orthotics",
+   "handle": "l1800u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1800D",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Walking\",\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Edge Orthotics provide comfort, support and pressure relief in footwear designed for outdoor sports such as skiing, snowboarding, hiking and mountain biking. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "Unisex Edge Orthotics W/ Metatarsal Support",
+   "handle": "l1805u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1805D",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Gym & Training\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Edge Orthotics provide comfort, support and pressure relief in footwear designed for outdoor sports such as skiing, snowboarding, hiking and mountain biking. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Unisex Edge Posted Orthotics",
+   "handle": "l1820u-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1820D",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Walking\",\"Gym & Training\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Edge Orthotics provide comfort, support and pressure relief in footwear designed for outdoor sports such as skiing, snowboarding, hiking and mountain biking. This orthotic features a soft microfiber top cover and our signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Men's Shearling Orthotics - Insoles For Winter Boots",
+   "handle": "l900m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L900M07",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Boots\"]"
+   },
+   "details": {
+    "value": "<ul><li>Best for: Winter boots, walking shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Shearling Orthotics are designed specifically to provide maximum foot comfort and protection. These extraordinary, tri-density orthotics feature a shearling top cover that provides luxurious cushioning and shock absorption. It also wicks moisture and allows your feet to breathe comfortably."
+   }
+  },
+  {
+   "title": "Women's Shearling Orthotics - Insoles For Winter Boots",
+   "handle": "l900w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L900W05",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Boots\"]"
+   },
+   "details": {
+    "value": "<ul><li>Best for: Winter boots, walking shoes and sneakers</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Shearling Orthotics are designed specifically to provide maximum foot comfort and protection. These extraordinary, tri-density orthotics feature a shearling top cover that provides luxurious cushioning and shock absorption. It also wicks moisture and allows your feet to breathe comfortably."
+   }
+  },
+  {
+   "title": "Men's Orthotics for Overpronation",
+   "handle": "overpronation-orthotics-men",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L4640M07",
+      "price": "59.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended For: Individuals with Overpronation, flat feet or low arches</li><li>Best For: Sneakers, Walking shoes, Everyday shoes, boots, and casual shoes</li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "Aetrex Overpronation Orthotics are designed specifically to reduce shock, control overpronation and provide maximum comfort. These orthotics are engineered with medial posting for rearfoot control to help with overpronation.  What is Overpronation? - Overpronation is a common biomechanical condition. It is typically experienced by those with flat feet or low arches and occurs when the arch collaps"
+   }
+  },
+  {
+   "title": "Men's Plantar Fasciitis Kit",
+   "handle": "men-plantar-fasciitis-kit",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "PFKM07",
+      "price": "145.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\",\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Aetrex Orthotic Flips: Built-In Arch Support and designed using light-weight UltraSKY EVA Foam for comfort  durability *Color & Style May Vary</li><li>Flips have a contoured rearfoot to cradle your heel and relieve pressure</li><li>Aetrex Foot Roller: Made from premium materials to help ease pain and promote foot health</li><li>Aetrex Orthotics: Posted heel to help align your body  prevent pain</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "The Aetrex Plantar Fasciitis Kit contains four essential tools to help relieve and prevent Plantar Fasciitis. \n1. Aetrex Premium Orthotics - The best-selling Aetrex Orthotics are designed to help keep the foot in the neutral position throughout the gait cycle and to reduce stretching of the plantar fascia. Within days of use, most people begin experience relief from the pain or discomfort.\n2. Aetr"
+   }
+  },
+  {
+   "title": "First Generation Men's Customizable Posted Orthotics",
+   "handle": "ll2420m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2420M06",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Induviduals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>How to Use: Begin by removing gel pods, found on the bottom of the orthotic, in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "First Generation Men's Customizable Posted Orthotics W/ Metatarsal Support",
+   "handle": "ll2425m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2425M06",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Induviduals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>How to Use: Begin by removing gel pods, found on the bottom of the orthotic, in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "First Generation Men's Customizable Orthotics - Insole for Personalized Comfort",
+   "handle": "ll2400m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2400M06",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>How to Use: Begin by removing gel pods, found on the bottom of the orthotic, in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "First Generation Men's Customizable Orthotics W/ Metatarsal Support",
+   "handle": "ll2405m-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2405M06",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Men"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Induviduals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>How to Use: Begin by removing gel pods, found on the bottom of the orthotic, in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics offer personalized comfort and pressure relief with patented Mozaic\u00ae technology. Featuring removable gel pods for high-pressure areas like the heel or ball of the foot, they provide easy discomfort relief. With strategic arch support and a CopperGuard\u00ae top cover, these orthotics help align your body and keep your feet healthy and clean. "
+   }
+  },
+  {
+   "title": "First Generation Women's Customizable Posted Orthotics",
+   "handle": "ll2420w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2420W04",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>To use your Customizable Orthotics, begin by removing gel pods in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located. Next remove the insole if possible and place your new Customizable orthotics inside. If you shoes do not have a removable insole, take a look at our thinner orthotic, the Casual Comfort Orthotic.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "First Generation Women's Customizable Posted Orthotics W/ Metatarsal Support",
+   "handle": "ll2425w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2425W04",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>To use your Customizable Orthotics, begin by removing gel pods in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located. Next remove the insole if possible and place your new Customizable orthotics inside. If you shoes do not have a removable insole, take a look at our thinner orthotic, the Casual Comfort Orthotic.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Flat Feet\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "First Generation Women's Customizable Orthotics - Insole for Personalized Comfort",
+   "handle": "ll2400w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2400W04",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>To use your Customizable Orthotics, begin by removing gel pods in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located. Next remove the insole if possible and place your new Customizable orthotics inside. If you shoes do not have a removable insole, take a look at our thinner orthotic, the Casual Comfort Orthotic.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia."
+   }
+  },
+  {
+   "title": "First Generation Women's Customizable Orthotics W/ Metatarsal Support",
+   "handle": "ll2405w-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "LL2405W04",
+      "price": "74.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Women"
+   },
+   "activity": {
+    "value": "[\"Walking\"]"
+   },
+   "details": {
+    "value": "<ul><li>Recommended for: Individuals seeking customized relief</li><li>Best for: Sneakers, Athletic shoes, Walking shoes, Tennis shoes</li><li>To use your Customizable Orthotics, begin by removing gel pods in pressure point areas. It is recommended to find a foot scanner nearest you to learn where your pressure point areas are located. Next remove the insole if possible and place your new Customizable orthotics inside. If you shoes do not have a removable insole, take a look at our thinner orthotic, the Casual Comfort Orthotic.</li></ul>"
+   },
+   "helps": {
+    "value": "[\"High Instep\",\"Metatarsalgia\",\"Shock Absorption\",\"Arch Pain\",\"Pregnancy\",\"Plantar Fasciitis\",\"Heel Pain\"]"
+   },
+   "summary": {
+    "value": "Aetrex Customizable Orthotics are designed with personalized comfort in mind and are engineered to help alleviate specific pressure points by removing gel pods in areas of discomfort. This orthotic features our patented Mosaic technology and signature Aetrex Arch Support to help biomechanically align your body & help prevent common foot pain such as Plantar Fasciitis, Arch Pain and Metatarsalgia. "
+   }
+  },
+  {
+   "title": "Kids Orthotics",
+   "handle": "l1700y-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1700C1213",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\"]"
+   },
+   "summary": {
+    "value": "Aetrex Kids Orthotics are specifically designed for children, helping them stay active and comfortable on their feet. Developed to provide superior cushioning, shock absorption and premium arch support, these orthotics help prevent injuries and provide the foundation needed for healthy, growing feet. Aetrex Kids Orthotics are made with an AeroCell\u2122 base for cushioning and energy return to absorb i"
+   }
+  },
+  {
+   "title": "Kids Orthotics W/ Metatarsal Support",
+   "handle": "l1705y-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1705C1213",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\"]"
+   },
+   "summary": {
+    "value": "Aetrex Kids Orthotics are specifically designed for children, helping them stay active and comfortable on their feet. Developed to provide superior cushioning, shock absorption and premium arch support, these orthotics help prevent injuries and provide the foundation needed for healthy, growing feet. Aetrex Kids Orthotics are made with an AeroCell\u2122 base for cushioning and energy return to absorb i"
+   }
+  },
+  {
+   "title": "Kids Posted Orthotics",
+   "handle": "l1720y-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L1720C1213",
+      "price": "49.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Everyday Comfort\"]"
+   },
+   "details": {
+    "value": "<ul></ul>"
+   },
+   "helps": {
+    "value": "[\"Shock Absorption\"]"
+   },
+   "summary": {
+    "value": "Aetrex Kids Orthotics are specifically designed for children, helping them stay active and comfortable on their feet. Developed to provide superior cushioning, shock absorption and premium arch support, these orthotics help prevent injuries and provide the foundation needed for healthy, growing feet. Aetrex Kids Orthotics are made with an AeroCell\u2122 base for cushioning and energy return to absorb i"
+   }
+  },
+  {
+   "title": "Bauer Aetrex Skate Orthotics",
+   "handle": "l2500x-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2500X01",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Skating\"]"
+   },
+   "details": {
+    "value": "<ul><li>Cupped heel helps balance & stability</li><li>Engineered in partnership with Bauer Hockey</li><li>Recommended for skaters </li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "BAUER // Aetrex Skate Orthotics are tailored to help generate a stronger, more powerful stride by reducing negative space in the boot and help stablize the foot \u2014 enhancing your performance output through every stride on the ice. This orthotic features anatomically placed arch support for proper alignment.\nFit B - For skaters with median arch height and minimal pronation. "
+   }
+  },
+  {
+   "title": "Bauer Aetrex Skate Orthotics W/ Metatarsal Support",
+   "handle": "l2505x-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2505X01",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Skating\"]"
+   },
+   "details": {
+    "value": "<ul><li>Cupped heel helps balance & stability</li><li>Metatarsal support reduces pressure</li><li>Engineered in partnership with Bauer Hockey</li><li>Recommended for skaters </li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "BAUER // Aetrex Skate Orthotics are tailored to help generate a stronger, more powerful stride by reducing negative space in the boot and help stablize the foot \u2014 enhancing your performance output through every stride on the ice. This orthotic features anatomically placed arch support for proper alignment.\nFit C - For skaters with high arches, little-to-no pronation, and high forefoot pressure."
+   }
+  },
+  {
+   "title": "Bauer Aetrex Skate Posted Orthotics",
+   "handle": "l2520x-m",
+   "variants": {
+    "nodes": [
+     {
+      "sku": "L2520X01",
+      "price": "69.95"
+     }
+    ]
+   },
+   "gender": {
+    "value": "Unisex"
+   },
+   "activity": {
+    "value": "[\"Skating\"]"
+   },
+   "details": {
+    "value": "<ul><li>Posted heel to help prevent overpronation</li><li>Engineered in partnership with Bauer Hockey</li><li>Recommended for skaters </li></ul>"
+   },
+   "helps": {
+    "value": "[]"
+   },
+   "summary": {
+    "value": "BAUER // Aetrex Skate Orthotics are tailored to help generate a stronger, more powerful stride by reducing negative space in the boot and help stablize the foot \u2014 enhancing your performance output through every stride on the ice. This orthotic features anatomically placed arch support for proper alignment.\nFit A - For skaters with low-to-flat arches and high pronation."
+   }
+  }
+ ]
+}

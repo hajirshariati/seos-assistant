@@ -48,6 +48,13 @@ export function validateDecisionTree(definition) {
   if (!definition || typeof definition !== "object") {
     return { ok: false, errors: ["definition must be an object"] };
   }
+  // The orthotic finder is built from the catalog, not authored as a tree.
+  if (definition.kind === "catalog_finder") {
+    const f = definition.finder;
+    return Array.isArray(f?.lines) && Array.isArray(f?.items)
+      ? { ok: true, errors: [] }
+      : { ok: false, errors: ["finder data is missing — run Sync from Shopify"] };
+  }
   const { rootNodeId, nodes, resolver } = definition;
 
   if (typeof rootNodeId !== "string" || !rootNodeId) {

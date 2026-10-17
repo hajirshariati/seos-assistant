@@ -8,6 +8,7 @@ import {
   resolveVariantAttributes,
 } from "./AttributeMapping.server";
 import { syncStoreKnowledgeAsync } from "../lib/store-knowledge/sync.server.js";
+import { refreshOrthoticFinderAsync } from "../lib/orthotic-finder.server.js";
 import { fetchMetafieldDefinitions } from "../lib/metafield-definitions.server.js";
 
 // Metafield types per shop ("target:namespace.key" → type), so queries only
@@ -366,6 +367,8 @@ export async function syncCatalog(admin, shop) {
     // Re-learn the store's policies and pages alongside the catalog, so
     // shipping/returns/FAQ answers never depend on a manual upload.
     syncStoreKnowledgeAsync({ admin, shop });
+    // …and the orthotic finder, so a new or retired orthotic is picked up.
+    refreshOrthoticFinderAsync({ admin, shop });
     return { ok: true, count: totalSeen };
   } catch (err) {
     const message = err?.message || String(err);

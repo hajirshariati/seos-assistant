@@ -286,10 +286,12 @@ export async function buildRecommenderTools(shop, { decisionTreeEnabled }) {
     console.error("[recommender] load failed:", err?.message || err);
     return { tools: [], trees: [] };
   }
+  // The orthotic finder (built from the live catalog) brings its own tool.
+  const finder = await import("./orthotic-finder.server.js");
   const tools = [];
   const trees = [];
   for (const r of rows) {
-    const td = recommenderToToolDef(r);
+    const td = finder.isFinderTree(r) ? finder.finderToolDef(r) : recommenderToToolDef(r);
     if (td) {
       tools.push(td);
       trees.push(r);
@@ -404,6 +406,8 @@ export async function executeRecommenderTool({ toolName, input, shop, trees, con
   if (!tree) {
     return { error: `Recommender for intent="${intent}" is not enabled on this shop.` };
   }
+  const finder = await import("./orthotic-finder.server.js");
+  if (finder.isFinderTree(tree)) return finder.runFinderTool({ tree, shop, input });
   if (!tree.definition?.resolver) {
     return { error: "Recommender has no resolver configured." };
   }

@@ -896,5 +896,65 @@
         }
       }
     ]
+  },
+  {
+    "name": "orthotic finder: running, woman, flat feet, ball-of-foot pain → Speed Posted W/ Met (L725W)",
+    "turns": [
+      {
+        "user": "I need an orthotic for my running shoes. I'm a woman with flat feet and pain in the ball of my foot.",
+        "expect": {
+          "products": {
+            "min": 1,
+            "atLeastOneTitleOrHandleMustMatch": "l725w",
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "orthotic finder: work boots, man, high arches, no forefoot pain → Work (L4600M)",
+    "turns": [
+      {
+        "user": "orthotic for my work boots please — I'm a man, high arches, no ball of foot pain",
+        "expect": {
+          "products": {
+            "min": 1,
+            "atLeastOneTitleOrHandleMustMatch": "l4600m",
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "orthotic finder: kid with flat feet → Kids Posted (L1720)",
+    "turns": [
+      {
+        "user": "orthotics for my 8 year old daughter, she has flat feet, no pain in the ball of her foot, for her school sneakers",
+        "expect": {
+          "products": {
+            "min": 1,
+            "atLeastOneTitleOrHandleMustMatch": "l1720",
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "orthotic finder: women's heels, medium arch, no forefoot pain → Fashion (L100W)",
+    "turns": [
+      {
+        "user": "women's orthotic for my heels — medium arch, no ball of foot pain",
+        "expect": {
+          "products": {
+            "min": 1,
+            "atLeastOneTitleOrHandleMustMatch": "l100w",
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer"
+          }
+        }
+      }
+    ]
   }
 ]

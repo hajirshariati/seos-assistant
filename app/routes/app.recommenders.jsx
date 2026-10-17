@@ -23,7 +23,6 @@ import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import {
   listDecisionTrees,
   getDecisionTreeById,
-  getDecisionTreeByIntent,
   repairOrthoticIntent,
   saveDecisionTree,
   deleteDecisionTree,
@@ -34,19 +33,12 @@ import {
   parseCsvToMasterIndex,
   diffMasterIndex,
 } from "../lib/mapping-csv.server";
-import {
-  fetchActiveOrthoticProducts,
-  discoverDistinctValues,
-  buildSuggestedMapping,
-  regenerateMasterIndex,
-} from "../lib/regenerate-orthotic.server";
+import { syncOrthoticFinder, tokenGraphql } from "../lib/orthotic-finder.server";
 import prisma from "../db.server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import BrandHeader from "../components/BrandHeader";
 import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
-import { RecommenderTables, MappingReview } from "../components/RecommenderEditor";
+import { RecommenderTables } from "../components/RecommenderEditor";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -128,30 +120,6 @@ export const action = async ({ request }) => {
     const id = String(formData.get("id") || "").trim();
     if (id) await deleteDecisionTree(session.shop, id);
     return { saved: true };
-  }
-
-  if (intent === "seed_aetrex_orthotic_tree") {
-    try {
-      const seedPath = path.resolve(process.cwd(), "scripts/seeds/aetrex-orthotic-tree.json");
-      const definition = JSON.parse(await readFile(seedPath, "utf8"));
-      const v = validateDecisionTree(definition);
-      if (!v.ok) return { error: "Bundled seed is invalid: " + v.errors.slice(0, 4).join("; ") };
-      const existing = await getDecisionTreeByIntent(session.shop, "orthotic");
-      const saved = await saveDecisionTree(session.shop, {
-        id: existing?.id,
-        name: "Aetrex Orthotic Finder",
-        intent: "orthotic",
-        triggerPhrases: JSON.stringify([
-          "orthotic", "orthotics", "insole", "insoles", "arch support", "custom orthotic",
-        ]),
-        triggerCategoryGroup: "Orthotics",
-        definition,
-        enabled: false,
-      });
-      return { saved: true, seeded: true, treeId: saved.id };
-    } catch (err) {
-      return { error: "Seed failed: " + (err?.message || "unknown") };
-    }
   }
 
   // CSV download/upload for the masterIndex (orthotic SKU mapping).
@@ -274,107 +242,17 @@ export const action = async ({ request }) => {
     };
   }
 
-  // Discover what's in the live Shopify catalog so the merchant can
-  // see distinct activity / helps_with metafield values BEFORE the
-  // regen runs. Used the first time and any time new metafield values
-  // appear that the saved mapping doesn't cover.
-  if (intent === "regen_orthotic_discover") {
+  // Rebuild the orthotic finder from the live catalog: every active orthotic,
+  // grouped into its line, with arch and metatarsal pad read from Aetrex's
+  // own SKU codes. Nothing to map by hand.
+  if (intent === "sync_orthotic_finder") {
     try {
       const accessToken = await getOfflineToken(session.shop);
       if (!accessToken) return { error: "No offline session for this shop. Re-install the app to refresh the token." };
-      const products = await fetchActiveOrthoticProducts({ shop: session.shop, accessToken });
-      const distinct = discoverDistinctValues(products);
-      const existing = await getDecisionTreeByIntent(session.shop, "orthotic");
-      const savedMapping = existing?.definition?.vocabularyMapping || null;
-      const suggestedMapping = buildSuggestedMapping(distinct);
-      // If a saved mapping already exists, surface only the NEW values
-      // (the ones the merchant hasn't mapped yet) so they aren't asked
-      // to re-confirm everything they already approved.
-      const newActivity = savedMapping?.activity
-        ? distinct.distinctActivity.filter((v) => !(v in savedMapping.activity))
-        : distinct.distinctActivity;
-      const newHelpsWith = savedMapping?.helps_with
-        ? distinct.distinctHelpsWith.filter((v) => !(v in savedMapping.helps_with))
-        : distinct.distinctHelpsWith;
-      return {
-        discovery: {
-          productCount: products.length,
-          distinctActivity: distinct.distinctActivity,
-          distinctHelpsWith: distinct.distinctHelpsWith,
-          distinctGender: distinct.distinctGender,
-          newActivity,
-          newHelpsWith,
-          suggestedMapping,
-          savedMapping,
-          // For the review table's answer dropdowns.
-          answers: {
-            nodes: existing?.definition?.nodes || [],
-            resolver: { masterIndex: existing?.definition?.resolver?.masterIndex || [] },
-          },
-        },
-      };
+      const result = await syncOrthoticFinder({ shop: session.shop, graphql: tokenGraphql({ shop: session.shop, accessToken }) });
+      return result.ok ? { finderSynced: result } : { error: result.error };
     } catch (err) {
-      return { error: "Discovery failed: " + (err?.message || "unknown") };
-    }
-  }
-
-  // Apply the merchant-reviewed mapping, regenerate the masterIndex
-  // straight from live Shopify, and write it to the orthotic
-  // DecisionTree row. The mapping is persisted inside
-  // definition.vocabularyMapping so future regens reuse it.
-  if (intent === "regen_orthotic_apply") {
-    try {
-      const accessToken = await getOfflineToken(session.shop);
-      if (!accessToken) return { error: "No offline session for this shop." };
-      let mapping;
-      try {
-        mapping = JSON.parse(formData.get("mapping") || "{}");
-      } catch {
-        return { error: "Invalid mapping JSON." };
-      }
-      const products = await fetchActiveOrthoticProducts({ shop: session.shop, accessToken });
-      const result = regenerateMasterIndex({ products, mapping });
-
-      const existing = await getDecisionTreeByIntent(session.shop, "orthotic");
-      if (!existing) {
-        return { error: "No orthotic recommender exists yet. Click 'Reset to factory' first to install the base structure." };
-      }
-      const oldDef = existing.definition || {};
-      const newDef = {
-        ...oldDef,
-        resolver: {
-          ...(oldDef.resolver || {}),
-          masterIndex: result.masterIndex,
-          fallback: result.fallback,
-        },
-        vocabularyMapping: mapping,
-        _lastRegenAt: new Date().toISOString(),
-        _lastRegenSource: "shopify-live",
-      };
-      const v = validateDecisionTree(newDef);
-      if (!v.ok) return { error: "Generated tree is invalid: " + v.errors.slice(0, 4).join("; ") };
-      await saveDecisionTree(session.shop, {
-        id: existing.id,
-        name: existing.name,
-        intent: existing.intent,
-        triggerPhrases: existing.triggerPhrases,
-        triggerCategoryGroup: existing.triggerCategoryGroup,
-        definition: newDef,
-        enabled: existing.enabled,
-      });
-      return {
-        regenerated: {
-          productCount: products.length,
-          masterIndexCount: result.masterIndex.length,
-          skippedCount: result.skipped.length,
-          skipped: result.skipped,
-          fallback: result.fallback,
-          unmappedActivity: result.unmappedActivity,
-          unmappedHelpsWith: result.unmappedHelpsWith,
-        },
-      };
-    } catch (err) {
-      return { error: "Regeneration failed: " + (err?.message || "unknown") };
+      return { error: "Sync failed: " + (err?.message || "unknown") };
     }
   }
 
@@ -450,28 +328,26 @@ function HowItWorksCard() {
         <Text as="h3" variant="headingMd">How it works</Text>
         <BlockStack gap="200">
           <Bullet>
-            <strong>Short Q&amp;A, fixed answers.</strong> A few choice-button
-            questions with the exact labels you saved — the AI doesn't paraphrase,
-            so the same click always maps to the same product.
+            <strong>Built from your catalog.</strong> Every active orthotic is read
+            from Shopify — its line, who it's for, what it's best for — and kept
+            current every time the catalog syncs. Nothing to map by hand.
           </Bullet>
           <Bullet>
-            <strong>Three ways to answer.</strong> Click a button, type freely
-            (keyword-matched), or fall back to a tight AI call that picks one of
-            your defined options.
+            <strong>Only the questions it needs.</strong> Who it's for, which
+            shoes, arch type and ball-of-foot pain — skipping anything the
+            shopper already said, with tap-to-answer choices.
           </Bullet>
           <Bullet>
-            <strong>Memory across turns.</strong> Answers accumulate. Already-
-            answered questions are skipped. Customers can pivot mid-flow.
+            <strong>The AI picks the line, the rules pick the version.</strong> The
+            assistant matches the shoes and needs to a line using each line's own
+            “Best for”; the exact product then follows Aetrex's SKU rule
+            (00/05 medium-high arch, 20/25 flat-low arch, 05/25 metatarsal pad).
           </Bullet>
           <Bullet>
-            <strong>One deterministic SKU at the end.</strong> Filtered against
-            your live Shopify catalog so nothing is hallucinated.
-          </Bullet>
-          <Bullet>
-            <strong>Built-in guardrails.</strong> Respects footwear pivots,
-            explicit rejections, off-topic questions (shipping, returns), and
-            impossible matches (e.g. orthotic for open sandals → suggests
-            supportive sandals instead). Kids never fall back to adult SKUs.
+            <strong>Honest when something doesn't exist.</strong> If a line has no
+            version for that person (e.g. Work is men's only), the shopper is
+            told and offered the closest line. Only products for sale are shown;
+            kids only get kids' orthotics.
           </Bullet>
         </BlockStack>
       </BlockStack>
@@ -482,36 +358,11 @@ function HowItWorksCard() {
 function DecisionTreesCard({ enabled, trees }) {
   const fetcher = useFetcher();
   const loadFetcher = useFetcher();
-  const regenFetcher = useFetcher();
+  const syncFetcher = useFetcher();
   const [editing, setEditing] = useState(null);  // { id?, name, intent, definition (object), ... }
   const [showMore, setShowMore] = useState(false);
   const [jsonDraft, setJsonDraft] = useState("");
   const [jsonError, setJsonError] = useState("");
-  // Sync-from-Shopify: discovery returns the Shopify values with a suggested
-  // mapping; the merchant reviews it as a table, then applies.
-  const [regenStep, setRegenStep] = useState("idle"); // idle | discovering | review | done
-  const [mappingDraft, setMappingDraft] = useState(null);
-
-  useEffect(() => {
-    if (regenFetcher.data?.discovery) {
-      const d = regenFetcher.data.discovery;
-      const merged = d.savedMapping
-        ? {
-            ...d.savedMapping,
-            activity: { ...d.suggestedMapping.activity, ...d.savedMapping.activity },
-            helps_with: { ...d.suggestedMapping.helps_with, ...d.savedMapping.helps_with },
-            gender: { ...d.suggestedMapping.gender, ...d.savedMapping.gender },
-            specialtyOverrides: d.savedMapping.specialtyOverrides || d.suggestedMapping.specialtyOverrides,
-          }
-        : d.suggestedMapping;
-      setMappingDraft(merged);
-      setRegenStep("review");
-    }
-    if (regenFetcher.data?.regenerated) {
-      setRegenStep("done");
-    }
-  }, [regenFetcher.data]);
-
   // When the load fetcher returns, hydrate the editor with the full
   // tree (definition included). Kept out of the loader to avoid
   // shipping every tree's full JSON on every page render.
@@ -537,29 +388,10 @@ function DecisionTreesCard({ enabled, trees }) {
     }
   }, [loadFetcher.data]);
 
-  const seedAetrex = () => {
+  const syncFinder = () => {
     const fd = new FormData();
-    fd.set("intent", "seed_aetrex_orthotic_tree");
-    fetcher.submit(fd, { method: "post" });
-  };
-
-  const startRegen = () => {
-    setRegenStep("discovering");
-    const fd = new FormData();
-    fd.set("intent", "regen_orthotic_discover");
-    regenFetcher.submit(fd, { method: "post" });
-  };
-
-  const applyRegen = () => {
-    const fd = new FormData();
-    fd.set("intent", "regen_orthotic_apply");
-    fd.set("mapping", JSON.stringify(mappingDraft || {}));
-    regenFetcher.submit(fd, { method: "post" });
-  };
-
-  const closeRegen = () => {
-    setRegenStep("idle");
-    setMappingDraft(null);
+    fd.set("intent", "sync_orthotic_finder");
+    syncFetcher.submit(fd, { method: "post" });
   };
 
   const toggleMaster = (next) => {
@@ -668,21 +500,18 @@ function DecisionTreesCard({ enabled, trees }) {
             />
           </InlineStack>
           <Text as="p" tone="subdued">
-            A recommender is a short guided quiz. When a shopper asks for help
-            picking an orthotic, the assistant asks a few tap-to-answer
-            questions (who it's for, what shoes, what hurts, arch type) and
-            shows the one orthotic that fits. Setup: click <strong>Reset to
-            factory</strong> once, then <strong>Sync from Shopify</strong>,
-            and switch this ON. Turned OFF, the assistant still recommends
-            orthotics — just without the quiz.
+            When a shopper wants help choosing an orthotic, the assistant asks
+            up to four tap-to-answer questions (who it's for, which shoes, arch
+            type, ball-of-foot pain), picks the line that suits their shoes and
+            then the exact version for their arch — and shows that one product.
+            Setup: click <strong>Sync from Shopify</strong> once and switch this
+            ON. Turned OFF, the assistant still recommends orthotics — just
+            without the guided questions.
           </Text>
         </BlockStack>
 
         {fetcher.data?.error && (
           <Banner tone="critical">{fetcher.data.error}</Banner>
-        )}
-        {fetcher.data?.seeded && (
-          <Banner tone="success">Factory data installed. Review the recommender below, then enable it.</Banner>
         )}
 
         <Divider />
@@ -693,30 +522,26 @@ function DecisionTreesCard({ enabled, trees }) {
             <InlineStack gap="200" wrap>
               <Button onClick={startNew}>+ New recommender</Button>
               <Button
-                onClick={startRegen}
+                onClick={syncFinder}
                 variant="primary"
-                loading={regenFetcher.state !== "idle" && regenStep === "discovering"}
+                loading={syncFetcher.state !== "idle"}
               >
                 Sync from Shopify
-              </Button>
-              <Button onClick={seedAetrex} variant="tertiary">
-                Reset to factory
               </Button>
             </InlineStack>
           </InlineStack>
           <Text as="p" tone="subdued" variant="bodySm">
-            <strong>Sync from Shopify</strong> rebuilds the lookup table from your
-            live products' metafields — run this whenever you add, remove, or
-            retag orthotic products. <strong>Reset to factory</strong> reinstalls
-            Aetrex's bundled 183-SKU starting point — only needed for first
-            install or to discard customizations and start over.
+            <strong>Sync from Shopify</strong> reads every active product with
+            product type “Orthotics”: its line, who it's for, what it's best for,
+            and its arch and metatarsal version (from the SKU: 00/05 medium-high
+            arch, 20/25 flat-low arch, 05/25 with metatarsal pad). It also
+            refreshes on its own every time the catalog syncs.
           </Text>
 
           {(!trees || trees.length === 0) && (
             <Text as="p" tone="subdued">
-              No recommenders yet. Click <strong>Reset to factory</strong> to
-              install the bundled Aetrex orthotic lookup (183 SKUs), or build
-              your own from scratch.
+              No recommenders yet. Click <strong>Sync from Shopify</strong> to
+              build the orthotic finder from your catalog.
             </Text>
           )}
 
@@ -746,76 +571,23 @@ function DecisionTreesCard({ enabled, trees }) {
           )}
         </BlockStack>
 
-        {regenFetcher.data?.error && (
-          <Banner tone="critical">{regenFetcher.data.error}</Banner>
+        {syncFetcher.data?.error && (
+          <Banner tone="critical">{syncFetcher.data.error}</Banner>
         )}
-
-        {regenStep === "review" && regenFetcher.data?.discovery && (
-          <>
-            <Divider />
-            <BlockStack gap="300">
-              <Text as="h4" variant="headingSm">Review mapping (Step 2 of 2)</Text>
-              <Text as="p" tone="subdued">
-                Pulled <strong>{regenFetcher.data.discovery.productCount}</strong> active orthotic products from Shopify.
-                Found {regenFetcher.data.discovery.distinctActivity.length} activity values, {regenFetcher.data.discovery.distinctHelpsWith.length} helps_with values, and {regenFetcher.data.discovery.distinctGender.length} gender values.
+        {syncFetcher.data?.finderSynced && (
+          <Banner tone="success">
+            <BlockStack gap="200">
+              <Text as="p" fontWeight="semibold">
+                Synced {syncFetcher.data.finderSynced.productCount} orthotics into {syncFetcher.data.finderSynced.lineCount} lines.
               </Text>
-              {(regenFetcher.data.discovery.newActivity?.length > 0 ||
-                regenFetcher.data.discovery.newHelpsWith?.length > 0) && (
-                <Banner tone="info">
-                  New metafield values found that weren't in your saved mapping. They've been merged with sensible-guess defaults below — review before applying.
-                  {regenFetcher.data.discovery.newActivity?.length > 0 && (
-                    <Text as="p" variant="bodySm">New activity: {regenFetcher.data.discovery.newActivity.join(", ")}</Text>
-                  )}
-                  {regenFetcher.data.discovery.newHelpsWith?.length > 0 && (
-                    <Text as="p" variant="bodySm">New helps_with: {regenFetcher.data.discovery.newHelpsWith.join(", ")}</Text>
-                  )}
-                </Banner>
-              )}
-              {mappingDraft && (
-                <MappingReview
-                  mapping={mappingDraft}
-                  definition={regenFetcher.data.discovery.answers || {}}
-                  onChange={setMappingDraft}
-                />
-              )}
-              <InlineStack gap="200" align="end">
-                <Button onClick={closeRegen}>Cancel</Button>
-                <Button
-                  onClick={applyRegen}
-                  variant="primary"
-                  loading={regenFetcher.state !== "idle" && regenStep === "review"}
-                >
-                  Apply mapping & regenerate
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </>
-        )}
-
-        {regenStep === "done" && regenFetcher.data?.regenerated && (
-          <>
-            <Divider />
-            <Banner tone="success">
-              <BlockStack gap="200">
-                <Text as="p" fontWeight="semibold">
-                  Regenerated {regenFetcher.data.regenerated.masterIndexCount} entries from {regenFetcher.data.regenerated.productCount} active Shopify products.
+              {syncFetcher.data.finderSynced.skipped?.length > 0 && (
+                <Text as="p" variant="bodySm">
+                  Left out: {syncFetcher.data.finderSynced.skipped.map((x) => `${x.title} (${x.reason})`).join("; ")}
                 </Text>
-                {regenFetcher.data.regenerated.fallback && (
-                  <Text as="p" variant="bodySm">
-                    Fallback: <code>{regenFetcher.data.regenerated.fallback.masterSku}</code> — {regenFetcher.data.regenerated.fallback.title}
-                  </Text>
-                )}
-                {regenFetcher.data.regenerated.skippedCount > 0 && (
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    {regenFetcher.data.regenerated.skippedCount} product{regenFetcher.data.regenerated.skippedCount === 1 ? "" : "s"} skipped — usually missing gender or activity metafield. Open the tree to review.
-                  </Text>
-                )}
-                <InlineStack>
-                  <Button onClick={closeRegen}>Close</Button>
-                </InlineStack>
-              </BlockStack>
-            </Banner>
-          </>
+              )}
+              <Text as="p" variant="bodySm" tone="subdued">Click Edit to see every line.</Text>
+            </BlockStack>
+          </Banner>
         )}
 
         {editing && (
@@ -848,14 +620,18 @@ function DecisionTreesCard({ enabled, trees }) {
                   onChange={(v) => setEditing((p) => ({ ...p, enabled: v }))}
                 />
               </FormLayout>
-              <RecommenderTables
-                definition={editing.definition || {}}
-                onChange={(definition) => setEditing((p) => ({ ...p, definition }))}
-              />
+              {editing.definition?.kind === "catalog_finder" ? (
+                <FinderLines definition={editing.definition} />
+              ) : (
+                <RecommenderTables
+                  definition={editing.definition || {}}
+                  onChange={(definition) => setEditing((p) => ({ ...p, definition }))}
+                />
+              )}
               <InlineStack>
-                <Button variant="plain" onClick={openAdvanced}>
+                {editing.definition?.kind !== "catalog_finder" && <Button variant="plain" onClick={openAdvanced}>
                   {showMore ? "Hide more options" : "More options (spreadsheet, advanced)"}
-                </Button>
+                </Button>}
               </InlineStack>
               {showMore && (
                 <BlockStack gap="400">
@@ -907,6 +683,35 @@ function DecisionTreesCard({ enabled, trees }) {
         )}
       </BlockStack>
     </Card>
+  );
+}
+
+// The orthotic finder's lines, as read from the catalog. Read-only: change
+// the products in Shopify and sync again.
+function FinderLines({ definition }) {
+  const lines = definition?.finder?.lines || [];
+  const synced = definition?.syncedAt ? new Date(definition.syncedAt).toLocaleString() : "never";
+  const versions = (l) => [
+    l.archVersions.length === 2 ? "Medium-high & flat-low arch" : l.archVersions[0] === "flat_low" ? "Flat-low arch" : l.archVersions[0] === "medium_high" ? "Medium-high arch" : "One version",
+    l.hasMetVersion && l.hasNoMetVersion ? "± met pad" : l.hasMetVersion ? "met pad" : "",
+  ].filter(Boolean).join(", ");
+  return (
+    <BlockStack gap="200">
+      <Text as="p" tone="subdued" variant="bodySm">
+        {lines.length} lines from your catalog · last synced {synced}. To change one, edit the products in Shopify, then sync.
+      </Text>
+      <DataTable
+        columnContentTypes={["text", "text", "text", "text", "numeric"]}
+        headings={["Line", "For", "Best for", "Versions", "Products"]}
+        rows={lines.map((l) => [
+          <Text key={l.id} as="span" fontWeight="semibold">{l.name}</Text>,
+          l.genders.join(", "),
+          l.bestFor || l.activity.join(", ") || "—",
+          versions(l),
+          l.count,
+        ])}
+      />
+    </BlockStack>
   );
 }
 
