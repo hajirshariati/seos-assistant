@@ -119,6 +119,18 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     .map((v) => v.compareAt);
   const compareAtPrice = compareAt.length ? Math.max(...compareAt) : NaN;
 
+  // Every option the product is sold in (Size, Width, …) with its values in
+  // store order — exact strings, so a chosen value maps to a real variant.
+  const options = {};
+  for (const v of variants) {
+    for (const [name, value] of Object.entries(optionBag(v.optionsJson))) {
+      const val = String(value ?? "").trim();
+      if (!name || !val) continue;
+      if (!options[name]) options[name] = [];
+      if (!options[name].includes(val)) options[name].push(val);
+    }
+  }
+
   const sizes = uniqLower(inStockVariants.flatMap((v) => readCI(optionBag(v.optionsJson), ["size"])));
   const widths = uniqLower(inStockVariants.flatMap((v) => readCI(optionBag(v.optionsJson), ["width"])));
   const colors = uniqLower([
@@ -138,6 +150,7 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     url: productUrl(shop, row.handle),
     image: row.featuredImageUrl || "",
     productType: String(row.productType || "").trim(),
+    options,
     category,
     subcategory: String(readCI(attrs, ["subcategory"])[0] || "").trim(),
     gender,

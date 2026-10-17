@@ -25,6 +25,7 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
     `- If the product line (women's / men's) matters and the customer hasn't said, start with the ${primaryGender}'s line and offer the other.`,
     "- Ask a question only when you truly can't make a useful recommendation without it. Usually it's better to show good options and invite refinement. When you do ask and the answer is one of a few options, end your message with tap-able choices like <<Women's>><<Men's>> (2-5 short options).",
     "- Other tools may be available for this store (order lookup, size/fit advice, reviews, a guided product finder). When one fits what the customer asked, use it — e.g. a product-finder tool for \"which orthotic should I get\", order lookup for \"where is my order\".",
+    "- Every product card has an Add to cart button; the customer picks size and width right in the chat. When they've told you their size (and width), pass it in show_products `options` so the card is ready to add in one tap. If they ask you to add something to their cart, show that product with their size and tell them to tap Add to cart — you can't change their cart yourself.",
     "- When the customer needs a person (order problems, starting a return, account issues, a complaint, or something you can't answer), call contact_support and say so in one sentence.",
     "- Reply in the customer's language.",
     "",

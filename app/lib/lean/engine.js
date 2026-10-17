@@ -12,6 +12,7 @@ import { leanSearch, productDetails, similarProducts } from "./search.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
+import { resolvePreselect } from "./variant-choice.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
@@ -98,8 +99,9 @@ function addUsage(total, u = {}) {
   }
 }
 
-export function toCard(p) {
+export function toCard(p, preselect = null) {
   return {
+    ...(preselect ? { preselect } : {}),
     title: p.title,
     url: p.url,
     handle: p.handle,
@@ -160,6 +162,7 @@ export async function runLeanTurn({
   const priorStyles = new Set(priorProducts.map((p) => p.style.toLowerCase()));
   const seenThisTurn = new Map();
   let shown = [];
+  let preselects = new Map();
   let followUps = [];
   let supportRequested = null;
   const events = [];
@@ -224,8 +227,15 @@ export async function runLeanTurn({
       const ok = handles.filter((h) => seen.has(h)).slice(0, MAX_CARDS);
       const rejected = handles.filter((h) => !seen.has(h));
       shown = ok;
+      // Size/width the customer stated → exact option values for one-tap Add to cart.
+      preselects = new Map();
+      for (const h of ok) {
+        const want = input.options && typeof input.options === "object" ? input.options[h] : null;
+        const pre = want ? resolvePreselect(byHandle.get(h), want) : null;
+        if (pre) preselects.set(h, pre);
+      }
       followUps = cleanFollowUps(input.follow_ups);
-      log(`[lean] show ${JSON.stringify(ok)}${rejected.length ? ` rejected=${JSON.stringify(rejected)}` : ""}`);
+      log(`[lean] show ${JSON.stringify(ok)}${rejected.length ? ` rejected=${JSON.stringify(rejected)}` : ""}${preselects.size ? ` preselect=${JSON.stringify(Object.fromEntries(preselects))}` : ""}`);
       return {
         showing: ok.map((h) => byHandle.get(h).title),
         ...(rejected.length ? { rejected, note: "Rejected handles weren't returned by a tool in this conversation — search first." } : {}),
@@ -345,7 +355,7 @@ export async function runLeanTurn({
     text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
   }
 
-  const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map(toCard);
+  const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map((p) => toCard(p, preselects.get(p.handle) || null));
   // The search that found the shown cards — the "View all" link repeats it.
   const shopAllSearch = cards.length
     ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null

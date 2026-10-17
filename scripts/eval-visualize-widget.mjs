@@ -251,7 +251,7 @@ test("the mobile changes are SCOPED to the media query — desktop card stays ve
 });
 
 test("the widget carries a current build marker (so the live version is verifiable)", () => {
-  assert.match(SRC, /\[hajirai-widget\] build 2026-06-30 mobile-card-cta-row/, "console build marker bumped for this change");
+  assert.match(SRC, /\[hajirai-widget\] build 2026-10-17 add-to-cart/, "console build marker bumped for this change");
 });
 
 // ── PRD 2026-06-29: stability — single-flight, cancellation, no runaway repaint ──

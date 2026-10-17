@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-06-30 mobile-card-cta-row');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-17 add-to-cart');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -158,8 +158,19 @@ function getSess(){var id=localStorage.getItem(SK);if(!id){id='sess_'+Date.now()
 function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.slice(-50)))}catch(e){}}
 function loadH(){try{return JSON.parse(localStorage.getItem(HK))||[]}catch(e){return[]}}
 
+/* Storefront root (Shopify Markets can serve the shop under /en-ca/ etc.). */
+var SHOP_ROOT=(window.Shopify&&window.Shopify.routes&&window.Shopify.routes.root)||'/';
+/* Tag the cart so an order that follows a chat add/click is attributed
+   ("SEoS" order tag via the orders/create webhook). Best-effort. */
+function markChatAttributed(){
+  try{fetch(SHOP_ROOT+'cart/update.js',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({attributes:{_seos_attributed:'1'}}),keepalive:true,credentials:'same-origin'}).catch(function(){})}catch(_){}
+}
+/* Add one variant to the cart. Resolves with the added line; rejects with
+   Shopify's own message (e.g. "only 2 left") on a 422. */
 function addToCart(vid,qty){
-return fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})}).then(function(r){return r.json()}).then(function(d){document.dispatchEvent(new CustomEvent('cart:refresh'));return fetch('/cart.js').then(function(r){return r.json()}).then(function(cart){document.querySelectorAll('[data-cart-count],.cart-count,.header__cart-count').forEach(function(e){e.textContent=cart.item_count});return d})})
+return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})})
+.then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var err=new Error(d.description||d.message||'Could not add to cart');err.status=r.status;throw err}return d})})
+.then(function(d){markChatAttributed();document.dispatchEvent(new CustomEvent('cart:refresh'));document.dispatchEvent(new CustomEvent('cart:updated'));return fetch(SHOP_ROOT+'cart.js',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(cart){document.querySelectorAll('[data-cart-count],.cart-count,.header__cart-count,.cart-count-bubble span[aria-hidden]').forEach(function(e){e.textContent=cart.item_count});return d}).catch(function(){return d})})
 }
 
 var avatarImg=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -762,8 +773,8 @@ function vizErrorHtml(msg){
 /* Inject the "Visualize My Look" button as a full-width row INSIDE the
    product card. The card is display:flex/flex-wrap, so a child with
    flex-basis:100% wraps cleanly to its own row at the bottom of the
-   card's box (no cramping). The card is a single <a> link, so the
-   button stops click propagation to avoid navigating to the product.
+   card's box (no cramping). The button stops click propagation so a
+   tap never reaches the card's own click handling.
    The generated image renders BELOW the card (see runVisualize). */
 function vizLabel(cta){
   // Migrate the old default to the new name; respect a genuinely custom label.
@@ -772,10 +783,10 @@ function vizLabel(cta){
 }
 function injectVizButton(card,cta){
   if(!card||card.querySelector('.ai-chat-viz-btn'))return;
-  // "See It Styled" is a SECONDARY action sitting BESIDE "View product" (the
+  // "See It Styled" is a SECONDARY action sitting BESIDE "Add to cart" (the
   // primary). Soft warm-outline styling, smaller visual weight, no heavy
-  // shadow — it must never read as the main buy CTA. The card is a single <a>,
-  // so the button stops click propagation to avoid navigating to the product.
+  // shadow — it must never read as the main buy CTA. The button stops click
+  // propagation so it never triggers the card's other actions.
   var viz=document.createElement('span');
   viz.className='ai-chat-viz-btn';
   viz.setAttribute('role','button');viz.setAttribute('tabindex','0');
@@ -788,9 +799,9 @@ function injectVizButton(card,cta){
   viz.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){go(e)}});
   var viewCta=card.querySelector('.ai-chat-product-cta');
   if(viewCta&&viewCta.parentNode&&getComputedStyle(viewCta).display!=='none'){
-    // Wrap "View product" + "See It Styled" in a single flex row so they sit
-    // side by side when there's room and STACK (See It Styled under View
-    // product) when the card is too narrow / on mobile.
+    // Wrap "Add to cart" + "See It Styled" in a single flex row so they sit
+    // side by side when there's room and STACK (See It Styled under Add to
+    // cart) when the card is too narrow / on mobile.
     var row=document.createElement('div');
     row.className='ai-chat-viz-actions';
     row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:4px';
@@ -1129,20 +1140,214 @@ scrollBottom();
 return d;
 }
 
+/* Product card: image + title link to the product; "Add to cart" is the
+   primary action (.ai-chat-product-cta keeps every layout's CTA placement),
+   "View product" a quiet underlined link. When the chat already knows the
+   customer's size/width, the card carries it (data-preselect) and shows it
+   under the price — one tap adds that exact variant. */
 function prodCard(p){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
-var u=p.url||(p.handle?('/products/'+p.handle):'#');
+var u=p.url||(p.handle?(SHOP_ROOT+'products/'+p.handle):'#');
 var pr=esc(p.price_formatted||(p.price?fmt(p.price):''));
 var cp=p.compare_at_price?esc(fmt(p.compare_at_price)):'';
-var ariaParts=[t];if(pr)ariaParts.push(pr);var ariaLabel=esc(ariaParts.join(' — '));
-// In showcase style we add a "View product" CTA below the price. The
-// CTA is rendered for both layouts but CSS-hidden on horizontal so
-// the markup is identical and we don't need to special-case anywhere
-// else (event handlers, fit-predictor injection, etc).
-var imgHtml=img?'<div class="ai-chat-product-img"><img src="'+esc(img)+'" alt="'+t+'" loading="lazy"></div>':'';
-var infoHtml='<div class="ai-chat-product-info"><span class="ai-chat-product-title">'+t+'</span><div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+'</div><span class="ai-chat-product-cta" aria-hidden="true">View product</span></div>';
-return '<a class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" href="'+esc(u)+'" aria-label="'+ariaLabel+'" style="text-decoration:none;color:inherit">'+imgHtml+infoHtml+'</a>';
+var pre=(p.preselect&&typeof p.preselect==='object')?p.preselect:null;
+var preKeys=pre?Object.keys(pre):[];
+var preLabel=preKeys.map(function(k){return esc(String(pre[k]))}).join(' \u00b7 ');
+var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
+var infoHtml='<div class="ai-chat-product-info">'+
+  '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
+  '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
+  '<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="Add '+t+(preLabel?', '+preLabel+',':'')+' to cart">Add to cart</button>'+
+  '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
+'</div>';
+return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(img)+'"'+(pre?' data-preselect="'+esc(JSON.stringify(pre))+'"':'')+'>'+imgHtml+infoHtml+'</div>';
+}
+
+/* ── Add to cart inside the chat ────────────────────────────────────────
+   Options and stock are read LIVE from the store (/products/<handle>.js) at
+   the moment of the tap, never from the nightly copy — so a size that just
+   sold out can't be added. If the card already knows the customer's size and
+   that exact variant is in stock, one tap adds it; otherwise an option picker
+   opens right under the cards. */
+var productJsCache={};
+function fetchProductJs(handle){
+  var hit=productJsCache[handle];
+  if(hit&&Date.now()-hit.at<60000)return hit.promise;
+  var promise=fetch(SHOP_ROOT+'products/'+encodeURIComponent(handle)+'.js',{credentials:'same-origin',headers:{'Accept':'application/json'}})
+    .then(function(r){if(!r.ok)throw new Error('product '+r.status);return r.json()});
+  productJsCache[handle]={at:Date.now(),promise:promise};
+  promise.catch(function(){delete productJsCache[handle]});
+  return promise;
+}
+function optModel(product){
+  var raw=Array.isArray(product.options)?product.options:[];
+  var variants=Array.isArray(product.variants)?product.variants:[];
+  var vopts=function(v){return Array.isArray(v.options)?v.options:[v.option1,v.option2,v.option3].filter(function(x){return x!=null})};
+  var opts=raw.map(function(o,i){
+    var name=typeof o==='string'?o:(o&&o.name)||('Option '+(i+1));
+    var values=(o&&typeof o==='object'&&Array.isArray(o.values))?o.values.slice():[];
+    if(!values.length)variants.forEach(function(v){var x=vopts(v)[i];if(x!=null&&values.indexOf(x)<0)values.push(x)});
+    return{name:name,values:values};
+  });
+  return{opts:opts,variants:variants,vopts:vopts};
+}
+function variantFor(m,sel){
+  return m.variants.filter(function(v){var o=m.vopts(v);return m.opts.every(function(op,i){return sel[op.name]===o[i]})})[0]||null;
+}
+function valueAvailable(m,sel,name,value){
+  return m.variants.some(function(v){
+    if(!v.available)return false;
+    var o=m.vopts(v);
+    return m.opts.every(function(op,i){return op.name===name?o[i]===value:(!sel[op.name]||o[i]===sel[op.name])});
+  });
+}
+// The card's known size/width → this product's exact option values (live).
+function initialSelection(m,pre){
+  var sel={};
+  m.opts.forEach(function(op){if(op.values.length===1)sel[op.name]=op.values[0]});
+  if(pre)Object.keys(pre).forEach(function(k){
+    var op=m.opts.filter(function(o){return o.name.toLowerCase()===String(k).toLowerCase()})[0];
+    if(op&&op.values.indexOf(pre[k])>=0)sel[op.name]=pre[k];
+  });
+  return sel;
+}
+function selectionComplete(m,sel){return m.opts.every(function(op){return !!sel[op.name]})}
+function setBusy(btn,busy){
+  if(!btn)return;
+  if(busy){btn.setAttribute('aria-busy','true');btn.disabled=true;btn.classList.add('is-busy')}
+  else{btn.removeAttribute('aria-busy');btn.disabled=false;btn.classList.remove('is-busy')}
+}
+function startAddToCart(card,btn){
+  if(!card)return;
+  var handle=card.getAttribute('data-handle');
+  var pre=null;try{pre=JSON.parse(card.getAttribute('data-preselect')||'null')}catch(_){}
+  setBusy(btn,true);
+  fetchProductJs(handle).then(function(product){
+    var m=optModel(product);
+    var sel=initialSelection(m,pre);
+    if(selectionComplete(m,sel)){
+      var v=variantFor(m,sel);
+      if(v&&v.available){
+        return addToCart(v.id,1).then(function(){setBusy(btn,false);openAtcPanel(card,product,m,sel,{added:v})})
+          .catch(function(err){setBusy(btn,false);openAtcPanel(card,product,m,sel,{error:err.message})});
+      }
+      setBusy(btn,false);
+      // The known size is sold out right now — let them pick another.
+      var soldOut=m.opts.filter(function(op){return m.opts.length>0&&op.values.length>1}).map(function(op){return sel[op.name]}).join(' \u00b7 ');
+      var keep={};m.opts.forEach(function(op){if(op.values.length===1)keep[op.name]=sel[op.name]});
+      openAtcPanel(card,product,m,keep,{note:(soldOut?soldOut+' is sold out right now':'That option is sold out right now')+' \u2014 choose another.'});
+      return;
+    }
+    setBusy(btn,false);
+    openAtcPanel(card,product,m,sel,{});
+  }).catch(function(){
+    setBusy(btn,false);
+    openAtcPanel(card,null,null,{},{error:'We couldn\u2019t load the sizes right now.'});
+  });
+}
+function closeAtcPanel(panel){
+  if(!panel)return;
+  var card=panel._card;if(card)card.classList.remove('is-picking');
+  if(panel.parentNode)panel.parentNode.removeChild(panel);
+}
+function openAtcPanel(card,product,m,sel,state){
+  var bubble=card.closest('.ai-chat-msg-bubble')||card.parentNode;
+  var existing=bubble.querySelector('.ai-chat-atc-panel');
+  if(existing)closeAtcPanel(existing);
+  var panel=document.createElement('div');
+  panel.className='ai-chat-atc-panel';
+  panel.setAttribute('role','region');
+  panel._card=card;
+  card.classList.add('is-picking');
+  var title=card.getAttribute('data-title')||'';
+  var url=card.getAttribute('data-url')||'#';
+  var img=card.getAttribute('data-image')||'';
+  var anchor=card.closest('.ai-chat-viz-host')||card.closest('.ai-chat-products-wrap')||card.closest('.ai-chat-products')||card;
+  if(anchor.parentNode)anchor.parentNode.insertBefore(panel,anchor.nextSibling);else bubble.appendChild(panel);
+  var priceOf=function(){var v=m&&selectionComplete(m,sel)?variantFor(m,sel):null;return v?fmt(v.price):(product?fmt(product.price):'')};
+  function head(){
+    return '<div class="ai-chat-atc-head">'+
+      (img?'<img class="ai-chat-atc-thumb" src="'+esc(img)+'" alt="">':'')+
+      '<div class="ai-chat-atc-headtext"><div class="ai-chat-atc-title">'+esc(title)+'</div><div class="ai-chat-atc-price">'+esc(priceOf())+'</div></div>'+
+      '<button type="button" class="ai-chat-atc-close" data-atc-close aria-label="Close">'+
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>'+
+    '</div>';
+  }
+  function render(st){
+    st=st||{};
+    panel.setAttribute('aria-label',(st.added?'Added to cart: ':'Choose options for ')+title);
+    if(st.added){
+      var chosen=m?m.opts.filter(function(op){return op.values.length>1}).map(function(op){return esc(sel[op.name])}).join(' \u00b7 '):'';
+      panel.innerHTML=head()+
+        '<div class="ai-chat-atc-done" role="status">'+
+          '<span class="ai-chat-atc-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>'+
+          '<span>Added to your cart'+(chosen?' \u2014 <strong>'+chosen+'</strong>':'')+'</span>'+
+        '</div>'+
+        '<div class="ai-chat-atc-actions">'+
+          '<a class="ai-chat-atc-primary" href="'+esc(SHOP_ROOT+'checkout')+'">Checkout</a>'+
+          '<a class="ai-chat-atc-secondary" href="'+esc(SHOP_ROOT+'cart')+'">View cart</a>'+
+          '<button type="button" class="ai-chat-atc-text" data-atc-close>Keep shopping</button>'+
+        '</div>';
+      return;
+    }
+    if(!m){
+      panel.innerHTML=head()+'<div class="ai-chat-atc-note is-error" role="alert">'+esc(st.error||'Something went wrong.')+' <a href="'+esc(url)+'">Open the product page</a></div>';
+      return;
+    }
+    var groups=m.opts.filter(function(op){return op.values.length>1}).map(function(op){
+      var current=sel[op.name]||'';
+      var buttons=op.values.map(function(val){
+        var avail=valueAvailable(m,sel,op.name,val);
+        var on=current===val;
+        return '<button type="button" class="ai-chat-atc-val'+(on?' is-on':'')+(avail?'':' is-out')+'" role="radio" aria-checked="'+(on?'true':'false')+'"'+(avail?'':' aria-disabled="true" title="Sold out"')+' data-opt="'+esc(op.name)+'" data-val="'+esc(val)+'">'+esc(val)+'</button>';
+      }).join('');
+      return '<div class="ai-chat-atc-group"><div class="ai-chat-atc-label">'+esc(op.name)+(current?': <strong>'+esc(current)+'</strong>':'')+'</div>'+
+        '<div class="ai-chat-atc-values" role="radiogroup" aria-label="'+esc(op.name)+'">'+buttons+'</div></div>';
+    }).join('');
+    var complete=selectionComplete(m,sel);
+    var v=complete?variantFor(m,sel):null;
+    var canAdd=!!(v&&v.available);
+    var missing=m.opts.filter(function(op){return !sel[op.name]}).map(function(op){return op.name.toLowerCase()});
+    var addLabel=canAdd?'Add to cart \u00b7 '+esc(fmt(v.price)):(complete?'Sold out':'Select '+esc(missing.join(' & ')));
+    panel.innerHTML=head()+
+      (st.note||st.error?'<div class="ai-chat-atc-note'+(st.error?' is-error':'')+'" role="'+(st.error?'alert':'status')+'">'+esc(st.error||st.note)+'</div>':'')+
+      groups+
+      '<button type="button" class="ai-chat-atc-add" data-atc-add'+(canAdd?'':' disabled')+'>'+addLabel+'</button>';
+  }
+  panel.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(e.target.closest('[data-atc-close]')){e.preventDefault();closeAtcPanel(panel);return}
+    var val=e.target.closest('[data-opt]');
+    if(val){
+      e.preventDefault();
+      if(val.getAttribute('aria-disabled')==='true')return;
+      var name=val.getAttribute('data-opt'),value=val.getAttribute('data-val');
+      sel[name]=sel[name]===value?'':value;
+      // Drop other choices that no longer exist with this one.
+      m.opts.forEach(function(op){if(op.name!==name&&sel[op.name]&&!valueAvailable(m,sel,op.name,sel[op.name])&&op.values.length>1)sel[op.name]=''});
+      render({});
+      var again=panel.querySelector('[data-opt="'+(window.CSS&&CSS.escape?CSS.escape(name):name)+'"][data-val="'+(window.CSS&&CSS.escape?CSS.escape(value):value)+'"]');
+      if(again)again.focus();
+      return;
+    }
+    var add=e.target.closest('[data-atc-add]');
+    if(add&&!add.disabled){
+      e.preventDefault();
+      var v=variantFor(m,sel);
+      if(!v||!v.available)return;
+      setBusy(add,true);add.textContent='Adding\u2026';
+      addToCart(v.id,1).then(function(){render({added:v})}).catch(function(err){
+        delete productJsCache[card.getAttribute('data-handle')];
+        render({error:err.message||'Could not add to cart.'});
+      });
+    }
+  });
+  panel.addEventListener('keydown',function(e){if(e.key==='Escape'){e.stopPropagation();closeAtcPanel(panel);var b=card.querySelector('[data-atc]');if(b)b.focus()}});
+  render(state);
+  try{panel.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(_){panel.scrollIntoView(false)}
+  var first=panel.querySelector('.ai-chat-atc-val:not(.is-out),.ai-chat-atc-primary,.ai-chat-atc-add:not([disabled])');
+  if(first&&first.focus)try{first.focus({preventScroll:true})}catch(_){first.focus()}
 }
 
 function sendMessage(){
@@ -1572,8 +1777,8 @@ if(retryBtn){
   inputEl.value=lastUserMessage;sendMessage();
   return;
 }
-var btn=e.target.closest('[data-add-to-cart]');
-if(btn){e.preventDefault();var vid=btn.getAttribute('data-add-to-cart');btn.disabled=true;btn.textContent='Adding...';addToCart(vid,1).then(function(){btn.textContent='Added!';setTimeout(function(){btn.textContent='Add to Cart';btn.disabled=false},2000)}).catch(function(){btn.textContent='Error';btn.disabled=false});return}
+var atcBtn=e.target.closest('[data-atc]');
+if(atcBtn){e.preventDefault();e.stopPropagation();startAddToCart(atcBtn.closest('.ai-chat-product-card'),atcBtn);return}
 // Handoff support CTA button → live chat (Zendesk/Intercom/Gorgias), Support
 // Hub URL only as fallback.
 var supportCtaBtn=e.target.closest('[data-support-cta]');
@@ -1591,18 +1796,8 @@ if(cta){var t=cta.getAttribute('data-message');if(t){inputEl.disabled=false;inpu
    webhook can tag the resulting order "SEoS". keepalive lets the POST
    complete even though the browser is navigating away. Best-effort —
    any failure is silent (we don't block navigation on a tracking call). */
-var prodLink=e.target.closest('a.ai-chat-product-card');
-if(prodLink){
-  try{
-    fetch('/cart/update.js',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Accept':'application/json'},
-      body:JSON.stringify({attributes:{_seos_attributed:'1'}}),
-      keepalive:true,
-      credentials:'same-origin'
-    }).catch(function(){});
-  }catch(_){/* ignore */}
-}
+var prodLink=e.target.closest('.ai-chat-product-card a[href]');
+if(prodLink)markChatAttributed();
 });
 
 /* Init */

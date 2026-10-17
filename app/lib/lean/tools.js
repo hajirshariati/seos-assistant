@@ -56,6 +56,11 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
         type: "object",
         properties: {
           handles: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
+          options: {
+            type: "object",
+            description: "Optional: ONLY when the customer has told you their size (and width, etc.), give it per product so the card's Add to cart is ready, e.g. {\"<handle>\": {\"size\": \"8\", \"width\": \"wide\"}}. Never guess a size.",
+            additionalProperties: { type: "object", additionalProperties: { type: "string" } },
+          },
           follow_ups: {
             type: "array",
             items: { type: "string" },

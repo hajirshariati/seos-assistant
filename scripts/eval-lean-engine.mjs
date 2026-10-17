@@ -30,6 +30,7 @@ const { runLeanTurn, extractPriorShownTitles, normalizeConversation } = await im
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
+const { resolvePreselect } = await import("../app/lib/lean/variant-choice.js");
 
 let passed = 0;
 let failed = 0;
@@ -523,6 +524,27 @@ await test("follow-up about an already-shown product: talking about it needs no 
   const r2 = await runLeanTurn({ catalog, model: "m", messages: [...sanitizeHistory(history), { role: "user", content: "any boots?" }], latestUserMessage: "any boots?", callModel: fresh.callModel, log: quiet });
   assert.equal(r2.retried, true, "a newly found product named without its card still triggers the rewrite");
   assert.equal(r2.cards.length, 1);
+});
+await test("add to cart: the customer's stated size/width maps to exact option values, never a guess", () => {
+  const p = { options: { Size: ["7 US", "8 US", "8.5 - 9 US", "10 US"], Width: ["Medium", "Wide"] } };
+  assert.deepEqual(resolvePreselect(p, { size: "8", width: "W" }), { Size: "8 US", Width: "Wide" });
+  assert.deepEqual(resolvePreselect(p, { Size: "9" }), { Size: "8.5 - 9 US" }, "a range holds the size");
+  assert.deepEqual(resolvePreselect(p, { size: "8", width: "regular" }), { Size: "8 US", Width: "Medium" });
+  assert.equal(resolvePreselect(p, { size: "12" }), null, "a size the product doesn't come in is never picked");
+  assert.equal(resolvePreselect(p, { color: "red" }), null, "an option the product doesn't have is ignored");
+  assert.equal(resolvePreselect({ options: { Size: ["8 US", "8 UK"] } }, { size: "8" }), null, "ambiguous → let the customer choose");
+  assert.equal(resolvePreselect(p, null), null);
+});
+await test("add to cart: show_products with the stated size → the card is ready for one-tap add", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("a", "get_product_details", { handle: H["Savannah Adjustable Quarter Strap Sandal - Red"] })] },
+    { stop_reason: "tool_use", content: [tu("b", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"], H["Savannah Adjustable Quarter Strap Sandal - Black"]], options: { [H["Savannah Adjustable Quarter Strap Sandal - Red"]]: { size: "8" } } })] },
+    { stop_reason: "end_turn", content: [txt("The Savannah in red, ready in your size 8, or in black.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "savannah in size 8" }], latestUserMessage: "savannah in size 8", callModel: s.callModel, log: quiet });
+  assert.deepEqual(r.cards[0].preselect, { Size: "8 US" });
+  assert.equal(r.cards[1].preselect, undefined, "no size stated for that card");
+  assert.ok(buildLeanTools({}).find((t) => t.name === "show_products").input_schema.properties.options);
 });
 await test("hop limit: the last call forbids tools so the customer always gets an answer", async () => {
   const loop = Array.from({ length: 7 }, (_, i) => ({ stop_reason: "tool_use", content: [tu(`t${i}`, "search_products", { query: "sandal" })] }));

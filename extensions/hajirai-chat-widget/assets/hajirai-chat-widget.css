@@ -1524,6 +1524,7 @@ a.ai-chat-welcome__hint--link:hover {
     row-gap: 2px;
     align-items: center;
     padding: 14px;
+    box-sizing: border-box;
   }
   /* Compact white image well — fixed, centered, no wasted space around the photo.
      Spans the title+price rows and centers vertically beside them. */
@@ -2336,4 +2337,348 @@ body:has(#CartDrawer:not([hidden])) .ai-chat-overlay {
     background: linear-gradient(135deg, var(--hajirai-glow-colors, #6366f1, #a855f7, #ec4899, #f59e0b, #10b981, #06b6d4));
     animation: none;
   }
+}
+
+/* ================================================================
+   ADD TO CART — card actions + in-chat option picker
+   ================================================================
+   The card is no longer one big link: image + title link to the
+   product, "Add to cart" (.ai-chat-product-cta) is the primary action
+   in every layout, "View product" a quiet underlined link. */
+a.ai-chat-product-img {
+  display: block;
+}
+a.ai-chat-product-title {
+  color: var(--ai-chat-text);
+  text-decoration: none;
+}
+.ai-chat-product-variant {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ai-chat-text-light);
+}
+.ai-chat-product-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  box-sizing: border-box;
+  min-height: 36px;
+  margin-top: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ai-chat-product-cta-bg, #000);
+  color: var(--ai-chat-product-cta-text, #fff);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .ai-chat-product-cta:hover { opacity: 0.88; }
+}
+.ai-chat-product-cta:active { transform: scale(0.98); }
+.ai-chat-product-cta:focus-visible,
+.ai-chat-view-link:focus-visible,
+.ai-chat-atc-val:focus-visible,
+.ai-chat-atc-add:focus-visible,
+.ai-chat-atc-close:focus-visible,
+.ai-chat-atc-primary:focus-visible,
+.ai-chat-atc-secondary:focus-visible,
+.ai-chat-atc-text:focus-visible {
+  outline: 2px solid var(--ai-chat-primary, #2d6b4f);
+  outline-offset: 2px;
+}
+.ai-chat-product-cta.is-busy,
+.ai-chat-atc-add.is-busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+.ai-chat-products--showcase .ai-chat-product-cta {
+  width: 100%;
+  align-self: stretch;
+}
+.ai-chat-view-link {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ai-chat-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ai-chat-products--showcase .ai-chat-view-link {
+  align-self: center;
+}
+.ai-chat-product-card.is-picking {
+  border-color: var(--ai-chat-product-cta-bg, #000);
+}
+/* "See It Styled" row: the primary Add to cart keeps its own width. */
+.ai-chat-viz-actions .ai-chat-product-cta {
+  flex: 1 1 auto;
+}
+/* With Add to cart on every card, ~2.3 cards fit the chat width (the third
+   peeks to signal scrolling) — 3.3 left ~105px cards that clipped the button. */
+@media (min-width: 601px) {
+  .ai-chat-products--showcase .ai-chat-product-card {
+    flex: 0 0 calc((100% - 20px) / 2.3);
+  }
+  .ai-chat-products--showcase .ai-chat-product-card:only-child {
+    flex: 0 0 100%;
+  }
+  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
+    align-self: flex-start;
+  }
+}
+/* The info column is width:100% + padding — count the padding inside the
+   card (it was ~22px wider than the card, hidden by overflow). */
+.ai-chat-products--showcase .ai-chat-product-info {
+  box-sizing: border-box;
+}
+/* Never let the button text spill out of a narrow card. */
+.ai-chat-product-cta {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 600px) {
+  .ai-chat-products--showcase .ai-chat-product-card:only-child {
+    grid-template-areas:
+      "img title"
+      "img price"
+      "cta cta"
+      "view view";
+  }
+  .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-view-link {
+    grid-area: view;
+    justify-self: start;
+    margin-top: 8px;
+  }
+  .ai-chat-product-cta {
+    min-height: 40px;
+  }
+}
+
+/* ---------- Option picker (opens under the cards) ---------- */
+.ai-chat-atc-panel {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: aiChatAtcIn 0.18s ease-out;
+}
+@keyframes aiChatAtcIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-atc-panel { animation: none; }
+  .ai-chat-product-cta { transition: none; }
+}
+.ai-chat-atc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ai-chat-atc-thumb {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.ai-chat-atc-headtext {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-chat-atc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ai-chat-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chat-atc-price {
+  font-size: 13px;
+  color: var(--ai-chat-text-light);
+  margin-top: 1px;
+}
+.ai-chat-atc-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ai-chat-text-light);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .ai-chat-atc-close:hover { background: rgba(0, 0, 0, 0.05); }
+}
+.ai-chat-atc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-chat-atc-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ai-chat-text);
+}
+.ai-chat-atc-label strong {
+  font-weight: 500;
+  color: var(--ai-chat-text-light);
+}
+.ai-chat-atc-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-chat-atc-val {
+  min-width: 48px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ai-chat-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .ai-chat-atc-val:hover { border-color: var(--ai-chat-text); }
+}
+.ai-chat-atc-val.is-on {
+  border-color: var(--ai-chat-product-cta-bg, #000);
+  background: var(--ai-chat-product-cta-bg, #000);
+  color: var(--ai-chat-product-cta-text, #fff);
+}
+.ai-chat-atc-val.is-out {
+  color: #a3a3a3;
+  border-style: dashed;
+  text-decoration: line-through;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+.ai-chat-atc-add,
+.ai-chat-atc-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ai-chat-product-cta-bg, #000);
+  color: var(--ai-chat-product-cta-text, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ai-chat-atc-add[disabled] {
+  background: #e5e5e5;
+  color: #8a8a8a;
+  cursor: not-allowed;
+}
+.ai-chat-atc-note {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ai-chat-text);
+  background: #f6f6f6;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ai-chat-atc-note.is-error {
+  color: #b42318;
+  background: #fef3f2;
+}
+.ai-chat-atc-note a {
+  color: inherit;
+  text-decoration: underline;
+}
+.ai-chat-atc-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ai-chat-text);
+}
+.ai-chat-atc-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: #12b76a;
+  color: #fff;
+}
+.ai-chat-atc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.ai-chat-atc-actions .ai-chat-atc-primary {
+  flex: 1 1 140px;
+  width: auto;
+}
+.ai-chat-atc-secondary,
+.ai-chat-atc-text {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ai-chat-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+/* Cards and the picker live inside the message bubble, whose generic link
+   rule (inherit + underline) would otherwise win over the classes above. */
+.ai-chat-msg-bubble a.ai-chat-product-img,
+.ai-chat-msg-bubble a.ai-chat-product-title {
+  color: var(--ai-chat-text);
+  text-decoration: none;
+}
+.ai-chat-msg-bubble a.ai-chat-view-link,
+.ai-chat-msg-bubble a.ai-chat-atc-secondary {
+  color: var(--ai-chat-text);
+  text-decoration: underline;
+}
+.ai-chat-msg-bubble a.ai-chat-atc-primary {
+  color: var(--ai-chat-product-cta-text, #fff);
+  text-decoration: none;
 }
