@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 truefit-logo');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 kb-fit');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -585,6 +585,27 @@ panel.addEventListener('keydown',function(e){
   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
 });
+/* Phones: iOS keeps the page height when the keyboard opens and simply
+   covers the bottom of it. Size the chat to what's actually visible so the
+   message bar sits right on the keyboard, with no gap and nothing hidden. */
+var KB_MQ=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
+function fitToKeyboard(){
+  var vv=window.visualViewport;
+  var kb=!!(vv&&isOpen&&KB_MQ&&KB_MQ.matches&&window.innerHeight-vv.height>120);
+  panel.classList.toggle('is-kb',kb);
+  if(kb){
+    panel.style.setProperty('height',vv.height+'px','important');
+    panel.style.setProperty('max-height',vv.height+'px','important');
+    panel.style.setProperty('top',vv.offsetTop+'px','important');
+    scrollBottom();
+  }else{
+    panel.style.removeProperty('height');panel.style.removeProperty('max-height');panel.style.removeProperty('top');
+  }
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',fitToKeyboard);
+  window.visualViewport.addEventListener('scroll',fitToKeyboard);
+}
 function toggle(force){
 var want=typeof force==='boolean'?force:!isOpen;
 if(want&&HIDDEN_BY_URL)return;
@@ -613,6 +634,7 @@ if(isOpen){
   focusBeforeOpen=null;
   try{back.focus({preventScroll:true})}catch(e){}
 }
+fitToKeyboard();
 }
 
 function scrollBottom(){requestAnimationFrame(function(){msgsEl.scrollTop=msgsEl.scrollHeight})}

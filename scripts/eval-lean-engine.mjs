@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -231,6 +231,29 @@ await test("invented product → fact check → Claude rewrites once", async () 
   assert.equal(r.retried, true);
   assert.equal(r.text, "The Ashley wedge in navy is the dressiest match.");
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Automatic fact check/);
+});
+// The live failure: "boots" mid-orthotic chat → the reply was the tap
+// suggestions ("Do these boots come in other colors? What sizes are
+// available?") written as if the assistant were asking them.
+await test("a reply that repeats the tap suggestions is sent back and rewritten", async () => {
+  const followUps = ["Do these come in other colors?", "What sizes are available?"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"] })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]], follow_ups: followUps })] },
+    { stop_reason: "end_turn", content: [txt("Do these come in other colors? What sizes are available? Or would you like more details on any of these?")] },
+    { stop_reason: "end_turn", content: [txt("The Ashley wedge in navy has built-in arch support and a dressy look.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "dressy wedge" }], callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, true);
+  assert.equal(r.text, "The Ashley wedge in navy has built-in arch support and a dressy look.");
+  assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /repeated the suggested tap questions/);
+  assert.deepEqual(r.followUps, followUps, "the suggestions still show as taps");
+});
+await test("echo check: only replies built from the suggestions, not ones that share a phrase", () => {
+  const f = ["Do these come in wide?", "Show me the navy one"];
+  assert.equal(echoesFollowUps("Do these come in wide? Show me the navy one.", f), true);
+  assert.equal(echoesFollowUps("The Ashley is a dressy wedge with arch support — and yes, it comes in wide.", f), false);
+  assert.equal(echoesFollowUps("", f), false);
 });
 await test("show_products rejects a product no tool returned", async () => {
   const s = scripted([

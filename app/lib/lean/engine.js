@@ -100,6 +100,17 @@ function addUsage(total, u = {}) {
   }
 }
 
+// The tap suggestions are written in the customer's voice ("Do these come in
+// wide?"). A reply that repeats them reads as the assistant asking the
+// customer the customer's own questions.
+export function echoesFollowUps(text, followUps = []) {
+  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const t = norm(text);
+  if (!t) return false;
+  const hits = followUps.map(norm).filter((f) => f.length > 8 && t.includes(f));
+  return hits.length >= 2 || (hits.length === 1 && t.length < hits[0].length * 2);
+}
+
 export function toCard(p, preselect = null) {
   // Options the shopper has to pick before adding (e.g. Size, Width) — the
   // card's button reads "Select size" until they're chosen.
@@ -320,14 +331,21 @@ export async function runLeanTurn({
       // Ended without a word for the customer: ask once for the reply.
       askedForText = true;
       if (content.length === 0) conv.pop(); // the API rejects empty assistant turns
-      const ask = { type: "text", text: "(Now write your reply to the customer. Any cards you chose are shown under it.)" };
+      const ask = { type: "text", text: "(Now write your reply to the customer in your own voice — a sentence or two on what you're showing and why it suits them. The cards and the suggested tap questions are shown separately: don't repeat the suggestions.)" };
       const last = conv[conv.length - 1];
       if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), ask];
       else conv.push({ role: "user", content: [ask] });
       log("[lean] no reply text — asking for it");
       continue;
     }
-    const issues = verifyLeanAnswer({
+    const issues = [];
+    if (echoesFollowUps(text, followUps)) {
+      issues.push({
+        code: "echoed_follow_ups",
+        detail: "Your reply repeated the suggested tap questions — they're written in the customer's voice and are already shown as buttons. Write your own short reply: what you're showing and why it fits what they asked.",
+      });
+    }
+    issues.push(...verifyLeanAnswer({
       text,
       shownHandles: shown,
       seenProducts: [...seen.values()],
@@ -335,7 +353,7 @@ export async function runLeanTurn({
       priorTitles,
       familyIndex,
       knowledgeText,
-    });
+    }));
     // A rewrite needs a step left to happen in; on the last step the issues stand.
     if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;

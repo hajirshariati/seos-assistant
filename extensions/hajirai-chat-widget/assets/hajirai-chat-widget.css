@@ -1419,13 +1419,23 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
     padding-top: max(12px, env(safe-area-inset-top));
   }
 
+  /* Only the last row (the fine print) clears the iPhone home bar —
+     clearing it under the message bar too left a band of empty space. */
   .ai-chat-input-area {
-    /* Safe area for bottom bar on iPhones */
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: 8px;
   }
 
   .ai-chat-footer {
-    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  /* Keyboard open: the panel is sized to the visible area (from the
+     widget script) and the fine print steps aside while typing. */
+  .ai-chat-panel.is-kb .ai-chat-footer {
+    display: none;
+  }
+  .ai-chat-panel.is-kb .ai-chat-input-area {
+    padding-bottom: 8px;
   }
 
 

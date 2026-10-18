@@ -181,6 +181,39 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 9b. Phone keyboard: the chat shrinks to the visible area (no gap under it,
+// nothing hidden behind the keyboard) and the fine print steps aside.
+{
+  const init = () => {
+    const vv = new EventTarget();
+    vv.height = window.innerHeight; vv.width = window.innerWidth; vv.offsetTop = 0; vv.offsetLeft = 0; vv.scale = 1;
+    Object.defineProperty(window, "visualViewport", { get: () => vv, configurable: true });
+    window.__kb = (h) => { vv.height = h; vv.dispatchEvent(new Event("resize")); };
+  };
+  const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 }, init });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  const pad = await page.$eval(".ai-chat-input-area", (e) => getComputedStyle(e).paddingBottom);
+  check("phone: no doubled bottom spacing under the message bar", pad === "8px", pad);
+  await page.evaluate(() => window.__kb(480));
+  await page.waitForTimeout(100);
+  const open1 = await page.evaluate(() => {
+    const p = document.querySelector(".ai-chat-panel");
+    const f = document.querySelector(".ai-chat-footer");
+    return { h: Math.round(p.getBoundingClientRect().height), kb: p.classList.contains("is-kb"), footer: f ? getComputedStyle(f).display : "none" };
+  });
+  check("phone keyboard: chat fits the visible area above the keyboard", open1.h === 480 && open1.kb, JSON.stringify(open1));
+  check("phone keyboard: fine print hidden while typing", open1.footer === "none", open1.footer);
+  await page.evaluate(() => window.__kb(844));
+  await page.waitForTimeout(100);
+  const closed = await page.evaluate(() => {
+    const p = document.querySelector(".ai-chat-panel");
+    return { h: Math.round(p.getBoundingClientRect().height), kb: p.classList.contains("is-kb") };
+  });
+  check("phone keyboard: full height again once it closes", closed.h === 844 && !closed.kb, JSON.stringify(closed));
+  await ctx.close();
+}
+
 // 10. axe-core WCAG 2.2 A/AA on the widget only (not the host page).
 const axeRuns = [];
 async function axe(page, label) {

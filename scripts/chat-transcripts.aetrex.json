@@ -1138,5 +1138,33 @@
         }
       }
     ]
+  },
+  {
+    "name": "a one-word shoe type mid-orthotic chat means orthotics for those shoes",
+    "turns": [
+      {
+        "user": "I need an orthotic, I have flat feet and ball of foot pain, women's",
+        "expect": {}
+      },
+      {
+        "user": "sandals",
+        "expect": {
+          "products": {
+            "allTitleOrHandleMustNotMatch": "\\borthotics?\\b|\\binsoles?\\b"
+          }
+        }
+      },
+      {
+        "user": "boots",
+        "expect": {
+          "products": {
+            "allTitleOrHandleMustNotMatch": "\\bboot\\b(?!.*orthotic)"
+          },
+          "text": {
+            "mustNotMatch": "come in other colors\\?|what sizes are available\\?"
+          }
+        }
+      }
+    ]
   }
 ]
