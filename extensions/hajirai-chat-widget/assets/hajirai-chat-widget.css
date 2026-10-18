@@ -2831,8 +2831,7 @@ button.ai-chat-launcher__text {
   height: 100%;
   min-height: 0;
   width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
+  /* Same left edge as the header and the message bar. */
   text-align: left;
   box-sizing: border-box;
   font-family: var(--seos-font);
@@ -2926,6 +2925,7 @@ button.ai-chat-launcher__text {
   color: var(--seos-ink);
 }
 .ai-chat-panel .ai-chat-helper__icon svg { width: 20px; height: 20px; }
+.ai-chat-panel .ai-chat-tf-logo { display: block; object-fit: contain; flex-shrink: 0; }
 .ai-chat-panel .ai-chat-helper__mono {
   font-size: 11px;
   font-weight: 800;
@@ -3041,28 +3041,58 @@ button.ai-chat-launcher__text {
 }
 
 /* ---------- Fit tools inside the conversation ---------- */
-/* On a product card: "Find my size" (shoes) or "Find my FIT" (orthotics). */
-.ai-chat-panel .ai-chat-card-helper {
+/* On a product card: a round icon button beside the buy button — ruler for
+   True Fit (shoes), "FIT" for FITFinder (orthotics). Same height as the buy
+   button, so the card keeps its size. */
+/* Buy button and fit tool always share the first line (even where older
+   rules stack the row); See It Styled, when present, takes its own line. */
+.ai-chat-msg-bubble .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row,
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions.ai-chat-buy-row {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.ai-chat-msg-bubble .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row .ai-chat-product-cta,
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions.ai-chat-buy-row .ai-chat-product-cta {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: auto !important;
+}
+.ai-chat-msg-bubble .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row .ai-chat-viz-btn,
+.ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions.ai-chat-buy-row .ai-chat-viz-btn {
+  flex: 1 0 100% !important;
+  width: 100% !important;
+  order: 3;
+}
+.ai-chat-panel .ai-chat-card-fit {
+  flex: 0 0 38px !important;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  margin-top: 6px;
-  padding: 4px 10px 4px 8px;
-  min-height: 28px;
-  border: 1px solid var(--seos-line);
+  justify-content: center;
+  border: 1px solid var(--seos-line-strong);
   border-radius: 999px;
   background: #fff;
-  color: var(--seos-text);
+  color: var(--seos-ink);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 550;
   cursor: pointer;
-  max-width: 100%;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.ai-chat-panel .ai-chat-card-fit svg { width: 18px; height: 18px; }
+.ai-chat-panel .ai-chat-card-fit--fit span {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 @media (hover: hover) {
-  .ai-chat-panel .ai-chat-card-helper:hover { background: var(--seos-surface); }
+  .ai-chat-panel .ai-chat-card-fit:hover { background: var(--seos-surface); border-color: var(--seos-ink); }
 }
+.ai-chat-panel .ai-chat-card-fit:active { transform: scale(0.96); }
+.ai-chat-panel .ai-chat-card-fit:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
 /* The FIT FITFinder worked out, shown in the reply. */
 .ai-chat-panel .ai-chat-fit-result {
   display: flex;

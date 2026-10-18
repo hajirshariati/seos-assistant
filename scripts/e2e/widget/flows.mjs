@@ -222,7 +222,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 3);
   const perCard = await page.$$eval(".ai-chat-product-card", (cs) => cs.map((c) => {
-    const h = c.querySelector(".ai-chat-card-helper");
+    const h = c.querySelector(".ai-chat-card-fit");
     return `${c.dataset.handle}:${h ? (h.dataset.truefit ? "truefit" : h.dataset.helper) : "-"}`;
   }));
   check("tools: shoes offer True Fit only, orthotics FITFinder only", perCard.join("|") === "savannah-red:truefit|jillian-black:truefit|orthotic-one:fitfinder", perCard.join("|"));
@@ -230,7 +230,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.waitForFunction(() => document.querySelector(".ai-chat-fit-result"), null, { timeout: 5000 }).catch(() => {});
   check("tools: Find my FIT starts the FIT questions", /orthotic FIT/i.test(chatBodies.at(-1)?.message || ""), chatBodies.at(-1)?.message);
   check("tools: the FIT found is shown as a FIT card", /FIT D/.test(await page.textContent(".ai-chat-fit-result").catch(() => "")));
-  check("tools: once a FIT is saved, cards stop offering to find one", (await page.$$('[data-helper="fitfinder"].ai-chat-card-helper')).length === 0);
+  check("tools: once a FIT is saved, cards stop offering to find one", (await page.$$('[data-helper="fitfinder"].ai-chat-card-fit')).length === 0);
   check("tools: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }

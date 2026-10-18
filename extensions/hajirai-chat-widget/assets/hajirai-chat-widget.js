@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 compact-home');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 truefit-logo');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -420,6 +420,10 @@ var WI={
   target:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
   spark:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>'
 };
+/* True Fit's own mark, as on the product pages' "Find my size" tile. */
+function tfLogo(size){
+  return C.trueFitLogo?'<img class="ai-chat-tf-logo" src="'+safeUrl(C.trueFitLogo)+'" alt="" width="'+size+'" height="'+size+'" aria-hidden="true">':WI.ruler.replace(/22/g,String(size));
+}
 function ctaIcon(label){
   var l=String(label||'').toLowerCase();
   if(/orthotic|insole|insert/.test(l))return WI.target.replace(/14/g,'18');
@@ -512,7 +516,7 @@ function renderHelpers(){
   var items='';
   if(tfPayload()){
     var onShoe=tfHere()&&pageHandle();
-    items+=helperHtml('truefit',onShoe?'Size for this shoe':'Find my shoe size','with True Fit',WI.ruler);
+    items+=helperHtml('truefit',onShoe?'Size for this shoe':'Find my shoe size','with True Fit',tfLogo(24));
   }
   if(ff){
     var mine=savedFit();
@@ -851,7 +855,11 @@ function injectVizButton(card,cta){
   var go=function(e){if(e){e.preventDefault();e.stopPropagation();}runVisualize(cta,card)};
   viz.addEventListener('click',go);
   var viewCta=card.querySelector('.ai-chat-product-cta');
-  if(viewCta&&viewCta.parentNode&&getComputedStyle(viewCta).display!=='none'){
+  var buyRow=viewCta&&viewCta.parentNode&&viewCta.parentNode.classList.contains('ai-chat-buy-row')?viewCta.parentNode:null;
+  if(buyRow){
+    /* The buy button already shares a row with the fit tool: join it. */
+    buyRow.insertBefore(viz,viewCta.nextSibling);
+  }else if(viewCta&&viewCta.parentNode&&getComputedStyle(viewCta).display!=='none'){
     // Wrap "Add to cart" + "See It Styled" in a single flex row so they sit
     // side by side when there's room and STACK (See It Styled under Add to
     // cart) when the card is too narrow / on mobile.
@@ -1189,8 +1197,7 @@ function tfPayload(){
 }
 function trueFitBtnHtml(f){
 return '<button type="button" class="ai-chat-cta-btn ai-chat-truefit-cta" data-truefit="'+esc(f.handle)+'" data-title="'+esc(f.title||'')+'">'+
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(-45 12 12)"><rect x="1.5" y="8.5" width="21" height="7" rx="2"/><path d="M6 8.5v2.5M10 8.5v3.5M14 8.5v2.5M18 8.5v3.5"/></g></svg>'+
-  '<span>Find my size with True Fit</span></button>';
+  tfLogo(20)+'<span>Find my size with True Fit</span></button>';
 }
 function tfNote(text){messages.push({role:'assistant',content:text});saveH(messages);appendMsg('assistant',text);scrollBottom()}
 function trueFitFor(handle,title){
@@ -1266,12 +1273,13 @@ return d;
    "View product" a quiet underlined link. When the chat already knows the
    customer's size/width, the card carries it (data-preselect) and shows it
    under the price — one tap adds that exact variant. */
-/* Each card offers the fit tool that belongs to it: True Fit on shoes,
-   FITFinder on orthotics (until the shopper has a FIT) — never the other way. */
+/* Each card offers the fit tool that belongs to it — True Fit on shoes,
+   FITFinder on orthotics (until the shopper has a FIT), never the other way —
+   as a round icon button beside the buy button, so the card doesn't grow. */
 function cardHelper(p,t){
   if(!p||!p.handle)return '';
-  if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-helper" data-truefit="'+esc(p.handle)+'" data-title="'+t+'">'+WI.ruler.replace(/22/g,'14')+'<span>Find my size</span></button>';
-  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-helper" data-helper="fitfinder">'+WI.target+'<span>Find my FIT</span></button>';
+  if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-fit" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit" title="Find my size \u00b7 True Fit">'+tfLogo(20)+'</button>';
+  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
   return '';
 }
 function prodCard(p){
@@ -1288,13 +1296,16 @@ var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preK
 /* One short label for every card ("Select size"); the picker asks for the rest. */
 var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
 var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
+var buyBtn='<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>';
+var fitBtn=cardHelper(p,t);
+/* With a fit tool, the buy button and the tool share one row. */
+var buyHtml=fitBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row">'+buyBtn+fitBtn+'</div>':buyBtn;
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
   '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
-  '<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>'+
+  buyHtml+
   '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
-  cardHelper(p,t)+
 '</div>';
 return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(img)+'"'+(pre?' data-preselect="'+esc(JSON.stringify(pre))+'"':'')+'>'+imgHtml+infoHtml+'</div>';
 }
@@ -1680,7 +1691,7 @@ function ffSave(key){
   }
   ff.saved=f.key;
   /* They have a FIT now: earlier cards stop offering to find one. */
-  var stale=msgsEl.querySelectorAll('.ai-chat-card-helper[data-helper="fitfinder"]');
+  var stale=msgsEl.querySelectorAll('.ai-chat-card-fit[data-helper="fitfinder"]');
   for(var si=0;si<stale.length;si++)stale[si].parentNode.removeChild(stale[si]);
 }
 

@@ -39,6 +39,7 @@
     chatWidth: {{ block.settings.chat_width | json }},
     hideOnMobile: {{ block.settings.hide_on_mobile | json }},
     trueFit: {{ block.settings.truefit_size_finder | json }},
+    trueFitLogo: {{ 'truefit-logo.png' | asset_url | json }},
     rotateGreetingCta: {{ block.settings.rotate_greeting_cta | json }},
     customerLoggedIn: {% if customer %}true{% else %}false{% endif %},
     customerFirstName: {% if customer %}{{ customer.first_name | json }}{% else %}""{% endif %},
