@@ -73,6 +73,7 @@ export function leanChatResponse({
   supportUrl = "",
   supportLabel = "",
   fitfinder = null,
+  sizeFinder = null,
 }) {
   const encoder = new TextEncoder();
   // When the shopper leaves (closes the tab, the widget gives up), the turn
@@ -110,7 +111,7 @@ export function leanChatResponse({
         const model = chatModel(config.anthropicModel);
         const [catalog, extras] = await Promise.all([
           loadLeanCatalog(shop),
-          buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder })
+          buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder, sizeFinder })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
               return { tools: [], similarAttributes: [], systemBlock: "" };

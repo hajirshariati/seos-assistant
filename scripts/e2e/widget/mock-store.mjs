@@ -49,6 +49,24 @@ function themeBlockStyle() {
   const liquid = fs.readFileSync(new URL("../../../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8");
   return liquid.match(/<style>[\s\S]*?<\/style>/)?.[0] || "";
 }
+// A shoe page with the theme's "Find my size" tile and a stand-in for its
+// True Fit driver: open() shows the finder, the shopper "answers", it
+// closes, and the size appears a moment later — as True Fit does.
+// ?tf=none: True Fit has no data for this style (open() shows the size chart).
+const shoePage = (handle, tf) => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
+<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",greeting:"Hi!"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
+<body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Product ${handle} <span class="cart-count">0</span>
+${tf === "absent" ? "" : '<button type="button" data-tf-size-tile data-product-id="42">Find my size</button>'}<div id="size-chart" hidden>Size chart</div></div>
+<script>
+${tf === "absent" ? "" : `window.AetrexTrueFitTile={state:{busy:false,finderOpen:false,recommendation:null},open:function(){
+  var s=this.state;window.__tfOpens=(window.__tfOpens||0)+1;
+  if(${JSON.stringify(tf === "none")}){document.getElementById("size-chart").hidden=false;return Promise.resolve()}
+  s.busy=true;
+  return new Promise(function(r){setTimeout(function(){
+    s.busy=false;s.finderOpen=true;document.body.classList.add("tfc-show-modal");window.__tfChatOpenDuringFinder=document.querySelector(".ai-chat-panel.open")?1:0;r();
+    setTimeout(function(){document.body.classList.remove("tfc-show-modal");s.finderOpen=false;setTimeout(function(){s.recommendation="9 - 9.5 US"},800)},1200);
+  },300)})}};`}
+</script><script src="/w.js"></script></body></html>`;
 export function start(port) {
   return new Promise((res) => {
     const srv = http.createServer((req, resp) => {
@@ -60,6 +78,8 @@ export function start(port) {
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
         if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage());
+        const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
+        if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }] }));
@@ -90,6 +110,21 @@ export function start(port) {
           if (parsed.message === "cut") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             resp.write(`data: ${JSON.stringify({ type: "text", text: "Here's what I found before the connection dropped." })}\n\n`);
+            return resp.end();
+          }
+          if (/what size/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const handle = parsed.size_finder?.page_handle || "jillian-black";
+            resp.write(`data: ${JSON.stringify({ type: "text", text: "True Fit can find your size — tap below." })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "size_finder", provider: "truefit", handle, title: "Jillian Sandal" })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+            return resp.end();
+          }
+          if (/^True Fit recommends/.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            resp.write(`data: ${JSON.stringify({ type: "text", text: "Here's the Jillian in 9 - 9.5 US, ready to add." })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "products", products: [{ ...cards[1], preselect: { Size: "9 US", Width: "Medium" } }] })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
             return resp.end();
           }
           if (/fit/i.test(parsed.message || "")) {

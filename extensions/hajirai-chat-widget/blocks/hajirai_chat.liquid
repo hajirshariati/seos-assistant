@@ -38,6 +38,7 @@
     launcherWidth: {{ block.settings.launcher_width | json }},
     chatWidth: {{ block.settings.chat_width | json }},
     hideOnMobile: {{ block.settings.hide_on_mobile | json }},
+    trueFit: {{ block.settings.truefit_size_finder | json }},
     rotateGreetingCta: {{ block.settings.rotate_greeting_cta | json }},
     customerLoggedIn: {% if customer %}true{% else %}false{% endif %},
     customerFirstName: {% if customer %}{{ customer.first_name | json }}{% else %}""{% endif %},
@@ -220,6 +221,15 @@
     {"type": "text", "id": "qp3_message", "label": "Quick Pick 3 Message", "default": "Show me Aetrex products currently on sale."},
     {"type": "text", "id": "qp4_label", "label": "Quick Pick 4 Label", "default": "Returns"},
     {"type": "text", "id": "qp4_message", "label": "Quick Pick 4 Message", "default": "Help me understand Aetrex's return and exchange policy."},
+
+    { "type": "header", "content": "Size finder" },
+    {
+      "type": "checkbox",
+      "id": "truefit_size_finder",
+      "label": "Open True Fit from the chat",
+      "info": "For stores with True Fit's \"Find my size\" on shoe product pages: when a shopper asks about size, the chat opens True Fit for that shoe and brings the recommended size back. On a shoe's own page this works even when unchecked.",
+      "default": false
+    },
 
     { "type": "header", "content": "Customer Service Handoff", "info": "Shown if the chat fails or the assistant can't answer." },
     {

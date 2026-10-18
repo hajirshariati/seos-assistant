@@ -10,6 +10,7 @@ import { getTodayMessageCount } from "../models/ChatUsage.server";
 import { leanChatResponse } from "../lib/lean/respond.server.js";
 import { sanitizeHistory, withoutTrailingCopy } from "../lib/lean/history.js";
 import { sanitizeFitfinder } from "../lib/orthotic-finder.js";
+import { sanitizeSizeFinder } from "../lib/lean/size-finder.server.js";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
 
@@ -115,5 +116,6 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     supportUrl: typeof body.support_url === "string" ? body.support_url : "",
     supportLabel: typeof body.support_label === "string" ? body.support_label : "",
     fitfinder: sanitizeFitfinder(body.fitfinder),
+    sizeFinder: sanitizeSizeFinder(body.size_finder),
   });
 }

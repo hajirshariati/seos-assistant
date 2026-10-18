@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 launch-ready');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 truefit');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -1094,6 +1094,77 @@ function supportCtaHtml(s){
 return '<button type="button" class="ai-chat-cta-btn ai-chat-support-cta" data-support-cta="1" data-fallback="'+esc(s.fallbackUrl||'')+'" style="display:block;width:100%;margin-top:12px;padding:14px 16px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border:none;border-radius:10px;text-align:center;font-size:14px;font-weight:600;line-height:1.3;cursor:pointer;font-family:inherit">'+esc(s.label||'Chat with Aetrex Support')+'</button>';
 }
 
+/* ── True Fit: the store's size finder, opened from the chat ──
+   On shoe pages the theme's "Find my size" tile drives True Fit
+   (window.AetrexTrueFitTile). When a shopper asks about size, the assistant
+   offers a button; it opens that same finder (the chat steps aside so the
+   finder is visible), then brings True Fit's size back into the chat, where
+   the shoe comes back ready to add in that size. For another shoe, the button
+   opens that shoe's page and the finder starts there. */
+var TF_PENDING='hajirai_tf_pending',TF_SITE='hajirai_tf_site',tfRun=null;
+function tfTile(){return document.querySelector('[data-tf-size-tile]')}
+function pageHandle(){var m=location.pathname.match(/\/products\/([^/?#]+)/);try{return m?decodeURIComponent(m[1]):''}catch(e){return ''}}
+function tfHere(){return !!(window.AetrexTrueFitTile&&window.AetrexTrueFitTile.state&&tfTile())}
+function tfPayload(){
+  var here=tfHere(),seen=false;
+  try{if(here)localStorage.setItem(TF_SITE,'1');seen=localStorage.getItem(TF_SITE)==='1'}catch(e){}
+  if(!here&&!seen&&C.trueFit!==true)return null;
+  return{provider:'truefit',page_handle:here?pageHandle():''};
+}
+function trueFitBtnHtml(f){
+return '<button type="button" class="ai-chat-cta-btn ai-chat-truefit-cta" data-truefit="'+esc(f.handle)+'" data-title="'+esc(f.title||'')+'">'+
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(-45 12 12)"><rect x="1.5" y="8.5" width="21" height="7" rx="2"/><path d="M6 8.5v2.5M10 8.5v3.5M14 8.5v2.5M18 8.5v3.5"/></g></svg>'+
+  '<span>Find my size with True Fit</span></button>';
+}
+function tfNote(text){messages.push({role:'assistant',content:text});saveH(messages);appendMsg('assistant',text);scrollBottom()}
+function trueFitFor(handle,title){
+  if(!handle||tfRun)return;
+  if(handle===pageHandle()&&tfHere()){runTrueFit(title);return}
+  try{sessionStorage.setItem(TF_PENDING,JSON.stringify({handle:handle,title:title,at:Date.now()}))}catch(e){}
+  location.href=SHOP_ROOT+'products/'+encodeURIComponent(handle);
+}
+function runTrueFit(title){
+  var api=window.AetrexTrueFitTile,tile=tfTile();
+  if(!api||!tile||tfRun)return;
+  tfRun={title:title,started:Date.now()};
+  toggle(false);
+  Promise.resolve().then(function(){return api.open(tile)}).catch(function(){}).then(function(){
+    var st=api.state,seen=false,closedAt=0;
+    var timer=setInterval(function(){
+      var open=document.body.classList.contains('tfc-show-modal')||st.finderOpen||st.busy;
+      if(open&&Date.now()-tfRun.started<30*60*1000){seen=true;closedAt=0;return}
+      if(!closedAt)closedAt=Date.now();
+      /* True Fit redraws its answer a moment after the finder closes. */
+      if(!st.recommendation&&seen&&Date.now()-closedAt<4000)return;
+      clearInterval(timer);
+      var run=tfRun;tfRun=null;
+      var size=st.recommendation;
+      /* No finder and no size: True Fit has no data for this style and the
+         theme opened its size chart instead — leave the shopper there. */
+      if(!seen&&!size)return;
+      toggle(true);
+      if(size){
+        inputEl.disabled=false;inputEl.placeholder=IPLACE;
+        inputEl.value='True Fit recommends size '+size+' for me'+(run.title?' in the '+run.title:'')+'.';
+        sendMessage();
+      }else tfNote('True Fit didn\'t give a size this time. Tap Find my size to try again, or tell me your usual size and I\'ll help from there.');
+    },400);
+  });
+}
+/* Arrived from the chat's True Fit button on another page: start the finder here. */
+function tfResume(){
+  var p=null;
+  try{p=JSON.parse(sessionStorage.getItem(TF_PENDING)||'null');sessionStorage.removeItem(TF_PENDING)}catch(e){}
+  if(!p||!p.handle||Date.now()-p.at>10*60*1000||p.handle!==pageHandle())return;
+  var tries=0;
+  (function wait(){
+    if(tfHere()){runTrueFit(p.title||'');return}
+    if(++tries<24){setTimeout(wait,250);return}
+    toggle(true);
+    tfNote('True Fit isn\'t available for this style. The size chart on this page can help — or tell me your usual size and I\'ll suggest one.');
+  })();
+}
+
 function appendMsg(role,content,products){
 var isU=role==='user';
 var d=el('div','ai-chat-msg ai-chat-msg--'+role);
@@ -1547,6 +1618,8 @@ var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,
 if(SUPPORT_URL)body.support_url=SUPPORT_URL;
 if(SUPPORT_LABEL)body.support_label=SUPPORT_LABEL;
 var ffData=ffPayload();
+var tfData=tfPayload();
+if(tfData)body.size_finder=tfData;
 if(ffData)body.fitfinder=ffData;
 else loadFitfinder();
 fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'text/event-stream'},body:JSON.stringify(body),signal:abortCtrl.signal}).then(function(r){
@@ -1574,7 +1647,7 @@ showHighTraffic();
 function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
-var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null;
+var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -1606,20 +1679,23 @@ if(p.type==='fit_report'&&p.recommendedSize){
 if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
 }
+if(p.type==='size_finder'&&p.handle){
+  sizeFinder={handle:String(p.handle),title:String(p.title||'')};
+}
 if(p.type==='klaviyo_form'){
   later(function(){showKlaviyoForm('Stay Connected')},300);
 }
 if(p.type==='visualize_cta'&&p.productHandle){
   vizCta={productHandle:p.productHandle,productTitle:p.productTitle||'',styleContext:p.styleContext||'',label:p.label||'See It Styled',scenes:(p.scenes&&p.scenes.length)?p.scenes:null,sceneGroup:p.sceneGroup||'',productCategory:p.productCategory||''};
 }
-if(p.type==='done'){finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);return true}
+if(p.type==='done'){finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta,sizeFinder);return true}
 if(p.type==='error'){
   showStreamError(p.message||'I\'m sorry, I\'m having trouble right now. Please try again in a moment.');
   return true;
 }
 }catch(e){}
 }return false}
-function read(){reader.read().then(function(r){armWatchdog();if(r.done){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('I\'m having trouble right now. Please try again.');return}var done=proc(decoder.decode(r.value,{stream:true}));if(!done)read()}).catch(function(e){if(e.name!=='AbortError'){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta);else showStreamError('Connection lost. Please try again.')}})}
+function read(){reader.read().then(function(r){armWatchdog();if(r.done){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta,sizeFinder);else showStreamError('I\'m having trouble right now. Please try again.');return}var done=proc(decoder.decode(r.value,{stream:true}));if(!done)read()}).catch(function(e){if(e.name!=='AbortError'){if(full)finish(full,prods,msgDiv,buffSugg,linkCTA,fitReport,buffChoices,vizCta,supportCta,sizeFinder);else showStreamError('Connection lost. Please try again.')}})}
 read();
 }
 
@@ -1689,7 +1765,7 @@ function stripDanglingMd(s){
   }).join('\n');
   return s.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+([.,!?;:])/g,'$1').replace(/([—–-])\s+([.,!?;:])/g,'$2').trim();
 }
-function finish(text,prods,md2,sugg,linkCTA,fitReport,sseChoices,vizCta,supportCta){clearWatchdog();
+function finish(text,prods,md2,sugg,linkCTA,fitReport,sseChoices,vizCta,supportCta,sizeFinder){clearWatchdog();
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
 errorRetryCount=0;
 var mDiv=md2;
@@ -1735,6 +1811,10 @@ if(linkCTA&&linkCTA.url&&mDiv){
 if(supportCta&&mDiv){
   var scb=$('.ai-chat-msg-bubble',mDiv);
   if(scb)scb.insertAdjacentHTML('beforeend',supportCtaHtml(supportCta));
+}
+if(sizeFinder&&mDiv){
+  var tfb=$('.ai-chat-msg-bubble',mDiv);
+  if(tfb)tfb.insertAdjacentHTML('beforeend',trueFitBtnHtml(sizeFinder));
 }
 if(fitReport&&fitReport.size&&mDiv){
   var frb=$('.ai-chat-msg-bubble',mDiv);
@@ -1842,6 +1922,8 @@ var atcBtn=e.target.closest('[data-atc]');
 if(atcBtn){e.preventDefault();e.stopPropagation();startAddToCart(atcBtn.closest('.ai-chat-product-card'),atcBtn);return}
 // Handoff support CTA button → live chat (Zendesk/Intercom/Gorgias), Support
 // Hub URL only as fallback.
+var tfBtn=e.target.closest('[data-truefit]');
+if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');
 if(supportCtaBtn){e.preventDefault();openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
 var deadEnd=e.target.closest('[data-dead-end]');
@@ -1862,6 +1944,7 @@ if(prodLink)markChatAttributed();
 });
 
 /* Init */
+setTimeout(tfResume,0);
 if(messages.length===0)buildWelcome();
 else for(var i=0;i<messages.length;i++){
   var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);

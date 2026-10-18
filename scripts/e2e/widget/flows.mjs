@@ -141,6 +141,70 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("ff: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// True Fit: the shopper asks about size, taps the button, True Fit opens
+// with the chat out of the way, and its size comes back into the chat.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const ask = async (text) => {
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", text);
+    await page.keyboard.press("Enter");
+  };
+  await page.goto("http://localhost:4789/products/jillian-black");
+  await page.waitForTimeout(400);
+  await page.click(".ai-chat-launcher");
+  await ask("what size should I get?");
+  await page.waitForSelector("[data-truefit]");
+  check("tf: the message tells the server True Fit is on this shoe's page", chatBodies.at(-1)?.size_finder?.provider === "truefit" && chatBodies.at(-1)?.size_finder?.page_handle === "jillian-black", JSON.stringify(chatBodies.at(-1)?.size_finder));
+  check("tf: a Find my size with True Fit button is shown", /Find my size with True Fit/.test(await page.textContent("[data-truefit]")));
+  const sent = chatBodies.length;
+  await page.click("[data-truefit]");
+  await page.waitForFunction(() => window.__tfOpens === 1, null, { timeout: 5000 });
+  await page.waitForFunction(() => document.body.classList.contains("tfc-show-modal"), null, { timeout: 5000 });
+  check("tf: True Fit opens with the chat out of the way", (await page.evaluate(() => window.__tfChatOpenDuringFinder)) === 0);
+  await page.waitForFunction((n) => window.__chatSent > n || document.querySelectorAll(".ai-chat-msg--user").length >= 2, sent, { timeout: 8000 }).catch(() => {});
+  await page.waitForSelector(".ai-chat-panel.open", { timeout: 8000 });
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 8000 });
+  check("tf: after True Fit closes, the chat comes back with the shopper's size", /^True Fit recommends size 9 - 9\.5 US for me in the Jillian Sandal\.$/.test(chatBodies.at(-1)?.message || ""), chatBodies.at(-1)?.message);
+  check("tf: the shoe comes back ready in that size", /9 US/.test(await page.textContent(".ai-chat-product-card")));
+
+  // From another page: the button opens the shoe's page and True Fit starts there.
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(400);
+  await page.click(".ai-chat-launcher");
+  await ask("what size in the Jillian?");
+  await page.waitForSelector(".ai-chat-msg--assistant:last-child [data-truefit]");
+  check("tf: on other pages the site is remembered as having True Fit", chatBodies.at(-1)?.size_finder?.page_handle === "", JSON.stringify(chatBodies.at(-1)?.size_finder));
+  await Promise.all([page.waitForURL(/\/products\/jillian-black$/), page.click(".ai-chat-msg--assistant:last-child [data-truefit]")]);
+  await page.waitForFunction(() => window.__tfOpens === 1, null, { timeout: 8000 });
+  await page.waitForSelector(".ai-chat-panel.open", { timeout: 10000 });
+  await page.waitForFunction(() => /^True Fit recommends/.test([...document.querySelectorAll(".ai-chat-msg--user")].at(-1)?.textContent || ""), null, { timeout: 8000 }).catch(() => {});
+  check("tf: …and the size comes back into the same conversation", /^True Fit recommends size 9 - 9\.5 US/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.history?.some((h) => /what size in the Jillian/.test(h.content)), chatBodies.at(-1)?.message);
+
+  // No True Fit data for a style: the theme's size chart opens, the chat stays out of the way.
+  await page.goto("http://localhost:4789/products/jillian-black?tf=none");
+  await page.waitForTimeout(400);
+  await page.click(".ai-chat-launcher");
+  await ask("what size should I get?");
+  await page.waitForSelector(".ai-chat-msg--assistant:last-child [data-truefit]");
+  const before = chatBodies.length;
+  await page.click(".ai-chat-msg--assistant:last-child [data-truefit]");
+  await page.waitForTimeout(1500);
+  check("tf: no True Fit data → the size chart shows, no message is sent", (await page.isVisible("#size-chart")) && chatBodies.length === before && !(await page.isVisible(".ai-chat-panel.open")));
+
+  // A page without True Fit (and the store setting off) never offers it.
+  await page.evaluate(() => { try { localStorage.removeItem("hajirai_tf_site"); } catch { /* */ } });
+  await page.goto("http://localhost:4789/products/orthotic-one");
+  await page.waitForTimeout(400);
+  await page.click(".ai-chat-launcher");
+  await ask("show me 1");
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  check("tf: without True Fit nothing is sent about it", !chatBodies.at(-1)?.size_finder);
+  check("tf: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 await browser.close();
 srv.close();
 console.log(results.join("\n"));

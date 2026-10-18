@@ -17,6 +17,7 @@ import { fetchCustomerContext } from "../customer-context.server.js";
 import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
+import { trueFitTool } from "./size-finder.server.js";
 
 const MAX_RULES_CHARS = 6000;
 
@@ -86,6 +87,8 @@ export async function buildLeanStoreExtras({
   messages = [],
   latestUserMessage = "",
   fitfinder = null, // the shopper's FITFinder data, from the widget (sanitized)
+  sizeFinder = null, // True Fit on this store's shoe pages, from the widget (sanitized)
+  sizeLookup, // tests: product lookup for the True Fit tool
   log = (l) => console.log(l),
 }) {
   const vip = Boolean(loggedInCustomerId && accessToken && config.vipModeEnabled === true);
@@ -172,6 +175,9 @@ export async function buildLeanStoreExtras({
       input_schema: { type: "object", properties: {} },
     }, async () => ({ ok: true, note: "The signup form appears under your reply.", _events: [{ type: "klaviyo_form" }] }));
   }
+
+  const trueFit = trueFitTool({ shop, sizeFinder, ...(sizeLookup ? { lookup: sizeLookup } : {}) });
+  if (trueFit) wrap(trueFit.definition, trueFit.run);
 
   if (ctx.yotpoApiKey) wrap(REVIEWS_TOOL, (input) => getProductReviews(input || {}, ctx));
 
