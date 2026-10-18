@@ -129,7 +129,7 @@ const healthRows = () => prisma.chatHealthEvent.findMany({ where: { shop: SHOP }
 
 const productCount = await seed();
 const mock = modelServer();
-const server = spawn(process.execPath, [path.join(ROOT, "node_modules/@react-router/serve/dist/cli.js"), "./build/server/index.js"], {
+const server = spawn(process.execPath, ["server.mjs"], {
   cwd: ROOT,
   env: {
     ...process.env, NODE_ENV: "production", PORT: String(APP_PORT), DATABASE_URL: DB, ENCRYPTION_KEY,
@@ -145,6 +145,18 @@ for (let i = 0; i < 60; i++) {
   try { if ((await fetch(`http://localhost:${APP_PORT}/healthz`)).ok) break; } catch { /* booting */ }
   await new Promise((r) => setTimeout(r, 500));
 }
+
+console.log("\nadmin behind an HTTPS proxy (Railway)");
+await test("admin form posts forwarded as plain HTTP pass the cross-site check; other origins don't", async () => {
+  const post = (origin) => fetch(`http://localhost:${APP_PORT}/app/knowledge.data`, {
+    method: "POST", body: "intent=sync_store_knowledge",
+    headers: { origin, "x-forwarded-proto": "https", "content-type": "application/x-www-form-urlencoded", "user-agent": "Mozilla/5.0 Chrome/130" },
+    redirect: "manual",
+  });
+  const own = await post(`https://localhost:${APP_PORT}`);
+  assert.notEqual(own.status, 400, "the admin's own submit was rejected as cross-site");
+  assert.equal((await post("https://evil.example")).status, 400);
+});
 
 console.log(`\nstorefront path (production build, ${productCount} products, stand-in model)`);
 await test("a signed chat turn streams the reply, two product cards and done", async () => {
