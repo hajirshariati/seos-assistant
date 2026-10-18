@@ -32,9 +32,9 @@ const PRODUCTS = {
 };
 const img = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f1ede6"/><path d="M30 130 Q100 60 170 120 L170 140 L30 140Z" fill="#8a2b2b"/></svg>');
 const cards = [
-  { title: PRODUCTS["savannah-red"].title, handle: "savannah-red", url: "/products/savannah-red", image: img, price: "129.95", price_formatted: "$129.95", preselect: { Size: "8 US", Width: "Medium" }, choose: ["Size", "Width"] },
-  { title: PRODUCTS["jillian-black"].title, handle: "jillian-black", url: "/products/jillian-black", image: img, price: "119.95", price_formatted: "$119.95", choose: ["Size", "Width"] },
-  { title: PRODUCTS["orthotic-one"].title, handle: "orthotic-one", url: "/products/orthotic-one", image: img, price: "69.95", price_formatted: "$69.95" },
+  { title: PRODUCTS["savannah-red"].title, handle: "savannah-red", url: "/products/savannah-red", image: img, price: "129.95", price_formatted: "$129.95", preselect: { Size: "8 US", Width: "Medium" }, choose: ["Size", "Width"], kind: "footwear" },
+  { title: PRODUCTS["jillian-black"].title, handle: "jillian-black", url: "/products/jillian-black", image: img, price: "119.95", price_formatted: "$119.95", choose: ["Size", "Width"], kind: "footwear" },
+  { title: PRODUCTS["orthotic-one"].title, handle: "orthotic-one", url: "/products/orthotic-one", image: img, price: "69.95", price_formatted: "$69.95", kind: "orthotic" },
 ];
 const page = (style) => `<!doctype html><script>setTimeout(function(){var d=document.createElement("div");d.id="floater";d.style.cssText="position:fixed;right:16px;bottom:16px;width:48px;height:48px;z-index:999999;pointer-events:none";var f=document.createElement("iframe");f.style.cssText="width:48px;height:48px;border:0;border-radius:50%;background:#333;pointer-events:auto";d.appendChild(f);document.body.appendChild(d)},6000)</script><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
 <script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"The Fit Concierge",greeting:"Hi!",position:"right"};try{localStorage.setItem("hajirai_product_card_style","${style}")}catch(e){}</script></head>

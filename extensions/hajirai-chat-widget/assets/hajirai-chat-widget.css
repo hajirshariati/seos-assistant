@@ -335,261 +335,6 @@
 /* ================================================================
    WELCOME SCREEN – Banner, avatar, CTAs
    ================================================================ */
-.ai-chat-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  /* Bind welcome to exactly the messages-area height so the banner's
-     flex-shrink can absorb any overflow. min-height:100% would let
-     welcome grow with its content — height:100% caps it. */
-  height: 100%;
-  box-sizing: border-box;
-}
-
-/* Lock every welcome child EXCEPT the banner at its natural height,
-   so the banner is the only thing that shrinks when space is tight.
-   Without this, default flex-shrink:1 lets text rows compress too
-   and they crush their own line-height before the banner gives up
-   any pixels. */
-.ai-chat-welcome > *:not(.ai-chat-welcome__banner) {
-  flex-shrink: 0;
-}
-
-.ai-chat-welcome__banner {
-  width: 100%;
-  overflow: hidden;
-  border-radius: 1em;
-  position: relative;
-  background: linear-gradient(135deg, var(--ai-chat-primary), var(--ai-chat-accent));
-  flex-shrink: 0;
-  /* Banner height = whatever space is left in the welcome area after
-     the non-banner content takes its natural size, clamped between
-     80px (min) and 280px (max). The 320px reservation covers avatar
-     (36 effective) + name (44) + tagline (32) + greeting-cta (38) +
-     CTAs (46) + quickpicks (72) + hint (30) + breathing room.
-     calc(100% - 320px) resolves against .ai-chat-welcome which has
-     height:100% of the messages area, so the banner adapts to the
-     panel's actual size — no scrollbar even on short viewports. */
-  height: clamp(80px, calc(100% - 320px), 280px);
-}
-
-.ai-chat-welcome__banner:empty,
-.ai-chat-welcome__banner:not(:has(img)) {
-  display: none;
-}
-
-.ai-chat-welcome__banner img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-/* Very short panels: hide the banner entirely so the rest of the
-   welcome is reachable without scroll. */
-@media (max-height: 480px) {
-  .ai-chat-welcome__banner { display: none; }
-  .ai-chat-welcome__avatar { margin-top: 8px; }
-}
-
-.ai-chat-welcome__avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: var(--ai-chat-primary);
-  border: 4px solid var(--ai-chat-bg);
-  margin-top: -44px;
-  position: relative;
-  z-index: 2;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-/* When banner is hidden (no image), reset avatar to sit below messages top */
-.ai-chat-welcome:not(:has(.ai-chat-welcome__banner img)) .ai-chat-welcome__avatar {
-  margin-top: 8px;
-}
-
-.ai-chat-welcome__avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.ai-chat-welcome__avatar svg {
-  width: 36px;
-  height: 36px;
-  color: #fff;
-}
-
-.ai-chat-welcome__name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ai-chat-text);
-  margin: 12px 0 4px;
-  letter-spacing: -0.01em;
-}
-
-.ai-chat-welcome__tagline {
-  font-size: 13px;
-  color: var(--ai-chat-text-light);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.ai-chat-welcome__tagline:empty {
-  display: none;
-}
-
-.ai-chat-welcome__ctas {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.ai-chat-welcome__cta-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--ai-chat-cta-bg-val);
-  border-radius: 10px;
-  background: var(--ai-chat-cta-bg-val);
-  color: var(--ai-chat-cta-text-val);
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
-  white-space: normal;
-  word-break: break-word;
-  line-height: 1.3;
-  min-width: 0;
-  text-align: left;
-  justify-content: flex-start;
-  font-family: inherit;
-}
-
-@media (hover: hover) {
-  .ai-chat-welcome__cta-btn:active {
-    transform: scale(0.98);
-  }
-}
-
-@media (hover: hover) {
-  .ai-chat-welcome__cta-btn:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    background: var(--ai-chat-cta-hover, #d6eee0);
-  }
-}
-
-.ai-chat-welcome__cta-btn .cta-plus {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ai-chat-cta-text-val);
-}
-
-.ai-chat-welcome__greeting-cta {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ai-chat-text);
-  margin-top: 4px;
-  margin-bottom: 12px;
-  transition: opacity 0.25s ease;
-  min-height: 1.4em;
-}
-
-/* Cross-fade frame swap for the multilingual rotator. The JS adds
-   .is-fading just before swapping textContent, then removes it. */
-.ai-chat-welcome__greeting-cta.is-fading {
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ai-chat-welcome__greeting-cta {
-    transition: none;
-  }
-}
-
-.ai-chat-welcome__hint {
-  font-size: 13px;
-  color: var(--ai-chat-text-light);
-  margin-top: 12px;
-  font-style: italic;
-}
-
-a.ai-chat-welcome__hint--link {
-  display: inline-block;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  color: var(--ai-chat-color-primary, #2d6b4f);
-  cursor: pointer;
-  font-style: normal;
-  font-weight: 500;
-}
-a.ai-chat-welcome__hint--link:hover {
-  color: var(--ai-chat-text, #1a1a1a);
-}
-
-/* Quick picks row */
-.ai-chat-welcome__quickpicks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-  justify-content: center;
-}
-
-.ai-chat-welcome__qp-label {
-  font-size: 12px;
-  color: var(--ai-chat-text-light);
-  font-weight: 500;
-  width: 100%;
-  text-align: center;
-  margin-bottom: 2px;
-}
-
-.ai-chat-welcome__qp-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px; /* WCAG 2.2 AA min 24px, comfortably above */
-  padding: 5px 12px;
-  border: 1px solid var(--ai-chat-border);
-  border-radius: 16px;
-  background: #fff;
-  color: var(--ai-chat-text);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
-  white-space: nowrap;
-  font-family: inherit;
-}
-
-@media (hover: hover) {
-  .ai-chat-welcome__qp-btn:active {
-    transform: scale(0.97);
-  }
-}
-
-@media (hover: hover) {
-  .ai-chat-welcome__qp-btn:hover {
-    background: var(--ai-chat-cta-bg-val);
-    border-color: var(--ai-chat-cta-bg-val);
-    color: var(--ai-chat-cta-text-val);
-  }
-}
-
 /* ---------- Dead-end CTAs ---------- */
 /* ---------- Inline choice buttons (quiz answers) ----------
  * Single-row horizontal scroll. Long chip lists used to wrap into
@@ -1683,24 +1428,6 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
     padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
-  .ai-chat-welcome__banner {
-    /* Clamp the container itself on mobile — the desktop rule caps at
-       280px which is too tall on a phone-sized viewport and leaves the
-       gradient fallback visible below the image. The img already has
-       height:100% + object-fit:cover so it fills whatever the
-       container resolves to; no separate img rule needed. */
-    height: clamp(80px, calc(100% - 320px), 180px);
-  }
-
-  .ai-chat-welcome__avatar {
-    width: 64px;
-    height: 64px;
-    margin-top: -36px;
-  }
-
-  .ai-chat-welcome__ctas {
-    grid-template-columns: 1fr 1fr !important;
-  }
 
   
 
@@ -2783,76 +2510,6 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   border-radius: 999px;
 }
 
-/* ---------- Welcome ---------- */
-.ai-chat-panel .ai-chat-welcome__avatar {
-  border: 0 !important;
-  box-shadow: 0 0 0 4px #fff, 0 0 0 6px transparent;
-  background: var(--seos-ink);
-  position: relative;
-  overflow: visible;
-}
-.ai-chat-panel .ai-chat-welcome__avatar::before {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  background: var(--seos-glow);
-  z-index: -1;
-  filter: blur(6px);
-  opacity: 0.55;
-  animation: seosAura 6s ease-in-out infinite alternate;
-}
-.ai-chat-panel .ai-chat-welcome__avatar img {
-  border-radius: 50%;
-}
-@keyframes seosAura {
-  from { transform: rotate(0deg) scale(1); opacity: 0.45; }
-  to { transform: rotate(180deg) scale(1.06); opacity: 0.7; }
-}
-.ai-chat-panel .ai-chat-welcome__name {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--seos-text);
-}
-
-.ai-chat-panel .ai-chat-welcome__cta-btn {
-  border-radius: 999px !important;
-  background: var(--seos-ink) !important;
-  color: #fff !important;
-  border: 0 !important;
-  padding: 10px 18px !important;
-  font-weight: 600 !important;
-  font-size: 14px !important;
-  min-height: 42px;
-  width: auto !important;
-  max-width: 100%;
-  white-space: normal;
-  justify-content: center;
-  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.12);
-}
-.ai-chat-panel .ai-chat-welcome__ctas {
-  display: flex !important;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px !important;
-}
-.ai-chat-panel .ai-chat-welcome__cta-btn .cta-plus {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-.ai-chat-panel .ai-chat-welcome__qp-btn {
-  border-radius: 999px !important;
-  background: var(--seos-surface) !important;
-  border: 0 !important;
-  color: var(--seos-text) !important;
-  font-weight: 500;
-}
-.ai-chat-panel .ai-chat-welcome__hint,
-.ai-chat-panel .ai-chat-welcome__hint--link {
-  color: var(--seos-text-2) !important;
-}
-
 /* ---------- Messages ---------- */
 .ai-chat-panel .ai-chat-msg-bubble {
   border-radius: 20px;
@@ -3161,4 +2818,335 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-welcome__avatar::before {
     animation: none;
   }
+}
+
+/* ================================================================
+   WELCOME — one column, one type scale, one card style
+   ================================================================
+   Banner → greeting → personal fit tools (True Fit for shoe sizes,
+   FITFinder for orthotics; each only where the store has it) → the
+   store's starting questions → popular quick picks. Content sits in a
+   centered 620px column on wide panels and fills narrow ones. */
+.ai-chat-panel .ai-chat-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  gap: 18px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 4px 2px 12px;
+  box-sizing: border-box;
+  font-family: var(--seos-font);
+}
+.ai-chat-panel .ai-chat-welcome__banner {
+  position: relative;
+  height: clamp(88px, 17vh, 150px);
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--seos-surface);
+  flex-shrink: 0;
+}
+.ai-chat-panel .ai-chat-welcome__banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ai-chat-panel .ai-chat-welcome__banner::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 45%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.55));
+  pointer-events: none;
+}
+@media (max-height: 560px) {
+  .ai-chat-panel .ai-chat-welcome__banner { display: none; }
+}
+
+/* Greeting: the avatar with its aura beside a two-line greeting. */
+/* Avatar, then the greeting under it; with a banner the avatar alone
+   rises into the banner's lower edge. */
+.ai-chat-panel .ai-chat-welcome__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-left: 2px;
+}
+.ai-chat-panel .ai-chat-welcome__banner + .ai-chat-welcome__intro {
+  margin-top: -52px;
+  padding-left: 16px;
+}
+.ai-chat-panel .ai-chat-welcome__avatar {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--seos-ink);
+  box-shadow: 0 0 0 4px #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.ai-chat-panel .ai-chat-welcome__avatar::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: var(--seos-glow);
+  z-index: -1;
+  filter: blur(6px);
+  opacity: 0.55;
+  animation: seosAura 6s ease-in-out infinite alternate;
+}
+@keyframes seosAura {
+  from { transform: rotate(0deg) scale(1); opacity: 0.45; }
+  to { transform: rotate(180deg) scale(1.06); opacity: 0.7; }
+}
+.ai-chat-panel .ai-chat-welcome__avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.ai-chat-panel .ai-chat-welcome__avatar svg { width: 28px; height: 28px; color: #fff; }
+.ai-chat-panel .ai-chat-welcome__intro-text { min-width: 0; }
+.ai-chat-panel .ai-chat-welcome__title {
+  margin: 0;
+  font-size: clamp(18px, 4.8vw, 21px);
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--seos-text);
+}
+.ai-chat-panel .ai-chat-welcome__greeting-cta {
+  margin: 4px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--seos-text-2);
+  min-height: 1.4em;
+  transition: opacity 0.25s ease;
+}
+.ai-chat-panel .ai-chat-welcome__greeting-cta.is-fading { opacity: 0; }
+
+/* Section labels */
+.ai-chat-panel .ai-chat-welcome__label {
+  margin: 0 0 10px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--seos-text-2);
+}
+
+/* Personal fit tools — the two featured helpers. */
+.ai-chat-panel .ai-chat-welcome__helpers[hidden] { display: none; }
+.ai-chat-panel .ai-chat-welcome__helper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 10px;
+}
+.ai-chat-panel .ai-chat-helper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 12px 12px 10px;
+  border: 1px solid var(--seos-line);
+  border-radius: var(--seos-radius);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.04), 0 6px 18px rgba(13, 13, 18, 0.05);
+  color: var(--seos-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+/* A thin gradient edge on hover/focus — the same light as the AI glow. */
+.ai-chat-panel .ai-chat-helper::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--seos-glow);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-helper:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(13, 13, 18, 0.05), 0 12px 28px rgba(13, 13, 18, 0.08);
+  }
+  .ai-chat-panel .ai-chat-helper:hover::before { opacity: 1; }
+}
+.ai-chat-panel .ai-chat-helper:focus-visible { outline: none; }
+.ai-chat-panel .ai-chat-helper:focus-visible::before { opacity: 1; }
+.ai-chat-panel .ai-chat-helper:active { transform: scale(0.99); }
+.ai-chat-panel .ai-chat-helper__icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--seos-ink);
+  background: linear-gradient(135deg, rgba(255, 79, 163, 0.12), rgba(163, 92, 255, 0.12) 40%, rgba(61, 123, 255, 0.12) 70%, rgba(41, 224, 208, 0.14));
+}
+.ai-chat-panel .ai-chat-helper__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ai-chat-panel .ai-chat-helper__title { font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
+.ai-chat-panel .ai-chat-helper__sub { font-size: 13px; line-height: 1.35; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-helper__go,
+.ai-chat-panel .ai-chat-welcome__cta-go { flex-shrink: 0; color: var(--seos-text-2); display: flex; }
+
+/* Starting questions: quiet rows, icon + label + chevron. */
+.ai-chat-panel .ai-chat-welcome__ctas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ai-chat-panel .ai-chat-welcome__cta-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 12px 11px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--seos-surface);
+  color: var(--seos-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-welcome__cta-btn:hover { background: #ececf0; }
+}
+.ai-chat-panel .ai-chat-welcome__cta-btn:active { transform: scale(0.99); }
+.ai-chat-panel .ai-chat-welcome__cta-icon { display: flex; flex-shrink: 0; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-welcome__cta-label { flex: 1; min-width: 0; }
+
+/* Popular quick picks: small outline chips. */
+.ai-chat-panel .ai-chat-welcome__quickpicks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ai-chat-panel .ai-chat-welcome__qp-btn {
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid var(--seos-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--seos-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-welcome__qp-btn:hover { background: var(--seos-surface); border-color: var(--seos-line-strong); }
+}
+.ai-chat-panel .ai-chat-welcome__hint {
+  font-size: 13px;
+  color: var(--seos-text-2);
+  margin: -6px 0 0 2px;
+}
+.ai-chat-panel a.ai-chat-welcome__hint--link {
+  color: var(--seos-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+.ai-chat-panel .ai-chat-welcome__cta-btn:focus-visible,
+.ai-chat-panel .ai-chat-welcome__qp-btn:focus-visible {
+  outline: 2px solid var(--seos-ink);
+  outline-offset: 2px;
+}
+
+/* ---------- Fit tools inside the conversation ---------- */
+/* On a product card: "Find my size" (shoes) or "Find my FIT" (orthotics). */
+.ai-chat-panel .ai-chat-card-helper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 10px 4px 8px;
+  min-height: 28px;
+  border: 1px solid var(--seos-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--seos-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  max-width: 100%;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-card-helper:hover { background: var(--seos-surface); }
+}
+/* The FIT FITFinder worked out, shown in the reply. */
+.ai-chat-panel .ai-chat-fit-result {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 12px 0 4px;
+  padding: 14px;
+  border-radius: var(--seos-radius);
+  background: linear-gradient(135deg, rgba(255, 79, 163, 0.07), rgba(163, 92, 255, 0.07) 40%, rgba(61, 123, 255, 0.07) 70%, rgba(41, 224, 208, 0.09));
+  border: 1px solid var(--seos-line);
+}
+.ai-chat-panel .ai-chat-fit-result__badge {
+  flex-shrink: 0;
+  min-width: 64px;
+  height: 64px;
+  padding: 0 8px;
+  border-radius: 16px;
+  background: var(--seos-ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  box-sizing: border-box;
+}
+.ai-chat-panel .ai-chat-fit-result__eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-fit-result__name { font-size: 15px; font-weight: 650; color: var(--seos-text); margin-top: 2px; }
+.ai-chat-panel .ai-chat-fit-result__desc { font-size: 13.5px; color: var(--seos-text-2); margin-top: 2px; line-height: 1.4; }
+.ai-chat-panel .ai-chat-fit-result__saved { font-size: 12.5px; color: var(--seos-text-2); margin-top: 6px; }
+.ai-chat-panel .ai-chat-fit-result__saved::before { content: "\2713\00a0"; color: #1f8f4e; font-weight: 700; }
+/* True Fit's button under a reply: the same helper card style. */
+.ai-chat-panel .ai-chat-truefit-cta {
+  background: #fff !important;
+  color: var(--seos-text) !important;
+  border: 1px solid var(--seos-line-strong) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-helper,
+  .ai-chat-panel .ai-chat-welcome__cta-btn { transition: none; }
+  .ai-chat-panel .ai-chat-welcome__avatar::before { animation: none; }
 }

@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 truefit');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 fit-tools');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -406,44 +406,65 @@ function startGreetCtaRotator(){
   },3500);
 }
 
+/* Welcome: banner, a greeting, the two personal fit tools (True Fit for
+   shoe sizes, FITFinder for orthotics \u2014 shown only where the store has them),
+   then the store's starting questions and quick picks. One column, one
+   type scale, one card style. */
+var WI={
+  arrow:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>',
+  ruler:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(-45 12 12)"><rect x="1.5" y="8.5" width="21" height="7" rx="2"/><path d="M6 8.5v2.5M10 8.5v3.5M14 8.5v2.5M18 8.5v3.5"/></g></svg>',
+  insole:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.5 2.5c3.2 0 5 2.6 5 6.2 0 2.6-1 4.4-1.6 6.3-.6 1.9-.5 3.6-1.2 5-.6 1.2-1.7 1.8-3 1.8-1.9 0-3.2-1.3-3.4-3.4-.2-2 .4-3.5.2-5.3-.2-2-1.5-3.2-1.5-5.6 0-3 2.4-5 5.5-5z"/><path d="M10.6 11.5c1.4.6 2.9.6 4.4 0"/></svg>',
+  shoe:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 16.5V9.8c0-.6.5-1 1-.9l2.6.5c.7.1 1.3.6 1.6 1.2l.5 1c.4.8 1.2 1.3 2.1 1.3h1.6l5.6 1.6c1.5.4 2.5 1.8 2.5 3.3V18H4a1 1 0 01-1-1.5z"/><path d="M3 18h18"/></svg>',
+  box:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+  tag:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+  ret:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>'
+};
+function ctaIcon(label){
+  var l=String(label||'').toLowerCase();
+  if(/orthotic|insole|insert/.test(l))return WI.insole;
+  if(/size|fit/.test(l))return WI.ruler.replace(/22/g,'18');
+  if(/order|track|ship|deliver/.test(l))return WI.box;
+  if(/sale|deal|offer|discount/.test(l))return WI.tag;
+  if(/return|exchange|refund/.test(l))return WI.ret;
+  if(/shoe|sneaker|sandal|boot|footwear|shop/.test(l))return WI.shoe;
+  return WI.spark;
+}
 function buildWelcome(){
 var h='<div class="ai-chat-welcome">';
-if(SHOWBAN){
-  h+='<div class="ai-chat-welcome__banner">';
-  if(BANNER)h+='<img src="'+safeUrl(BANNER)+'" alt="Welcome banner">';
-  h+='</div>';
+if(SHOWBAN&&BANNER){
+  h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
 }
-h+='<div class="ai-chat-welcome__avatar">'+avatarImg+'</div>';
-h+='<div class="ai-chat-welcome__name">'+esc(NAME)+'</div>';
 var welcomeGreeting=(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())
   ? GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME)
   : GREET;
-h+='<div class="ai-chat-welcome__tagline">'+esc(welcomeGreeting)+'</div>';
-if(GREETCTA)h+='<div class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</div>';
+h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar">'+avatarImg+'</div>'+
+   '<div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
+   (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div></div>';
+h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=[];
 if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M});
 if(CTA2L&&CTA2M)ctas.push({l:CTA2L,m:CTA2M});
 if(CTA3L&&CTA3M)ctas.push({l:CTA3L,m:CTA3M});
 if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M});
 if(ctas.length){
-  h+='<div class="ai-chat-welcome__ctas">';
+  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Start here</div><div class="ai-chat-welcome__ctas">';
   for(var i=0;i<ctas.length;i++){
-    h+='<button class="ai-chat-welcome__cta-btn" data-message="'+esc(ctas[i].m)+'"><span class="cta-plus">+</span> '+esc(ctas[i].l)+'</button>';
+    h+='<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(ctas[i].m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-label">'+esc(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
   }
-  h+='</div>';
+  h+='</div></div>';
 }
-/* Quick picks */
 var qps=[];
 if(QP1L&&QP1M)qps.push({l:QP1L,m:QP1M});
 if(QP2L&&QP2M)qps.push({l:QP2L,m:QP2M});
 if(QP3L&&QP3M)qps.push({l:QP3L,m:QP3M});
 if(QP4L&&QP4M)qps.push({l:QP4L,m:QP4M});
 if(qps.length){
-  h+='<div class="ai-chat-welcome__quickpicks"><span class="ai-chat-welcome__qp-label">Quick picks:</span>';
+  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Popular</div><div class="ai-chat-welcome__quickpicks">';
   for(var j=0;j<qps.length;j++){
-    h+='<button class="ai-chat-welcome__qp-btn" data-message="'+esc(qps[j].m)+'">'+esc(qps[j].l)+'</button>';
+    h+='<button type="button" class="ai-chat-welcome__qp-btn" data-message="'+esc(qps[j].m)+'">'+esc(qps[j].l)+'</button>';
   }
-  h+='</div>';
+  h+='</div></div>';
 }
 if(CUST_LOGGED_IN){
   if(HINT_LOGGED&&HINT_LOGGED.trim()){
@@ -455,7 +476,61 @@ if(CUST_LOGGED_IN){
 }
 h+='</div>';
 msgsEl.innerHTML=h;
+renderHelpers();
+/* FITFinder's config loads when the chat opens; the tool appears then. */
+if(ffLoading)ffLoading.then(renderHelpers);
 if(GREETCTA)startGreetCtaRotator();
+}
+
+/* The fit tools, each only where it belongs: True Fit sizes shoes (when the
+   store has it), FITFinder picks orthotics (when the store has it). */
+function pageTitle(){
+  var og=document.querySelector('meta[property="og:title"]');
+  return (og&&og.getAttribute('content'))||((document.querySelector('h1')||{}).textContent||'').trim();
+}
+function helperHtml(kind,title,sub,icon){
+  return '<button type="button" class="ai-chat-helper ai-chat-helper--'+kind+'" data-helper="'+kind+'"><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>';
+}
+var fitResult=null;
+function fitCardHtml(f){
+  return '<div class="ai-chat-fit-result" role="status"><div class="ai-chat-fit-result__badge">'+esc(f.label)+'</div>'+
+    '<div class="ai-chat-fit-result__text"><div class="ai-chat-fit-result__eyebrow">Your FIT \u00b7 FITFinder</div>'+
+    '<div class="ai-chat-fit-result__name">'+esc(f.name||f.label)+'</div>'+
+    (f.description?'<div class="ai-chat-fit-result__desc">'+esc(f.description)+'</div>':'')+
+    '<div class="ai-chat-fit-result__saved">Saved \u2014 orthotic pages open on your FIT</div></div></div>';
+}
+function savedFit(){
+  if(!ff)return null;
+  var local=ffStored(),key=(local&&local.key)||ff.saved;
+  for(var i=0;i<ff.fits.length;i++){if(ff.fits[i].key===key)return ff.fits[i]}
+  return null;
+}
+function renderHelpers(){
+  var box=msgsEl&&msgsEl.querySelector('.ai-chat-welcome__helpers');
+  if(!box)return;
+  var items='';
+  if(tfPayload()){
+    var onShoe=tfHere()&&pageHandle();
+    items+=helperHtml('truefit',onShoe?'Find my size in this shoe':'Find my shoe size','True Fit \u00b7 about a minute',WI.ruler);
+  }
+  if(ff){
+    var mine=savedFit();
+    items+=helperHtml('fitfinder',mine?'Orthotics for my '+mine.label:'Find my orthotic FIT',mine?(mine.name||'Your saved FIT'):'FITFinder \u00b7 a few quick questions',WI.insole);
+  }
+  if(!items){box.hidden=true;box.innerHTML='';return}
+  box.innerHTML='<div class="ai-chat-welcome__label">Personal fit tools</div><div class="ai-chat-welcome__helper-grid">'+items+'</div>';
+  box.hidden=false;
+}
+function startHelper(kind){
+  inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;
+  if(kind==='truefit'){
+    if(tfHere()&&pageHandle()){runTrueFit(pageTitle());return}
+    inputEl.value='Help me find my shoe size with True Fit.';
+  }else{
+    var mine=savedFit();
+    inputEl.value=mine?'Show me orthotics for my '+mine.label+'.':'Help me find my orthotic FIT.';
+  }
+  sendMessage();
 }
 
 /* Opening animation: the welcome content rises in, line by line, as the
@@ -511,7 +586,7 @@ if(want&&HIDDEN_BY_URL)return;
 isOpen=want;
 if(isOpen){
   focusBeforeOpen=document.activeElement;
-  loadFitfinder();
+  loadFitfinder().then(renderHelpers);
   launcher.classList.add('hidden');
   launcher.inert=true;launcher.setAttribute('aria-hidden','true');
   panel.classList.add('open');
@@ -1190,6 +1265,14 @@ return d;
    "View product" a quiet underlined link. When the chat already knows the
    customer's size/width, the card carries it (data-preselect) and shows it
    under the price — one tap adds that exact variant. */
+/* Each card offers the fit tool that belongs to it: True Fit on shoes,
+   FITFinder on orthotics (until the shopper has a FIT) — never the other way. */
+function cardHelper(p,t){
+  if(!p||!p.handle)return '';
+  if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-helper" data-truefit="'+esc(p.handle)+'" data-title="'+t+'">'+WI.ruler.replace(/22/g,'14')+'<span>Find my size</span></button>';
+  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-helper" data-helper="fitfinder">'+WI.insole.replace(/22/g,'14')+'<span>Find my FIT</span></button>';
+  return '';
+}
 function prodCard(p){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
@@ -1210,6 +1293,7 @@ var infoHtml='<div class="ai-chat-product-info">'+
   '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
   '<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>'+
   '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
+  cardHelper(p,t)+
 '</div>';
 return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(img)+'"'+(pre?' data-preselect="'+esc(JSON.stringify(pre))+'"':'')+'>'+imgHtml+infoHtml+'</div>';
 }
@@ -1593,6 +1677,9 @@ function ffSave(key){
     fetch(SHOP_ROOT+'apps/fitfinder/fit',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({fitKey:f.key})}).catch(function(){});
   }
   ff.saved=f.key;
+  /* They have a FIT now: earlier cards stop offering to find one. */
+  var stale=msgsEl.querySelectorAll('.ai-chat-card-helper[data-helper="fitfinder"]');
+  for(var si=0;si<stale.length;si++)stale[si].parentNode.removeChild(stale[si]);
 }
 
 var streamWatchdog=null;
@@ -1648,6 +1735,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
+fitResult=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -1678,6 +1766,7 @@ if(p.type==='fit_report'&&p.recommendedSize){
 }
 if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
+  fitResult=String(p.key);
 }
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
@@ -1812,6 +1901,12 @@ if(supportCta&&mDiv){
   var scb=$('.ai-chat-msg-bubble',mDiv);
   if(scb)scb.insertAdjacentHTML('beforeend',supportCtaHtml(supportCta));
 }
+if(fitResult&&mDiv){
+  var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
+  for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
+  if(fitP&&fitObj)fitP.insertAdjacentHTML('afterend',fitCardHtml(fitObj));
+  fitResult=null;
+}
 if(sizeFinder&&mDiv){
   var tfb=$('.ai-chat-msg-bubble',mDiv);
   if(tfb)tfb.insertAdjacentHTML('beforeend',trueFitBtnHtml(sizeFinder));
@@ -1922,6 +2017,8 @@ var atcBtn=e.target.closest('[data-atc]');
 if(atcBtn){e.preventDefault();e.stopPropagation();startAddToCart(atcBtn.closest('.ai-chat-product-card'),atcBtn);return}
 // Handoff support CTA button → live chat (Zendesk/Intercom/Gorgias), Support
 // Hub URL only as fallback.
+var helperBtn=e.target.closest('[data-helper]');
+if(helperBtn){e.preventDefault();if(!isStreaming)startHelper(helperBtn.getAttribute('data-helper'));return;}
 var tfBtn=e.target.closest('[data-truefit]');
 if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');

@@ -25,6 +25,8 @@ import {
   DataTable,
   DropZone,
   EmptyState,
+  Tabs,
+  Pagination,
 } from "@shopify/polaris";
 import { DeleteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -937,8 +939,26 @@ function StoreKnowledgeCard({ docs }) {
   const last = docs.reduce((m, d) => (d.syncedAt && (!m || d.syncedAt > m) ? d.syncedAt : m), null);
   const count = (kind) => docs.filter((d) => d.kind === kind).length;
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  const rows = docs.map((d) => [
-    d.kind,
+  // One type at a time, searchable, 10 per page — 400+ documents don't scroll forever.
+  const tabs = [
+    { id: "all", content: `All (${docs.length})` },
+    { id: "Page", content: `Pages (${count("Page")})` },
+    { id: "Article", content: `Blog articles (${count("Article")})` },
+    { id: "Policy", content: `Policies (${count("Policy")})` },
+  ];
+  const [tab, setTab] = useState(0);
+  const [query, setQuery] = useState("");
+  const [pageIndex, setPageIndex] = useState(0);
+  const PER_PAGE = 10;
+  const kind = tabs[tab].id;
+  const q = query.trim().toLowerCase();
+  const filtered = docs.filter((d) => (kind === "all" || d.kind === kind) && (!q || `${d.title} ${d.url}`.toLowerCase().includes(q)));
+  const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const at = Math.min(pageIndex, pages - 1);
+  const shown = filtered.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE);
+  const KIND_TONE = { Policy: "info", Page: undefined, Article: "success" };
+  const rows = shown.map((d) => [
+    <Badge key={`${d.id}-k`} tone={KIND_TONE[d.kind]}>{d.kind === "Article" ? "Blog" : d.kind}</Badge>,
     d.url ? <a key={d.id} href={d.url} target="_blank" rel="noreferrer">{d.title}</a> : d.title,
     `${Math.max(1, Math.round(d.chars / 1000))}k chars`,
   ]);
@@ -961,8 +981,38 @@ function StoreKnowledgeCard({ docs }) {
         {started && (
           <Banner tone="info"><p>Reading your store's policies, pages and blog articles — this takes a minute or two. The list updates automatically.</p></Banner>
         )}
-        {rows.length > 0 && (
-          <DataTable columnContentTypes={["text", "text", "text"]} headings={["Type", "Title", "Size"]} rows={rows} />
+        {docs.length > 0 && (
+          <BlockStack gap="300">
+            <Tabs tabs={tabs} selected={tab} onSelect={(i) => { setTab(i); setPageIndex(0); }} fitted />
+            <TextField
+              label="Search what was learned"
+              labelHidden
+              placeholder="Search titles — e.g. clinical, plantar fasciitis, returns"
+              value={query}
+              onChange={(v) => { setQuery(v); setPageIndex(0); }}
+              clearButton
+              onClearButtonClick={() => { setQuery(""); setPageIndex(0); }}
+              autoComplete="off"
+            />
+            {rows.length > 0 ? (
+              <DataTable columnContentTypes={["text", "text", "text"]} headings={["Type", "Title", "Size"]} rows={rows} />
+            ) : (
+              <Box padding="400"><Text as="p" tone="subdued" alignment="center">Nothing matches "{query}".</Text></Box>
+            )}
+            {filtered.length > PER_PAGE && (
+              <InlineStack align="space-between" blockAlign="center">
+                <Text as="p" tone="subdued" variant="bodySm">
+                  {at * PER_PAGE + 1}–{Math.min(filtered.length, (at + 1) * PER_PAGE)} of {filtered.length}
+                </Text>
+                <Pagination
+                  hasPrevious={at > 0}
+                  onPrevious={() => setPageIndex(at - 1)}
+                  hasNext={at < pages - 1}
+                  onNext={() => setPageIndex(at + 1)}
+                />
+              </InlineStack>
+            )}
+          </BlockStack>
         )}
       </BlockStack>
     </Card>
@@ -1004,7 +1054,7 @@ export default function Knowledge() {
         <BlockStack gap="400">
           <SectionHeading
             title="Learned from your website"
-            description="Policies and published pages (shipping, returns, FAQ, size guide, about…) are read automatically after every product sync and nightly. Nothing to upload."
+            description="Everything your store publishes — policies, pages (FAQs, size guides, clinical studies, technology…) and blog articles — is read automatically after every product sync and nightly. Nothing to upload."
           />
           <StoreKnowledgeCard docs={data.storeKnowledge || []} />
         </BlockStack>

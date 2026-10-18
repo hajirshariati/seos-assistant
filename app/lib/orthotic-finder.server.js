@@ -123,7 +123,7 @@ export function finderToolDef(tree, { fitfinder = null } = {}) {
   return {
     name: `recommend_${tree.intent}`,
     description:
-      "Find the right orthotic (insole) for the customer. Use it whenever they want help choosing one, or ask about FITs.\n\n" +
+      "Find the right orthotic (insole) for the customer. Use it whenever they want help choosing one, or ask about FITs. Orthotics only: it never sizes or picks shoes, and a FIT never describes a shoe — shoe sizes come from True Fit when that tool is available.\n\n" +
       "Sound like an experienced, friendly orthotic fit specialist: warm, calm and sure of yourself, in plain words. " +
       "Briefly acknowledge what they told you (\"Ball-of-foot pain is really common in heels — good news, that's easy to support.\"), " +
       "ask one short question per message with tap choices, and when you recommend, say in a sentence or two why it suits them. " +

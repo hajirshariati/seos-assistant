@@ -4,9 +4,9 @@
 // a "Find my size with True Fit" button under the reply. The widget opens
 // True Fit and sends the recommended size back as the shopper's next message.
 import prisma from "../../db.server.js";
+import { productKind } from "./catalog.js";
 
 const HANDLE = /^[a-z0-9][a-z0-9-]{0,254}$/;
-const NOT_FOOTWEAR = /orthotic|insole|accessor|sock|gift|care|cleaner|lace/i;
 
 export function sanitizeSizeFinder(raw) {
   if (!raw || typeof raw !== "object" || raw.provider !== "truefit") return null;
@@ -30,7 +30,7 @@ export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
     definition: {
       name: "open_true_fit",
       description:
-        "Offer True Fit, the store's personal size finder, for one shoe. Use when the customer asks what size to get in a shoe, how it fits, or whether to size up or down — footwear only, not orthotics or accessories. " +
+        "Offer True Fit, the store's personal size finder, for one shoe. Use when the customer asks what size to get in a shoe, how it fits, or whether to size up or down. Shoes only — never for orthotics or accessories (orthotic choice and FITs belong to the orthotic finder). " +
         "It shows a \"Find my size with True Fit\" button under your reply; the customer answers a few quick questions in True Fit and their recommended size comes back to you as their next message. Don't guess a size yourself." +
         here +
         " When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence.",
@@ -45,8 +45,13 @@ export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
       if (!HANDLE.test(handle)) return { error: "Pass the shoe's product handle." };
       const product = await lookup(shop, handle);
       if (!product) return { error: `No active product "${handle}" — search for the shoe first.` };
-      if (NOT_FOOTWEAR.test(product.productType || "")) {
-        return { error: `True Fit is for shoes; "${product.title}" is ${product.productType || "not footwear"}.` };
+      const kind = productKind(product);
+      if (kind !== "footwear") {
+        return {
+          error: kind === "orthotic"
+            ? `True Fit is for shoes only. For "${product.title}" (an orthotic), help them choose with the orthotic finder / their FIT instead.`
+            : `True Fit is for shoes only; "${product.title}" is ${product.productType || "not footwear"}.`,
+        };
       }
       return {
         ok: true,

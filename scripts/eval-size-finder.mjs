@@ -13,6 +13,9 @@ const HOOK = `export async function resolve(spec, ctx, next) {
 }`;
 register("data:text/javascript," + encodeURIComponent(HOOK));
 const { sanitizeSizeFinder, trueFitTool } = await import("../app/lib/lean/size-finder.server.js");
+const { productKind } = await import("../app/lib/lean/catalog.js");
+const { toCard } = await import("../app/lib/lean/engine.js");
+const { finderToolDef } = await import("../app/lib/orthotic-finder.server.js");
 
 let passed = 0;
 let failed = 0;
@@ -55,6 +58,23 @@ await test("orthotics, unknown handles and junk are refused with a reason Claude
   assert.match((await t.run({ handle: "made-up-shoe" })).error, /search for the shoe first/);
   assert.match((await t.run({ handle: "" })).error, /handle/);
   assert.match((await t.run({ handle: "../../admin" })).error, /handle/);
+});
+
+console.log("\neach fit tool only on its own products");
+await test("products are told apart: shoes, orthotics, everything else", () => {
+  assert.equal(productKind({ productType: "Footwear", category: "Sandals" }), "footwear");
+  assert.equal(productKind({ productType: "Orthotics" }), "orthotic");
+  assert.equal(productKind({ productType: "", category: "Insoles" }), "orthotic");
+  assert.equal(productKind({ productType: "Accessories", category: "Socks" }), "other");
+});
+await test("every card says what it is, so the widget offers the right tool", () => {
+  assert.equal(toCard({ title: "Jillian", handle: "j", url: "/products/j", productType: "Footwear", category: "Sandals", options: {} }).kind, "footwear");
+  assert.equal(toCard({ title: "L2300", handle: "l", url: "/products/l", productType: "Orthotics", options: {} }).kind, "orthotic");
+});
+await test("the orthotic finder says it never sizes or picks shoes", () => {
+  const def = finderToolDef({ intent: "orthotic", definition: { finder: { lines: [] } } }, { fitfinder: null });
+  assert.match(def.description, /Orthotics only: it never sizes or picks shoes/);
+  assert.match(tool({ provider: "truefit", pageHandle: "" }).definition.description, /Shoes only — never for orthotics/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

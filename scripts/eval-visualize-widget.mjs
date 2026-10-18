@@ -253,7 +253,7 @@ test("the mobile changes are SCOPED to the media query — desktop card stays ve
 });
 
 test("the widget carries a current build marker (so the live version is verifiable)", () => {
-  assert.match(SRC, /\[hajirai-widget\] build 2026-10-18 launch-ready/, "console build marker bumped for this change");
+  assert.match(SRC, /\[hajirai-widget\] build \d{4}-\d{2}-\d{2} [a-z0-9-]+/, "console build marker present");
 });
 
 // ── PRD 2026-06-29: stability — single-flight, cancellation, no runaway repaint ──

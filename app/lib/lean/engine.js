@@ -13,6 +13,7 @@ import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
 import { resolvePreselect } from "./variant-choice.js";
+import { productKind } from "./catalog.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
@@ -115,6 +116,8 @@ export function toCard(p, preselect = null) {
     price: Number.isFinite(p.price) ? p.price.toFixed(2) : "",
     price_formatted: p.priceLabel,
     compare_at_price: p.onSale ? Math.round(p.compareAtPrice * 100) : undefined,
+    // footwear / orthotic / other — decides which fit helper the card offers.
+    kind: productKind(p),
   };
 }
 

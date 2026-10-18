@@ -63,6 +63,17 @@ export function styleName(title) {
   return String(title || "").replace(/\s+[-–—]\s+[^-–—]+$/, "").replace(/\s+/g, " ").trim();
 }
 
+// What a product is, for the fit helpers: True Fit sizes shoes, FITFinder
+// picks orthotics — neither may be offered for the other.
+const ORTHOTIC_WORDS = /orthotic|insole|insert|footbed/i;
+const FOOTWEAR_WORDS = /footwear|shoe|sneaker|sandal|boot|loafer|clog|mule|flat|wedge|heel|slipper|oxford|slide|flip|trainer|runner/i;
+export function productKind(p = {}) {
+  const text = `${p.productType || ""} ${p.category || ""} ${p.subcategory || ""}`;
+  if (ORTHOTIC_WORDS.test(text)) return "orthotic";
+  if (FOOTWEAR_WORDS.test(text)) return "footwear";
+  return "other";
+}
+
 export function productUrl(shop, handle) {
   return `https://${shop}/products/${handle}?utm_content=SEoS`;
 }
