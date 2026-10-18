@@ -18,8 +18,7 @@ import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
-
-const MAX_RULES_CHARS = 6000;
+import { MAX_RULES_CHARS } from "../knowledge-check.js";
 
 function parseJson(raw, fallback) {
   if (raw && typeof raw === "object") return raw;
@@ -61,7 +60,7 @@ export function formatLoyalty(loyalty, config = {}) {
 export function buildStoreContextBlock({ rules = [], campaigns = [], customer = null, loyaltyText = "" } = {}) {
   const parts = [];
   const ruleText = rules.map((r) => String(r || "").trim()).filter(Boolean).join("\n\n").slice(0, MAX_RULES_CHARS);
-  if (ruleText) parts.push(`INSTRUCTIONS FROM THE STORE TEAM\n${ruleText}`);
+  if (ruleText) parts.push(`INSTRUCTIONS FROM THE STORE TEAM (apply them to what the customer means in this conversation)\n${ruleText}`);
   if (campaigns.length) {
     parts.push(
       "ACTIVE PROMOTIONS (live right now — quote only these)\n" +

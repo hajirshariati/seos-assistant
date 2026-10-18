@@ -1166,5 +1166,39 @@
         }
       }
     ]
+  },
+  {
+    "name": "an activity word mid-orthotic chat means orthotics for that activity, not shoes",
+    "turns": [
+      {
+        "user": "which orthotic is right for me? women's, high arches, no ball of foot pain",
+        "expect": {}
+      },
+      {
+        "user": "running",
+        "expect": {
+          "products": {
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer|clog|slip-on"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "a person mid-orthotic chat keeps the orthotic topic (for my husband)",
+    "turns": [
+      {
+        "user": "I need an orthotic for my sneakers, I have flat feet",
+        "expect": {}
+      },
+      {
+        "user": "for my husband",
+        "expect": {
+          "products": {
+            "allTitleOrHandleMustNotMatch": "sneaker|sandal|boot\\b|loafer|clog|slip-on"
+          }
+        }
+      }
+    ]
   }
 ]

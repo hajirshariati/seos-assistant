@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -254,6 +254,40 @@ await test("echo check: only replies built from the suggestions, not ones that s
   assert.equal(echoesFollowUps("Do these come in wide? Show me the navy one.", f), true);
   assert.equal(echoesFollowUps("The Ashley is a dressy wedge with arch support — and yes, it comes in wide.", f), false);
   assert.equal(echoesFollowUps("", f), false);
+});
+// The live failure's root: a rules file said "a footwear word means shoes",
+// so "boots" mid-orthotic chat became a boot search. Whatever a rules file
+// says, a short answer that switches the chat to shoes gets a second look.
+await test('"boots" while choosing an orthotic → shoes get a second look → orthotics for boots', async () => {
+  const history = [
+    { role: "user", content: "which orthotic should I get?" },
+    { role: "assistant", content: "Happy to help you pick an orthotic. What shoes will you wear them in?" },
+    { role: "user", content: "boots" },
+  ];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "boots", categories: ["boots"] })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Margot Lace-Up Boot - Dark Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Margot lace-up boot has built-in arch support.")] },
+    { stop_reason: "tool_use", content: [tu("t3", "search_products", { query: "orthotic", categories: ["orthotics"] })] },
+    { stop_reason: "tool_use", content: [tu("t4", "show_products", { handles: [H["Women's Train Orthotics W/ Metatarsal Support"]] })] },
+    { stop_reason: "end_turn", content: [txt("For boots, these orthotics fit well once you take out the boot's insole.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: history, latestUserMessage: "boots", callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, true);
+  assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /You were helping choose an orthotic.*<<Orthotics for boots>><<Show me boots>>/);
+  assert.deepEqual(r.cards.map((c) => c.kind), ["orthotic"]);
+  assert.deepEqual(r.issues, []);
+});
+await test("the orthotic-chat check only fires on a short answer that switches to shoes", () => {
+  const boot = P("Margot Lace-Up Boot - Dark Red");
+  const orth = P("Women's Train Orthotics W/ Metatarsal Support");
+  const ask = "Which shoes will you wear the orthotic in?";
+  assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "boots", shownProducts: [boot] }), true);
+  assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "boots", shownProducts: [orth] }), false, "orthotics shown");
+  assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "actually forget it, show me some boots for winter", shownProducts: [boot] }), false, "a full request is the customer's call");
+  assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "orthotics for boots", shownProducts: [boot] }), false);
+  assert.equal(leftOrthoticChat({ lastAssistantText: "Here are some sandals you might like.", latestUserMessage: "boots", shownProducts: [boot] }), false, "not an orthotic chat");
+  assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "boots", shownProducts: [] }), false);
 });
 await test("show_products rejects a product no tool returned", async () => {
   const s = scripted([
@@ -614,7 +648,7 @@ await test("store context (rules, promotions, customer) is a separate, uncached 
     campaigns: [{ name: "Fall Sale", content: "25% off sneakers with code FALL25. Free shipping over $75.", startsAt: "2026-10-01", endsAt: "2026-10-31" }],
     customer: { firstName: "Dana", numberOfOrders: 3 },
   });
-  assert.match(block, /INSTRUCTIONS FROM THE STORE TEAM\nNever recommend kids/);
+  assert.match(block, /INSTRUCTIONS FROM THE STORE TEAM \(apply them to what the customer means in this conversation\)\nNever recommend kids/);
   assert.match(block, /Fall Sale .*FALL25/);
   assert.match(block, /First name: Dana/);
   assert.match(buildStoreContextBlock({}), /None are running/);

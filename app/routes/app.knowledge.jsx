@@ -56,6 +56,7 @@ import {
   countEnrichmentsBySourceFile,
 } from "../models/ProductEnrichment.server";
 import BrandHeader from "../components/BrandHeader";
+import { checkKnowledge } from "../lib/knowledge-check.js";
 
 function isCsv(fileName) {
   return typeof fileName === "string" && fileName.toLowerCase().endsWith(".csv");
@@ -76,9 +77,25 @@ export const loader = async ({ request }) => {
   try { storeKnowledge = await listStoreKnowledge(session.shop); }
   catch (err) { console.error("[store-knowledge] list failed:", err?.message || err); }
 
+  // Lines in the team's notes that could steer answers wrong (keyword rules,
+  // dated promotions, rules past the length limit, links to missing pages).
+  // Rules files in the order the assistant reads them: newest first.
+  let knowledgeCheck = { byFile: {}, counts: { critical: 0, warning: 0, notice: 0 } };
+  try {
+    const withContent = await prisma.knowledgeFile.findMany({
+      where: { shop: session.shop },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, fileName: true, fileType: true, content: true },
+    });
+    knowledgeCheck = checkKnowledge(withContent.filter((f) => !isCsv(f.fileName)), { storeUrls: storeKnowledge.map((d) => d.url).filter(Boolean) });
+  } catch (err) {
+    console.error("[knowledge-check] failed:", err?.message || err);
+  }
+
   return {
     storeKnowledge: storeKnowledge.map((d) => ({ ...d, syncedAt: d.syncedAt instanceof Date ? d.syncedAt.toISOString() : d.syncedAt })),
     files: filesWithCounts,
+    knowledgeCheck,
     campaigns: campaigns.map((c) => ({
       ...c,
       startsAt: c.startsAt.toISOString(),
@@ -415,7 +432,63 @@ function formatSize(bytes) {
 }
 
 
-function KnowledgeFilesCard({ files }) {
+const LEVEL = {
+  critical: { tone: "critical", label: "Fix" },
+  warning: { tone: "warning", label: "Check" },
+  notice: { tone: "info", label: "Tip" },
+};
+
+function KnowledgeCheckSummary({ counts }) {
+  const c = counts || { critical: 0, warning: 0, notice: 0 };
+  if (c.critical + c.warning === 0) {
+    return (
+      <Banner tone="success" title="Knowledge check: nothing in your notes looks likely to steer answers wrong.">
+        {c.notice > 0 && <Text as="p" variant="bodySm">{c.notice} small {c.notice === 1 ? "tip" : "tips"} below.</Text>}
+      </Banner>
+    );
+  }
+  const n = c.critical + c.warning;
+  return (
+    <Banner tone={c.critical ? "critical" : "warning"} title={`Knowledge check: ${n} ${n === 1 ? "line" : "lines"} in your notes could steer answers wrong`}>
+      <Text as="p" variant="bodySm">
+        The usual cause is a rule keyed on words — e.g. "if the customer says boots, show boots" also fires when someone choosing an orthotic answers "boots". Write rules about what the customer wants, then upload the file again.
+      </Text>
+    </Banner>
+  );
+}
+
+function FileFindings({ findings }) {
+  const [open, setOpen] = useState(false);
+  if (!findings.length) return null;
+  const important = findings.filter((x) => x.level !== "notice");
+  const list = open ? findings : (important.length ? important : findings).slice(0, 3);
+  const hidden = findings.length - list.length;
+  return (
+    <BlockStack gap="150">
+      <Divider />
+      {list.map((x, i) => (
+        <InlineStack key={`${x.code}-${x.line}-${i}`} gap="200" wrap={false} blockAlign="start">
+          <Box minWidth="44px"><Badge tone={LEVEL[x.level]?.tone}>{LEVEL[x.level]?.label || x.level}</Badge></Box>
+          <BlockStack gap="050">
+            {x.line != null && (
+              <Text as="p" variant="bodySm" fontWeight="semibold" breakWord>{`Line ${x.line}: “${x.excerpt}”`}</Text>
+            )}
+            <Text as="p" variant="bodySm" tone="subdued">{x.message}</Text>
+          </BlockStack>
+        </InlineStack>
+      ))}
+      {(hidden > 0 || open) && (
+        <InlineStack>
+          <Button variant="plain" size="slim" onClick={() => setOpen(!open)}>
+            {open ? "Show less" : `Show ${hidden} more`}
+          </Button>
+        </InlineStack>
+      )}
+    </BlockStack>
+  );
+}
+
+function KnowledgeFilesCard({ files, check }) {
   const actionData = useActionData();
   const nav = useNavigation();
   const submit = useSubmit();
@@ -512,6 +585,8 @@ function KnowledgeFilesCard({ files }) {
         </BlockStack>
 
 
+        {files.length > 0 && <KnowledgeCheckSummary counts={check?.counts} />}
+
         {actionData?.uploaded && dismissed !== actionData.message && (
           <Banner title={actionData.message} tone={actionData.skuWarning ? "warning" : "success"} onDismiss={() => setDismissed(actionData.message)} />
         )}
@@ -604,6 +679,7 @@ function KnowledgeFilesCard({ files }) {
                             />
                           </InlineStack>
                         </InlineStack>
+                        <FileFindings findings={check?.byFile?.[f.id] || []} />
                       </BlockStack>
                     </Box>
                   );
@@ -1064,7 +1140,7 @@ export default function Knowledge() {
             title="Your team's notes"
             description="Add what isn't on the website, or correct what is."
           />
-          <KnowledgeFilesCard files={data.files} />
+          <KnowledgeFilesCard files={data.files} check={data.knowledgeCheck} />
         </BlockStack>
 
         <BlockStack gap="400">

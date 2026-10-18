@@ -56,7 +56,7 @@ function makeStoreInfoLookup({ shop, config }) {
     }
     if (uploaded.length === 0 && website.length === 0) return { found: false };
     const parts = [];
-    if (uploaded.length) parts.push(`STORE TEAM NOTES (uploaded by the store — these win if anything differs):\n${uploaded.map(fmt).join("\n\n")}`);
+    if (uploaded.length) parts.push(`STORE TEAM NOTES (reference from the store team — these win over the website if they differ; products, prices and stock still come from the product tools):\n${uploaded.map(fmt).join("\n\n")}`);
     if (website.length) parts.push(`FROM THE STORE'S WEBSITE:\n${website.map(fmt).join("\n\n")}`);
     return { found: true, text: parts.join("\n\n").slice(0, 9000) };
   };

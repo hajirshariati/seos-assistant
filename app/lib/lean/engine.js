@@ -111,6 +111,17 @@ export function echoesFollowUps(text, followUps = []) {
   return hits.length >= 2 || (hits.length === 1 && t.length < hits[0].length * 2);
 }
 
+// A short reply in the middle of choosing an orthotic usually answers the last
+// question ("boots" = orthotics for boots). If the turn ends up showing only
+// shoes, Claude is asked to look again — it decides; this only spots the switch.
+const ORTHOTIC_TALK = /orthotic|insole|insert|footbed|\bfit [abcd]\b/i;
+export function leftOrthoticChat({ lastAssistantText = "", latestUserMessage = "", shownProducts = [] } = {}) {
+  const said = String(latestUserMessage || "").trim();
+  if (!said || said.split(/\s+/).length > 3 || ORTHOTIC_TALK.test(said)) return false;
+  if (!ORTHOTIC_TALK.test(String(lastAssistantText || ""))) return false;
+  return shownProducts.length > 0 && shownProducts.every((p) => productKind(p) === "footwear");
+}
+
 export function toCard(p, preselect = null) {
   // Options the shopper has to pick before adding (e.g. Size, Width) — the
   // card's button reads "Select size" until they're chosen.
@@ -343,6 +354,14 @@ export async function runLeanTurn({
       issues.push({
         code: "echoed_follow_ups",
         detail: "Your reply repeated the suggested tap questions — they're written in the customer's voice and are already shown as buttons. Write your own short reply: what you're showing and why it fits what they asked.",
+      });
+    }
+    const lastAssistantText = [...messages].reverse().find((m) => m?.role === "assistant" && typeof m.content === "string")?.content || "";
+    if (leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) })) {
+      const said = String(latestUserMessage).trim().replace(/[<>]/g, "").slice(0, 40);
+      issues.push({
+        code: "left_orthotic_chat",
+        detail: `You were helping choose an orthotic and the customer answered "${said}" — you're now showing shoes. A short answer mid-conversation usually answers your last question ("boots" = orthotics for boots). Unless they clearly asked for shoes, keep helping with the orthotic; if it could mean either, ask with <<Orthotics for ${said}>><<Show me ${said}>>. If they did want shoes, keep your reply.`,
       });
     }
     issues.push(...verifyLeanAnswer({
