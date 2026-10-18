@@ -4,6 +4,7 @@
 // Run: node scripts/eval-hardening.mjs
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
@@ -53,6 +54,18 @@ test("deprecated stored models run on the current model of the same tier", () =>
   assert.equal(chatModel(""), "claude-sonnet-4-6");
   assert.equal(chatModel("made-up-model"), "claude-sonnet-4-6");
   for (const m of ALLOWED_MODELS) assert.equal(chatModel(m), m);
+});
+
+// Shopify refuses to release the theme block otherwise ("must have a maximum
+// of 6 for non-interactive settings"); this catches it before a deploy does.
+test("the chat block's settings stay within Shopify's limits", () => {
+  const liquid = fs.readFileSync(new URL("../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8");
+  const schema = JSON.parse(liquid.slice(liquid.indexOf("{% schema %}") + 12, liquid.indexOf("{% endschema %}")));
+  const nonInteractive = schema.settings.filter((s) => s.type === "header" || s.type === "paragraph").length;
+  assert.ok(nonInteractive <= 6, `${nonInteractive} headers/paragraphs (max 6)`);
+  const ids = schema.settings.filter((s) => s.id).map((s) => s.id);
+  assert.equal(new Set(ids).size, ids.length, "setting ids are unique");
+  for (const id of ids) assert.match(liquid, new RegExp(`block\\.settings\\.${id}\\b`), `setting "${id}" is used`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
