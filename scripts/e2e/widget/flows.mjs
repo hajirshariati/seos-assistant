@@ -217,7 +217,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.click(".ai-chat-launcher");
   await page.waitForSelector('[data-helper="fitfinder"]', { timeout: 5000 });
   const tools = await page.$$eval(".ai-chat-welcome__helpers [data-helper]", (b) => b.map((x) => `${x.dataset.helper}:${x.querySelector(".ai-chat-helper__title").textContent}`));
-  check("tools: welcome features True Fit and FITFinder", tools.join("|") === "truefit:Find my size in this shoe|fitfinder:Find my orthotic FIT", tools.join("|"));
+  check("tools: welcome features True Fit and FITFinder", tools.join("|") === "truefit:Size for this shoe|fitfinder:Find my orthotic FIT", tools.join("|"));
   await page.fill(".ai-chat-input-area textarea", "show me 3");
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 3);

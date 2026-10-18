@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 fit-tools');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-18 compact-home');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -158,7 +158,6 @@ return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',he
 .then(function(d){markChatAttributed();document.dispatchEvent(new CustomEvent('cart:refresh'));document.dispatchEvent(new CustomEvent('cart:updated'));return fetch(SHOP_ROOT+'cart.js',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(cart){document.querySelectorAll('[data-cart-count],.cart-count,.header__cart-count,.cart-count-bubble span[aria-hidden]').forEach(function(e){e.textContent=cart.item_count});return d}).catch(function(){return d})})
 }
 
-var avatarImg=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
@@ -413,21 +412,23 @@ function startGreetCtaRotator(){
 var WI={
   arrow:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>',
   ruler:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(-45 12 12)"><rect x="1.5" y="8.5" width="21" height="7" rx="2"/><path d="M6 8.5v2.5M10 8.5v3.5M14 8.5v2.5M18 8.5v3.5"/></g></svg>',
-  insole:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.5 2.5c3.2 0 5 2.6 5 6.2 0 2.6-1 4.4-1.6 6.3-.6 1.9-.5 3.6-1.2 5-.6 1.2-1.7 1.8-3 1.8-1.9 0-3.2-1.3-3.4-3.4-.2-2 .4-3.5.2-5.3-.2-2-1.5-3.2-1.5-5.6 0-3 2.4-5 5.5-5z"/><path d="M10.6 11.5c1.4.6 2.9.6 4.4 0"/></svg>',
   shoe:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 16.5V9.8c0-.6.5-1 1-.9l2.6.5c.7.1 1.3.6 1.6 1.2l.5 1c.4.8 1.2 1.3 2.1 1.3h1.6l5.6 1.6c1.5.4 2.5 1.8 2.5 3.3V18H4a1 1 0 01-1-1.5z"/><path d="M3 18h18"/></svg>',
   box:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
   tag:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
   ret:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>',
+  search:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+  target:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
   spark:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>'
 };
 function ctaIcon(label){
   var l=String(label||'').toLowerCase();
-  if(/orthotic|insole|insert/.test(l))return WI.insole;
-  if(/size|fit/.test(l))return WI.ruler.replace(/22/g,'18');
+  if(/orthotic|insole|insert/.test(l))return WI.target.replace(/14/g,'18');
+  if(/siz|fit/.test(l))return WI.ruler.replace(/22/g,'18');
   if(/order|track|ship|deliver/.test(l))return WI.box;
   if(/sale|deal|offer|discount/.test(l))return WI.tag;
   if(/return|exchange|refund/.test(l))return WI.ret;
-  if(/shoe|sneaker|sandal|boot|footwear|shop/.test(l))return WI.shoe;
+  if(/shoe|sneaker|sandal|boot|footwear/.test(l))return WI.shoe;
+  if(/find|product|search|shop|browse/.test(l))return WI.search;
   return WI.spark;
 }
 function buildWelcome(){
@@ -438,9 +439,8 @@ if(SHOWBAN&&BANNER){
 var welcomeGreeting=(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())
   ? GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME)
   : GREET;
-h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar">'+avatarImg+'</div>'+
-   '<div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
-   (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div></div>';
+h+='<div class="ai-chat-welcome__intro"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
+   (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div>';
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=[];
 if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M});
@@ -476,6 +476,7 @@ if(CUST_LOGGED_IN){
 }
 h+='</div>';
 msgsEl.innerHTML=h;
+msgsEl.classList.add('is-welcome');
 renderHelpers();
 /* FITFinder's config loads when the chat opens; the tool appears then. */
 if(ffLoading)ffLoading.then(renderHelpers);
@@ -511,14 +512,14 @@ function renderHelpers(){
   var items='';
   if(tfPayload()){
     var onShoe=tfHere()&&pageHandle();
-    items+=helperHtml('truefit',onShoe?'Find my size in this shoe':'Find my shoe size','True Fit \u00b7 about a minute',WI.ruler);
+    items+=helperHtml('truefit',onShoe?'Size for this shoe':'Find my shoe size','with True Fit',WI.ruler);
   }
   if(ff){
     var mine=savedFit();
-    items+=helperHtml('fitfinder',mine?'Orthotics for my '+mine.label:'Find my orthotic FIT',mine?(mine.name||'Your saved FIT'):'FITFinder \u00b7 a few quick questions',WI.insole);
+    items+=helperHtml('fitfinder',mine?'Orthotics for '+mine.label:'Find my orthotic FIT',mine?(mine.name||'Your saved FIT'):'with FITFinder','<span class="ai-chat-helper__mono">FIT</span>');
   }
   if(!items){box.hidden=true;box.innerHTML='';return}
-  box.innerHTML='<div class="ai-chat-welcome__label">Personal fit tools</div><div class="ai-chat-welcome__helper-grid">'+items+'</div>';
+  box.innerHTML='<div class="ai-chat-welcome__helper-grid">'+items+'</div>';
   box.hidden=false;
 }
 function startHelper(kind){
@@ -1270,7 +1271,7 @@ return d;
 function cardHelper(p,t){
   if(!p||!p.handle)return '';
   if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-helper" data-truefit="'+esc(p.handle)+'" data-title="'+t+'">'+WI.ruler.replace(/22/g,'14')+'<span>Find my size</span></button>';
-  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-helper" data-helper="fitfinder">'+WI.insole.replace(/22/g,'14')+'<span>Find my FIT</span></button>';
+  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-helper" data-helper="fitfinder">'+WI.target+'<span>Find my FIT</span></button>';
   return '';
 }
 function prodCard(p){
@@ -1502,6 +1503,7 @@ var text=inputEl.value.trim();
 if(!text||isStreaming)return;
 var w=$('.ai-chat-welcome',msgsEl);
 if(w)w.remove();
+msgsEl.classList.remove('is-welcome');
 /* Deactivate any prior choice/suggestion chip rows so chips from
    earlier turns can no longer be tapped — the visible history stays
    readable, but only the latest assistant turn's chips are live. */
