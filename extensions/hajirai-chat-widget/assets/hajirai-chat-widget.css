@@ -3446,8 +3446,8 @@ button.ai-chat-launcher__text {
   border-radius: 50%;
   pointer-events: none;
   user-select: none;
-  filter: saturate(1.05);
-  opacity: 0.96;
+  filter: drop-shadow(0 1px 2px rgba(13, 13, 18, 0.25));
+  opacity: 1;
   transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ai-chat-launcher__icon.is-orb {
@@ -3459,7 +3459,7 @@ button.ai-chat-launcher__text {
   overflow: visible;
 }
 @media (hover: hover) {
-  .ai-chat-launcher:hover .ai-chat-glow { opacity: 1; filter: saturate(1.15); }
+  .ai-chat-launcher:hover .ai-chat-glow { filter: drop-shadow(0 1px 3px rgba(13, 13, 18, 0.3)) brightness(1.06); }
 }
 /* The round bubble: clean white, the light filling it softly. */
 .ai-chat-launcher.is-bubble { background: #fff !important; }
@@ -3469,7 +3469,7 @@ button.ai-chat-launcher__text {
   overflow: hidden;
   clip-path: circle(50% at 50% 50%);
 }
-.ai-chat-launcher.is-bubble .ai-chat-glow { filter: saturate(1.05); }
+.ai-chat-launcher.is-bubble .ai-chat-glow { filter: drop-shadow(0 2px 4px rgba(13, 13, 18, 0.28)); }
 
 /* ======================================================================
    DARK THEME (Settings → Appearance). Designed on its own terms: deep
@@ -3590,7 +3590,7 @@ button.ai-chat-launcher__text {
   background: var(--seos-bg) !important;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 22px rgba(120, 120, 255, 0.22) !important;
 }
-.ai-chat-launcher[data-theme="dark"] .ai-chat-glow { filter: saturate(1.15) brightness(1.08); }
+.ai-chat-launcher[data-theme="dark"] .ai-chat-glow { filter: none; }
 @media (hover: hover) {
-  .ai-chat-launcher[data-theme="dark"]:hover .ai-chat-glow { filter: saturate(1.25) brightness(1.15); }
+  .ai-chat-launcher[data-theme="dark"]:hover .ai-chat-glow { filter: brightness(1.08); }
 }

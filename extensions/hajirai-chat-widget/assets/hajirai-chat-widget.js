@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 themes');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 siri-sphere');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -198,57 +198,50 @@ var GLOW_FRAG=[
 'precision mediump float;',
 'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;',
 'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
-/* gradient noise with quintic smoothing: no lattice kinks, smooth motion */
 'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);',
 ' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
-/* one large octave plus a faint second: broad, continuous folds */
-'float fld(vec2 p){return nz(p)+.22*nz(p*1.9+vec2(3.7,1.9));}',
-/* one sheet: `u` is the signed distance across it (-1..1 inside), `e` its edge softness */
-'struct R{float a;float g;float u;};',
-'R sheet(float f,float c,float w,float e){R r;r.u=(f-c)/w;float d=abs(r.u);r.a=1.-smoothstep(1.-e,1.,d);r.g=exp(-d*1.1);return r;}',
+/* one petal: a soft-edged ellipse of light radiating from the core, bent by
+   slow noise. Returns (defined edge, glow beyond it). */
+'vec2 petal(vec2 uv,float ang,float dist,float len,float wid,float tilt,float T,float k){',
+' vec2 c=dist*vec2(cos(ang),sin(ang));',
+' float th=ang+tilt;mat2 R=mat2(cos(th),-sin(th),sin(th),cos(th));',
+' vec2 p=R*(uv-c);',
+' p+=.16*vec2(nz(uv*1.6+vec2(T*.5,k)),nz(uv*1.6+vec2(k,-T*.45)));',
+' float d=length(p/vec2(len,wid))-1.;',
+' float edge=1.-smoothstep(-.04,.06,d);',
+' float inner=exp(-max(-d,0.)*1.2);',  /* brighter toward the petal's own edge, like a glass sheet */
+' float glow=exp(-max(d,0.)*5.);',
+' return vec2(edge*mix(.55,1.,inner),glow);}',
 'void main(){',
-' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float rr=length(uv);',
-' float T=t*.3+seed;',
-/* each field is stretched along its own slowly turning axis: long sheets */
-' float a1=T*.1,a2=-T*.08+1.3,a3=T*.09+2.6;',
-' mat2 s1=mat2(cos(a1),-sin(a1),sin(a1),cos(a1))*mat2(.62,0.,0.,1.1);',
-' mat2 s2=mat2(cos(a2),-sin(a2),sin(a2),cos(a2))*mat2(1.1,0.,0.,.6);',
-' mat2 s3=mat2(cos(a3),-sin(a3),sin(a3),cos(a3))*mat2(.7,0.,0.,1.);',
-/* three independent flow fields, large scale: about one sweep each across the circle */
-' vec2 q1=vec2(fld(uv*.35+vec2(T*.5,-T*.35)),fld(uv*.35+vec2(-T*.4,T*.55)+3.1));',
-' vec2 q2=vec2(fld(uv*.3+vec2(-T*.6,T*.3)+9.),fld(uv*.3+vec2(T*.45,T*.6)+6.2));',
-' vec2 q3=vec2(fld(uv*.32+vec2(T*.35,T*.45)+13.),fld(uv*.32+vec2(-T*.55,-T*.3)+17.));',
-' float f1=fld(s1*(uv+.7*q1)*.56+vec2(T*.6,T*.25));',
-' float f2=fld(s2*(uv+.8*q2)*.5+vec2(-T*.45,T*.7)+7.);',
-' float f3=fld(s3*(uv+.6*q3)*.58+vec2(T*.3,-T*.55)+11.);',
-/* the iso-values drift too, so each sheet travels across the circle */
-' float c1=.10*sin(T*.9),c2=.12*sin(T*.7+2.),c3=.10*sin(T*1.15+4.);',
-' R r1=sheet(f1,c1,.15,.12);',   /* the defined one: crisp contour */
-' R r2=sheet(f2,c2,.17,.38);',   /* softer */
-' R r3=sheet(f3,c3,.13,.55);',   /* the quiet third, mostly glow */
-/* palette: light mode clean on white; dark mode richer and more luminous */
-' vec3 cyan=mix(vec3(.18,.84,1.),vec3(.30,.92,1.),dark),blue=mix(vec3(.28,.48,1.),vec3(.36,.56,1.),dark);',
-' vec3 violet=mix(vec3(.58,.34,1.),vec3(.66,.42,1.),dark),pink=mix(vec3(1.,.46,.84),vec3(1.,.40,.80),dark),white=vec3(1.);',
-' float d1=.5+.5*sin(T*.55+1.),d2=.5+.5*sin(T*.4+2.5),d3=.5+.5*sin(T*.65+4.);',
-' vec3 k1=mix(mix(cyan,blue,r1.u*.5+.5),mix(mix(white,cyan,.75),cyan,r1.u*.5+.5),d1);',
-' vec3 k2=mix(mix(pink,violet,r2.u*.5+.5),mix(pink,mix(white,pink,.8),r2.u*.5+.5),d2);',
-/* the quiet third sheet stays airy on white (lifted toward white in light mode) */
-' vec3 k3=mix(mix(violet,blue,r3.u*.5+.5),mix(blue,cyan,r3.u*.5+.5),d3);k3=mix(mix(white,k3,.55),k3,dark);',
-' vec3 col=vec3(0.);float a=0.;float o;',
-/* soft atmospheric halo around each sheet (stronger in the dark) */
-' float h=mix(.12,.30,dark);',
-' o=h*r2.g;col=col*(1.-o)+pink*o;a+=o*(1.-a);',
-' o=h*r3.g;col=col*(1.-o)+violet*o;a+=o*(1.-a);',
-' o=h*1.1*r1.g;col=col*(1.-o)+cyan*o;a+=o*(1.-a);',
-/* the sheets, back to front */
-' o=mix(.45,.55,dark)*r3.a;col=col*(1.-o)+k3*o;a+=o*(1.-a);',
-' o=.70*r2.a;col=col*(1.-o)+k2*o;a+=o*(1.-a);',
-' o=mix(.80,.88,dark)*r1.a;col=col*(1.-o)+k1*o;a+=o*(1.-a);',
-/* luminous overlaps, hue kept */
-' float x=smoothstep(1.2,1.9,r1.a+r2.a+r3.a);col+=(white-col)*x*mix(.45,.55,dark);',
-/* contained: fades out before the edge */
-' float m=1.-smoothstep(.66,.98,rr);',
-' gl_FragColor=vec4(col*a*m,a*m);',
+' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
+' float T=t*.42+seed;',
+/* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
+' float sph=1.-smoothstep(.93,1.,r);',
+' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
+' body=mix(body,vec3(.26,.24,.46),smoothstep(.55,1.,r)*.8);',
+' body+=vec3(.55,.6,.9)*smoothstep(.86,.97,r)*(1.-smoothstep(.97,1.,r))*.22;',
+' body=mix(body*1.25,body,dark);',
+/* four petals, each on its own slow orbit, breathing and bending */
+' vec3 cyan=vec3(.10,.90,1.),teal=vec3(.18,.95,.62),mag=vec3(1.,.22,.62),vio=vec3(.46,.34,1.);',
+' vec2 p1=petal(uv,T*.5+0.0+.6*sin(T*.37),.30+.07*sin(T*.6),.74+.08*sin(T*.8),.25,.35,T,1.);',
+' vec2 p2=petal(uv,T*.42+2.1+.6*sin(T*.29+1.),.32+.07*sin(T*.5+2.),.70+.08*sin(T*.7+1.),.23,-.4,T,2.);',
+' vec2 p3=petal(uv,-T*.46+4.2+.6*sin(T*.33+2.),.30+.07*sin(T*.55+4.),.76+.08*sin(T*.9+2.),.25,.3,T,3.);',
+' vec2 p4=petal(uv,T*.34+3.1+.6*sin(T*.41+3.),.22+.06*sin(T*.45+1.),.60+.07*sin(T*.75+3.),.20,-.3,T,4.);',
+/* additive light: where petals cross the color builds toward white, as in glass */
+' vec3 L=vec3(0.);',
+' L+=cyan*(p1.x*.95+p1.y*.30);',
+' L+=mag*(p2.x*.95+p2.y*.30);',
+' L+=vio*(p3.x*.85+p3.y*.28);',
+' L+=teal*(p4.x*.75+p4.y*.22);',
+/* the white-hot core and its halo */
+' float core=exp(-r*r*26.);float halo=exp(-r*r*3.6);',
+' L+=vec3(1.)*(core*1.5+halo*.22);',
+/* a soft specular on the glass */
+' float spec=pow(max(0.,1.-length(uv-vec2(-.38,.46))*1.7),3.)*.22;',
+' vec3 col=body+L*mix(.78,.9,dark)+vec3(spec);',
+' col=col/(1.+col*.35);',   /* gentle tone map: bright, never clipped flat */
+' float a=sph;',
+' gl_FragColor=vec4(col*a,a);',
 '}'].join('\n');
 function initGlowGL(){
   try{
