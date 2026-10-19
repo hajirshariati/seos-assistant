@@ -3470,7 +3470,7 @@ button.ai-chat-launcher__text {
 }
 .ai-chat-launcher.is-bubble .ai-chat-launcher__orb .ai-orb { width: 44px !important; height: 44px !important; animation: none; filter: none; }
 
-/* ---------- The orb artwork (assets/assistant-orb.webp) ----------
+/* ---------- The orb artwork (assets/assistant-orb.png) ----------
    The glass bubble turns slowly so its ribbon flows, breathes a little,
    and its colors shimmer between pink, violet and cyan. Still for reduced
    motion; paused while the chat is open. */

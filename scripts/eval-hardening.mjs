@@ -3,6 +3,7 @@
 //
 // Run: node scripts/eval-hardening.mjs
 
+import { readdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
@@ -54,6 +55,14 @@ test("deprecated stored models run on the current model of the same tier", () =>
   assert.equal(chatModel(""), "claude-sonnet-4-6");
   assert.equal(chatModel("made-up-model"), "claude-sonnet-4-6");
   for (const m of ALLOWED_MODELS) assert.equal(chatModel(m), m);
+});
+
+// Shopify refuses to deploy other file types in a theme app extension's
+// assets ("Only these filetypes are supported in assets: …").
+test("theme extension assets use only file types Shopify accepts", () => {
+  const dir = new URL("../extensions/hajirai-chat-widget/assets/", import.meta.url);
+  const bad = readdirSync(dir).filter((f) => !/\.(jpe?g|json|js|css|png|svg|wasm)$/i.test(f));
+  assert.deepEqual(bad, [], `not allowed in assets/: ${bad.join(", ")}`);
 });
 
 // Shopify refuses to release the theme block otherwise ("must have a maximum

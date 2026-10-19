@@ -178,7 +178,7 @@ function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-h
    gradients separate. */
 var ORB_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function aiOrb(id,rim){
-  /* The store's orb artwork (assets/assistant-orb.webp), animated in the
+  /* The store's orb artwork (assets/assistant-orb.png), animated in the
      stylesheet; the drawn version below is the fallback. */
   if(safeUrl(C.orbUrl))return '<span class="ai-orb ai-orb--img" aria-hidden="true"><img src="'+safeUrl(C.orbUrl)+'" alt="" draggable="false"></span>';
   var g=function(n){return 'url(#'+id+n+')'};
