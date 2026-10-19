@@ -102,6 +102,27 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   await p.click(".ai-chat-welcome__qp-btn"); await p.waitForTimeout(700);
   check("admin: feedback buttons on by default", !!(await p.$(".ai-chat-feedback")));
 });
+// The rotating welcome line: English first on every open (held 3s), then
+// the other languages; English again after closing and reopening.
+wcNow = { greetingCtaTranslations: [{ text: "ES-LINE", dir: "ltr", code: "es" }, { text: "AR-LINE", dir: "rtl", code: "ar" }] };
+await run({ ...base, rotateGreetingCta: true }, { width: 1280, height: 900 }, async (p) => {
+  const line = () => p.textContent(".ai-chat-welcome__greeting-cta").then((t) => t.trim());
+  await p.waitForTimeout(6000); // the page sits a while before the chat is opened
+  await p.click(".ai-chat-launcher__text");
+  await p.waitForTimeout(600);
+  check("rotator: opens in English", (await line()) === "CTA-LINE-X", await line());
+  await p.waitForTimeout(1800);
+  check("rotator: English holds ~3s", (await line()) === "CTA-LINE-X", await line());
+  await p.waitForTimeout(1200);
+  check("rotator: then other languages", (await line()) === "ES-LINE", await line());
+  await p.waitForTimeout(4600);
+  check("rotator: back to English and held again", (await line()) === "CTA-LINE-X", await line());
+  await p.waitForTimeout(800);
+  await p.click(".ai-chat-close-btn"); await p.waitForTimeout(400);
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(500);
+  check("rotator: reopening starts in English", (await line()) === "CTA-LINE-X", await line());
+});
+wcNow = {};
 console.log(out.join("\n"));
 const failed = out.filter((l) => l.startsWith("FAIL")).length;
 console.log(`\n${out.length - failed} passed, ${failed} failed`);

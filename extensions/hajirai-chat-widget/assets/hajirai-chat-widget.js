@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 glow');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 greet-en');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -414,29 +414,38 @@ var GREET_CTA_FRAMES=[{text:GREETCTA,dir:'ltr',code:'en'}];
 var GREET_CTA_ROTATE=C.rotateGreetingCta!==false;
 var greetCtaTimer=null;
 var greetCtaIdx=0;
-function stopGreetCtaRotator(){if(greetCtaTimer){clearInterval(greetCtaTimer);greetCtaTimer=null}}
+function stopGreetCtaRotator(){if(greetCtaTimer){clearTimeout(greetCtaTimer);greetCtaTimer=null}}
+/* Every time the home screen is seen it opens in English and holds it for
+   3s, then shows the other languages; each return to English holds 3s
+   again. It only runs while the chat is open. */
+var GREET_EN_HOLD=3000,GREET_OTHER_HOLD=2200,greetGen=0;
+function showGreetFrame(node,f,fade){
+  if(!fade){node.textContent=f.text;node.setAttribute('dir',f.dir);node.setAttribute('lang',f.code);node.classList.remove('is-fading');return}
+  node.classList.add('is-fading');
+  var gen=greetGen;
+  setTimeout(function(){
+    if(!node.isConnected||gen!==greetGen)return;
+    node.textContent=f.text;node.setAttribute('dir',f.dir);node.setAttribute('lang',f.code);
+    node.classList.remove('is-fading');
+  },250);
+}
 function startGreetCtaRotator(){
   stopGreetCtaRotator();
-  if(!GREET_CTA_ROTATE)return;
+  greetGen++;
   greetCtaIdx=0;
-  /* Always start the timer when the rotator is enabled, even if the
-     server hasn't returned translations yet — once they arrive, the
-     frames array is updated and the next tick picks them up. */
-  greetCtaTimer=setInterval(function(){
-    var node=$('.ai-chat-welcome__greeting-cta',msgsEl);
-    if(!node){stopGreetCtaRotator();return}
-    if(GREET_CTA_FRAMES.length<2)return;
-    greetCtaIdx=(greetCtaIdx+1)%GREET_CTA_FRAMES.length;
-    var f=GREET_CTA_FRAMES[greetCtaIdx];
-    node.classList.add('is-fading');
-    setTimeout(function(){
-      if(!node.isConnected)return;
-      node.textContent=f.text;
-      node.setAttribute('dir',f.dir);
-      node.setAttribute('lang',f.code);
-      node.classList.remove('is-fading');
-    },250);
-  },3500);
+  var node=$('.ai-chat-welcome__greeting-cta',msgsEl);
+  if(node)showGreetFrame(node,GREET_CTA_FRAMES[0],false);
+  if(!GREET_CTA_ROTATE||!isOpen)return;
+  /* Translations arrive with widget-config; until then English just stays. */
+  greetCtaTimer=setTimeout(function tick(){
+    var n=$('.ai-chat-welcome__greeting-cta',msgsEl);
+    if(!n||!isOpen){stopGreetCtaRotator();return}
+    if(GREET_CTA_FRAMES.length>1){
+      greetCtaIdx=(greetCtaIdx+1)%GREET_CTA_FRAMES.length;
+      showGreetFrame(n,GREET_CTA_FRAMES[greetCtaIdx],true);
+    }
+    greetCtaTimer=setTimeout(tick,greetCtaIdx===0?GREET_EN_HOLD:GREET_OTHER_HOLD);
+  },GREET_EN_HOLD);
 }
 
 /* Welcome: banner, a greeting, the two personal fit tools (True Fit for
@@ -713,7 +722,9 @@ if(isOpen){
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   playWelcomeIntro();
+  if(GREETCTA)startGreetCtaRotator();
 }else{
+  stopGreetCtaRotator();
   panel.classList.remove('open');
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');
