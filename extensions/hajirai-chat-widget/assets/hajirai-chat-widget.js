@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 orb-art');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 aura');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -169,42 +169,9 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark: an airy glass bubble holding a soft folded ribbon
-   whose edges blush pink, violet and cyan (Siri-like, on light). It's alive:
-   the ribbon keeps reshaping, a faint second ribbon moves out of step, the
-   edge colors drift, the whole turns slowly and a highlight glides around
-   the bubble's rim. In the text box only the ribbon shows — no circle, no
-   rim. Still for shoppers who prefer reduced motion. `id` keeps each copy's
-   gradients separate. */
-var ORB_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function aiOrb(id,rim){
-  /* The store's orb artwork (assets/assistant-orb.png), animated in the
-     stylesheet; the drawn version below is the fallback. */
-  if(safeUrl(C.orbUrl))return '<span class="ai-orb ai-orb--img" aria-hidden="true"><img src="'+safeUrl(C.orbUrl)+'" alt="" draggable="false"></span>';
-  var g=function(n){return 'url(#'+id+n+')'};
-  var A=['M11.5 24.5C8.8 15.5 15 9 22 10C28.2 10.9 31.3 15.9 29.3 21C27.9 24.6 24.4 26.6 21.3 26.5C23.9 24.1 24.4 20.5 21.8 18.9C18.8 17.1 14.5 19.2 11.5 24.5Z',
-         'M10.5 23C9.5 13.5 16.5 8 23 9.5C29.5 11 32 17 29.8 22C28 25.8 24 27.5 20.8 27C23.5 24.5 23.6 21 21.2 19.6C18 17.8 13.5 19 10.5 23Z',
-         'M12.5 25.5C9 17 14 10.5 21 10.8C27.5 11 30.5 14.8 29.6 19.8C28.8 24 25.5 26.8 22 27.2C24.6 24.6 25.2 21 22.6 19.4C19.5 17.5 15.5 20 12.5 25.5Z'];
-  var B=['M20.3 18.9C23.2 20.3 23.1 24.2 20.8 26.6C19.2 28.8 17 30.5 14.5 31.2C17.4 29 19 25.9 18.9 22.8C18.8 21.2 19.2 19.7 20.3 18.9Z',
-         'M21 19.6C24.3 21.4 24 25.6 21.5 27.8C19.6 29.7 17.2 31 14.2 31.2C17.6 29.4 19.6 26.4 19.7 23.3C19.8 21.7 20 20.4 21 19.6Z',
-         'M19.8 18.6C22.6 19.8 22.3 23.5 20.1 25.9C18.6 28 16.6 29.8 15.2 31.6C17.1 29.2 18.4 25.6 18.3 22.4C18.3 20.8 18.8 19.3 19.8 18.6Z'];
-  var spline='keyTimes="0;.33;.66;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1;.45 0 .55 1"';
-  var morph=function(v,dur,begin){return ORB_STILL?'':'<animate attributeName="d" values="'+v[0]+';'+v[1]+';'+v[2]+';'+v[0]+'" dur="'+dur+'s" begin="'+(begin||0)+'s" repeatCount="indefinite" '+spline+'/>'};
-  var hue=function(vals,dur){return ORB_STILL?'':'<animate attributeName="stop-color" values="'+vals+'" dur="'+dur+'s" repeatCount="indefinite"/>'};
-  var path=function(v,fill,op,sw,dur,begin){return '<path d="'+v[0]+'" fill="'+g(fill)+'" stroke="'+g('e')+'" stroke-opacity="'+op+'" stroke-width="'+sw+'">'+morph(v,dur,begin)+'</path>'};
-  return '<svg class="ai-orb'+(rim?' has-rim':'')+'" viewBox="'+(rim?'0 0 40 40':'7 7 26 26')+'" aria-hidden="true" focusable="false"><defs>'+
-    '<radialGradient id="'+id+'r"><stop offset=".72" stop-color="#fff" stop-opacity="0"/><stop offset=".9" stop-color="#ddd2ff" stop-opacity=".4"/><stop offset="1" stop-color="#c2b2ff" stop-opacity=".6"/></radialGradient>'+
-    '<linearGradient id="'+id+'h" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#ff9fd0" stop-opacity=".9"/><stop offset=".75" stop-color="#7fe8ff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'+
-    '<linearGradient id="'+id+'t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7ac0" stop-opacity=".38">'+hue('#ff7ac0;#b48bff;#6fdcff;#ff7ac0',9)+'</stop><stop offset=".55" stop-color="#b48bff" stop-opacity=".24">'+hue('#b48bff;#6fdcff;#ff7ac0;#b48bff',9)+'</stop><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'+
-    '<linearGradient id="'+id+'u" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#5fe3ff" stop-opacity=".38">'+hue('#5fe3ff;#ff8ccc;#a07bff;#5fe3ff',9)+'</stop></linearGradient>'+
-    '<linearGradient id="'+id+'e" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fae">'+hue('#ff5fae;#8a5cff;#3fd6ff;#ff5fae',7)+'</stop><stop offset=".5" stop-color="#8a5cff">'+hue('#8a5cff;#3fd6ff;#ff5fae;#8a5cff',7)+'</stop><stop offset="1" stop-color="#3fd6ff">'+hue('#3fd6ff;#ff5fae;#8a5cff;#3fd6ff',7)+'</stop></linearGradient>'+
-    '<filter id="'+id+'b" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation=".22"/></filter>'+
-    '</defs>'+
-    (rim?'<circle cx="20" cy="20" r="19" fill="'+g('r')+'"/><circle cx="20" cy="20" r="18.6" fill="none" stroke="#c7b6ff" stroke-opacity=".35" stroke-width=".5"/>'+
-      '<g class="ai-orb__shine"><circle cx="20" cy="20" r="18.4" fill="none" stroke="'+g('h')+'" stroke-width=".9" stroke-linecap="round" stroke-dasharray="22 94"/></g>':'')+
-    '<g class="ai-orb__spin"><g class="ai-orb__ghost" transform="rotate(165 20 20)" opacity=".38" filter="'+g('b')+'">'+path(A,'t',.4,.35,8.5,-3)+'</g>'+
-    '<g class="ai-orb__ribbon" filter="'+g('b')+'">'+path(A,'t',.5,.45,7)+path(B,'u',.45,.4,7)+'</g></g></svg>';
-}
+/* The assistant's mark: the sparkle on a soft aura of two colors flowing
+   into each other (stylesheet: .ai-chat-aura). */
+function aiMark(){return '<i class="ai-chat-aura" aria-hidden="true"></i>'+aiSparkle()}
 /* Build launcher */
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
 launcher.style.width=LWIDTH+'px';
@@ -212,8 +179,8 @@ launcher.style.maxWidth='calc(100vw - 32px)';
 /* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
-launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true">'+aiOrb('aio1',false)+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
-  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiOrb('aio2',true)+'</span>';
+launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true">'+aiMark()+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiMark()+'</span>';
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);
