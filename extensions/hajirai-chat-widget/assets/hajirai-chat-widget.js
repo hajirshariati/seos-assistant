@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 account-fit');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 icons-inert');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -80,10 +80,10 @@ var NAME=C.assistantName||'AI Shopping Assistant';
 var LPLACE=C.launcherPlaceholder||'How can I help you today?';
 var IPLACE=C.inputPlaceholder||'How can I help you today?';
 var POS=C.widgetPosition||'bottom-center';
-var CTA1L=C.cta1Label||'';var CTA1M=C.cta1Message||'';
-var CTA2L=C.cta2Label||'';var CTA2M=C.cta2Message||'';
-var CTA3L=C.cta3Label||'';var CTA3M=C.cta3Message||'';
-var CTA4L=C.cta4Label||'';var CTA4M=C.cta4Message||'';
+var CTA1L=C.cta1Label||'';var CTA1M=C.cta1Message||'';var CTA1I=C.cta1Icon||'';
+var CTA2L=C.cta2Label||'';var CTA2M=C.cta2Message||'';var CTA2I=C.cta2Icon||'';
+var CTA3L=C.cta3Label||'';var CTA3M=C.cta3Message||'';var CTA3I=C.cta3Icon||'';
+var CTA4L=C.cta4Label||'';var CTA4M=C.cta4Message||'';var CTA4I=C.cta4Icon||'';
 var HINT=C.ctaHint||'';
 var HINT_LOGGED=C.ctaHintLoggedIn||'';
 var QP1L=C.quickPick1Label||'';var QP1M=C.quickPick1Message||'';
@@ -448,13 +448,24 @@ var WI={
   ret:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>',
   search:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
   target:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
-  spark:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>'
+  spark:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  truck:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 6h11v10H2z"/><path d="M13 9h4.5l3.5 3.5V16h-8"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>',
+  gift:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12"/><path d="M12 8C10.5 4 7 4.5 7 6.5S10 8 12 8zm0 0c1.5-4 5-3.5 5-1.5S14 8 12 8z"/></svg>',
+  heart:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20s-7.5-4.6-9.2-9.3C1.7 7.5 3.8 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.2 0 5.3 3 4.2 6.2C19.5 15.4 12 20 12 20z"/></svg>',
+  star:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
+  chat:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 15a2 2 0 01-2 2H8l-4 3.5V6a2 2 0 012-2h12a2 2 0 012 2z"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0113 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>'
 };
+/* Icons a store can pick for each "Start here" button (theme editor). */
+var CTA_ICONS={search:'search',sizing:'ruler',shoe:'shoe',orthotic:'target',order:'box',shipping:'truck',returns:'ret',deals:'tag',gift:'gift',heart:'heart',star:'star',support:'chat',store:'pin',sparkle:'spark'};
 /* True Fit's own mark, as on the product pages' "Find my size" tile. */
 function tfLogo(size){
   return C.trueFitLogo?'<img class="ai-chat-tf-logo" src="'+safeUrl(C.trueFitLogo)+'" alt="" width="'+size+'" height="'+size+'" aria-hidden="true">':WI.ruler.replace(/22/g,String(size));
 }
-function ctaIcon(label){
+function ctaIcon(label,pick){
+  var key=CTA_ICONS[String(pick||'')];
+  if(key)return key==='target'?WI.target.replace(/14/g,'18'):key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
+  /* Automatic: chosen from the button's words. */
   var l=String(label||'').toLowerCase();
   if(/orthotic|insole|insert/.test(l))return WI.target.replace(/14/g,'18');
   if(/siz|fit/.test(l))return WI.ruler.replace(/22/g,'18');
@@ -477,14 +488,14 @@ h+='<div class="ai-chat-welcome__intro"><h2 class="ai-chat-welcome__title">'+esc
    (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div>';
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=[];
-if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M});
-if(CTA2L&&CTA2M)ctas.push({l:CTA2L,m:CTA2M});
-if(CTA3L&&CTA3M)ctas.push({l:CTA3L,m:CTA3M});
-if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M});
+if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M,i:CTA1I});
+if(CTA2L&&CTA2M)ctas.push({l:CTA2L,m:CTA2M,i:CTA2I});
+if(CTA3L&&CTA3M)ctas.push({l:CTA3L,m:CTA3M,i:CTA3I});
+if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M,i:CTA4I});
 if(ctas.length){
   h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Start here</div><div class="ai-chat-welcome__ctas">';
   for(var i=0;i<ctas.length;i++){
-    h+='<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(ctas[i].m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-label">'+esc(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
+    h+='<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(ctas[i].m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(ctas[i].l,ctas[i].i)+'</span><span class="ai-chat-welcome__cta-label">'+esc(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
   }
   h+='</div></div>';
 }
@@ -623,6 +634,20 @@ function hideFloaters(){
     }
   }
 }
+/* While the chat is open, the page behind it can't be reached: no tabbing
+   into it, and on iPhone the keyboard bar's up/down arrows have nowhere to
+   jump (they'd otherwise move the cursor to the site's search box behind
+   the chat). */
+var inertEls=[];
+function inertPage(on){
+  if(!on){for(var j=0;j<inertEls.length;j++)inertEls[j].inert=false;inertEls=[];return}
+  var kids=document.body.children;
+  for(var i=0;i<kids.length;i++){
+    var el=kids[i];
+    if(el===panel||el===overlay||el===launcher||el.contains(panel)||el.inert||/^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(el.tagName))continue;
+    el.inert=true;inertEls.push(el);
+  }
+}
 function restoreFloaters(){
   for(var i=0;i<hiddenFloaters.length;i++)hiddenFloaters[i][0].style.visibility=hiddenFloaters[i][1];
   hiddenFloaters=[];
@@ -673,6 +698,7 @@ if(isOpen){
   overlay.classList.add('visible');
   document.body.classList.add('ai-chat-blurred');
   hideFloaters();
+  inertPage(true);
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   playWelcomeIntro();
@@ -683,6 +709,7 @@ if(isOpen){
   launcher.inert=false;launcher.removeAttribute('aria-hidden');
   document.body.classList.remove('ai-chat-blurred');
   restoreFloaters();
+  inertPage(false);
   menu.style.display='none';
   var back=focusBeforeOpen&&document.body.contains(focusBeforeOpen)&&focusBeforeOpen!==document.body?focusBeforeOpen:(launcher.classList.contains('is-bubble')?launcher:$('.ai-chat-launcher__text',launcher)||launcher);
   focusBeforeOpen=null;
@@ -1244,8 +1271,9 @@ return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:
 function openSupportChat(fallbackUrl){
   var url=fallbackUrl||SUPPORT_URL||'';
   if(typeof window.zE==='function'){toggle(false);try{window.zE('webWidget','show');window.zE('webWidget','open');return}catch(e){}}
-  if(typeof window.Intercom==='function'){try{window.Intercom('show');return}catch(e){}}
-  if(typeof window.GorgiasChat!=='undefined'&&window.GorgiasChat&&typeof window.GorgiasChat.open==='function'){try{window.GorgiasChat.open();return}catch(e){}}
+  /* Other chat apps are hidden behind ours while it's open: step aside first. */
+  if(typeof window.Intercom==='function'){toggle(false);try{window.Intercom('show');return}catch(e){}}
+  if(typeof window.GorgiasChat!=='undefined'&&window.GorgiasChat&&typeof window.GorgiasChat.open==='function'){toggle(false);try{window.GorgiasChat.open();return}catch(e){}}
   if(url)window.open(url,'_blank','noopener');
 }
 // Handoff support CTA rendered as a BUTTON (not an anchor) so the click opens

@@ -302,6 +302,26 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("known/menu: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The page behind the open chat can't be reached (on iPhone the keyboard
+// bar's arrows would jump to the site's search box), and a store can pick
+// each Start-here icon.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector(".ai-chat-panel.open");
+  check("open chat: the page behind is unreachable", await page.evaluate(() => !!document.getElementById("site-search").closest("[inert]")));
+  check("open chat: the chat itself stays usable", await page.evaluate(() => !document.querySelector(".ai-chat-input").closest("[inert]")));
+  check("icons: a store-picked icon replaces the automatic one", await page.evaluate(() => /M12 20s/.test(document.querySelector(".ai-chat-welcome__cta-icon").innerHTML)));
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(300);
+  check("closed chat: the page is reachable again", await page.evaluate(() => !document.getElementById("site-search").closest("[inert]")));
+  check("inert: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 await browser.close();
 srv.close();
 console.log(results.join("\n"));
