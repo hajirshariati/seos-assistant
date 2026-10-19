@@ -15,6 +15,7 @@ import { supportChatLabel } from "../support-handoff.js";
 import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
 import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
+import { makeLiveStock } from "./live-stock.server.js";
 import { recordHealth } from "../../models/ChatHealth.server.js";
 import { chatModel } from "../claude-models.js";
 import { buildShopAllLink } from "./shop-all.js";
@@ -130,6 +131,7 @@ export function leanChatResponse({
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
           similarAttributes: extras.similarAttributes,
+          liveStock: makeLiveStock({ shop, accessToken }),
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
             return withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal }));

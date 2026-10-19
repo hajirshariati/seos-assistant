@@ -289,6 +289,66 @@ await test("the orthotic-chat check only fires on a short answer that switches t
   assert.equal(leftOrthoticChat({ lastAssistantText: "Here are some sandals you might like.", latestUserMessage: "boots", shownProducts: [boot] }), false, "not an orthotic chat");
   assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "boots", shownProducts: [] }), false);
 });
+// Live store, 2026-10: the assistant pre-picked a sold-out size (Blaire in
+// 6 - 6.5 US) and said "just tap Add to cart". A size is only pre-picked when
+// it's in stock — live stock first — and a reply that ignores it is rewritten.
+{
+  const blaire = { ...row("Blaire Adjustable Slide Sandal - Black", { cat: "Sandals", price: "55.98" }) };
+  blaire.variants = [["6 - 6.5 US", 0], ["7 US", 8], ["7.5 - 8 US", 1]].map(([size, qty]) => ({ price: "55.98", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }]) }));
+  const cat2 = buildLeanCatalog([...ROWS, blaire], { shop: "s.myshopify.com" });
+  const bh = cat2.products.find((p) => p.title.startsWith("Blaire")).handle;
+  const turn = (liveStock, replies) => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "blaire" })] },
+      { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [bh], options: { [bh]: { size: "6 - 6.5" } } })] },
+      ...replies.map((t) => ({ stop_reason: "end_turn", content: [txt(t)] })),
+    ]);
+    return runLeanTurn({ catalog: cat2, model: "m", messages: [{ role: "user", content: "blaire in 6.5" }], latestUserMessage: "blaire in 6.5", liveStock, callModel: s.callModel, log: quiet }).then((r) => ({ r, s }));
+  };
+  await test("a sold-out size is never pre-picked; Claude is told what's in stock", async () => {
+    const { r, s } = await turn(null, ["Just tap Add to cart and you're all set!", "The Blaire is sold out in 6 - 6.5 US right now — 7 US is in stock."]);
+    assert.equal(r.cards[0].preselect, undefined);
+    const shown = JSON.stringify(s.requests[2].messages.at(-1));
+    assert.match(shown, /sold_out/);
+    assert.match(shown, /7 US/);
+    assert.equal(r.retried, true, "a reply that ignores it is sent back");
+    assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /The size you picked is sold out/);
+    assert.match(r.text, /sold out/);
+  });
+  await test("live stock wins over the synced catalog (both ways)", async () => {
+    const restocked = await turn(async () => [{ Size: "6 - 6.5 US" }, { Size: "7 US" }], ["Here's the Blaire in 6 - 6.5 US, ready to add."]);
+    assert.deepEqual(restocked.r.cards[0].preselect, { Size: "6 - 6.5 US" });
+    assert.equal(restocked.r.retried, false);
+    const live = { ...blaire, variants: blaire.variants.map((v) => ({ ...v, inventoryQty: 5 })) };
+    const cat3 = buildLeanCatalog([...ROWS, live], { shop: "s.myshopify.com" });
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "blaire" })] },
+      { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [bh], options: { [bh]: { size: "7" } } })] },
+      { stop_reason: "end_turn", content: [txt("Sorry — the Blaire just sold out in 7 US; 7.5 - 8 US is available.")] },
+    ]);
+    const r = await runLeanTurn({ catalog: cat3, model: "m", messages: [{ role: "user", content: "blaire in 7" }], latestUserMessage: "blaire in 7", liveStock: async () => [{ Size: "7.5 - 8 US" }], callModel: s.callModel, log: quiet });
+    assert.equal(r.cards[0].preselect, undefined, "the catalog said 7 was in stock; the store says it sold out");
+  });
+  await test("live stock: reads the store's buyable variants; any failure falls back to the catalog", async () => {
+    const { makeLiveStock } = await import("../app/lib/lean/live-stock.server.js");
+    let calls = 0;
+    const ok = makeLiveStock({ shop: "s.myshopify.com", accessToken: "t", fetchImpl: async (url, init) => {
+      calls++;
+      assert.match(url, /\/admin\/api\/.+\/graphql\.json$/);
+      assert.equal(JSON.parse(init.body).variables.handle, "blaire");
+      return { ok: true, json: async () => ({ data: { productByIdentifier: { variants: { nodes: [
+        { availableForSale: false, selectedOptions: [{ name: "Size", value: "6 - 6.5 US" }] },
+        { availableForSale: true, selectedOptions: [{ name: "Size", value: "7 US" }] },
+      ] } } } }) };
+    } });
+    assert.deepEqual(await ok("blaire"), [{ Size: "7 US" }]);
+    await ok("blaire");
+    assert.equal(calls, 1, "asked once per turn");
+    assert.equal(await makeLiveStock({ shop: "s", accessToken: "t", fetchImpl: async () => ({ ok: false }) })("x"), null);
+    assert.equal(await makeLiveStock({ shop: "s", accessToken: "t", fetchImpl: async () => { throw new Error("timeout"); } })("x"), null);
+    assert.equal(makeLiveStock({ shop: "s", accessToken: null }), null);
+  });
+}
 await test("show_products rejects a product no tool returned", async () => {
   const s = scripted([
     { stop_reason: "tool_use", content: [tu("t1", "show_products", { handles: [H["Margot Lace-Up Boot - Dark Red"]] })] },

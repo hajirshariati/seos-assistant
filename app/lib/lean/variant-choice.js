@@ -46,3 +46,30 @@ export function resolvePreselect(product, wanted) {
   }
   return Object.keys(out).length ? out : null;
 }
+
+// Is there a variant in stock with every chosen option value?
+// stock: [{ Size: "7 US", Width: "M" }, …] — the in-stock variants.
+// Unknown stock (null) counts as available.
+export function preselectAvailable(stock, pre) {
+  if (!pre || !Array.isArray(stock)) return true;
+  const want = Object.entries(pre).map(([k, v]) => [k.toLowerCase(), String(v).toLowerCase()]);
+  return stock.some((variant) => {
+    const has = Object.fromEntries(Object.entries(variant).map(([k, v]) => [k.toLowerCase(), String(v).toLowerCase()]));
+    return want.every(([k, v]) => has[k] === v);
+  });
+}
+
+// What the customer can pick instead: the values of the first chosen option
+// (usually Size) that are in stock with the rest of their choices (e.g. Wide).
+export function availableAlternatives(stock, pre) {
+  if (!pre || !Array.isArray(stock)) return [];
+  const [first, ...rest] = Object.keys(pre);
+  const out = [];
+  for (const variant of stock) {
+    const has = Object.fromEntries(Object.entries(variant).map(([k, v]) => [k.toLowerCase(), String(v)]));
+    if (!rest.every((k) => String(has[k.toLowerCase()] || "").toLowerCase() === String(pre[k]).toLowerCase())) continue;
+    const v = has[first.toLowerCase()];
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out.slice(0, 12);
+}

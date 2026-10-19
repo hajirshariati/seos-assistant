@@ -182,6 +182,9 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     compareAtPrice,
     onSale: Number.isFinite(compareAtPrice) && compareAtPrice > minPrice,
     inStock: variants.length === 0 || inStockVariants.length > 0,
+    // The option values of each variant in stock ({ Size: "7 US", Width: "M" }),
+    // so a size picked for the customer can be checked before it's offered.
+    stock: inStockVariants.map((v) => optionBag(v.optionsJson)).filter((o) => Object.keys(o).length),
     sizes,
     widths,
   };

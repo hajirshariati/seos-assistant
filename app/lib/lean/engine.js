@@ -12,7 +12,7 @@ import { leanSearch, productDetails, similarProducts } from "./search.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
-import { resolvePreselect } from "./variant-choice.js";
+import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { productKind } from "./catalog.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
 
@@ -164,6 +164,8 @@ export async function runLeanTurn({
   deadlineMs = TURN_DEADLINE_MS,
   log = (line) => console.log(line),
   callModel = null, // test seam: (request) => response
+  // Live stock for one product: async (handle) → [{ Size, Width }] in stock, or null.
+  liveStock = null,
 }) {
   const started = Date.now();
   const products = catalog?.products || [];
@@ -196,6 +198,7 @@ export async function runLeanTurn({
   let preselects = new Map();
   let followUps = [];
   let supportRequested = null;
+  let soldOut = []; // sizes the customer asked for that aren't in stock
   const events = [];
   // Facts the reply may quote: store info, promotions, order/recommender output.
   let knowledgeText = String(extraSystem || "");
@@ -260,15 +263,29 @@ export async function runLeanTurn({
       shown = ok;
       // Size/width the customer stated → exact option values for one-tap Add to cart.
       preselects = new Map();
+      soldOut = [];
       for (const h of ok) {
         const want = input.options && typeof input.options === "object" ? input.options[h] : null;
         const pre = want ? resolvePreselect(byHandle.get(h), want) : null;
-        if (pre) preselects.set(h, pre);
+        if (!pre) continue;
+        // The card offers one-tap Add to cart in this size only if it's in
+        // stock right now — the store's live stock when we can read it.
+        let stock = byHandle.get(h).stock;
+        if (liveStock) {
+          const live = await liveStock(h).catch(() => null);
+          if (Array.isArray(live)) stock = live;
+        }
+        if (preselectAvailable(stock, pre)) preselects.set(h, pre);
+        else soldOut.push({ title: byHandle.get(h).title, wanted: pre, in_stock: availableAlternatives(stock, pre) });
       }
       followUps = cleanFollowUps(input.follow_ups);
       log(`[lean] show ${JSON.stringify(ok)}${rejected.length ? ` rejected=${JSON.stringify(rejected)}` : ""}${preselects.size ? ` preselect=${JSON.stringify(Object.fromEntries(preselects))}` : ""}`);
       return {
         showing: ok.map((h) => byHandle.get(h).title),
+        ...(soldOut.length ? {
+          sold_out: soldOut,
+          sold_out_note: "Those sizes are sold out right now, so the cards don't pre-pick them. Tell the customer plainly and name the closest sizes in `in_stock` (or other styles) — don't say it's ready to add.",
+        } : {}),
         ...(rejected.length ? { rejected, note: "Rejected handles weren't returned by a tool in this conversation — search first." } : {}),
       };
     }
@@ -362,6 +379,12 @@ export async function runLeanTurn({
       issues.push({
         code: "left_orthotic_chat",
         detail: `You were helping choose an orthotic and the customer answered "${said}" — you're now showing shoes. A short answer mid-conversation usually answers your last question ("boots" = orthotics for boots). Unless they clearly asked for shoes, keep helping with the orthotic; if it could mean either, ask with <<Orthotics for ${said}>><<Show me ${said}>>. If they did want shoes, keep your reply.`,
+      });
+    }
+    if (soldOut.length && !/sold out|out of stock|not in stock|isn['’]t available|not available|unavailable|no longer|don['’]t have|out in/i.test(text)) {
+      issues.push({
+        code: "sold_out_size",
+        detail: `The size you picked is sold out: ${soldOut.map((s) => `${s.title} in ${Object.values(s.wanted).join(" / ")}${s.in_stock.length ? ` (in stock: ${s.in_stock.join(", ")})` : ""}`).join("; ")}. Say so and offer what's in stock — the card can't add a sold-out size.`,
       });
     }
     issues.push(...verifyLeanAnswer({
