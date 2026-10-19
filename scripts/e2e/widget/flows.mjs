@@ -315,7 +315,12 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.waitForSelector(".ai-chat-panel.open");
   check("open chat: the page behind is unreachable", await page.evaluate(() => !!document.getElementById("site-search").closest("[inert]")));
   check("open chat: the chat itself stays usable", await page.evaluate(() => !document.querySelector(".ai-chat-input").closest("[inert]")));
+  check("avatar: on the home screen it's beside the greeting, not in the header", await page.evaluate(() => !!document.querySelector(".ai-chat-welcome__avatar") && document.querySelector(".ai-chat-header__avatar").getBoundingClientRect().width < 2));
   check("icons: a store-picked icon replaces the automatic one", await page.evaluate(() => /M12 20s/.test(document.querySelector(".ai-chat-welcome__cta-icon").innerHTML)));
+  await page.fill(".ai-chat-input-area textarea", "show me 1");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1000);
+  check("avatar: once the chat starts it's in the header (and the flying copy is gone)", await page.evaluate(() => { const a = document.querySelector(".ai-chat-header__avatar"); return a.getBoundingClientRect().width > 30 && getComputedStyle(a).opacity === "1" && !document.querySelector(".ai-chat-avatar-ghost"); }));
   await page.click(".ai-chat-close-btn");
   await page.waitForTimeout(300);
   check("closed chat: the page is reachable again", await page.evaluate(() => !document.getElementById("site-search").closest("[inert]")));

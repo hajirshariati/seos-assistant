@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 icons-inert');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 avatar-fly');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -484,8 +484,11 @@ if(SHOWBAN&&BANNER){
 var welcomeGreeting=(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())
   ? GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME)
   : GREET;
-h+='<div class="ai-chat-welcome__intro"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
-   (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div>';
+/* The assistant's face greets the shopper here; the header shows it only
+   once the chat starts (it flies up there — see flyAvatarToHeader). */
+var welcomeAv=safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar'+(safeUrl(AVATAR)?'':' is-placeholder')+'" aria-hidden="true">'+welcomeAv+'</div><div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
+   (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div></div>';
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=[];
 if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M,i:CTA1I});
@@ -522,6 +525,7 @@ if(CUST_LOGGED_IN){
 h+='</div>';
 msgsEl.innerHTML=h;
 msgsEl.classList.add('is-welcome');
+panel.classList.add('is-home');
 renderHelpers();
 /* FITFinder's config loads when the chat opens; the tool appears then. */
 if(ffLoading)ffLoading.then(renderHelpers);
@@ -1620,12 +1624,46 @@ function openAtcPanel(card,product,m,sel,state){
   if(first&&first.focus)try{first.focus({preventScroll:true})}catch(_){first.focus()}
 }
 
+/* Home → chat: the avatar beside the greeting flies up into the header
+   while the name slides over to make room for it. The header avatar's final
+   spot is measured with the layout already settled, then both move together.
+   No flight for reduced motion, a closed chat, or an avatar off screen. */
+function leaveHome(fromRect){
+  if(!panel.classList.contains('is-home'))return;
+  var hdr=$('.ai-chat-header__avatar',panel);
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!hdr||!fromRect||!fromRect.width||reduce){panel.classList.remove('is-home');return}
+  panel.classList.add('is-measuring');
+  panel.classList.remove('is-home');
+  var to=hdr.getBoundingClientRect();
+  panel.classList.add('is-home');
+  void panel.offsetWidth;
+  panel.classList.remove('is-measuring');
+  panel.classList.add('is-avatar-flying');
+  panel.classList.remove('is-home');
+  var ghost=el('div','ai-chat-avatar-ghost'+(hdr.classList.contains('ai-chat-header__avatar--placeholder')?' is-placeholder':''),hdr.innerHTML);
+  ghost.style.cssText='left:'+fromRect.left+'px;top:'+fromRect.top+'px;width:'+fromRect.width+'px;height:'+fromRect.height+'px';
+  document.body.appendChild(ghost);
+  var dx=to.left-fromRect.left,dy=to.top-fromRect.top,sc=to.width/fromRect.width;
+  var done=function(){if(ghost.parentNode)ghost.parentNode.removeChild(ghost);panel.classList.remove('is-avatar-flying')};
+  if(ghost.animate){
+    var a=ghost.animate([
+      {transform:'translate(0,0) scale(1)'},
+      {transform:'translate('+dx+'px,'+dy+'px) scale('+sc+')'}
+    ],{duration:520,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
+    a.onfinish=done;
+    setTimeout(done,900);
+  }else done();
+}
 function sendMessage(){
 var text=inputEl.value.trim();
 if(!text||isStreaming)return;
 var w=$('.ai-chat-welcome',msgsEl);
+var homeAv=w&&isOpen?$('.ai-chat-welcome__avatar',w):null;
+var fromRect=homeAv?homeAv.getBoundingClientRect():null;
 if(w)w.remove();
 msgsEl.classList.remove('is-welcome');
+leaveHome(fromRect);
 /* Deactivate any prior choice/suggestion chip rows so chips from
    earlier turns can no longer be tapped — the visible history stays
    readable, but only the latest assistant turn's chips are live. */

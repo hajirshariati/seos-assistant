@@ -3260,3 +3260,64 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-helper.is-known .ai-chat-helper__title,
   .ai-chat-panel .ai-chat-helper.is-known .ai-chat-helper__sub { white-space: normal; }
 }
+
+/* ---------- Avatar: on the greeting at home, in the header in a chat ----------
+   Home: the face sits beside the greeting and the header shows only the
+   name. When the chat starts, a copy of the face flies from the greeting to
+   the header (JS) while the header makes room; it lands as the real header
+   avatar appears. A new chat folds the header avatar away again. */
+.ai-chat-panel .ai-chat-welcome__intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ai-chat-panel .ai-chat-welcome__intro-text { min-width: 0; }
+.ai-chat-panel .ai-chat-welcome__avatar,
+.ai-chat-avatar-ghost {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f3f4f6;
+  box-shadow: 0 0 0 1px var(--seos-line, rgba(13, 13, 18, 0.08)), 0 6px 16px rgba(13, 13, 18, 0.08);
+}
+.ai-chat-panel .ai-chat-welcome__avatar img,
+.ai-chat-avatar-ghost img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ai-chat-panel .ai-chat-welcome__avatar.is-placeholder,
+.ai-chat-avatar-ghost.is-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--seos-ink, #0d0d12);
+  color: #fff;
+}
+.ai-chat-panel .ai-chat-welcome__avatar.is-placeholder svg { width: 24px; height: 24px; }
+.ai-chat-avatar-ghost.is-placeholder svg { width: 20px; height: 20px; }
+.ai-chat-avatar-ghost {
+  position: fixed;
+  z-index: 2147483647;
+  margin: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.ai-chat-panel .ai-chat-header__avatar {
+  transition: width 0.52s cubic-bezier(0.2, 0.8, 0.2, 1), margin 0.52s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease, transform 0.52s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ai-chat-panel.is-home .ai-chat-header__avatar {
+  width: 0;
+  margin-right: -12px;
+  opacity: 0;
+  transform: scale(0.6);
+}
+/* The real header avatar stays hidden while the copy is in the air. */
+.ai-chat-panel.is-avatar-flying .ai-chat-header__avatar { opacity: 0; transition-property: width, margin, transform; }
+.ai-chat-panel.is-measuring .ai-chat-header__avatar,
+.ai-chat-panel.is-measuring .ai-chat-header__info { transition: none !important; }
+@media (max-width: 480px) {
+  .ai-chat-panel .ai-chat-welcome__avatar { width: 46px; height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-header__avatar { transition: opacity 0.2s ease; }
+}
