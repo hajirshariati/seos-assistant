@@ -3325,3 +3325,55 @@ button.ai-chat-launcher__text {
 
 /* Launcher Width (theme editor) is the bar's full width, padding and border included. */
 .ai-chat-launcher { box-sizing: border-box; }
+
+/* ---------- Hero: the avatar set into the banner ----------
+   With a banner, the assistant's face sits on the banner's bottom edge
+   (half on the photo, half below) in a white ring, like a profile photo on
+   a cover; the greeting reads beside it, just under the banner. Short
+   screens hide the banner and fall back to the plain row. */
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__banner {
+  position: relative;
+  /* Tall screens: the banner takes the spare room (up to 210px). */
+  flex: 1 1 148px;
+  max-height: 210px;
+  border-radius: 20px;
+}
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(13, 13, 18, 0.05);
+  background: linear-gradient(to top, rgba(13, 13, 18, 0.10), rgba(13, 13, 18, 0) 45%);
+  pointer-events: none;
+}
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro {
+  position: relative;
+  z-index: 1;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: -48px;
+  padding-left: 16px;
+}
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__avatar {
+  width: 68px;
+  height: 68px;
+  box-shadow: 0 0 0 3px #fff, 0 6px 16px rgba(13, 13, 18, 0.12);
+}
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro-text { padding-top: 42px; }
+.ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__title { font-size: 20px; }
+@media (max-width: 480px) {
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__banner { flex-basis: 128px; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro { margin-top: -40px; padding-left: 12px; gap: 12px; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__avatar { width: 58px; height: 58px; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro-text { padding-top: 34px; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__title { font-size: 18px; }
+}
+@media (max-height: 720px) {
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro { margin-top: 0; padding-left: 2px; align-items: center; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__intro-text { padding-top: 0; }
+  .ai-chat-panel .ai-chat-welcome.has-banner .ai-chat-welcome__avatar { width: 52px; height: 52px; box-shadow: 0 0 0 1px var(--seos-line), 0 6px 16px rgba(13, 13, 18, 0.08); }
+}
+/* Home: the greeting already says "Welcome back, Hajir!" — the header's
+   "Hi Hajir!" pill returns once the chat starts. */
+.ai-chat-panel.is-home .ai-chat-header__vip-pill { display: none; }

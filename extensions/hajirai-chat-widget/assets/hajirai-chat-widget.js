@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 settings-40');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 hero-avatar');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -483,7 +483,8 @@ function ctaIcon(label,pick){
   return WI.spark;
 }
 function buildWelcome(){
-var h='<div class="ai-chat-welcome">';
+var hasBanner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
+var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+'">';
 if(SHOWBAN&&BANNER){
   h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
 }
