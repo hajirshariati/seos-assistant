@@ -3436,3 +3436,39 @@ button.ai-chat-launcher__text {
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-panel .ai-chat-avatar-glow { animation: none; }
 }
+
+/* ---------- The Siri-style orb (launcher bar + round bubble) ---------- */
+.ai-orb { display: block; overflow: visible; }
+.ai-orb .ai-orb__lobes { transform-origin: 20px 20px; animation: aiOrbSpin 9s linear infinite; }
+.ai-orb .ai-orb__lobe { transform-box: view-box; transform-origin: 20px 20px; animation: aiOrbBreathe 4.5s ease-in-out infinite alternate; }
+.ai-orb g:nth-child(2) > .ai-orb__lobe { animation-delay: -1.5s; }
+.ai-orb g:nth-child(3) > .ai-orb__lobe { animation-delay: -3s; }
+.ai-orb .ai-orb__wisps { transform-origin: 20px 20px; animation: aiOrbSpin 13s linear infinite reverse; }
+.ai-orb .ai-orb__core { transform-origin: 20px 20px; animation: aiOrbCore 3s ease-in-out infinite alternate; }
+@keyframes aiOrbSpin { to { transform: rotate(360deg); } }
+@keyframes aiOrbBreathe { from { transform: scale(0.9) rotate(0deg); } to { transform: scale(1.08) rotate(18deg); } }
+@keyframes aiOrbCore { from { opacity: 0.85; transform: scale(0.92); } to { opacity: 1; transform: scale(1.06); } }
+/* No motion while the chat is open (the launcher is hidden) or for shoppers who prefer less. */
+.ai-chat-launcher.hidden .ai-orb *,
+.ai-chat-launcher.hidden .ai-orb { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-orb, .ai-orb * { animation: none !important; }
+}
+/* In the bar: the orb on its own, no disc or glow around it. */
+.ai-chat-launcher__icon.is-orb {
+  width: 30px !important;
+  height: 30px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ai-chat-launcher__icon.is-orb .ai-orb { width: 30px !important; height: 30px !important; }
+/* The bubble: a white button holding the orb. */
+.ai-chat-launcher.is-bubble { background: #fff !important; }
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb {
+  background: transparent !important;
+  clip-path: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  overflow: visible;
+}
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb .ai-orb { width: 42px !important; height: 42px !important; animation: none; filter: none; }
