@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 hero-avatar');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 glow');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -494,7 +494,7 @@ var welcomeGreeting=(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim(
 /* The assistant's face greets the shopper here; the header shows it only
    once the chat starts (it flies up there — see flyAvatarToHeader). */
 var welcomeAv=safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar'+(safeUrl(AVATAR)?'':' is-placeholder')+'" aria-hidden="true">'+welcomeAv+'</div><div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
+h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar-wrap" aria-hidden="true"><i class="ai-chat-avatar-glow"></i><div class="ai-chat-welcome__avatar'+(safeUrl(AVATAR)?'':' is-placeholder')+'">'+welcomeAv+'</div></div><div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
    (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div></div>';
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=[];

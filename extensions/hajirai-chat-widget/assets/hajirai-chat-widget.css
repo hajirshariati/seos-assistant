@@ -3377,3 +3377,62 @@ button.ai-chat-launcher__text {
 /* Home: the greeting already says "Welcome back, Hajir!" — the header's
    "Hi Hajir!" pill returns once the chat starts. */
 .ai-chat-panel.is-home .ai-chat-header__vip-pill { display: none; }
+
+/* ---------- The AI glow, without the circle ----------
+   In the launcher bar the sparkle has no disc around it: its three soft
+   lights drift right inside the text box, which keeps them within its
+   rounded edge. The round bubble keeps its own light circle. */
+.ai-chat-launcher:not(.is-bubble) { overflow: hidden; isolation: isolate; }
+.ai-chat-launcher__icon.is-orb {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+  clip-path: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  border-radius: 0;
+  color: var(--seos-ink, #0d0d12) !important;
+}
+.ai-chat-launcher__icon.is-orb .ai-chat-orb-glow {
+  width: 30px;
+  height: 30px;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  filter: blur(9px);
+  opacity: 0.5;
+}
+.ai-chat-launcher__icon.is-orb .ai-chat-orb-glow--1 { left: -9px; top: -6px; }
+.ai-chat-launcher__icon.is-orb .ai-chat-orb-glow--2 { right: -12px; bottom: -6px; }
+.ai-chat-launcher__icon.is-orb .ai-chat-orb-glow--3 { left: 2px; bottom: -10px; }
+.ai-chat-launcher__icon.is-orb svg { width: 16px !important; height: 16px !important; }
+
+/* ---------- The same glow around the assistant's face ----------
+   A soft pink → violet → blue → teal halo behind the white ring, turning
+   slowly; still for shoppers who prefer reduced motion. */
+.ai-chat-panel .ai-chat-welcome__avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  isolation: isolate;
+}
+.ai-chat-panel .ai-chat-welcome__avatar-wrap .ai-chat-welcome__avatar { position: relative; z-index: 1; }
+.ai-chat-panel .ai-chat-avatar-glow {
+  position: absolute;
+  inset: -5px;
+  z-index: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3);
+  filter: blur(9px);
+  opacity: 0.38;
+  animation: aiChatAvatarGlow 14s linear infinite;
+  pointer-events: none;
+}
+@keyframes aiChatAvatarGlow { to { transform: rotate(360deg); } }
+/* In the header: the same colors, still and quieter. */
+.ai-chat-panel .ai-chat-header__avatar {
+  box-shadow: 0 0 0 1px rgba(13, 13, 18, 0.06), -3px -2px 9px rgba(255, 79, 163, 0.22), 3px 3px 9px rgba(61, 123, 255, 0.22), 0 4px 10px rgba(41, 224, 208, 0.14) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-avatar-glow { animation: none; }
+}
