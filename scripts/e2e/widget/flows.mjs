@@ -217,7 +217,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.click(".ai-chat-launcher");
   await page.waitForSelector('[data-helper="fitfinder"]', { timeout: 5000 });
   const tools = await page.$$eval(".ai-chat-welcome__helpers [data-helper]", (b) => b.map((x) => `${x.dataset.helper}:${x.querySelector(".ai-chat-helper__title").textContent}`));
-  check("tools: welcome features True Fit and FITFinder", tools.join("|") === "truefit:Size for this shoe|fitfinder:Find my orthotic FIT", tools.join("|"));
+  check("tools: welcome features True Fit and FITFinder", tools.join("|") === "truefit:Find my size|fitfinder:Find my orthotic FIT", tools.join("|"));
   await page.fill(".ai-chat-input-area textarea", "show me 3");
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 3);
@@ -232,6 +232,74 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("tools: the FIT found is shown as a FIT card", /FIT D/.test(await page.textContent(".ai-chat-fit-result").catch(() => "")));
   check("tools: once a FIT is saved, cards stop offering to find one", (await page.$$('[data-helper="fitfinder"].ai-chat-card-fit')).length === 0);
   check("tools: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// When the fit tools already know the shopper: the cards say so, and tapping
+// them uses what's known instead of asking again.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const helperTitles = () => page.$$eval(".ai-chat-welcome__helpers .ai-chat-helper", (b) => b.map((x) => `${x.querySelector(".ai-chat-helper__title").textContent} / ${x.querySelector(".ai-chat-helper__sub").textContent}`));
+  await page.goto("http://localhost:4789/products/jillian-black?tf=known");
+  await page.click(".ai-chat-launcher");
+  await page.waitForFunction(() => /Size 9/.test(document.querySelector(".ai-chat-helper--truefit")?.textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  const known = await helperTitles();
+  check("known: True Fit's size shows on the welcome card", known[0] === "Size 9 - 9.5 US / Your True Fit size", known.join(" | "));
+  check("known: with a small Update action", (await page.textContent('.ai-chat-helper__alt[data-helper="truefit-update"]').catch(() => "")) === "Update");
+  await page.click(".ai-chat-helper--truefit");
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 }).catch(() => {});
+  check("known: tapping it shops that size — no second quiz", /^True Fit recommends size 9 - 9\.5 US for me in the /.test(chatBodies.at(-1)?.message || "") && !(await page.evaluate(() => window.__tfOpens)), chatBodies.at(-1)?.message);
+
+  // A saved FIT: the card shops it, Retake asks the questions again.
+  await page.evaluate(() => { sessionStorage.setItem("fitfinder_fit", JSON.stringify({ key: "B", label: "FIT B", code: "00" })); localStorage.removeItem("hajirai_chat_history"); });
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector(".ai-chat-helper--fitfinder.is-known", { timeout: 5000 }).catch(() => {});
+  const fitCards = await helperTitles();
+  check("known: the saved FIT shows on its card", fitCards.includes("Cushioned Support / Your FIT B"), fitCards.join(" | "));
+  check("known: True Fit off a shoe page remembers the shopper", fitCards.includes("Find my shoe size / True Fit knows your fit"), fitCards.join(" | "));
+  await page.click('.ai-chat-helper__alt[data-helper="fitfinder-retake"]');
+  await page.waitForTimeout(600);
+  check("known: Retake asks the FIT questions again", /retake my orthotic FIT/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.fitfinder?.saved?.key === "", JSON.stringify(chatBodies.at(-1)?.fitfinder?.saved));
+
+  // Menu, signed out: new chat + log in (back to this page).
+  await page.click(".ai-chat-menu-btn");
+  const outItems = await page.$$eval(".ai-chat-menu .ai-chat-menu-item", (b) => b.map((x) => x.textContent));
+  check("menu (guest): new chat, retake FIT, log in", outItems.join("|") === "Start a new chat|Retake my orthotic FIT|Log in", outItems.join("|"));
+  check("header: Log in returns to this page", /\/account\/login\?return_url=%2Ffull/.test(await page.getAttribute(".ai-chat-header__login-pill", "href")) && (await page.textContent(".ai-chat-header__login-pill")) === "Log in");
+  await page.keyboard.press("Escape");
+
+  // Signed in: the menu says who, and Log out takes their chat with it.
+  await page.goto("http://localhost:4789/full?login=Dana");
+  await page.click(".ai-chat-launcher");
+  await page.fill(".ai-chat-input-area textarea", "show me 1");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  await page.click(".ai-chat-menu-btn");
+  const inMenu = await page.textContent(".ai-chat-menu");
+  check("menu (signed in): says who and offers Log out", /Signed in as Dana/.test(inMenu) && /Log out/.test(inMenu) && !/Log in/.test(inMenu), inMenu);
+  await Promise.all([page.waitForURL(/\/account\/logout$/), page.click('.ai-chat-menu-item[data-action="logout"]')]);
+  const left = await page.evaluate(() => ({ h: localStorage.getItem("hajirai_chat_history"), o: localStorage.getItem("hajirai_chat_owner") }));
+  check("logout: the customer's chat is cleared from this device", !left.h && left.o === "guest", JSON.stringify(left));
+
+  // Signed out elsewhere (session expired, another tab): the next visit starts fresh too.
+  await page.goto("http://localhost:4789/full?login=Dana");
+  await page.click(".ai-chat-launcher");
+  await page.fill(".ai-chat-input-area textarea", "show me 1");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  await page.goto("http://localhost:4789/full");
+  check("signed out elsewhere: their chat doesn't show to the next person", (await page.evaluate(() => localStorage.getItem("hajirai_chat_history"))) === null);
+  // A guest who signs in keeps the chat they were having.
+  await page.click(".ai-chat-launcher");
+  await page.fill(".ai-chat-input-area textarea", "show me 1");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  await page.goto("http://localhost:4789/full?login=Dana");
+  check("guest → signed in: the chat carries on", !!(await page.evaluate(() => localStorage.getItem("hajirai_chat_history"))));
+  check("known/menu: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 await browser.close();

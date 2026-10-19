@@ -40,8 +40,8 @@ const page = (style) => `<!doctype html><script>setTimeout(function(){var d=docu
 <script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"The Fit Concierge",greeting:"Hi!",position:"right"};try{localStorage.setItem("hajirai_product_card_style","${style}")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Store page <span class="cart-count">0</span></div><script src="/w.js"></script></body></html>`;
 const AVATAR = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#d9c7b8"/><circle cx="40" cy="32" r="15" fill="#8c6b55"/><rect x="18" y="52" width="44" height="30" rx="14" fill="#5f8f8a"/></svg>');
-const fullPage = () => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">${themeBlockStyle()}
-<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",avatarUrl:${JSON.stringify(AVATAR)},greeting:"Hi! I'm your personal shopping assistant.",greetingCta:"What can I help you find today?",cta1Label:"Find my orthotic",cta1Message:"which orthotic is right for me?",cta2Label:"Shop sneakers",cta2Message:"show me sneakers",quickPick1Label:"Sandals",quickPick1Message:"sandals",quickPick2Label:"Heel pain",quickPick2Message:"heel pain",quickPick3Label:"Wide fit",quickPick3Message:"wide shoes",ctaHint:"Log in for faster checkout",disclaimerText:"This chatbot uses AI and may make mistakes.",widgetPosition:"bottom-center"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
+const fullPage = (login = "") => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">${themeBlockStyle()}
+<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",avatarUrl:${JSON.stringify(AVATAR)},greeting:"Hi! I'm your personal shopping assistant.",greetingCta:"What can I help you find today?",cta1Label:"Find my orthotic",cta1Message:"which orthotic is right for me?",cta2Label:"Shop sneakers",cta2Message:"show me sneakers",quickPick1Label:"Sandals",quickPick1Message:"sandals",quickPick2Label:"Heel pain",quickPick2Message:"heel pain",quickPick3Label:"Wide fit",quickPick3Message:"wide shoes",ctaHint:"Log in for faster checkout",${login ? `customerLoggedIn:true,customerFirstName:${JSON.stringify(login)},customerId:7,customerLogoutUrl:"/account/logout",` : ""}disclaimerText:"This chatbot uses AI and may make mistakes.",widgetPosition:"bottom-center"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px;height:2000px;background:linear-gradient(#f3efe9,#e9e4dc)">Store page <span class="cart-count">0</span></div><script src="/w.js"></script></body></html>`;
 // The theme block's own inline <style>, read from the liquid file so the
 // test page never drifts from what the storefront renders.
@@ -65,7 +65,7 @@ ${tf === "absent" ? "" : `window.AetrexTrueFitTile={state:{busy:false,finderOpen
   return new Promise(function(r){setTimeout(function(){
     s.busy=false;s.finderOpen=true;document.body.classList.add("tfc-show-modal");window.__tfChatOpenDuringFinder=document.querySelector(".ai-chat-panel.open")?1:0;r();
     setTimeout(function(){document.body.classList.remove("tfc-show-modal");s.finderOpen=false;setTimeout(function(){s.recommendation="9 - 9.5 US"},800)},1200);
-  },300)})}};`}
+  },300)})}};${tf === "known" ? "setTimeout(function(){window.AetrexTrueFitTile.state.recommendation=\"9 - 9.5 US\";try{localStorage.setItem(\"tfTileProfile\",\"1\")}catch(e){}},700);" : ""}`}
 </script><script src="/w.js"></script></body></html>`;
 export function start(port) {
   return new Promise((res) => {
@@ -77,7 +77,8 @@ export function start(port) {
         const send = (code, type, data) => { resp.writeHead(code, { "Content-Type": type }); resp.end(data); };
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
-        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage());
+        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || ""));
+        if (u.pathname === "/account/logout" || u.pathname === "/account/login") return send(200, "text/html", "<!doctype html><title>account</title>" + u.pathname);
         const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));

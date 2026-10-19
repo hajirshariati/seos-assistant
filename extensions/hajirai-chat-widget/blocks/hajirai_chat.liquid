@@ -44,6 +44,8 @@
     customerLoggedIn: {% if customer %}true{% else %}false{% endif %},
     customerFirstName: {% if customer %}{{ customer.first_name | json }}{% else %}""{% endif %},
     customerLoginUrl: {{ routes.account_login_url | json }},
+    customerLogoutUrl: {{ routes.account_logout_url | json }},
+    customerId: {% if customer %}{{ customer.id | json }}{% else %}null{% endif %},
     disclaimerText: {{ block.settings.disclaimer | json }},
     privacyUrl: {{ block.settings.privacy_url | json }},
     supportUrl: {{ block.settings.support_url | json }},

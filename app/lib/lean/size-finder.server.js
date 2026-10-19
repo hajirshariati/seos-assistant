@@ -33,7 +33,7 @@ export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
         "Offer True Fit, the store's personal size finder, for one shoe. Use when the customer asks what size to get in a shoe, how it fits, or whether to size up or down. Shoes only — never for orthotics or accessories (orthotic choice and FITs belong to the orthotic finder). " +
         "It shows a \"Find my size with True Fit\" button under your reply; the customer answers a few quick questions in True Fit and their recommended size comes back to you as their next message. Don't guess a size yourself." +
         here +
-        " When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence.",
+        " When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence. True Fit sometimes gives a range (\"9 - 9.5 US\"): then show the shoe without a size and ask which they'd like with taps (e.g. <<Size 9>><<Size 9.5>>) — both should fit, the smaller a little snugger. A size the shoe isn't made in (no half sizes) → offer the nearest it has.",
       input_schema: {
         type: "object",
         properties: { handle: { type: "string", description: "The shoe's product handle (from a search, a shown card, or the current page)." } },

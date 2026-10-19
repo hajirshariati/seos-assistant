@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-18 kb-fit');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 account-fit');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -101,6 +101,9 @@ var SUPPORT_LABEL=C.supportLabel||'Contact customer service';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
 var CUST_NAME=C.customerFirstName||'';
 var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';
+var CUST_LOGOUT_URL=C.customerLogoutUrl||'/account/logout';
+/* Log in and come back to this page. */
+function loginUrl(){return CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?')+'return_url='+encodeURIComponent(location.pathname+location.search)}
 // "horizontal" = legacy thumbnail-left layout, capped at 3 cards.
 // "showcase" = square image on top, scroll-snap row, up to 10 cards.
 // Set from /widget-config response; merchants pick this in the admin.
@@ -190,7 +193,7 @@ var loginPillHtml='';
 if(CUST_LOGGED_IN&&CUST_NAME){
   loginPillHtml='<span class="ai-chat-header__vip-pill" title="Logged in">Hi '+esc(CUST_NAME)+'!</span>';
 }else if(!CUST_LOGGED_IN){
-  loginPillHtml='<a class="ai-chat-header__login-pill" href="'+esc(CUST_LOGIN_URL)+'">Login</a>';
+  loginPillHtml='<a class="ai-chat-header__login-pill" href="'+esc(loginUrl())+'">Log in</a>';
 }
 
 panel.innerHTML=
@@ -205,8 +208,24 @@ var overlay=el('div','ai-chat-overlay');
 
 /* Menu dropdown */
 var menu=el('div','ai-chat-menu');
-menu.style.cssText='position:absolute;top:52px;right:12px;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:10;display:none;min-width:140px;overflow:hidden';
-menu.innerHTML='<button class="ai-chat-menu-item" data-action="clear" style="display:block;width:100%;padding:10px 16px;border:none;background:none;text-align:left;font-size:13px;cursor:pointer;color:#1a1a1a;font-family:inherit">Clear Chat</button>';
+menu.setAttribute('role','menu');
+menu.style.display='none';
+/* Built each time it opens, so it matches who's here and what's saved. */
+function menuHtml(){
+  var MI={
+    chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    fit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0115.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
+    user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>',
+    out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>'
+  };
+  function item(action,icon,label){return '<button type="button" role="menuitem" class="ai-chat-menu-item" data-action="'+action+'">'+icon+'<span>'+esc(label)+'</span></button>'}
+  var h=item('clear',MI.chat,'Start a new chat');
+  if(ff&&savedFit())h+=item('refit',MI.fit,'Retake my orthotic FIT');
+  h+='<div class="ai-chat-menu-sep" role="separator"></div>';
+  if(CUST_LOGGED_IN)h+=(CUST_NAME?'<div class="ai-chat-menu-who">Signed in as '+esc(CUST_NAME)+'</div>':'')+item('logout',MI.out,'Log out');
+  else h+=item('login',MI.user,'Log in');
+  return h;
+}
 panel.style.position='fixed';
 panel.appendChild(menu);
 
@@ -357,6 +376,17 @@ try{
   typingObserver.observe(typingEl,{attributes:true,attributeFilter:['class']});
 }catch(e){}
 
+/* The chat belongs to whoever was signed in when it happened. When that
+   customer signs out (or someone else signs in on this device), their chat
+   and size history don't follow to the next person. */
+var OWNER_KEY='hajirai_chat_owner',TF_LAST='hajirai_tf_last';
+function forgetPersonal(){try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(TF_LAST)}catch(e){}_memSess=''}
+(function(){
+  var now=CUST_LOGGED_IN?'c:'+String(C.customerId||CUST_NAME||'1'):'guest',was=null;
+  try{was=localStorage.getItem(OWNER_KEY)}catch(e){}
+  if(was&&was!=='guest'&&was!==now)forgetPersonal();
+  try{localStorage.setItem(OWNER_KEY,now)}catch(e){}
+})();
 var isOpen=false,isStreaming=false,messages=loadH(),abortCtrl=null;
 var lastUserMessage='',errorRetryCount=0;
 /* An old "away for a while" marker from earlier versions — not used. */
@@ -476,7 +506,7 @@ if(CUST_LOGGED_IN){
     h+='<div class="ai-chat-welcome__hint">'+esc(loggedHint)+'</div>';
   }
 }else if(HINT){
-  h+='<a class="ai-chat-welcome__hint ai-chat-welcome__hint--link" href="'+esc(CUST_LOGIN_URL)+'">'+esc(HINT)+'</a>';
+  h+='<a class="ai-chat-welcome__hint ai-chat-welcome__hint--link" href="'+esc(loginUrl())+'">'+esc(HINT)+'</a>';
 }
 h+='</div>';
 msgsEl.innerHTML=h;
@@ -493,8 +523,11 @@ function pageTitle(){
   var og=document.querySelector('meta[property="og:title"]');
   return (og&&og.getAttribute('content'))||((document.querySelector('h1')||{}).textContent||'').trim();
 }
-function helperHtml(kind,title,sub,icon){
-  return '<button type="button" class="ai-chat-helper ai-chat-helper--'+kind+'" data-helper="'+kind+'"><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>';
+/* A fit card: one main action; when the tool already knows the shopper, a
+   small second action (Update / Retake) sits in its corner. */
+function helperHtml(kind,title,sub,icon,alt){
+  return '<div class="ai-chat-helper-wrap'+(alt?' has-alt':'')+'"><button type="button" class="ai-chat-helper ai-chat-helper--'+kind+(alt?' is-known':'')+'" data-helper="'+kind+'"><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'+
+    (alt?'<button type="button" class="ai-chat-helper__alt" data-helper="'+alt.kind+'" aria-label="'+esc(alt.aria)+'">'+esc(alt.label)+'</button>':'')+'</div>';
 }
 var fitResult=null;
 function fitCardHtml(f){
@@ -510,30 +543,51 @@ function savedFit(){
   for(var i=0;i<ff.fits.length;i++){if(ff.fits[i].key===key)return ff.fits[i]}
   return null;
 }
+/* "FIT B" → "B", for the badge. */
+function fitLetter(f){var m=String(f.label||f.key||'').match(/([A-Z0-9]+)\s*$/i);return m?m[1].toUpperCase():'FIT'}
+function fitTitle(f){var l=String(f.label||f.key||'');return /^fit\b/i.test(l)?l.replace(/^fit/i,'FIT'):'FIT '+l}
+var helperSig='';
+function helperState(){var mine=ff&&savedFit();return [tfPayload()?'tf':'',tfSizeHere(),tfKnown()?'k':'',ff?'ff':'',mine?mine.key:''].join('|')}
 function renderHelpers(){
   var box=msgsEl&&msgsEl.querySelector('.ai-chat-welcome__helpers');
   if(!box)return;
+  helperSig=helperState();
   var items='';
   if(tfPayload()){
-    var onShoe=tfHere()&&pageHandle();
-    items+=helperHtml('truefit',onShoe?'Size for this shoe':'Find my shoe size','with True Fit',tfLogo(24));
+    var onShoe=tfHere()&&pageHandle(),size=onShoe?tfSizeHere():'';
+    if(size)items+=helperHtml('truefit','Size '+size,'Your True Fit size',tfLogo(24),{kind:'truefit-update',label:'Update',aria:'Update my size with True Fit'});
+    else if(onShoe)items+=helperHtml('truefit','Find my size','True Fit \u00b7 for this shoe',tfLogo(24));
+    else items+=helperHtml('truefit','Find my shoe size',tfKnown()||tfLast()?'True Fit knows your fit':'with True Fit',tfLogo(24));
   }
   if(ff){
     var mine=savedFit();
-    items+=helperHtml('fitfinder',mine?'Orthotics for '+mine.label:'Find my orthotic FIT',mine?(mine.name||'Your saved FIT'):'with FITFinder','<span class="ai-chat-helper__mono">FIT</span>');
+    if(mine)items+=helperHtml('fitfinder',mine.name||fitTitle(mine),'Your '+fitTitle(mine),'<span class="ai-chat-helper__mono is-letter">'+esc(fitLetter(mine))+'</span>',{kind:'fitfinder-retake',label:'Retake',aria:'Retake my orthotic FIT'});
+    else items+=helperHtml('fitfinder','Find my orthotic FIT',ff.questions.length?'FITFinder \u00b7 '+ff.questions.length+' quick question'+(ff.questions.length===1?'':'s'):'with FITFinder','<span class="ai-chat-helper__mono">FIT</span>');
   }
   if(!items){box.hidden=true;box.innerHTML='';return}
   box.innerHTML='<div class="ai-chat-welcome__helper-grid">'+items+'</div>';
   box.hidden=false;
 }
+/* True Fit marks a known shopper's size a few seconds after the page loads,
+   and a FIT can be saved on another tab: keep the cards current while the
+   welcome screen is open. */
+setInterval(function(){
+  if(isOpen&&msgsEl&&msgsEl.classList.contains('is-welcome')&&helperState()!==helperSig)renderHelpers();
+},1500);
+var ffRetake=false;
 function startHelper(kind){
   inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;
+  var mine=savedFit(),size=tfHere()&&pageHandle()?tfSizeHere():'';
+  if(kind==='truefit-update'){runTrueFit(pageTitle());return}
   if(kind==='truefit'){
-    if(tfHere()&&pageHandle()){runTrueFit(pageTitle());return}
-    inputEl.value='Help me find my shoe size with True Fit.';
+    if(size)inputEl.value='True Fit recommends size '+size+' for me in the '+pageTitle()+'.';
+    else if(tfHere()&&pageHandle()){runTrueFit(pageTitle());return}
+    else inputEl.value='Help me find my shoe size with True Fit.';
+  }else if(kind==='fitfinder-retake'||(kind==='refit')){
+    ffRetake=true;
+    inputEl.value='I\'d like to retake my orthotic FIT.';
   }else{
-    var mine=savedFit();
-    inputEl.value=mine?'Show me orthotics for my '+mine.label+'.':'Help me find my orthotic FIT.';
+    inputEl.value=mine?'Show me orthotics in my '+fitTitle(mine)+'.':'Help me find my orthotic FIT.';
   }
   sendMessage();
 }
@@ -1211,6 +1265,12 @@ var TF_PENDING='hajirai_tf_pending',TF_SITE='hajirai_tf_site',tfRun=null;
 function tfTile(){return document.querySelector('[data-tf-size-tile]')}
 function pageHandle(){var m=location.pathname.match(/\/products\/([^/?#]+)/);try{return m?decodeURIComponent(m[1]):''}catch(e){return ''}}
 function tfHere(){return !!(window.AetrexTrueFitTile&&window.AetrexTrueFitTile.state&&tfTile())}
+/* The size True Fit has marked on this shoe's page ("9 - 9.5 US"), if any. */
+function tfSizeHere(){var st=tfHere()&&window.AetrexTrueFitTile.state,r=st&&st.recommendation;return typeof r==='string'?r.trim().slice(0,40):''}
+/* True Fit already knows this shopper (the theme's tile remembers it). */
+function tfKnown(){try{return localStorage.getItem('tfTileProfile')==='1'}catch(e){return false}}
+function tfLast(){try{var v=JSON.parse(localStorage.getItem(TF_LAST)||'null');return v&&v.size?v:null}catch(e){return null}}
+function tfRemember(size,title){try{localStorage.setItem(TF_LAST,JSON.stringify({size:size,title:title||'',handle:pageHandle(),at:Date.now()}))}catch(e){}}
 function tfPayload(){
   var here=tfHere(),seen=false;
   try{if(here)localStorage.setItem(TF_SITE,'1');seen=localStorage.getItem(TF_SITE)==='1'}catch(e){}
@@ -1249,6 +1309,7 @@ function runTrueFit(title){
       if(!seen&&!size)return;
       toggle(true);
       if(size){
+        tfRemember(size,run.title);
         inputEl.disabled=false;inputEl.placeholder=IPLACE;
         inputEl.value='True Fit recommends size '+size+' for me'+(run.title?' in the '+run.title:'')+'.';
         sendMessage();
@@ -1690,6 +1751,9 @@ function ffStored(){
 function ffPayload(){
   if(!ff)return null;
   var local=ffStored();/* a save on this device is the newest choice */
+  /* "Retake my FIT": this one message goes without the saved FIT, so the
+     questions are asked again; the new answer is saved as usual. */
+  if(ffRetake){ffRetake=false;return{fits:ff.fits,questions:ff.questions,saved:{key:''},retake:true}}
   return{fits:ff.fits,questions:ff.questions,saved:{key:(local&&local.key)||ff.saved||''}};
 }
 /* The same consent rule FITFinder follows: remember across visits only when
@@ -2032,8 +2096,24 @@ inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){
 inputEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&isOpen)toggle(false)});
 menuBtn.setAttribute('aria-haspopup','true');menuBtn.setAttribute('aria-expanded','false');
-menuBtn.addEventListener('click',function(e){e.stopPropagation();var show=menu.style.display==='none';menu.style.display=show?'block':'none';menuBtn.setAttribute('aria-expanded',show?'true':'false')});
-menu.addEventListener('click',function(e){var item=e.target.closest('[data-action]');if(!item)return;if(item.dataset.action==='clear')clearChat();menu.style.display='none'});
+menuBtn.addEventListener('click',function(e){e.stopPropagation();var show=menu.style.display==='none';if(show)menu.innerHTML=menuHtml();menu.style.display=show?'block':'none';menuBtn.setAttribute('aria-expanded',show?'true':'false');if(show){var first=menu.querySelector('.ai-chat-menu-item');if(first)first.focus({preventScroll:true})}});
+menu.addEventListener('click',function(e){
+  var item=e.target.closest('[data-action]');if(!item)return;
+  var a=item.dataset.action;
+  menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');
+  if(a==='clear')clearChat();
+  else if(a==='refit'){if(!isStreaming)startHelper('refit')}
+  else if(a==='login')location.href=loginUrl();
+  /* Signing out takes this customer's chat and sizes with it. */
+  else if(a==='logout'){forgetPersonal();try{localStorage.setItem(OWNER_KEY,'guest')}catch(e){}location.href=CUST_LOGOUT_URL}
+});
+menu.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');menuBtn.focus();return}
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  e.preventDefault();
+  var list=[].slice.call(menu.querySelectorAll('.ai-chat-menu-item')),i=list.indexOf(document.activeElement);
+  var n=list[(i+(e.key==='ArrowDown'?1:-1)+list.length)%list.length];if(n)n.focus();
+});
 document.addEventListener('click',function(){menu.style.display='none'});
 msgsEl.addEventListener('click',function(e){
 var retryBtn=e.target.closest('[data-retry]');
