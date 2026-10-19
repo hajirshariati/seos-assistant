@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 aura');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 mark-refined');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -169,9 +169,18 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark: the sparkle on a soft aura of two colors flowing
-   into each other (stylesheet: .ai-chat-aura). */
-function aiMark(){return '<i class="ai-chat-aura" aria-hidden="true"></i>'+aiSparkle()}
+/* The assistant's mark: a graphite sparkle on a barely-there halo. Every
+   few seconds a faint silver glint sweeps across the sparkle (SVG); the
+   halo, breathing and twinkle live in the stylesheet. Still for shoppers
+   who prefer reduced motion. `id` keeps each copy's gradient separate. */
+function aiMark(id){
+  var still=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var glint=still?'':'<animateTransform attributeName="gradientTransform" type="translate" values="-1.3 0;-1.3 0;1.3 0;1.3 0" keyTimes="0;.62;.86;1" calcMode="spline" keySplines="0 0 1 1;.45 0 .55 1;0 0 1 1" dur="7s" repeatCount="indefinite"/>';
+  return '<i class="ai-chat-aura" aria-hidden="true"></i>'+
+    '<svg class="ai-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><defs>'+
+    '<linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d1d1f"/><stop offset=".4" stop-color="#1d1d1f"/><stop offset=".5" stop-color="#9a9aa6"/><stop offset=".6" stop-color="#1d1d1f"/><stop offset="1" stop-color="#1d1d1f"/>'+glint+'</linearGradient></defs>'+
+    '<g fill="url(#'+id+')"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></g></svg>';
+}
 /* Build launcher */
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
 launcher.style.width=LWIDTH+'px';
@@ -179,8 +188,8 @@ launcher.style.maxWidth='calc(100vw - 32px)';
 /* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
-launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true">'+aiMark()+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
-  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiMark()+'</span>';
+launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true">'+aiMark('aim1')+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiMark('aim2')+'</span>';
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);
