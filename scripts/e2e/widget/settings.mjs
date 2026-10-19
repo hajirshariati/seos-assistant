@@ -30,6 +30,7 @@ const srv = http.createServer((req, res) => {
     if (u.pathname === "/w.js") { res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" }); return res.end(fs.readFileSync(W + "hajirai-chat-widget.js")); }
     if (u.pathname === "/w.css") { res.writeHead(200, { "Content-Type": "text/css" }); return res.end(fs.readFileSync(W + "hajirai-chat-widget.css")); }
     if (u.pathname.endsWith(".png")) { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(png); }
+    if (u.pathname === "/axe.js") { try { res.writeHead(200, { "Content-Type": "application/javascript" }); return res.end(fs.readFileSync(new URL("../../../node_modules/axe-core/axe.min.js", import.meta.url))); } catch { res.writeHead(404); return res.end(); } }
     if (u.pathname.startsWith("/apps/hajirai/widget-config")) { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(wcNow)); }
     if (u.pathname === "/apps/hajirai/chat") { bodies.push(JSON.parse(b || "{}")); res.writeHead(200, { "Content-Type": "text/event-stream" }); res.write('data: {"type":"text","text":"ok"}\n\n'); res.write('data: {"type":"products","products":[{"title":"Test Shoe","handle":"test-shoe","url":"/products/test-shoe","price":"10.00","price_formatted":"$10.00","kind":"footwear"}]}\n\n'); res.write('data: {"type":"done"}\n\n'); return res.end(); }
     res.writeHead(404); res.end();
@@ -121,6 +122,34 @@ await run({ ...base, rotateGreetingCta: true }, { width: 1280, height: 900 }, as
   await p.click(".ai-chat-close-btn"); await p.waitForTimeout(400);
   await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(500);
   check("rotator: reopening starts in English", (await line()) === "CTA-LINE-X", await line());
+});
+wcNow = {};
+// Settings → Appearance: Dark themes the whole assistant and is remembered
+// for the next page load (no flash of light); Light is the default.
+wcNow = { theme: "dark" };
+await run(base, { width: 1280, height: 900 }, async (p) => {
+  await p.waitForTimeout(400);
+  const themed = await p.evaluate(() => [".ai-chat-launcher", ".ai-chat-panel", ".ai-chat-overlay"].map((s) => document.querySelector(s)?.getAttribute("data-theme")).join(","));
+  check("dark: launcher, panel and overlay carry the theme", themed === "dark,dark,dark", themed);
+  const bg = await p.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-launcher")).backgroundColor);
+  check("dark: the launcher bar is charcoal", bg === "rgb(20, 20, 24)", bg);
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(700);
+  const panel = await p.evaluate(() => ({ bg: getComputedStyle(document.querySelector(".ai-chat-panel")).backgroundColor, text: getComputedStyle(document.querySelector(".ai-chat-welcome__title")).color, input: getComputedStyle(document.querySelector(".ai-chat-input")).color }));
+  check("dark: panel charcoal, text light", panel.bg === "rgb(20, 20, 24)" && panel.text === "rgb(245, 245, 247)" && panel.input === "rgb(245, 245, 247)", JSON.stringify(panel));
+  await p.fill(".ai-chat-input-area textarea", "show me 1"); await p.keyboard.press("Enter");
+  await p.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  const card = await p.evaluate(() => ({ card: getComputedStyle(document.querySelector(".ai-chat-product-card")).backgroundColor, user: getComputedStyle(document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")).backgroundColor }));
+  check("dark: product card raised charcoal, shopper bubble light", card.card === "rgb(28, 28, 33)" && card.user === "rgb(245, 245, 247)", JSON.stringify(card));
+  const remembered = await p.evaluate(() => localStorage.getItem("hajirai_theme"));
+  check("dark: remembered for the next page load", remembered === "dark", remembered);
+  const axe = await p.evaluate(async () => { if (!window.axe) { await new Promise((r) => { const s = document.createElement("script"); s.src = "/axe.js"; s.onload = r; s.onerror = r; document.head.appendChild(s); }); } if (!window.axe) return null; const res = await window.axe.run(document.querySelector(".ai-chat-panel"), { runOnly: ["color-contrast"] }); return res.violations.map((v) => v.id + ":" + v.nodes.length); });
+  if (axe !== null) check("dark: text contrast passes (axe color-contrast)", axe.length === 0, axe.join(" | "));
+});
+wcNow = { theme: "light" };
+await run(base, { width: 1280, height: 900 }, async (p) => {
+  await p.evaluate(() => { try { localStorage.setItem("hajirai_theme", "dark"); } catch { /* */ } });
+  await p.reload(); await p.waitForTimeout(500);
+  check("light: the saved setting wins over a stale cached theme", (await p.evaluate(() => document.querySelector(".ai-chat-launcher").getAttribute("data-theme") + "," + getComputedStyle(document.querySelector(".ai-chat-launcher")).backgroundColor)) === "light,rgb(255, 255, 255)");
 });
 wcNow = {};
 console.log(out.join("\n"));

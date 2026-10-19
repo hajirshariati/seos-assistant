@@ -3470,3 +3470,127 @@ button.ai-chat-launcher__text {
   clip-path: circle(50% at 50% 50%);
 }
 .ai-chat-launcher.is-bubble .ai-chat-glow { filter: saturate(1.05); }
+
+/* ======================================================================
+   DARK THEME (Settings → Appearance). Designed on its own terms: deep
+   charcoal surfaces, understated hairlines, light text, a light (not
+   white) primary, and the assistant's light richer against the dark.
+   The same tokens as the light theme, redefined — then the few rules
+   that hard-code white are settled below.
+   ====================================================================== */
+.ai-chat-panel[data-theme="dark"],
+.ai-chat-launcher[data-theme="dark"],
+.ai-chat-overlay[data-theme="dark"] {
+  --seos-ink: #f5f5f7;
+  --seos-ink-hover: #ffffff;
+  --seos-text: #f5f5f7;
+  --seos-text-2: #a1a1a6;
+  --seos-surface: #232329;
+  --seos-line: rgba(255, 255, 255, 0.1);
+  --seos-line-strong: rgba(255, 255, 255, 0.2);
+  --seos-bg: #141418;
+  --seos-bg-raised: #1c1c21;
+  --ai-chat-bg: #141418;
+  --ai-chat-product-cta-text: #0d0d12;
+  color-scheme: dark;
+}
+.ai-chat-panel[data-theme="dark"] {
+  background: var(--seos-bg) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.ai-chat-overlay[data-theme="dark"].visible { background: rgba(0, 0, 0, 0.55) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-header,
+.ai-chat-panel[data-theme="dark"] .ai-chat-input-area,
+.ai-chat-panel[data-theme="dark"] .ai-chat-footer,
+.ai-chat-panel[data-theme="dark"] .ai-chat-messages { background: var(--seos-bg) !important; border-color: var(--seos-line) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-header__name,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__title,
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__title,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-label,
+.ai-chat-panel[data-theme="dark"] .ai-chat-menu-item,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__qp-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-footer,
+.ai-chat-panel[data-theme="dark"] .ai-chat-footer a { color: var(--seos-text); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-footer,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__greeting-cta,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__label,
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__sub,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__hint,
+.ai-chat-panel[data-theme="dark"] .ai-chat-menu-who,
+.ai-chat-panel[data-theme="dark"] .ai-chat-header__btn { color: var(--seos-text-2); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-icon,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-go,
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__go { color: #8e8e93; }
+/* Messages: the shopper's in light-on-light-ink, the assistant's on charcoal */
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg--user .ai-chat-msg-bubble { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg--assistant .ai-chat-msg-bubble { background: var(--seos-surface) !important; color: var(--seos-text) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-avatar { box-shadow: 0 0 0 1.5px var(--seos-bg), 0 0 0 3px rgba(163, 92, 255, 0.5); }
+/* Surfaces that were white: cards, chips, menu, tools */
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__qp-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-menu,
+.ai-chat-panel[data-theme="dark"] .ai-chat-card-fit,
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__alt,
+.ai-chat-panel[data-theme="dark"] .ai-chat-choice-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-suggest-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-fb-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-truefit-cta,
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card { background: var(--seos-bg-raised) !important; border-color: var(--seos-line) !important; color: var(--seos-text) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--seos-line); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-menu-sep { background: var(--seos-line); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__icon,
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn { background: var(--seos-surface); color: var(--seos-text); }
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn:hover,
+  .ai-chat-panel[data-theme="dark"] .ai-chat-menu-item:hover,
+  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__qp-btn:hover { background: #2a2a31 !important; }
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper--fitfinder.is-known .ai-chat-helper__icon { background: var(--seos-ink); color: #0d0d12; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper__alt { color: var(--seos-text-2); text-decoration-color: rgba(255, 255, 255, 0.3); }
+/* Product cards: text, buttons, size pickers */
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card,
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card * { border-color: var(--seos-line); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-chat-product-title,
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-chat-product-price,
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-card a { color: var(--seos-text); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-primary,
+.ai-chat-panel[data-theme="dark"] .ai-chat-product-cta,
+.ai-chat-panel[data-theme="dark"] .ai-chat-cta-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-send { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-val { background: var(--seos-surface); color: var(--seos-text); border-color: var(--seos-line); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-val.is-on { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-btn { background: transparent; color: var(--seos-text); border-color: var(--seos-line-strong); }
+/* Input */
+.ai-chat-panel[data-theme="dark"] .ai-chat-input-wrap,
+.ai-chat-panel[data-theme="dark"] .ai-chat-input-wrap:focus-within { background: var(--seos-bg-raised) !important; border-color: var(--seos-line-strong) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-input,
+.ai-chat-panel[data-theme="dark"] .ai-chat-input-icon { color: var(--seos-text); background: transparent; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-input::placeholder { color: var(--seos-text-2); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-typing-dot { background: var(--seos-text-2); }
+/* Pills and avatars */
+.ai-chat-panel[data-theme="dark"] .ai-chat-header__login-pill,
+.ai-chat-panel[data-theme="dark"] .ai-chat-header__vip-pill { background: var(--seos-surface) !important; color: var(--seos-text) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-header__avatar { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), -3px -2px 10px rgba(79, 214, 255, 0.28), 3px 3px 10px rgba(163, 92, 255, 0.3) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome.has-banner .ai-chat-welcome__avatar { box-shadow: 0 0 0 3px var(--seos-bg), 0 6px 18px rgba(0, 0, 0, 0.5); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__avatar { background: var(--seos-surface); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__avatar.is-placeholder { background: var(--seos-ink); color: #0d0d12; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-avatar-glow { opacity: 0.55; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-result { background: var(--seos-bg-raised); border-color: var(--seos-line); color: var(--seos-text); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-result__badge { background: var(--seos-ink); color: #0d0d12; }
+/* Launcher: charcoal bar and bubble; the light reads richer with a soft atmosphere */
+.ai-chat-launcher[data-theme="dark"] {
+  background: var(--seos-bg) !important;
+  border-color: var(--seos-line) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+.ai-chat-launcher[data-theme="dark"] .ai-chat-launcher__text { color: var(--seos-text-2) !important; }
+.ai-chat-launcher[data-theme="dark"] .ai-chat-launcher__close { color: var(--seos-text-2); }
+.ai-chat-launcher[data-theme="dark"].is-bubble {
+  background: var(--seos-bg) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 22px rgba(120, 120, 255, 0.22) !important;
+}
+.ai-chat-launcher[data-theme="dark"] .ai-chat-glow { filter: saturate(1.15) brightness(1.08); }
+@media (hover: hover) {
+  .ai-chat-launcher[data-theme="dark"]:hover .ai-chat-glow { filter: saturate(1.25) brightness(1.15); }
+}
