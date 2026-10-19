@@ -3438,13 +3438,14 @@ button.ai-chat-launcher__text {
 }
 
 /* ---------- The assistant's mark (launcher bar + round bubble) ----------
-   An airy glass bubble with one soft ribbon that sways gently. */
+   The ribbon reshapes and its colors drift (SVG); here: the whole turns
+   slowly, breathing a little, and a highlight glides around the rim. */
 .ai-orb { display: block; overflow: visible; }
-.ai-orb .ai-orb__ribbon { transform-origin: 20px 20px; animation: aiOrbSway 6s ease-in-out infinite alternate; }
-@keyframes aiOrbSway {
-  from { transform: rotate(-10deg) scale(0.97); }
-  to { transform: rotate(12deg) scale(1.03); }
-}
+.ai-orb .ai-orb__spin { transform-origin: 20px 20px; animation: aiOrbTurn 18s linear infinite; }
+.ai-orb .ai-orb__ribbon { transform-origin: 20px 20px; animation: aiOrbBreath 4s ease-in-out infinite alternate; }
+.ai-orb .ai-orb__shine { transform-origin: 20px 20px; animation: aiOrbTurn 5s linear infinite; }
+@keyframes aiOrbTurn { to { transform: rotate(360deg); } }
+@keyframes aiOrbBreath { from { transform: scale(0.95); } to { transform: scale(1.05); } }
 /* No motion while the chat is open (the launcher is hidden) or for shoppers who prefer less. */
 .ai-chat-launcher.hidden .ai-orb * { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
