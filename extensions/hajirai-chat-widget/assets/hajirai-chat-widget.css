@@ -2962,7 +2962,7 @@ button.ai-chat-launcher__text {
   gap: 9px;
   width: 100%;
   min-height: 42px;
-  padding: 8px 10px 8px 12px;
+  padding: 7px 10px 7px 7px;
   border: 0;
   border-radius: 12px;
   background: var(--seos-surface);
@@ -2979,8 +2979,20 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-welcome__cta-btn:hover { background: #ececf0; }
 }
 .ai-chat-panel .ai-chat-welcome__cta-btn:active { transform: scale(0.99); }
-.ai-chat-panel .ai-chat-welcome__cta-icon { display: flex; flex-shrink: 0; color: var(--seos-text-2); }
-.ai-chat-panel .ai-chat-welcome__cta-icon svg { width: 16px; height: 16px; }
+/* Each icon sits on a small white tile, so it reads at a glance. */
+.ai-chat-panel .ai-chat-welcome__cta-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(13, 13, 18, 0.07), 0 1px 2px rgba(13, 13, 18, 0.06);
+  color: var(--seos-ink);
+}
+.ai-chat-panel .ai-chat-welcome__cta-icon svg { width: 19px; height: 19px; }
 .ai-chat-panel .ai-chat-welcome__cta-label { flex: 1; min-width: 0; }
 
 /* Popular: one row of chips; it slides sideways if it doesn't fit. */

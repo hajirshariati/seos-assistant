@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 avatar-fly');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 icons-v2');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -442,7 +442,9 @@ function startGreetCtaRotator(){
 var WI={
   arrow:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>',
   ruler:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(-45 12 12)"><rect x="1.5" y="8.5" width="21" height="7" rx="2"/><path d="M6 8.5v2.5M10 8.5v3.5M14 8.5v2.5M18 8.5v3.5"/></g></svg>',
-  shoe:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 16.5V9.8c0-.6.5-1 1-.9l2.6.5c.7.1 1.3.6 1.6 1.2l.5 1c.4.8 1.2 1.3 2.1 1.3h1.6l5.6 1.6c1.5.4 2.5 1.8 2.5 3.3V18H4a1 1 0 01-1-1.5z"/><path d="M3 18h18"/></svg>',
+  shoe:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.2 16V8.2c0-.8.6-1.3 1.3-1.1 1.4.5 2 2 3.4 1.9 1-.1 1.2-3 2.6-3 1.2 0 2 2.4 3.7 3.6 1.6 1.1 4.4 1.4 6 2 1.1.4 1.5 1.5 1.5 2.6V16"/><path d="M2.4 16h19.8v.8a2 2 0 0 1-2 2H4.1a1.7 1.7 0 0 1-1.7-1.7z"/><path d="M11.2 7.6l1.5-1M12.6 9l1.5-1"/><path d="M17.4 11c.4 1.7 1.8 3 4.3 3.2"/></svg>',
+  /* A pair of orthotic insoles, arch support shaded on the inner sides. */
+  insole:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="translate(12.7 2.55)"><path d="M3.6.3C6 0 7.8 1.8 7.9 4.4 8 6.8 7.2 8.6 7.1 10.6 7 12.6 7.6 14.4 7.3 16.2 7 18 5.8 18.9 4.4 18.9 2.9 18.9 1.8 18 1.7 16.4 1.6 14.8 2.6 13.4 2.6 11.8 2.6 10.3 1.2 9.2.6 7.2 0 5 .9.7 3.6.3z"/><path d="M.9 8.2C2 9.6 2.7 10.6 2.6 11.8c0 1.6-1 3-.9 4.4.9-.8 2.2-2.2 2.3-4.2.1-1.6-1.4-3-3.1-3.8z" fill="currentColor" stroke="none" opacity=".3"/></g><g transform="translate(11.3 2.55) scale(-1 1)"><path d="M3.6.3C6 0 7.8 1.8 7.9 4.4 8 6.8 7.2 8.6 7.1 10.6 7 12.6 7.6 14.4 7.3 16.2 7 18 5.8 18.9 4.4 18.9 2.9 18.9 1.8 18 1.7 16.4 1.6 14.8 2.6 13.4 2.6 11.8 2.6 10.3 1.2 9.2.6 7.2 0 5 .9.7 3.6.3z"/><path d="M.9 8.2C2 9.6 2.7 10.6 2.6 11.8c0 1.6-1 3-.9 4.4.9-.8 2.2-2.2 2.3-4.2.1-1.6-1.4-3-3.1-3.8z" fill="currentColor" stroke="none" opacity=".3"/></g></svg>',
   box:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
   tag:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
   ret:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>',
@@ -457,17 +459,17 @@ var WI={
   pin:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0113 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>'
 };
 /* Icons a store can pick for each "Start here" button (theme editor). */
-var CTA_ICONS={search:'search',sizing:'ruler',shoe:'shoe',orthotic:'target',order:'box',shipping:'truck',returns:'ret',deals:'tag',gift:'gift',heart:'heart',star:'star',support:'chat',store:'pin',sparkle:'spark'};
+var CTA_ICONS={search:'search',sizing:'ruler',shoe:'shoe',orthotic:'insole',order:'box',shipping:'truck',returns:'ret',deals:'tag',gift:'gift',heart:'heart',star:'star',support:'chat',store:'pin',sparkle:'spark'};
 /* True Fit's own mark, as on the product pages' "Find my size" tile. */
 function tfLogo(size){
   return C.trueFitLogo?'<img class="ai-chat-tf-logo" src="'+safeUrl(C.trueFitLogo)+'" alt="" width="'+size+'" height="'+size+'" aria-hidden="true">':WI.ruler.replace(/22/g,String(size));
 }
 function ctaIcon(label,pick){
   var key=CTA_ICONS[String(pick||'')];
-  if(key)return key==='target'?WI.target.replace(/14/g,'18'):key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
+  if(key)return key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
   /* Automatic: chosen from the button's words. */
   var l=String(label||'').toLowerCase();
-  if(/orthotic|insole|insert/.test(l))return WI.target.replace(/14/g,'18');
+  if(/orthotic|insole|insert|footbed/.test(l))return WI.insole;
   if(/siz|fit/.test(l))return WI.ruler.replace(/22/g,'18');
   if(/order|track|ship|deliver/.test(l))return WI.box;
   if(/sale|deal|offer|discount/.test(l))return WI.tag;
