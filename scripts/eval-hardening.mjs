@@ -62,6 +62,9 @@ test("the chat block's settings stay within Shopify's limits", () => {
   const liquid = fs.readFileSync(new URL("../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8");
   const schema = JSON.parse(liquid.slice(liquid.indexOf("{% schema %}") + 12, liquid.indexOf("{% endschema %}")));
   const nonInteractive = schema.settings.filter((s) => s.type === "header" || s.type === "paragraph").length;
+  // Theme check: "declares 41 settings, which exceeds the maximum of 40".
+  const inputs = schema.settings.length - nonInteractive;
+  assert.ok(inputs <= 40, `${inputs} input settings — Shopify allows 40 per block`);
   assert.ok(nonInteractive <= 6, `${nonInteractive} headers/paragraphs (max 6)`);
   const ids = schema.settings.filter((s) => s.id).map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length, "setting ids are unique");

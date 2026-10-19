@@ -18,7 +18,7 @@ const base = {
   quickPick1Label: "Q1-X", quickPick1Message: "q1 msg", quickPick2Label: "Q2-X", quickPick2Message: "q2 msg", quickPick3Label: "Q3-X", quickPick3Message: "q3 msg", quickPick4Label: "Q4-X", quickPick4Message: "q4 msg",
   showBanner: true, launcherWidth: "420", chatWidth: "700", hideOnMobile: false, trueFit: false, trueFitLogo: "/tf.png", rotateGreetingCta: false,
   customerLoggedIn: false, customerFirstName: "", customerLoginUrl: "/account/login", customerLogoutUrl: "/account/logout", customerId: null,
-  disclaimerText: "DISCLAIMER-X", privacyUrl: "/pages/privacy-X", supportUrl: "https://help.example/x", supportLabel: "SUPPORT-X",
+  disclaimerText: "DISCLAIMER-X", privacyUrl: "/pages/privacy-X", supportUrl: "https://help.example/x",
 };
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const LIQ = fs.readFileSync(new URL("../../../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8").match(/<style>[\s\S]*?<\/style>/)[0];
@@ -66,7 +66,7 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   check("rotateGreetingCta off → stays", (await p.textContent(".ai-chat-welcome__greeting-cta")).trim() === "CTA-LINE-X");
   await p.click(".ai-chat-welcome__qp-btn");
   await p.waitForTimeout(500);
-  check("support url+label sent to the server", bodies.at(-1)?.support_url === "https://help.example/x" && bodies.at(-1)?.support_label === "SUPPORT-X", JSON.stringify({ u: bodies.at(-1)?.support_url, l: bodies.at(-1)?.support_label }));
+  check("theme support url sent to the server (label defaults until set in Settings)", bodies.at(-1)?.support_url === "https://help.example/x" && bodies.at(-1)?.support_label === "Chat with Aetrex Support", JSON.stringify({ u: bodies.at(-1)?.support_url, l: bodies.at(-1)?.support_label }));
   check("quick pick sends its message", bodies.at(-1)?.message === "q1 msg", bodies.at(-1)?.message);
 });
 await run({ ...base, showBanner: false, customerLoggedIn: true, customerFirstName: "Dana", customerId: 5, widgetPosition: "bottom-left" }, { width: 1280, height: 900 }, async (p) => {

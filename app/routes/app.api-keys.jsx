@@ -687,7 +687,7 @@ export default function ApiKeys() {
 
             <Layout.AnnotatedSection
               title="Support link"
-              description="When a customer needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias) if your store has one, otherwise this page. These override the support link and label in the theme editor."
+              description="When a customer needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias) if your store has one, otherwise this page. This link overrides the Support URL in the theme editor."
             >
               <Card>
                 <BlockStack gap="400">
@@ -705,7 +705,7 @@ export default function ApiKeys() {
                     onChange={setSupportLabel}
                     placeholder="Chat with Aetrex Support"
                     autoComplete="off"
-                    helpText="Shown exactly as typed. Left blank, the theme editor's label is used, or “Chat with Aetrex Support”."
+                    helpText="Shown exactly as typed. Left blank, it reads “Chat with Aetrex Support”."
                   />
                   <TextField
                     label="Order tracking page URL"

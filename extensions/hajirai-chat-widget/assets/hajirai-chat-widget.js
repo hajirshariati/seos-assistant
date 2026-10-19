@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 settings-map');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 settings-40');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -100,8 +100,8 @@ var LWIDTH=C.launcherWidth||'500';
 var CWIDTH=C.chatWidth||LWIDTH;
 var HIDE_MOBILE=C.hideOnMobile===true;
 var SUPPORT_URL=C.supportUrl||'';
-/* The theme block's default label isn't a choice: the chat's own wording is used. */
-var SUPPORT_LABEL=(C.supportLabel&&C.supportLabel!=='Contact customer service')?C.supportLabel:'Chat with Aetrex Support';
+/* The button's text comes from the app's Settings → Support link (widget-config). */
+var SUPPORT_LABEL='Chat with Aetrex Support';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
 var CUST_NAME=C.customerFirstName||'';
 var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';

@@ -52,8 +52,7 @@
     customerId: {% if customer %}{{ customer.id | json }}{% else %}null{% endif %},
     disclaimerText: {{ block.settings.disclaimer | json }},
     privacyUrl: {{ block.settings.privacy_url | json }},
-    supportUrl: {{ block.settings.support_url | json }},
-    supportLabel: {{ block.settings.support_label | json }}
+    supportUrl: {{ block.settings.support_url | json }}
   };
 </script>
 
@@ -622,17 +621,10 @@
       "info": "Shown if the chat fails or the assistant can't answer."
     },
     {
-      "type": "text",
-      "id": "support_label",
-      "label": "Support Button Label",
-      "default": "Contact customer service",
-      "info": "Used when the app's Settings → Support link label is blank."
-    },
-    {
       "type": "url",
       "id": "support_url",
       "label": "Support URL (help center, contact page, live chat link)",
-      "info": "Used when the app's Settings → Support link URL is blank."
+      "info": "Used when the app's Settings → Support link URL is blank. The button's text is set there too."
     },
     {
       "type": "text",
