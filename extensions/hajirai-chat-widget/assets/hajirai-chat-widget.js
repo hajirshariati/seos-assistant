@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 orb-alive');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 orb-art');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -178,6 +178,9 @@ function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-h
    gradients separate. */
 var ORB_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function aiOrb(id,rim){
+  /* The store's orb artwork (assets/assistant-orb.webp), animated in the
+     stylesheet; the drawn version below is the fallback. */
+  if(safeUrl(C.orbUrl))return '<span class="ai-orb ai-orb--img" aria-hidden="true"><img src="'+safeUrl(C.orbUrl)+'" alt="" draggable="false"></span>';
   var g=function(n){return 'url(#'+id+n+')'};
   var A=['M11.5 24.5C8.8 15.5 15 9 22 10C28.2 10.9 31.3 15.9 29.3 21C27.9 24.6 24.4 26.6 21.3 26.5C23.9 24.1 24.4 20.5 21.8 18.9C18.8 17.1 14.5 19.2 11.5 24.5Z',
          'M10.5 23C9.5 13.5 16.5 8 23 9.5C29.5 11 32 17 29.8 22C28 25.8 24 27.5 20.8 27C23.5 24.5 23.6 21 21.2 19.6C18 17.8 13.5 19 10.5 23Z',
