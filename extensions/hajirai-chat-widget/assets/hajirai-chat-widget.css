@@ -3446,8 +3446,8 @@ button.ai-chat-launcher__text {
   border-radius: 50%;
   pointer-events: none;
   user-select: none;
-  filter: blur(1.2px) saturate(1.05);
-  opacity: 0.92;
+  filter: saturate(1.05);
+  opacity: 0.96;
   transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ai-chat-launcher__icon.is-orb {
@@ -3459,7 +3459,7 @@ button.ai-chat-launcher__text {
   overflow: visible;
 }
 @media (hover: hover) {
-  .ai-chat-launcher:hover .ai-chat-glow { opacity: 1; filter: blur(1px) saturate(1.15); }
+  .ai-chat-launcher:hover .ai-chat-glow { opacity: 1; filter: saturate(1.15); }
 }
 /* The round bubble: clean white, the light filling it softly. */
 .ai-chat-launcher.is-bubble { background: #fff !important; }
@@ -3469,4 +3469,4 @@ button.ai-chat-launcher__text {
   overflow: hidden;
   clip-path: circle(50% at 50% 50%);
 }
-.ai-chat-launcher.is-bubble .ai-chat-glow { filter: blur(1.6px) saturate(1.05); }
+.ai-chat-launcher.is-bubble .ai-chat-glow { filter: saturate(1.05); }

@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 ambient-light');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 siri-light');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -169,51 +169,89 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark: ambient light. A few soft lights, each drifting,
-   breathing and slowly changing color on its own path (layered slow waves
-   with random seeds, so the motion never visibly repeats), blended and
-   faded out at the edges — diffused light, not a shape. Drawn on a small
-   canvas each frame; idle while the launcher is hidden or the tab is in
-   the background. One still frame for shoppers who prefer reduced motion. */
+/* The assistant's mark: flowing light, Siri-style, inside the white button.
+   A WebGL fragment shader (one shared surface, copied into the bar icon and
+   the bubble each frame): layered noise with domain warping makes a slowly
+   flowing field; thin iso-bands of that field are the ribbons — sheets of
+   cyan, electric blue, violet and pink light with crisp curved edges (each
+   band at its own sharpness), layered translucently, brighter where they
+   cross, over a soft diffused glow; everything fades out before the edge.
+   Random seed per visit and incommensurate rates: no visible loop. Idle
+   while the chat is open or the tab is hidden; one still frame for reduced
+   motion. Without WebGL, a soft 2D glow stands in. */
 var GLOW_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-/* electric blue, violet, lavender, soft pink, cyan */
-var GLOW_PALETTE=[[79,123,255],[139,92,246],[196,181,253],[240,171,252],[34,211,238]];
-var glows=[];
-function makeGlow(size){
-  var c=document.createElement('canvas');
-  c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
-  var dpr=Math.min(window.devicePixelRatio||1,2),px=Math.round(size*dpr);
-  c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
-  var r=function(a,b){return a+Math.random()*(b-a)};
-  var lights=[];
-  for(var i=0;i<5;i++){
-    lights.push({
-      /* two slow waves per axis, incommensurate periods (9–30s) */
-      fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),
-      px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),
-      /* starting colors spaced around the palette, so every hue is present */
-      pc:i+r(-.3,.3),
-      spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)
-    });
-  }
-  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
-  glows.push(g);
-  drawGlow(g,g.t0);/* first frame right away; the loop takes it from here */
-  return c;
+var GLOW_SEED=Math.random()*100;
+var glows=[],glowGL=null;
+var GLOW_FRAG=[
+'precision mediump float;',
+'uniform float t;uniform float seed;uniform vec2 res;',
+'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
+'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);',
+' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
+'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<3;i++){v+=a*nz(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}',
+/* a ribbon: a thin band around an iso-value of the field, `w` sets its edge sharpness */
+'float band(float f,float c,float w){return 1.-smoothstep(0.,w,abs(f-c));}',
+'void main(){',
+' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
+' float T=t*.09+seed;',
+/* domain warp at a large scale: a few broad folds, flowing like silk */
+' vec2 q=vec2(fbm(uv*.55+vec2(T*.5,-T*.35)),fbm(uv*.55+vec2(-T*.4,T*.55)+3.1));',
+' vec2 p=uv+.7*q;',
+' float f1=fbm(p*.75+vec2(T*.6,T*.25));',
+' float f2=fbm(p*.9+vec2(-T*.35,T*.6)+7.);',
+' float f3=fbm((uv+.5*q.yx)*.65+vec2(T*.25,-T*.5)+11.);',
+/* colors drift slowly between neighbours */
+' vec3 cyan=vec3(.22,.84,1.),blue=vec3(.30,.48,1.),violet=vec3(.60,.36,1.),pink=vec3(1.,.50,.84),lav=vec3(.84,.80,1.);',
+' float d1=.5+.5*sin(T*.9+1.),d2=.5+.5*sin(T*.7+2.5),d3=.5+.5*sin(T*1.1+4.);',
+' vec3 c1=mix(cyan,blue,d1),c2=mix(violet,pink,d2),c3=mix(blue,violet,d3);',
+/* three sheets: one crisp-edged, two softer; wide enough to read as ribbons */
+' float k1=band(f1,.02,.07),k2=band(f2,-.05,.15),k3=band(f3,.08,.10);',
+/* soft diffused glow underneath */
+' float g=smoothstep(.1,.9,fbm(uv*.5+vec2(T*.2,T*.15)+5.)*.5+.5);',
+' vec3 col=vec3(0.);float a=0.;float o;',
+' o=.22*g;col=col*(1.-o)+lav*o;a+=o*(1.-a);',
+' o=.6*k2;col=col*(1.-o)+c2*o;a+=o*(1.-a);',
+' o=.7*k3;col=col*(1.-o)+c3*o;a+=o*(1.-a);',
+' o=.82*k1;col=col*(1.-o)+c1*o;a+=o*(1.-a);',
+/* luminous intersections: where sheets cross, light builds toward white */
+' float x=smoothstep(1.1,1.9,k1+k2+k3);col+=(vec3(1.)-col)*x*.35;',
+/* contained: the light fades out before the edge */
+' float m=1.-smoothstep(.55,.97,r);',
+' gl_FragColor=vec4(col*a*m,a*m);',
+'}'].join('\n');
+function initGlowGL(){
+  try{
+    var c=document.createElement('canvas');c.width=c.height=112;
+    var gl=c.getContext('webgl',{premultipliedAlpha:true,alpha:true,antialias:true})||c.getContext('experimental-webgl',{premultipliedAlpha:true,alpha:true});
+    if(!gl)return null;
+    var mk=function(type,src){var sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));return sh};
+    var pr=gl.createProgram();
+    gl.attachShader(pr,mk(gl.VERTEX_SHADER,'attribute vec2 v;void main(){gl_Position=vec4(v,0.,1.);}'));
+    gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,GLOW_FRAG));
+    gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(pr));
+    gl.useProgram(pr);
+    var buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+    var loc=gl.getAttribLocation(pr,'v');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    gl.uniform2f(gl.getUniformLocation(pr,'res'),c.width,c.height);
+    gl.uniform1f(gl.getUniformLocation(pr,'seed'),GLOW_SEED);
+    gl.viewport(0,0,c.width,c.height);
+    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t')};
+  }catch(e){return null}
 }
+function renderGlowGL(t){
+  var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
+}
+/* Fallback without WebGL: soft drifting lights on a 2D canvas. */
+var GLOW_PALETTE=[[79,123,255],[139,92,246],[196,181,253],[240,171,252],[34,211,238]];
 function glowColor(u){
   var n=GLOW_PALETTE.length,k=((u%n)+n)%n,i=Math.floor(k),f=k-i,a=GLOW_PALETTE[i],b=GLOW_PALETTE[(i+1)%n];
-  f=f*f*(3-2*f);/* smooth between neighbors */
+  f=f*f*(3-2*f);
   return [Math.round(a[0]+(b[0]-a[0])*f),Math.round(a[1]+(b[1]-a[1])*f),Math.round(a[2]+(b[2]-a[2])*f)];
 }
-function drawGlow(g,t){
+function drawGlow2D(g,t){
   var ctx=g.ctx,s=g.px,S=Math.sin;
-  ctx.globalCompositeOperation='source-over';
-  ctx.clearRect(0,0,s,s);
-  /* a faint lavender base keeps the whole field softly lit */
-  var base=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s*.5);
-  base.addColorStop(0,'rgba(214,206,255,.5)');base.addColorStop(1,'rgba(214,206,255,0)');
-  ctx.fillStyle=base;ctx.fillRect(0,0,s,s);
+  ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,s,s);
   for(var i=0;i<g.lights.length;i++){
     var l=g.lights[i];
     var x=s*(.5+l.spread*(S(t*l.fx1+l.px1)*.62+S(t*l.fx2+l.px2)*.38));
@@ -221,20 +259,37 @@ function drawGlow(g,t){
     var rad=s*(l.radius+l.breath*S(t*l.fr+l.pr));
     var c=glowColor(l.pc+t*l.fc),rgb=c[0]+','+c[1]+','+c[2];
     var grd=ctx.createRadialGradient(x,y,0,x,y,rad);
-    grd.addColorStop(0,'rgba('+rgb+','+l.alpha+')');
-    grd.addColorStop(.45,'rgba('+rgb+','+(l.alpha*.42)+')');
-    grd.addColorStop(1,'rgba('+rgb+',0)');
+    grd.addColorStop(0,'rgba('+rgb+','+l.alpha+')');grd.addColorStop(.45,'rgba('+rgb+','+(l.alpha*.42)+')');grd.addColorStop(1,'rgba('+rgb+',0)');
     ctx.fillStyle=grd;ctx.fillRect(0,0,s,s);
   }
-  /* the light fades out well before the edge: no circle, no rim */
   ctx.globalCompositeOperation='destination-in';
   var m=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
   m.addColorStop(0,'rgba(0,0,0,1)');m.addColorStop(.5,'rgba(0,0,0,.95)');m.addColorStop(.8,'rgba(0,0,0,.35)');m.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=m;ctx.fillRect(0,0,s,s);
 }
+function makeGlow(size){
+  var c=document.createElement('canvas');
+  c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
+  var dpr=Math.min(window.devicePixelRatio||1,2),px=Math.round(size*dpr);
+  c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
+  var r=function(a,b){return a+Math.random()*(b-a)},lights=[];
+  for(var i=0;i<5;i++)lights.push({fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),pc:i+r(-.3,.3),spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)});
+  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
+  glows.push(g);
+  return c;
+}
+function paintGlows(t){
+  if(glowGL===null)glowGL=initGlowGL()||false;
+  if(glowGL)renderGlowGL(t);
+  for(var i=0;i<glows.length;i++){
+    var g=glows[i];
+    if(glowGL){g.ctx.clearRect(0,0,g.px,g.px);g.ctx.drawImage(glowGL.canvas,0,0,g.px,g.px)}
+    else drawGlow2D(g,t+g.t0);
+  }
+}
 function glowLoop(){
   var idle=document.hidden||launcher.classList.contains('hidden');
-  if(!idle){var t=performance.now()/1000;for(var i=0;i<glows.length;i++)drawGlow(glows[i],t+glows[i].t0)}
+  if(!idle)paintGlows(performance.now()/1000);
   if(idle)setTimeout(glowLoop,300);else requestAnimationFrame(glowLoop);
 }
 /* Build launcher */
@@ -248,7 +303,7 @@ launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true
   '<span class="ai-chat-launcher__orb" aria-hidden="true"></span>';
 $('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(30));
 $('.ai-chat-launcher__orb',launcher).appendChild(makeGlow(48));
-if(!GLOW_STILL)requestAnimationFrame(glowLoop);
+if(GLOW_STILL)paintGlows(GLOW_SEED);else requestAnimationFrame(glowLoop);
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);
