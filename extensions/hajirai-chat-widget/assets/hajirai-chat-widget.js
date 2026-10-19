@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 siri-light');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 siri-ribbons');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -186,37 +186,53 @@ var GLOW_FRAG=[
 'precision mediump float;',
 'uniform float t;uniform float seed;uniform vec2 res;',
 'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
-'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);',
+/* gradient noise with quintic smoothing: no lattice kinks, smooth motion */
+'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);',
 ' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
-'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<3;i++){v+=a*nz(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}',
-/* a ribbon: a thin band around an iso-value of the field, `w` sets its edge sharpness */
-'float band(float f,float c,float w){return 1.-smoothstep(0.,w,abs(f-c));}',
+/* two octaves only: large, smooth folds — no tangled detail */
+'float fld(vec2 p){return nz(p)+.35*nz(p*2.1+vec2(3.7,1.9));}',
+/* one ribbon: `u` is the signed distance across it (-1..1 inside), `e` its edge softness */
+'struct R{float a;float g;float u;};',
+'R ribbon(float f,float c,float w,float e){R r;r.u=(f-c)/w;float d=abs(r.u);r.a=1.-smoothstep(1.-e,1.,d);r.g=exp(-d*1.4);return r;}',
 'void main(){',
-' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
-' float T=t*.09+seed;',
-/* domain warp at a large scale: a few broad folds, flowing like silk */
-' vec2 q=vec2(fbm(uv*.55+vec2(T*.5,-T*.35)),fbm(uv*.55+vec2(-T*.4,T*.55)+3.1));',
-' vec2 p=uv+.7*q;',
-' float f1=fbm(p*.75+vec2(T*.6,T*.25));',
-' float f2=fbm(p*.9+vec2(-T*.35,T*.6)+7.);',
-' float f3=fbm((uv+.5*q.yx)*.65+vec2(T*.25,-T*.5)+11.);',
-/* colors drift slowly between neighbours */
-' vec3 cyan=vec3(.22,.84,1.),blue=vec3(.30,.48,1.),violet=vec3(.60,.36,1.),pink=vec3(1.,.50,.84),lav=vec3(.84,.80,1.);',
-' float d1=.5+.5*sin(T*.9+1.),d2=.5+.5*sin(T*.7+2.5),d3=.5+.5*sin(T*1.1+4.);',
-' vec3 c1=mix(cyan,blue,d1),c2=mix(violet,pink,d2),c3=mix(blue,violet,d3);',
-/* three sheets: one crisp-edged, two softer; wide enough to read as ribbons */
-' float k1=band(f1,.02,.07),k2=band(f2,-.05,.15),k3=band(f3,.08,.10);',
-/* soft diffused glow underneath */
-' float g=smoothstep(.1,.9,fbm(uv*.5+vec2(T*.2,T*.15)+5.)*.5+.5);',
+' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float rr=length(uv);',
+' float T=t*.3+seed;',
+/* each field is stretched along its own slowly turning axis: long ribbons, not patches */
+' float a1=T*.12,a2=-T*.09+1.1,a3=T*.1+2.3;',
+' mat2 s1=mat2(cos(a1),-sin(a1),sin(a1),cos(a1))*mat2(.55,0.,0.,1.25);',
+' mat2 s2=mat2(cos(a2),-sin(a2),sin(a2),cos(a2))*mat2(1.2,0.,0.,.5);',
+' mat2 s3=mat2(cos(a3),-sin(a3),sin(a3),cos(a3))*mat2(.6,0.,0.,1.15);',
+/* three independent flow fields, each warped and drifting at its own pace */
+' vec2 q1=vec2(fld(uv*.6+vec2(T*.55,-T*.4)),fld(uv*.6+vec2(-T*.45,T*.6)+3.1));',
+' vec2 q2=vec2(fld(uv*.5+vec2(-T*.7,T*.35)+9.),fld(uv*.5+vec2(T*.5,T*.65)+6.2));',
+' vec2 q3=vec2(fld(uv*.55+vec2(T*.4,T*.5)+13.),fld(uv*.55+vec2(-T*.6,-T*.3)+17.));',
+' float f1=fld(s1*(uv+.7*q1)*.75+vec2(T*.7,T*.3));',
+' float f2=fld(s2*(uv+.8*q2)*.7+vec2(-T*.5,T*.8)+7.);',
+' float f3=fld(s3*(uv+.6*q3)*.8+vec2(T*.35,-T*.6)+11.);',
+/* the iso-values drift too, so each sheet sweeps across the circle */
+' float c1=.12*sin(T*.9),c2=.14*sin(T*.7+2.),c3=.12*sin(T*1.15+4.);',
+' R r1=ribbon(f1,c1,.12,.10);',   /* crisp contour */
+' R r2=ribbon(f2,c2,.15,.28);',   /* medium */
+' R r3=ribbon(f3,c3,.11,.45);',   /* soft */
+/* colors: a two-tone gradient across each sheet, drifting over time */
+' vec3 cyan=vec3(.16,.86,1.),blue=vec3(.26,.46,1.),violet=vec3(.58,.32,1.),pink=vec3(1.,.42,.82),white=vec3(1.);',
+' float d1=.5+.5*sin(T*.6+1.),d2=.5+.5*sin(T*.45+2.5),d3=.5+.5*sin(T*.7+4.);',
+' vec3 k1=mix(mix(cyan,blue,r1.u*.5+.5),mix(white*.9+cyan*.1,cyan,r1.u*.5+.5),d1);',
+' vec3 k2=mix(mix(pink,violet,r2.u*.5+.5),mix(pink,white*.85+pink*.15,r2.u*.5+.5),d2);',
+' vec3 k3=mix(mix(violet,blue,r3.u*.5+.5),mix(blue,cyan,r3.u*.5+.5),d3);',
 ' vec3 col=vec3(0.);float a=0.;float o;',
-' o=.22*g;col=col*(1.-o)+lav*o;a+=o*(1.-a);',
-' o=.6*k2;col=col*(1.-o)+c2*o;a+=o*(1.-a);',
-' o=.7*k3;col=col*(1.-o)+c3*o;a+=o*(1.-a);',
-' o=.82*k1;col=col*(1.-o)+c1*o;a+=o*(1.-a);',
-/* luminous intersections: where sheets cross, light builds toward white */
-' float x=smoothstep(1.1,1.9,k1+k2+k3);col+=(vec3(1.)-col)*x*.35;',
-/* contained: the light fades out before the edge */
-' float m=1.-smoothstep(.55,.97,r);',
+/* soft luminous halo around each sheet (separate from the sheet itself) */
+' o=.16*r2.g;col=col*(1.-o)+pink*o;a+=o*(1.-a);',
+' o=.14*r3.g;col=col*(1.-o)+violet*o;a+=o*(1.-a);',
+' o=.18*r1.g;col=col*(1.-o)+cyan*o;a+=o*(1.-a);',
+/* the sheets, back to front */
+' o=.62*r3.a;col=col*(1.-o)+k3*o;a+=o*(1.-a);',
+' o=.70*r2.a;col=col*(1.-o)+k2*o;a+=o*(1.-a);',
+' o=.80*r1.a;col=col*(1.-o)+k1*o;a+=o*(1.-a);',
+/* luminous intersections, hue kept */
+' float x=smoothstep(1.2,1.9,r1.a+r2.a+r3.a);col+=(white-col)*x*.45;',
+/* contained: fades out before the edge */
+' float m=1.-smoothstep(.66,.98,rr);',
 ' gl_FragColor=vec4(col*a*m,a*m);',
 '}'].join('\n');
 function initGlowGL(){
