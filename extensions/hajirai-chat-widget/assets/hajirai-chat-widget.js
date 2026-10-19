@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 mark-refined');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 ambient-light');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -169,17 +169,73 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark: a graphite sparkle on a barely-there halo. Every
-   few seconds a faint silver glint sweeps across the sparkle (SVG); the
-   halo, breathing and twinkle live in the stylesheet. Still for shoppers
-   who prefer reduced motion. `id` keeps each copy's gradient separate. */
-function aiMark(id){
-  var still=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  var glint=still?'':'<animateTransform attributeName="gradientTransform" type="translate" values="-1.3 0;-1.3 0;1.3 0;1.3 0" keyTimes="0;.62;.86;1" calcMode="spline" keySplines="0 0 1 1;.45 0 .55 1;0 0 1 1" dur="7s" repeatCount="indefinite"/>';
-  return '<i class="ai-chat-aura" aria-hidden="true"></i>'+
-    '<svg class="ai-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><defs>'+
-    '<linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d1d1f"/><stop offset=".4" stop-color="#1d1d1f"/><stop offset=".5" stop-color="#9a9aa6"/><stop offset=".6" stop-color="#1d1d1f"/><stop offset="1" stop-color="#1d1d1f"/>'+glint+'</linearGradient></defs>'+
-    '<g fill="url(#'+id+')"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></g></svg>';
+/* The assistant's mark: ambient light. A few soft lights, each drifting,
+   breathing and slowly changing color on its own path (layered slow waves
+   with random seeds, so the motion never visibly repeats), blended and
+   faded out at the edges — diffused light, not a shape. Drawn on a small
+   canvas each frame; idle while the launcher is hidden or the tab is in
+   the background. One still frame for shoppers who prefer reduced motion. */
+var GLOW_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+/* electric blue, violet, lavender, soft pink, cyan */
+var GLOW_PALETTE=[[79,123,255],[139,92,246],[196,181,253],[240,171,252],[34,211,238]];
+var glows=[];
+function makeGlow(size){
+  var c=document.createElement('canvas');
+  c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
+  var dpr=Math.min(window.devicePixelRatio||1,2),px=Math.round(size*dpr);
+  c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
+  var r=function(a,b){return a+Math.random()*(b-a)};
+  var lights=[];
+  for(var i=0;i<5;i++){
+    lights.push({
+      /* two slow waves per axis, incommensurate periods (9–30s) */
+      fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),
+      px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),
+      /* starting colors spaced around the palette, so every hue is present */
+      pc:i+r(-.3,.3),
+      spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)
+    });
+  }
+  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
+  glows.push(g);
+  drawGlow(g,g.t0);/* first frame right away; the loop takes it from here */
+  return c;
+}
+function glowColor(u){
+  var n=GLOW_PALETTE.length,k=((u%n)+n)%n,i=Math.floor(k),f=k-i,a=GLOW_PALETTE[i],b=GLOW_PALETTE[(i+1)%n];
+  f=f*f*(3-2*f);/* smooth between neighbors */
+  return [Math.round(a[0]+(b[0]-a[0])*f),Math.round(a[1]+(b[1]-a[1])*f),Math.round(a[2]+(b[2]-a[2])*f)];
+}
+function drawGlow(g,t){
+  var ctx=g.ctx,s=g.px,S=Math.sin;
+  ctx.globalCompositeOperation='source-over';
+  ctx.clearRect(0,0,s,s);
+  /* a faint lavender base keeps the whole field softly lit */
+  var base=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s*.5);
+  base.addColorStop(0,'rgba(214,206,255,.5)');base.addColorStop(1,'rgba(214,206,255,0)');
+  ctx.fillStyle=base;ctx.fillRect(0,0,s,s);
+  for(var i=0;i<g.lights.length;i++){
+    var l=g.lights[i];
+    var x=s*(.5+l.spread*(S(t*l.fx1+l.px1)*.62+S(t*l.fx2+l.px2)*.38));
+    var y=s*(.5+l.spread*(S(t*l.fy1+l.py1)*.62+S(t*l.fy2+l.py2)*.38));
+    var rad=s*(l.radius+l.breath*S(t*l.fr+l.pr));
+    var c=glowColor(l.pc+t*l.fc),rgb=c[0]+','+c[1]+','+c[2];
+    var grd=ctx.createRadialGradient(x,y,0,x,y,rad);
+    grd.addColorStop(0,'rgba('+rgb+','+l.alpha+')');
+    grd.addColorStop(.45,'rgba('+rgb+','+(l.alpha*.42)+')');
+    grd.addColorStop(1,'rgba('+rgb+',0)');
+    ctx.fillStyle=grd;ctx.fillRect(0,0,s,s);
+  }
+  /* the light fades out well before the edge: no circle, no rim */
+  ctx.globalCompositeOperation='destination-in';
+  var m=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+  m.addColorStop(0,'rgba(0,0,0,1)');m.addColorStop(.5,'rgba(0,0,0,.95)');m.addColorStop(.8,'rgba(0,0,0,.35)');m.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=m;ctx.fillRect(0,0,s,s);
+}
+function glowLoop(){
+  var idle=document.hidden||launcher.classList.contains('hidden');
+  if(!idle){var t=performance.now()/1000;for(var i=0;i<glows.length;i++)drawGlow(glows[i],t+glows[i].t0)}
+  if(idle)setTimeout(glowLoop,300);else requestAnimationFrame(glowLoop);
 }
 /* Build launcher */
 var launcher=el('div','ai-chat-launcher ai-chat-launcher--'+POS);
@@ -188,8 +244,11 @@ launcher.style.maxWidth='calc(100vw - 32px)';
 /* Bar: avatar, prompt, ×. The × folds it into a round bubble (the orb) —
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
-launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true">'+aiMark('aim1')+'</div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
-  '<span class="ai-chat-launcher__orb" aria-hidden="true">'+aiMark('aim2')+'</span>';
+launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"></div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
+  '<span class="ai-chat-launcher__orb" aria-hidden="true"></span>';
+$('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(30));
+$('.ai-chat-launcher__orb',launcher).appendChild(makeGlow(48));
+if(!GLOW_STILL)requestAnimationFrame(glowLoop);
 
 /* Build panel */
 var panel=el('div','ai-chat-panel ai-chat-panel--'+POS);

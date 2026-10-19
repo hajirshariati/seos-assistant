@@ -3437,60 +3437,31 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-avatar-glow { animation: none; }
 }
 
-/* ---------- The assistant's mark: graphite sparkle + quiet halo ----------
-   Restraint first: a small, barely tinted halo (soft pink → lavender →
-   pale sky, drawn soft with a gradient mask — no blur filter, so motion
-   stays perfectly smooth) drifting very slowly; the sparkle breathes on
-   long eased curves, its little star twinkles, and a faint silver glint
-   crosses it every few seconds. Hover: the halo brightens a touch and the
-   sparkle turns with a soft spring. Still for reduced motion; paused while
-   the chat is open. */
-.ai-chat-launcher__icon.is-orb,
-.ai-chat-launcher.is-bubble .ai-chat-launcher__orb { position: relative; }
-.ai-chat-aura {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 40px;
-  height: 40px;
-  margin: -20px 0 0 -20px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, #f1d3ee, #dcd6ff 28%, #cfe3ff 52%, #dcd6ff 76%, #f1d3ee);
-  -webkit-mask-image: radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 18%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
-  opacity: 0.6;
-  z-index: 0;
-  pointer-events: none;
-  will-change: transform;
-  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: aiAuraTurn 18s linear infinite, aiAuraBreath 6s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-}
-@keyframes aiAuraTurn { to { rotate: 360deg; } }
-@keyframes aiAuraBreath { from { scale: 0.92; } to { scale: 1.06; } }
-.ai-chat-launcher .ai-mark {
-  position: relative;
-  z-index: 1;
+/* ---------- The assistant's mark: ambient light ----------
+   A small canvas of drifting, breathing, color-shifting light (drawn in
+   the script). No shape: the light fades out before its edge. A touch of
+   blur diffuses it further; hover lifts it slightly. */
+.ai-chat-glow {
   display: block;
-  transform-origin: 50% 50%;
-  will-change: transform;
-  transition: rotate 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-  animation: aiMarkBreath 3.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-  filter: none;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+  filter: blur(1.2px) saturate(1.05);
+  opacity: 0.92;
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.ai-chat-launcher__icon.is-orb .ai-mark { width: 17px !important; height: 17px !important; }
-.ai-chat-launcher.is-bubble .ai-chat-launcher__orb .ai-mark { width: 20px; height: 20px; animation: aiMarkBreath 3.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; filter: none; }
-@keyframes aiMarkBreath { from { scale: 1; } to { scale: 1.06; } }
-.ai-chat-launcher .ai-chat-twinkle {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: aiMarkTwinkle 3.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+.ai-chat-launcher__icon.is-orb {
+  width: 30px !important;
+  height: 30px !important;
+  margin-right: 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
 }
-@keyframes aiMarkTwinkle { from { opacity: 0.45; scale: 0.82; } to { opacity: 1; scale: 1.08; } }
 @media (hover: hover) {
-  .ai-chat-launcher:hover .ai-chat-aura { opacity: 0.9; }
-  .ai-chat-launcher:hover .ai-mark { rotate: 14deg; }
+  .ai-chat-launcher:hover .ai-chat-glow { opacity: 1; filter: blur(1px) saturate(1.15); }
 }
-/* The round bubble: clean white, the halo a little larger, clipped to the circle. */
+/* The round bubble: clean white, the light filling it softly. */
 .ai-chat-launcher.is-bubble { background: #fff !important; }
 .ai-chat-launcher.is-bubble .ai-chat-launcher__orb {
   background: transparent !important;
@@ -3498,17 +3469,4 @@ button.ai-chat-launcher__text {
   overflow: hidden;
   clip-path: circle(50% at 50% 50%);
 }
-.ai-chat-launcher.is-bubble .ai-chat-aura { width: 54px; height: 54px; margin: -27px 0 0 -27px; opacity: 0.55; }
-.ai-chat-launcher.hidden .ai-chat-aura,
-.ai-chat-launcher.hidden .ai-mark,
-.ai-chat-launcher.hidden .ai-chat-twinkle { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .ai-chat-aura,
-  .ai-chat-launcher .ai-mark,
-  .ai-chat-launcher .ai-chat-twinkle { animation: none; }
-}
-.ai-chat-launcher.is-bubble .ai-chat-twinkle {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: aiMarkTwinkle 3.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-}
+.ai-chat-launcher.is-bubble .ai-chat-glow { filter: blur(1.6px) saturate(1.05); }
