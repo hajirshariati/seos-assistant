@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 icons-quiet');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 settings-map');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -38,6 +38,9 @@ if(_cachedRules&&matchesHideRule(_cachedRules))return;
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
+  /* Settings → Support link wins over the theme editor's. */
+  if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
+  if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -97,7 +100,8 @@ var LWIDTH=C.launcherWidth||'500';
 var CWIDTH=C.chatWidth||LWIDTH;
 var HIDE_MOBILE=C.hideOnMobile===true;
 var SUPPORT_URL=C.supportUrl||'';
-var SUPPORT_LABEL=C.supportLabel||'Contact customer service';
+/* The theme block's default label isn't a choice: the chat's own wording is used. */
+var SUPPORT_LABEL=(C.supportLabel&&C.supportLabel!=='Contact customer service')?C.supportLabel:'Chat with Aetrex Support';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
 var CUST_NAME=C.customerFirstName||'';
 var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';
@@ -946,11 +950,8 @@ function vizErrorHtml(msg){
    card's box (no cramping). The button stops click propagation so a
    tap never reaches the card's own click handling.
    The generated image renders BELOW the card (see runVisualize). */
-function vizLabel(cta){
-  // Migrate the old default to the new name; respect a genuinely custom label.
-  var l=cta&&cta.label;
-  return (l&&l!=='Visualize My Look')?l:'See It Styled';
-}
+/* The label set in the app's Settings, exactly (the server resolves the default). */
+function vizLabel(cta){return (cta&&cta.label)||'See It Styled'}
 function injectVizButton(card,cta){
   if(!card||card.querySelector('.ai-chat-viz-btn'))return;
   // "See It Styled" is a SECONDARY action sitting BESIDE "Add to cart" (the
@@ -1922,7 +1923,7 @@ if(p.type==='link'&&p.url){
   linkCTA={url:p.url,label:p.label||'Visit Support Hub'};
 }
 if(p.type==='support_cta'){
-  supportCta={label:p.label||'Chat with Aetrex Support',fallbackUrl:p.fallbackUrl||SUPPORT_URL||''};
+  supportCta={label:p.label||SUPPORT_LABEL,fallbackUrl:p.fallbackUrl||SUPPORT_URL||''};
 }
 if(p.type==='suggestions'&&p.questions&&p.questions.length){
   buffSugg=p.questions;

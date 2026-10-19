@@ -1,4 +1,5 @@
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
+import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useRef, useEffect } from "react";
 import {
   Page,
@@ -66,7 +67,7 @@ export const loader = async ({ request }) => {
     hasOpenaiKey: (config.openaiApiKey || "") !== "",
     visualizeLookEnabled: config.visualizeLookEnabled === true,
     imageProvider: config.imageProvider || "",
-    visualizeLookLabel: config.visualizeLookLabel || "Visualize My Look",
+    visualizeLookLabel: visualizeLabel(config),
     hasGeminiKey: (config.geminiApiKey || "") !== "",
     plan: { id: plan.id, name: plan.name, features: plan.features },
   };
@@ -95,7 +96,7 @@ export const action = async ({ request }) => {
     const vData = {
       visualizeLookEnabled: enabled,
       imageProvider: provider,
-      visualizeLookLabel: label || "Visualize My Look",
+      visualizeLookLabel: label || "See It Styled",
     };
     const geminiKey = formData.get("geminiApiKey");
     if (geminiKey !== null && geminiKey !== "") vData.geminiApiKey = geminiKey;
@@ -244,7 +245,7 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
   const fetcher = useFetcher();
   const [enabled, setEnabled] = useState(Boolean(initialEnabled));
   const [provider, setProvider] = useState(initialProvider || "");
-  const [label, setLabel] = useState(initialLabel || "Visualize My Look");
+  const [label, setLabel] = useState(initialLabel || "See It Styled");
   const [geminiKey, setGeminiKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const saving = fetcher.state !== "idle";
@@ -266,7 +267,7 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
     <Card>
       <BlockStack gap="400">
         <Checkbox
-          label="Enable “Visualize My Look”"
+          label="Enable “See It Styled”"
           checked={enabled}
           onChange={setEnabled}
           helpText="When the assistant recommends exactly ONE product, customers get a standout button that generates an AI styling preview — the real product, styled for what they described. Shown only for single-product recommendations."
@@ -573,7 +574,7 @@ export default function ApiKeys() {
   const optionalOn = [
     embeddingProvider ? "semantic search" : null,
     initVizEnabled ? "styling previews" : null,
-    hasYotpoKey || hasAftershipKey || klaviyoFormId ? "integrations" : null,
+    hasYotpoKey || hasAftershipKey || klaviyoCompanyId ? "integrations" : null,
     vipMode ? "VIP experience" : null,
     dailyCapEnabled ? "daily limit" : null,
   ].filter(Boolean);
@@ -686,7 +687,7 @@ export default function ApiKeys() {
 
             <Layout.AnnotatedSection
               title="Support link"
-              description="When a customer asks for help or customer service, the AI shows a 'Visit Support Hub' button linking to this URL."
+              description="When a customer needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias) if your store has one, otherwise this page. These override the support link and label in the theme editor."
             >
               <Card>
                 <BlockStack gap="400">
@@ -696,15 +697,15 @@ export default function ApiKeys() {
                     onChange={setSupportUrl}
                     placeholder="https://yourstore.com/pages/contact"
                     autoComplete="off"
-                    helpText="Leave blank to disable the support button."
+                    helpText="Left blank, the theme editor's Support URL is used."
                   />
                   <TextField
                     label="Button label (optional)"
                     value={supportLabel}
                     onChange={setSupportLabel}
-                    placeholder="Visit Support Hub"
+                    placeholder="Chat with Aetrex Support"
                     autoComplete="off"
-                    helpText="Defaults to 'Visit Support Hub' if left blank."
+                    helpText="Shown exactly as typed. Left blank, the theme editor's label is used, or “Chat with Aetrex Support”."
                   />
                   <TextField
                     label="Order tracking page URL"
@@ -867,7 +868,7 @@ export default function ApiKeys() {
             </Layout.AnnotatedSection>
 
             <Layout.AnnotatedSection
-              title="Visualize My Look (AI styling preview)"
+              title="See It Styled (AI styling preview)"
               description={
                 <BlockStack gap="200">
                   <Text as="p" tone="subdued" variant="bodySm">

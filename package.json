@@ -27,7 +27,7 @@
     "eval:all": "node scripts/run-evals.mjs --all",
     "eval": "node scripts/run-evals.mjs",
     "test:integration": "node scripts/e2e/server-integration.mjs",
-    "test:widget": "node scripts/e2e/widget/flows.mjs && node scripts/e2e/widget/resilience.mjs"
+    "test:widget": "node scripts/e2e/widget/flows.mjs && node scripts/e2e/widget/resilience.mjs && node scripts/e2e/widget/settings.mjs"
   },
   "type": "module",
   "engines": {

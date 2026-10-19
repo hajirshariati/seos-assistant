@@ -63,6 +63,9 @@ export const loader = async ({ request }) => {
         klaviyoCompanyId: config.klaviyoCompanyId || "",
         klaviyoListId: config.klaviyoListId || "",
         showLoginPill: config.showLoginPill !== false,
+        // Settings → Support link; the widget falls back to the theme editor's.
+        supportUrl: String(config.supportUrl || "").trim(),
+        supportLabel: String(config.supportLabel || "").trim(),
         showFeedback: config.showFeedback !== false,
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,

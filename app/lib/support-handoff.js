@@ -1,8 +1,11 @@
-// Label for the "talk to a person" button. A meaningful custom label from
-// Settings wins; the generic link defaults fall back to the chat wording.
-export function supportChatLabel(ctx) {
-  const raw = String(ctx?.supportLabel || "").trim();
-  const linkDefaults = new Set(["Contact customer service", "Visit Support Hub"]);
-  if (raw && !linkDefaults.has(raw)) return raw;
-  return "Chat with Aetrex Support";
+// Where the support link and label come from: the app's Settings first
+// (Support link card), then the theme editor's block settings, then the
+// default. The theme block's own default label doesn't count as a choice.
+export function resolveSupport({ adminUrl = "", adminLabel = "", themeUrl = "", themeLabel = "" } = {}) {
+  const url = String(adminUrl || "").trim() || String(themeUrl || "").trim();
+  const theme = String(themeLabel || "").trim();
+  const label = String(adminLabel || "").trim()
+    || (theme && theme !== "Contact customer service" ? theme : "")
+    || "Chat with Aetrex Support";
+  return { url, label };
 }

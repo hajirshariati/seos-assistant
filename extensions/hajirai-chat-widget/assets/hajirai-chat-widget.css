@@ -3322,3 +3322,6 @@ button.ai-chat-launcher__text {
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-panel .ai-chat-header__avatar { transition: opacity 0.2s ease; }
 }
+
+/* Launcher Width (theme editor) is the bar's full width, padding and border included. */
+.ai-chat-launcher { box-sizing: border-box; }

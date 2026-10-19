@@ -618,7 +618,7 @@ export default function Analytics() {
     // generated (not messages), surfaced as its own row.
     if (usage.imageCost > 0) {
       rows.push({
-        model: "Visualize My Look (images)",
+        model: "See It Styled (images)",
         messages: usage.imageCount || 0,
         cost: usage.imageCost,
         avg: usage.imageCount > 0 ? usage.imageCost / usage.imageCount : null,

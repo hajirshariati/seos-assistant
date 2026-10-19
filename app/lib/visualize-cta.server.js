@@ -36,6 +36,13 @@ export const VISUALIZE_SCENE_GROUPS = {
 // Pick the scene group from a product's category/title. Sandals & wedges →
 // sandals; sneakers/athletic → sneakers; loafers/dress/boots/heels → dress.
 // Unknown footwear falls back to the (most general) sneakers set.
+// The button's text, exactly as shoppers see it — the admin shows the same.
+// "Visualize My Look" was the old default; it now reads "See It Styled".
+export function visualizeLabel(config = {}) {
+  const raw = String(config.visualizeLookLabel || "").trim();
+  return raw && raw !== "Visualize My Look" ? raw : "See It Styled";
+}
+
 export function visualizeSceneGroup(category = "", title = "") {
   const hay = `${category} ${title}`.toLowerCase();
   if (/\b(?:sandals?|wedges?|slides?|flip[\s-]*flops?|espadrilles?)\b/.test(hay)) return "sandals";
@@ -106,7 +113,7 @@ export function buildVisualizeCtaEvent({ config, product, messages, isInsoleReco
     productImage: image,
     productCategory: category,
     styleContext: recentUserStyleContext(messages),
-    label: String(config.visualizeLookLabel || "").trim() || "See It Styled",
+    label: visualizeLabel(config),
     sceneGroup,
     scenes: VISUALIZE_SCENE_GROUPS[sceneGroup],
   };

@@ -26,7 +26,7 @@ test("fires for enabled + gemini key + single product with image", () => {
   const ev = buildVisualizeCtaEvent({ config: enabledGemini, product, messages });
   assert.ok(ev && ev.type === "visualize_cta");
   assert.equal(ev.productHandle, "maui-black");
-  assert.equal(ev.label, "Visualize My Look");
+  assert.equal(ev.label, "See It Styled", "the old default label reads See It Styled — the admin shows the same");
   assert.match(ev.styleContext, /blue dress/);
 });
 

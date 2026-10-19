@@ -40,10 +40,11 @@ function fnBody(name) {
 
 console.log("\nvisualize widget-source invariants\n");
 
-test("CTA is renamed to 'See It Styled' (old name migrated, not shown)", () => {
+test("CTA shows the label from the app's Settings exactly (the server resolves the default)", () => {
   assert.match(SRC, /'See It Styled'/);
   const label = fnBody("vizLabel");
-  assert.match(label, /!==\s*'Visualize My Look'/, "old default must migrate to the new name");
+  assert.match(label, /cta\.label/, "uses the label the server sent");
+  assert.doesNotMatch(label, /Visualize My Look/, "no hidden rewrite in the widget");
 });
 
 test("CTA is a SECONDARY outline action (not the buy CTA)", () => {

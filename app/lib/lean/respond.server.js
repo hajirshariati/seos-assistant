@@ -11,7 +11,7 @@ import { buildLeanStoreExtras } from "./store-tools.server.js";
 import { logMentions } from "../../models/ChatProductMention.server.js";
 import { logTopics } from "../../models/ChatTopic.server.js";
 import { getActiveCampaigns, formatCampaignsForCS } from "../../models/Campaign.server.js";
-import { supportChatLabel } from "../support-handoff.js";
+import { resolveSupport } from "../support-handoff.js";
 import { buildVisualizeCtaEvent } from "../visualize-cta.server.js";
 import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
@@ -120,9 +120,10 @@ export function leanChatResponse({
         ]);
         // No message text in the logs — shoppers type emails, order numbers, health details.
         console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length}`);
+        const support = resolveSupport({ adminUrl: config.supportUrl, adminLabel: config.supportLabel, themeUrl: supportUrl, themeLabel: supportLabel });
         const result = await runLeanTurn({
           shop,
-          config: { ...config, supportUrl: supportUrl || config.supportUrl, supportLabel: supportLabel || config.supportLabel },
+          config: { ...config, supportUrl: support.url, supportLabel: support.label },
           model,
           catalog,
           messages,
@@ -161,8 +162,8 @@ export function leanChatResponse({
         if (result.supportRequested) {
           send({
             type: "support_cta",
-            label: supportChatLabel({ supportLabel: supportLabel || config.supportLabel }),
-            fallbackUrl: supportUrl || config.supportUrl || "",
+            label: support.label,
+            fallbackUrl: support.url,
             context: { reason: result.supportRequested, engine: "lean" },
           });
         }

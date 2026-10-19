@@ -107,7 +107,10 @@
   "name": "SEoS Assistant",
   "target": "body",
   "settings": [
-    { "type": "header", "content": "Assistant Identity" },
+    {
+      "type": "header",
+      "content": "Assistant Identity"
+    },
     {
       "type": "text",
       "id": "assistant_name",
@@ -130,8 +133,10 @@
       "label": "Show banner on welcome screen",
       "default": true
     },
-
-    { "type": "header", "content": "Messages" },
+    {
+      "type": "header",
+      "content": "Messages"
+    },
     {
       "type": "textarea",
       "id": "greeting",
@@ -163,16 +168,27 @@
       "label": "Chat Input Placeholder",
       "default": "How can I help you today?"
     },
-
-    { "type": "header", "content": "Layout" },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
     {
       "type": "select",
       "id": "position",
       "label": "Launcher Position",
       "options": [
-        { "value": "bottom-center", "label": "Bottom Center" },
-        { "value": "bottom-left", "label": "Bottom Left" },
-        { "value": "bottom-right", "label": "Bottom Right" }
+        {
+          "value": "bottom-center",
+          "label": "Bottom Center"
+        },
+        {
+          "value": "bottom-left",
+          "label": "Bottom Left"
+        },
+        {
+          "value": "bottom-right",
+          "label": "Bottom Right"
+        }
       ],
       "default": "bottom-center"
     },
@@ -180,7 +196,8 @@
       "type": "text",
       "id": "launcher_width",
       "label": "Launcher Width (px)",
-      "default": "500"
+      "default": "500",
+      "info": "Total width of the launcher bar, in pixels."
     },
     {
       "type": "text",
@@ -207,32 +224,391 @@
       "type": "paragraph",
       "content": "Custom launcher: add the attribute data-open-ai-chat to any link, button, image, or text and clicking it will open the chatbot. Example: <a href=\"#\" data-open-ai-chat>Chat with us</a> — works even when the chatbot is hidden on mobile."
     },
-
-    { "type": "header", "content": "Welcome CTAs & Quick Picks", "info": "Up to 4 starting questions, plus shorter quick-pick prompts." },
-    {"type": "text", "id": "cta1_label", "label": "CTA 1 Label", "default": "Shop Shoes"},
-    {"type": "text", "id": "cta1_message", "label": "CTA 1 Message", "default": "Help me choose Aetrex shoes based on my style, comfort needs, and activities."},
-    {"type": "select", "id": "cta1_icon", "label": "CTA 1 Icon", "default": "auto", "options": [{"value": "auto", "label": "Automatic (from the label)"}, {"value": "search", "label": "Search"}, {"value": "sizing", "label": "Ruler (sizing)"}, {"value": "shoe", "label": "Shoe"}, {"value": "orthotic", "label": "Insoles (orthotics)"}, {"value": "order", "label": "Box (orders)"}, {"value": "shipping", "label": "Truck (shipping)"}, {"value": "returns", "label": "Return arrow"}, {"value": "deals", "label": "Tag (deals)"}, {"value": "gift", "label": "Gift"}, {"value": "heart", "label": "Heart"}, {"value": "star", "label": "Star"}, {"value": "support", "label": "Chat bubble (support)"}, {"value": "store", "label": "Map pin (stores)"}, {"value": "sparkle", "label": "Sparkle"}]},
-    {"type": "text", "id": "cta2_label", "label": "CTA 2 Label", "default": "Shop Orthotics"},
-    {"type": "text", "id": "cta2_message", "label": "CTA 2 Message", "default": "Help me choose the right Aetrex orthotics based on my arch support needs, footwear, and daily activities."},
-    {"type": "select", "id": "cta2_icon", "label": "CTA 2 Icon", "default": "auto", "options": [{"value": "auto", "label": "Automatic (from the label)"}, {"value": "search", "label": "Search"}, {"value": "sizing", "label": "Ruler (sizing)"}, {"value": "shoe", "label": "Shoe"}, {"value": "orthotic", "label": "Insoles (orthotics)"}, {"value": "order", "label": "Box (orders)"}, {"value": "shipping", "label": "Truck (shipping)"}, {"value": "returns", "label": "Return arrow"}, {"value": "deals", "label": "Tag (deals)"}, {"value": "gift", "label": "Gift"}, {"value": "heart", "label": "Heart"}, {"value": "star", "label": "Star"}, {"value": "support", "label": "Chat bubble (support)"}, {"value": "store", "label": "Map pin (stores)"}, {"value": "sparkle", "label": "Sparkle"}]},
-    {"type": "text", "id": "cta3_label", "label": "CTA 3 Label", "default": "Size & Fit Help"},
-    {"type": "text", "id": "cta3_message", "label": "CTA 3 Message", "default": "Help me find the right Aetrex shoe size and fit."},
-    {"type": "select", "id": "cta3_icon", "label": "CTA 3 Icon", "default": "auto", "options": [{"value": "auto", "label": "Automatic (from the label)"}, {"value": "search", "label": "Search"}, {"value": "sizing", "label": "Ruler (sizing)"}, {"value": "shoe", "label": "Shoe"}, {"value": "orthotic", "label": "Insoles (orthotics)"}, {"value": "order", "label": "Box (orders)"}, {"value": "shipping", "label": "Truck (shipping)"}, {"value": "returns", "label": "Return arrow"}, {"value": "deals", "label": "Tag (deals)"}, {"value": "gift", "label": "Gift"}, {"value": "heart", "label": "Heart"}, {"value": "star", "label": "Star"}, {"value": "support", "label": "Chat bubble (support)"}, {"value": "store", "label": "Map pin (stores)"}, {"value": "sparkle", "label": "Sparkle"}]},
-    {"type": "text", "id": "cta4_label", "label": "CTA 4 Label", "default": "Track Order"},
-    {"type": "text", "id": "cta4_message", "label": "CTA 4 Message", "default": "Help me check the status of my order."},
-    {"type": "select", "id": "cta4_icon", "label": "CTA 4 Icon", "default": "auto", "options": [{"value": "auto", "label": "Automatic (from the label)"}, {"value": "search", "label": "Search"}, {"value": "sizing", "label": "Ruler (sizing)"}, {"value": "shoe", "label": "Shoe"}, {"value": "orthotic", "label": "Insoles (orthotics)"}, {"value": "order", "label": "Box (orders)"}, {"value": "shipping", "label": "Truck (shipping)"}, {"value": "returns", "label": "Return arrow"}, {"value": "deals", "label": "Tag (deals)"}, {"value": "gift", "label": "Gift"}, {"value": "heart", "label": "Heart"}, {"value": "star", "label": "Star"}, {"value": "support", "label": "Chat bubble (support)"}, {"value": "store", "label": "Map pin (stores)"}, {"value": "sparkle", "label": "Sparkle"}]},
-    { "type": "text", "id": "cta_hint", "label": "CTA Hint Text", "info": "Shown under the welcome CTAs when the customer is NOT logged in. Becomes a clickable login link automatically." },
-    { "type": "text", "id": "cta_hint_logged_in", "label": "CTA Hint Text (logged in)", "info": "Shown when the customer IS logged in. Use {name} for their first name. Leave blank to hide." },
-
-    {"type": "text", "id": "qp1_label", "label": "Quick Pick 1 Label", "default": "Best Sellers"},
-    {"type": "text", "id": "qp1_message", "label": "Quick Pick 1 Message", "default": "Show me the most popular Aetrex products."},
-    {"type": "text", "id": "qp2_label", "label": "Quick Pick 2 Label", "default": "New Arrivals"},
-    {"type": "text", "id": "qp2_message", "label": "Quick Pick 2 Message", "default": "Show me the latest Aetrex shoes and orthotics."},
-    {"type": "text", "id": "qp3_label", "label": "Quick Pick 3 Label", "default": "Sale Items"},
-    {"type": "text", "id": "qp3_message", "label": "Quick Pick 3 Message", "default": "Show me Aetrex products currently on sale."},
-    {"type": "text", "id": "qp4_label", "label": "Quick Pick 4 Label", "default": "Returns"},
-    {"type": "text", "id": "qp4_message", "label": "Quick Pick 4 Message", "default": "Help me understand Aetrex's return and exchange policy."},
-
+    {
+      "type": "header",
+      "content": "Welcome CTAs & Quick Picks",
+      "info": "Up to 4 starting questions, plus shorter quick-pick prompts."
+    },
+    {
+      "type": "text",
+      "id": "cta1_label",
+      "label": "CTA 1 Label",
+      "default": "Shop Shoes"
+    },
+    {
+      "type": "text",
+      "id": "cta1_message",
+      "label": "CTA 1 Message",
+      "default": "Help me choose Aetrex shoes based on my style, comfort needs, and activities."
+    },
+    {
+      "type": "select",
+      "id": "cta1_icon",
+      "label": "CTA 1 Icon",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatic (from the label)"
+        },
+        {
+          "value": "search",
+          "label": "Search"
+        },
+        {
+          "value": "sizing",
+          "label": "Ruler (sizing)"
+        },
+        {
+          "value": "shoe",
+          "label": "Shoe"
+        },
+        {
+          "value": "orthotic",
+          "label": "Insoles (orthotics)"
+        },
+        {
+          "value": "order",
+          "label": "Box (orders)"
+        },
+        {
+          "value": "shipping",
+          "label": "Truck (shipping)"
+        },
+        {
+          "value": "returns",
+          "label": "Return arrow"
+        },
+        {
+          "value": "deals",
+          "label": "Tag (deals)"
+        },
+        {
+          "value": "gift",
+          "label": "Gift"
+        },
+        {
+          "value": "heart",
+          "label": "Heart"
+        },
+        {
+          "value": "star",
+          "label": "Star"
+        },
+        {
+          "value": "support",
+          "label": "Chat bubble (support)"
+        },
+        {
+          "value": "store",
+          "label": "Map pin (stores)"
+        },
+        {
+          "value": "sparkle",
+          "label": "Sparkle"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "cta2_label",
+      "label": "CTA 2 Label",
+      "default": "Shop Orthotics"
+    },
+    {
+      "type": "text",
+      "id": "cta2_message",
+      "label": "CTA 2 Message",
+      "default": "Help me choose the right Aetrex orthotics based on my arch support needs, footwear, and daily activities."
+    },
+    {
+      "type": "select",
+      "id": "cta2_icon",
+      "label": "CTA 2 Icon",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatic (from the label)"
+        },
+        {
+          "value": "search",
+          "label": "Search"
+        },
+        {
+          "value": "sizing",
+          "label": "Ruler (sizing)"
+        },
+        {
+          "value": "shoe",
+          "label": "Shoe"
+        },
+        {
+          "value": "orthotic",
+          "label": "Insoles (orthotics)"
+        },
+        {
+          "value": "order",
+          "label": "Box (orders)"
+        },
+        {
+          "value": "shipping",
+          "label": "Truck (shipping)"
+        },
+        {
+          "value": "returns",
+          "label": "Return arrow"
+        },
+        {
+          "value": "deals",
+          "label": "Tag (deals)"
+        },
+        {
+          "value": "gift",
+          "label": "Gift"
+        },
+        {
+          "value": "heart",
+          "label": "Heart"
+        },
+        {
+          "value": "star",
+          "label": "Star"
+        },
+        {
+          "value": "support",
+          "label": "Chat bubble (support)"
+        },
+        {
+          "value": "store",
+          "label": "Map pin (stores)"
+        },
+        {
+          "value": "sparkle",
+          "label": "Sparkle"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "cta3_label",
+      "label": "CTA 3 Label",
+      "default": "Size & Fit Help"
+    },
+    {
+      "type": "text",
+      "id": "cta3_message",
+      "label": "CTA 3 Message",
+      "default": "Help me find the right Aetrex shoe size and fit."
+    },
+    {
+      "type": "select",
+      "id": "cta3_icon",
+      "label": "CTA 3 Icon",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatic (from the label)"
+        },
+        {
+          "value": "search",
+          "label": "Search"
+        },
+        {
+          "value": "sizing",
+          "label": "Ruler (sizing)"
+        },
+        {
+          "value": "shoe",
+          "label": "Shoe"
+        },
+        {
+          "value": "orthotic",
+          "label": "Insoles (orthotics)"
+        },
+        {
+          "value": "order",
+          "label": "Box (orders)"
+        },
+        {
+          "value": "shipping",
+          "label": "Truck (shipping)"
+        },
+        {
+          "value": "returns",
+          "label": "Return arrow"
+        },
+        {
+          "value": "deals",
+          "label": "Tag (deals)"
+        },
+        {
+          "value": "gift",
+          "label": "Gift"
+        },
+        {
+          "value": "heart",
+          "label": "Heart"
+        },
+        {
+          "value": "star",
+          "label": "Star"
+        },
+        {
+          "value": "support",
+          "label": "Chat bubble (support)"
+        },
+        {
+          "value": "store",
+          "label": "Map pin (stores)"
+        },
+        {
+          "value": "sparkle",
+          "label": "Sparkle"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "cta4_label",
+      "label": "CTA 4 Label",
+      "default": "Track Order"
+    },
+    {
+      "type": "text",
+      "id": "cta4_message",
+      "label": "CTA 4 Message",
+      "default": "Help me check the status of my order."
+    },
+    {
+      "type": "select",
+      "id": "cta4_icon",
+      "label": "CTA 4 Icon",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automatic (from the label)"
+        },
+        {
+          "value": "search",
+          "label": "Search"
+        },
+        {
+          "value": "sizing",
+          "label": "Ruler (sizing)"
+        },
+        {
+          "value": "shoe",
+          "label": "Shoe"
+        },
+        {
+          "value": "orthotic",
+          "label": "Insoles (orthotics)"
+        },
+        {
+          "value": "order",
+          "label": "Box (orders)"
+        },
+        {
+          "value": "shipping",
+          "label": "Truck (shipping)"
+        },
+        {
+          "value": "returns",
+          "label": "Return arrow"
+        },
+        {
+          "value": "deals",
+          "label": "Tag (deals)"
+        },
+        {
+          "value": "gift",
+          "label": "Gift"
+        },
+        {
+          "value": "heart",
+          "label": "Heart"
+        },
+        {
+          "value": "star",
+          "label": "Star"
+        },
+        {
+          "value": "support",
+          "label": "Chat bubble (support)"
+        },
+        {
+          "value": "store",
+          "label": "Map pin (stores)"
+        },
+        {
+          "value": "sparkle",
+          "label": "Sparkle"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "cta_hint",
+      "label": "CTA Hint Text",
+      "info": "Shown under the welcome CTAs when the customer is NOT logged in. Becomes a clickable login link automatically."
+    },
+    {
+      "type": "text",
+      "id": "cta_hint_logged_in",
+      "label": "CTA Hint Text (logged in)",
+      "info": "Shown when the customer IS logged in. Use {name} for their first name. Leave blank to hide."
+    },
+    {
+      "type": "text",
+      "id": "qp1_label",
+      "label": "Quick Pick 1 Label",
+      "default": "Best Sellers"
+    },
+    {
+      "type": "text",
+      "id": "qp1_message",
+      "label": "Quick Pick 1 Message",
+      "default": "Show me the most popular Aetrex products."
+    },
+    {
+      "type": "text",
+      "id": "qp2_label",
+      "label": "Quick Pick 2 Label",
+      "default": "New Arrivals"
+    },
+    {
+      "type": "text",
+      "id": "qp2_message",
+      "label": "Quick Pick 2 Message",
+      "default": "Show me the latest Aetrex shoes and orthotics."
+    },
+    {
+      "type": "text",
+      "id": "qp3_label",
+      "label": "Quick Pick 3 Label",
+      "default": "Sale Items"
+    },
+    {
+      "type": "text",
+      "id": "qp3_message",
+      "label": "Quick Pick 3 Message",
+      "default": "Show me Aetrex products currently on sale."
+    },
+    {
+      "type": "text",
+      "id": "qp4_label",
+      "label": "Quick Pick 4 Label",
+      "default": "Returns"
+    },
+    {
+      "type": "text",
+      "id": "qp4_message",
+      "label": "Quick Pick 4 Message",
+      "default": "Help me understand Aetrex's return and exchange policy."
+    },
     {
       "type": "checkbox",
       "id": "truefit_size_finder",
@@ -240,21 +616,24 @@
       "info": "Shows \"Find my shoe size\" (True Fit) on the chat's home screen and on shoe cards. Needs True Fit's \"Find my size\" on your shoe product pages; turn off if your store doesn't have it.",
       "default": true
     },
-
-    { "type": "header", "content": "Customer Service Handoff", "info": "Shown if the chat fails or the assistant can't answer." },
+    {
+      "type": "header",
+      "content": "Customer Service Handoff",
+      "info": "Shown if the chat fails or the assistant can't answer."
+    },
     {
       "type": "text",
       "id": "support_label",
       "label": "Support Button Label",
-      "default": "Contact customer service"
+      "default": "Contact customer service",
+      "info": "Used when the app's Settings → Support link label is blank."
     },
     {
       "type": "url",
       "id": "support_url",
       "label": "Support URL (help center, contact page, live chat link)",
-      "info": "Leave blank to use your existing live chat (Zendesk / Gorgias / Intercom) if loaded on the page."
+      "info": "Used when the app's Settings → Support link URL is blank."
     },
-
     {
       "type": "text",
       "id": "disclaimer",
