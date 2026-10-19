@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 siri-sphere');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-19 siri-orbit');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -200,18 +200,28 @@ var GLOW_FRAG=[
 'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
 'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);',
 ' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
-/* one petal: a soft-edged ellipse of light radiating from the core, bent by
-   slow noise. Returns (defined edge, glow beyond it). */
-'vec2 petal(vec2 uv,float ang,float dist,float len,float wid,float tilt,float T,float k){',
-' vec2 c=dist*vec2(cos(ang),sin(ang));',
-' float th=ang+tilt;mat2 R=mat2(cos(th),-sin(th),sin(th),cos(th));',
+/* one petal on a tilted 3D orbit around the core. `ph` is its orbit angle:
+   depth = sin(ph) — in front it is bright, crisp and full-size; swinging
+   behind it dims, softens and foreshortens, then fades back in. The petal
+   also turns on its own axis and is bent by slow noise, so its shape keeps
+   changing. Returns (defined edge, glow beyond it) already weighted by depth. */
+'vec2 petal(vec2 uv,float ph,float tiltY,float spin,float len,float wid,float T,float k){',
+' float depth=sin(ph);',                       /* -1 behind … +1 in front */
+' float front=depth*.5+.5;',
+' vec2 c=vec2(cos(ph)*.34,sin(ph)*tiltY*.34+.04*sin(T*.3+k));',
+' float th=spin;mat2 R=mat2(cos(th),-sin(th),sin(th),cos(th));',
 ' vec2 p=R*(uv-c);',
-' p+=.16*vec2(nz(uv*1.6+vec2(T*.5,k)),nz(uv*1.6+vec2(k,-T*.45)));',
-' float d=length(p/vec2(len,wid))-1.;',
-' float edge=1.-smoothstep(-.04,.06,d);',
-' float inner=exp(-max(-d,0.)*1.2);',  /* brighter toward the petal's own edge, like a glass sheet */
-' float glow=exp(-max(d,0.)*5.);',
-' return vec2(edge*mix(.55,1.,inner),glow);}',
+' p+=.14*vec2(nz(uv*1.6+vec2(T*.5,k)),nz(uv*1.6+vec2(k,-T*.45)));',
+/* foreshortening as it turns: narrower at the sides of the orbit, fuller in front */
+' float fs=mix(.55,1.,abs(depth));',
+' float sc=mix(.72,1.08,front);',
+' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
+' float soft=mix(.16,.05,front);',            /* crisp in front, soft behind */
+' float edge=1.-smoothstep(-soft*.6,soft,d);',
+' float inner=exp(-max(-d,0.)*1.2);',
+' float glow=exp(-max(d,0.)*mix(3.,5.,front));',
+' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
+' return vec2(edge*mix(.55,1.,inner),glow)*vis;}',
 'void main(){',
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
 ' float T=t*.42+seed;',
@@ -223,10 +233,10 @@ var GLOW_FRAG=[
 ' body=mix(body*1.25,body,dark);',
 /* four petals, each on its own slow orbit, breathing and bending */
 ' vec3 cyan=vec3(.10,.90,1.),teal=vec3(.18,.95,.62),mag=vec3(1.,.22,.62),vio=vec3(.46,.34,1.);',
-' vec2 p1=petal(uv,T*.5+0.0+.6*sin(T*.37),.30+.07*sin(T*.6),.74+.08*sin(T*.8),.25,.35,T,1.);',
-' vec2 p2=petal(uv,T*.42+2.1+.6*sin(T*.29+1.),.32+.07*sin(T*.5+2.),.70+.08*sin(T*.7+1.),.23,-.4,T,2.);',
-' vec2 p3=petal(uv,-T*.46+4.2+.6*sin(T*.33+2.),.30+.07*sin(T*.55+4.),.76+.08*sin(T*.9+2.),.25,.3,T,3.);',
-' vec2 p4=petal(uv,T*.34+3.1+.6*sin(T*.41+3.),.22+.06*sin(T*.45+1.),.60+.07*sin(T*.75+3.),.20,-.3,T,4.);',
+' vec2 p1=petal(uv,T*.95+0.0,.45,T*.35+.3*sin(T*.5),.74+.06*sin(T*.8),.25,T,1.);',
+' vec2 p2=petal(uv,T*.80+2.0,.55,-T*.3+.3*sin(T*.4+1.),.70+.06*sin(T*.7+1.),.23,T,2.);',
+' vec2 p3=petal(uv,T*1.05+4.1,.40,T*.4+.3*sin(T*.6+2.),.76+.06*sin(T*.9+2.),.25,T,3.);',
+' vec2 p4=petal(uv,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
 /* additive light: where petals cross the color builds toward white, as in glass */
 ' vec3 L=vec3(0.);',
 ' L+=cyan*(p1.x*.95+p1.y*.30);',
