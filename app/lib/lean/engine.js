@@ -143,6 +143,13 @@ export function toCard(p, preselect = null) {
   };
 }
 
+// A reply that hands the customer to a person or team. "Tap the button below"
+// alone isn't enough — that can mean Add to cart or See It Styled.
+const SUPPORT_POINTER = /\b(customer (service|care|support|experience)|support team|service team|care team|(reach|contact|message|email|call) (us|support|our team|the team)|talk to (someone|a person|a human|an agent|our team)|live (chat|agent))\b/i;
+export function pointsToSupport(text) {
+  return SUPPORT_POINTER.test(String(text || ""));
+}
+
 export async function runLeanTurn({
   anthropic,
   model,
@@ -424,6 +431,15 @@ export async function runLeanTurn({
     !disclaimerAlreadyShown(messages)
   ) {
     text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
+  }
+
+  // The reply sends the customer to a person ("tap below to reach customer
+  // service") but contact_support wasn't called: show the support button
+  // anyway, so that promise always has a button under it.
+  if (!supportRequested && pointsToSupport(text)) {
+    supportRequested = "reply points to customer service";
+    topic("support", "");
+    log("[lean] support button: the reply points to customer service");
   }
 
   const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map((p) => toCard(p, preselects.get(p.handle) || null));

@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -513,6 +513,24 @@ await test("contact_support → support button; follow-ups only with cards, clea
   ]);
   const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "red sandals" }], latestUserMessage: "red sandals", callModel: s2.callModel, log: quiet });
   assert.deepEqual(r2.followUps, ["Does it come in wide?", "Show black", "Any on sale?"]);
+});
+await test("a reply that points to customer service always gets the support button, even if the tool wasn't called", async () => {
+  const said = "Tap the button below to connect with the customer service team — they'll get your order status sorted out quickly!";
+  const s = scripted([{ stop_reason: "end_turn", content: [txt(said)] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "I want to check the status of my order" }], latestUserMessage: "I want to check the status of my order", callModel: s.callModel, log: quiet });
+  assert.equal(r.text, said);
+  assert.ok(r.supportRequested, "support button added");
+  assert.ok(r.topics.some((t) => t.kind === "support"));
+  for (const t of ["Contact us anytime and we'll help with your return.", "Our support team can change the address.", "Our customer care team is happy to help.", "You can talk to someone on our team."]) assert.ok(pointsToSupport(t), t);
+  for (const t of ["Tap the button below to add it to your cart.", "Our team designed this sandal for all-day comfort.", "The Savannah in red is a great pick.", "Tap See It Styled to see it on."]) assert.ok(!pointsToSupport(t), t);
+  // product replies keep their own buttons and get no support button
+  const s2 = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sandal", colors: ["red"], gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Savannah in red is a great pick — tap the button below to pick your size.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "red sandals" }], latestUserMessage: "red sandals", callModel: s2.callModel, log: quiet });
+  assert.equal(r2.supportRequested, null);
 });
 await test("analytics: a turn records what it was about (never the customer's words) and which products were found", async () => {
   const s = scripted([
