@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-19 siri-orbit');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-soft');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -216,20 +216,20 @@ var GLOW_FRAG=[
 ' float fs=mix(.55,1.,abs(depth));',
 ' float sc=mix(.72,1.08,front);',
 ' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
-' float soft=mix(.16,.05,front);',            /* crisp in front, soft behind */
-' float edge=1.-smoothstep(-soft*.6,soft,d);',
-' float inner=exp(-max(-d,0.)*1.2);',
-' float glow=exp(-max(d,0.)*mix(3.,5.,front));',
+' float soft=mix(.42,.24,front);',            /* feathered: softer still when behind */
+' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',   /* smooth shoulder, no hard line */
+' float inner=mix(.7,1.,exp(-max(-d,0.)*.9));',
+' float glow=exp(-max(d,0.)*mix(1.8,2.6,front));',
 ' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
-' return vec2(edge*mix(.55,1.,inner),glow)*vis;}',
+' return vec2(edge*inner,glow)*vis;}',
 'void main(){',
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
 ' float T=t*.42+seed;',
 /* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
-' float sph=1.-smoothstep(.93,1.,r);',
+' float sph=1.-smoothstep(.95,1.,r);',
 ' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
 ' body=mix(body,vec3(.26,.24,.46),smoothstep(.55,1.,r)*.8);',
-' body+=vec3(.55,.6,.9)*smoothstep(.86,.97,r)*(1.-smoothstep(.97,1.,r))*.22;',
+' body+=vec3(.55,.6,.9)*smoothstep(.80,.96,r)*(1.-smoothstep(.96,1.,r))*.16;',
 ' body=mix(body*1.25,body,dark);',
 /* four petals, each on its own slow orbit, breathing and bending */
 ' vec3 cyan=vec3(.10,.90,1.),teal=vec3(.18,.95,.62),mag=vec3(1.,.22,.62),vio=vec3(.46,.34,1.);',
@@ -239,23 +239,23 @@ var GLOW_FRAG=[
 ' vec2 p4=petal(uv,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
 /* additive light: where petals cross the color builds toward white, as in glass */
 ' vec3 L=vec3(0.);',
-' L+=cyan*(p1.x*.95+p1.y*.30);',
-' L+=mag*(p2.x*.95+p2.y*.30);',
-' L+=vio*(p3.x*.85+p3.y*.28);',
-' L+=teal*(p4.x*.75+p4.y*.22);',
+' L+=cyan*(p1.x*.85+p1.y*.34);',
+' L+=mag*(p2.x*.85+p2.y*.34);',
+' L+=vio*(p3.x*.78+p3.y*.32);',
+' L+=teal*(p4.x*.68+p4.y*.26);',
 /* the white-hot core and its halo */
-' float core=exp(-r*r*26.);float halo=exp(-r*r*3.6);',
-' L+=vec3(1.)*(core*1.5+halo*.22);',
+' float core=exp(-r*r*20.);float halo=exp(-r*r*3.0);',
+' L+=vec3(1.)*(core*1.25+halo*.26);',
 /* a soft specular on the glass */
 ' float spec=pow(max(0.,1.-length(uv-vec2(-.38,.46))*1.7),3.)*.22;',
 ' vec3 col=body+L*mix(.78,.9,dark)+vec3(spec);',
-' col=col/(1.+col*.35);',   /* gentle tone map: bright, never clipped flat */
+' col=col/(1.+col*.45);',   /* gentle tone map: bright, never clipped flat */
 ' float a=sph;',
 ' gl_FragColor=vec4(col*a,a);',
 '}'].join('\n');
 function initGlowGL(){
   try{
-    var c=document.createElement('canvas');c.width=c.height=112;
+    var c=document.createElement('canvas');c.width=c.height=160;
     var gl=c.getContext('webgl',{premultipliedAlpha:true,alpha:true,antialias:true})||c.getContext('experimental-webgl',{premultipliedAlpha:true,alpha:true});
     if(!gl)return null;
     var mk=function(type,src){var sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));return sh};
