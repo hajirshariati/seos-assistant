@@ -2,6 +2,7 @@ import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
 import prisma from "../db.server";
+import { parseOrbColors } from "../lib/orb-colors";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -71,6 +72,10 @@ export const loader = async ({ request }) => {
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,
         welcomeGlowStyle: config.welcomeGlowStyle === "none" ? "none" : "subtle",
+        // Settings → Assistant look: the mark's five colors (always five valid
+        // hex values; the Siri defaults when unset) and the talk button.
+        orbColors: parseOrbColors(config.orbColors),
+        voiceInput: config.voiceInput !== false,
       },
       {
         // 60s keeps the storefront responsive without making merchant config

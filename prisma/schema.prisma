@@ -133,8 +133,13 @@ model ShopConfig {
   // anything else plays it (the panel springs open, the welcome content
   // rises in). Older values ("internal", "external") read as on.
   welcomeGlowStyle       String   @default("subtle")
-  // "light" | "dark": the assistant's look on the storefront (Settings → Appearance).
+  // Unused since shoppers pick light/dark themselves in the chat header.
   widgetTheme            String   @default("light")
+  // The assistant mark's five sheet colors, comma-separated hex; "" = Siri defaults
+  // (Settings → Assistant look).
+  orbColors              String   @default("")
+  // The talk (voice input) button beside Send in the chat.
+  voiceInput             Boolean  @default(true)
   similarMatchAttributes String   @default("[]")
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)

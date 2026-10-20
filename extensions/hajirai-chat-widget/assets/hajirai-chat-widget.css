@@ -3672,3 +3672,499 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-theme-btn svg { transition: none; transform: none !important; }
   .ai-chat-theming, .ai-chat-theming * { transition: none !important; }
 }
+
+/* ---------- Talk instead of typing ----------
+   A quiet mic beside Send. While listening it becomes a solid stop button
+   with a soft ring that breathes with the shopper's voice; the search icon
+   in the box gives way to a small wave in the mark's colors; the words
+   appear in the box as they're spoken; × cancels. */
+.ai-chat-panel .ai-chat-mic {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--seos-surface);
+  color: var(--seos-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.25s ease, color 0.25s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ai-chat-panel .ai-chat-mic[hidden] { display: none; }
+.ai-chat-panel .ai-chat-mic svg {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ai-chat-panel .ai-chat-mic__stop { width: 16px; height: 16px; opacity: 0; transform: scale(0.5); }
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-mic:hover { background: rgba(13, 13, 18, 0.09); }
+  .ai-chat-panel[data-theme="dark"] .ai-chat-mic:hover { background: rgba(255, 255, 255, 0.12); }
+}
+.ai-chat-panel .ai-chat-mic:active { transform: scale(0.94); }
+.ai-chat-panel .ai-chat-mic:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-chat-mic:disabled { opacity: 0.4; cursor: default; }
+
+/* Listening: solid ink, stop square, a ring that swells while words come in */
+.ai-chat-panel.is-listening .ai-chat-mic { background: var(--seos-ink); color: #fff; }
+.ai-chat-panel[data-theme="dark"].is-listening .ai-chat-mic { color: #0d0d12; }
+.ai-chat-panel.is-listening .ai-chat-mic__mic { opacity: 0; transform: scale(0.5); }
+.ai-chat-panel.is-listening .ai-chat-mic__stop { opacity: 1; transform: none; }
+.ai-chat-panel .ai-chat-mic::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--orb-c2, #33dbff);
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+}
+.ai-chat-panel.is-listening .ai-chat-mic::after { animation: aiMicRing 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+.ai-chat-panel.is-hearing .ai-chat-mic::after { animation-duration: 0.9s; border-color: var(--orb-c1, #1a4dff); }
+@keyframes aiMicRing {
+  0% { opacity: 0.55; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+/* The box while listening */
+.ai-chat-panel .ai-chat-wave { display: none; }
+.ai-chat-panel.is-listening .ai-chat-input-icon { display: none; }
+.ai-chat-panel.is-listening .ai-chat-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.ai-chat-panel .ai-chat-wave i {
+  display: block;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--orb-c1, #1a4dff);
+  transform: scaleY(0.25);
+  animation: aiWaveIdle 1.4s ease-in-out infinite;
+}
+.ai-chat-panel .ai-chat-wave i:nth-child(1) { background: var(--orb-c2, #33dbff); animation-delay: -0.2s; }
+.ai-chat-panel .ai-chat-wave i:nth-child(2) { background: var(--orb-c1, #1a4dff); animation-delay: -0.5s; }
+.ai-chat-panel .ai-chat-wave i:nth-child(3) { background: var(--orb-c4, #ff4780); animation-delay: -0.8s; }
+.ai-chat-panel .ai-chat-wave i:nth-child(4) { background: var(--orb-c0, #ff1f33); animation-delay: -0.35s; }
+.ai-chat-panel .ai-chat-wave i:nth-child(5) { background: var(--orb-c3, #14d999); animation-delay: -0.65s; }
+.ai-chat-panel.is-hearing .ai-chat-wave i { animation-name: aiWave; animation-duration: 0.7s; }
+@keyframes aiWaveIdle { 0%, 100% { transform: scaleY(0.2); } 50% { transform: scaleY(0.45); } }
+@keyframes aiWave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+.ai-chat-panel.is-listening .ai-chat-input-wrap {
+  background: var(--seos-surface) !important;
+  border-color: var(--seos-line-strong, rgba(0, 0, 0, 0.14)) !important;
+}
+.ai-chat-panel.is-listening .ai-chat-input { caret-color: transparent; }
+.ai-chat-panel.is-listening .ai-chat-input::placeholder,
+.ai-chat-panel.is-voice-hint .ai-chat-input::placeholder { color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-voice-cancel {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--seos-text-2);
+  cursor: pointer;
+}
+.ai-chat-panel .ai-chat-voice-cancel[hidden] { display: none; }
+.ai-chat-panel .ai-chat-voice-cancel svg { width: 16px; height: 16px; }
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-voice-cancel:hover { color: var(--seos-text); background: rgba(13, 13, 18, 0.06); }
+  .ai-chat-panel[data-theme="dark"] .ai-chat-voice-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+}
+.ai-chat-panel .ai-chat-voice-cancel:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 1px; }
+.ai-chat-panel .ai-chat-voice-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.ai-chat-panel.has-voice .ai-chat-input-area { gap: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-wave i { animation: none !important; transform: scaleY(0.55); }
+  .ai-chat-panel.is-listening .ai-chat-mic::after { animation: none; opacity: 0.4; transform: scale(1.1); }
+  .ai-chat-panel .ai-chat-mic, .ai-chat-panel .ai-chat-mic svg { transition: none; }
+}
+
+/* ---------- The message capsule: mic and Send live inside it ----------
+   One rounded field, like Messages: the text, then a quiet mic, then Send,
+   a solid circle with an up arrow that lights up once there's something to
+   send (soft and grey while the box is empty). */
+.ai-chat-panel .ai-chat-input-area { gap: 0 !important; }
+.ai-chat-panel .ai-chat-input-wrap {
+  align-items: flex-end !important;
+  gap: 6px !important;
+  padding: 5px 5px 5px 14px !important;
+  border-radius: 22px !important;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.ai-chat-panel .ai-chat-input-icon,
+.ai-chat-panel.is-listening .ai-chat-wave { height: 32px !important; align-self: flex-end; }
+.ai-chat-panel .ai-chat-input { padding: 6px 0 !important; min-height: 32px; }
+.ai-chat-panel .ai-chat-voice-cancel { margin: 3px 0 !important; }
+.ai-chat-panel .ai-chat-mic {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  color: var(--seos-text-2);
+}
+.ai-chat-panel.is-listening .ai-chat-mic { background: var(--seos-ink); color: #fff; }
+.ai-chat-panel .ai-chat-mic svg { width: 19px; height: 19px; }
+.ai-chat-panel .ai-chat-mic .ai-chat-mic__stop { width: 14px; height: 14px; }
+.ai-chat-panel .ai-chat-send {
+  width: 32px !important;
+  height: 32px !important;
+  flex: 0 0 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50% !important;
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  opacity: 1;
+  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.18);
+  transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+.ai-chat-panel .ai-chat-send svg { width: 18px !important; height: 18px !important; transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.ai-chat-panel:not(.has-text):not(.is-listening) .ai-chat-send {
+  background: rgba(13, 13, 18, 0.1) !important;
+  color: #fff !important;
+  box-shadow: none;
+  cursor: default;
+}
+.ai-chat-panel:not(.has-text):not(.is-listening) .ai-chat-send svg { transform: translateY(1px) scale(0.92); }
+@media (hover: hover) {
+  .ai-chat-panel.has-text .ai-chat-send:not(:disabled):hover { transform: scale(1.06) !important; opacity: 1 !important; }
+  .ai-chat-panel:not(.has-text) .ai-chat-send:hover { transform: none !important; opacity: 1 !important; }
+}
+.ai-chat-panel .ai-chat-send:active:not(:disabled) { transform: scale(0.92) !important; }
+.ai-chat-panel .ai-chat-send:disabled { opacity: 0.45 !important; }
+.ai-chat-panel .ai-chat-send:focus-visible { outline: 2px solid var(--seos-ink) !important; outline-offset: 2px !important; box-shadow: none !important; }
+/* Dark: a light send circle with a charcoal arrow; dim while empty */
+.ai-chat-panel[data-theme="dark"] .ai-chat-send { background: var(--seos-ink) !important; color: #0d0d12 !important; box-shadow: none; }
+.ai-chat-panel[data-theme="dark"]:not(.has-text):not(.is-listening) .ai-chat-send { background: rgba(255, 255, 255, 0.14) !important; color: rgba(255, 255, 255, 0.55) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-input-wrap:focus-within { background: var(--seos-surface) !important; }
+
+/* ---------- One button, one place: mic ⇄ Send ----------
+   The mic and Send share a single slot at the end of the capsule. With the
+   box empty it's the mic; as soon as there are words (typed or spoken) the
+   same solid circle turns into Send, the glyph trading places with a small
+   scale. Without voice, Send alone sits there (soft while empty). */
+.ai-chat-panel .ai-chat-action {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-self: flex-end;
+}
+.ai-chat-panel .ai-chat-action > button {
+  position: absolute !important;
+  inset: 0;
+  margin: 0 !important;
+  transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0s, background-color 0.25s ease, color 0.25s ease !important;
+}
+.ai-chat-panel .ai-chat-mic {
+  width: 32px;
+  height: 32px;
+  background: var(--seos-ink) !important;
+  color: #fff !important;
+  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.18);
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-mic { color: #0d0d12 !important; box-shadow: none; }
+.ai-chat-panel .ai-chat-mic svg { width: 18px; height: 18px; }
+/* which one shows */
+.ai-chat-panel.has-voice:not(.has-text) .ai-chat-send,
+.ai-chat-panel.has-voice.has-text .ai-chat-mic {
+  opacity: 0 !important;
+  transform: scale(0.6) rotate(-20deg) !important;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.25s !important;
+}
+/* with voice, the empty-box Send look never shows; the mic is the action */
+.ai-chat-panel.has-voice .ai-chat-send { background: var(--seos-ink) !important; color: #fff !important; }
+.ai-chat-panel.has-voice[data-theme="dark"] .ai-chat-send { color: #0d0d12 !important; }
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-mic:hover { transform: scale(1.06) !important; background: var(--seos-ink) !important; }
+}
+.ai-chat-panel .ai-chat-mic:active { transform: scale(0.92) !important; }
+/* listening, before any words: the mic stays, breathing ring around it */
+.ai-chat-panel.is-listening .ai-chat-mic__mic { opacity: 1 !important; transform: none !important; }
+.ai-chat-panel.is-listening .ai-chat-mic__stop { opacity: 0 !important; }
+.ai-chat-panel .ai-chat-mic::after { inset: -5px; }
+.ai-chat-panel.is-listening.has-text .ai-chat-send::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--orb-c2, #33dbff);
+  pointer-events: none;
+  animation: aiMicRing 0.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-action > button { transition: none !important; }
+  .ai-chat-panel.is-listening.has-text .ai-chat-send::after { animation: none; opacity: 0.4; }
+}
+
+/* ======================================================================
+   DARK THEME — the remaining pieces (dark is the default). Older product-
+   card rules force white with !important at high specificity (the single
+   featured card, the inline size picker, "See It Styled"); these settle
+   them, plus the hairlines and the fit report. Product photos keep their
+   light well: catalog shots are shot on white.
+   ====================================================================== */
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card.has-inline-picker,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card.is-picking {
+  background: var(--seos-bg-raised) !important;
+  border-color: var(--seos-line) !important;
+  color: var(--seos-text) !important;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-product-title,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-product-title a,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-product-price,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-text,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-text strong,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card strong {
+  color: var(--seos-text) !important;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-label,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-product-variant,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-secondary,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-view-link,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-cancel,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card a:not(.ai-chat-atc-primary):not(.ai-chat-product-cta):not(.ai-chat-product-title) {
+  color: var(--seos-text-2) !important;
+  text-decoration-color: rgba(255, 255, 255, 0.28) !important;
+}
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-view-link:hover,
+  .ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products .ai-chat-product-card .ai-chat-atc-secondary:hover { color: var(--seos-text) !important; }
+}
+/* "See It Styled": a quiet outline on the dark card */
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-viz-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions .ai-chat-viz-btn,
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-products--showcase .ai-chat-product-card:only-child .ai-chat-viz-actions.ai-chat-buy-row .ai-chat-viz-btn {
+  background: transparent !important;
+  border-color: var(--seos-line-strong, rgba(255, 255, 255, 0.18)) !important;
+  color: var(--seos-text) !important;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-msg-bubble .ai-chat-viz-btn span { color: var(--seos-text) !important; }
+/* hairlines: quick replies label, feedback divider, retry */
+.ai-chat-panel[data-theme="dark"] .ai-chat-suggestions-label { color: var(--seos-text-2) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-suggestions-label::after { background: var(--seos-line) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-feedback { border-top-color: var(--seos-line) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-retry-btn { border-color: var(--seos-line-strong, rgba(255, 255, 255, 0.18)) !important; color: var(--seos-text) !important; background: transparent !important; }
+/* the fit report */
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-for { color: var(--seos-text-2) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-for strong,
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-size,
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-size strong { color: var(--seos-text) !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-fit-reasons li { color: var(--seos-text-2) !important; }
+
+/* ======================================================================
+   SEE IT STYLED — themed (dark and light), the new icon, and generating
+   ====================================================================== */
+.ai-chat-panel .ai-chat-viz-btn .ai-chat-viz-icon { width: 17px !important; height: 17px !important; flex-shrink: 0; }
+/* the compact card on the left, in either theme */
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-product-card {
+  background: var(--seos-bg-raised, #fff) !important;
+  border-color: var(--seos-line) !important;
+}
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-product-title,
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-product-price { color: var(--seos-text) !important; }
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-product-cta { background: var(--seos-ink) !important; color: #fff !important; border-radius: 999px !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-controls .ai-chat-product-cta { color: #0d0d12 !important; }
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-view-link { color: var(--seos-text-2) !important; }
+/* "Style the look" */
+.ai-chat-panel .ai-chat-viz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--seos-line);
+  border-radius: 16px !important;
+  background: var(--seos-bg-raised, #fff);
+  box-sizing: border-box;
+}
+.ai-chat-panel .ai-chat-viz-options-title { font-size: 13px !important; font-weight: 600 !important; letter-spacing: -0.01em; color: var(--seos-text); }
+.ai-chat-panel .ai-chat-viz-options-help { font-size: 11px !important; color: var(--seos-text-2); margin-top: -4px; }
+.ai-chat-panel .ai-chat-viz-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-chat-panel .ai-chat-viz-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--seos-line-strong) !important;
+  background: transparent !important;
+  color: var(--seos-text) !important;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-viz-opt:hover { border-color: var(--seos-text-2) !important; }
+}
+.ai-chat-panel .ai-chat-viz-opt:active { transform: scale(0.96); }
+.ai-chat-panel .ai-chat-viz-opt[aria-pressed="true"] { background: var(--seos-ink) !important; border-color: var(--seos-ink) !important; color: #fff !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-opt[aria-pressed="true"] { color: #0d0d12 !important; }
+.ai-chat-panel .ai-chat-viz-opt:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+/* the preview frame and the finished image */
+.ai-chat-panel .ai-chat-viz-result {
+  background: var(--seos-bg-raised, #fff);
+  border-color: var(--seos-line);
+  border-radius: 16px;
+}
+.ai-chat-panel .ai-chat-viz-disclaimer { color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-viz-result-img { animation: aiVizReveal 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aiVizReveal { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+/* could not create it */
+.ai-chat-panel .ai-chat-viz-error {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--seos-line);
+  border-radius: 14px;
+  background: var(--seos-bg-raised, #fff);
+}
+.ai-chat-panel .ai-chat-viz-error-msg { font-size: 13px; color: var(--seos-text-2); margin-bottom: 10px; line-height: 1.4; }
+.ai-chat-panel .ai-chat-viz-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 600 13px/1.2 var(--seos-font);
+  color: #fff;
+  background: var(--seos-ink);
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-retry { color: #0d0d12; }
+
+/* Generating: the mark's five colors drift as soft light behind the live orb,
+   a faint sheen passes now and then, and one line says what's happening.
+   Only transform and opacity move (composited — no repaint loop). */
+.ai-chat-panel .ai-chat-viz-gen {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--seos-surface) !important;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-gen { background: var(--seos-bg, #141418) !important; }
+.ai-chat-panel .ai-chat-viz-aura { position: absolute; inset: -25%; z-index: -1; pointer-events: none; }
+.ai-chat-panel .ai-chat-viz-aura i {
+  position: absolute;
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  opacity: 0.24;
+  will-change: transform;
+  animation: aiAuraA 11s ease-in-out infinite alternate;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-aura i { opacity: 0.34; }
+.ai-chat-panel .ai-chat-viz-aura i:nth-child(1) { top: 12%; left: 8%; background: radial-gradient(closest-side, var(--orb-c1, #1a4dff), transparent); }
+.ai-chat-panel .ai-chat-viz-aura i:nth-child(2) { top: 6%; right: 6%; background: radial-gradient(closest-side, var(--orb-c4, #ff4780), transparent); animation-name: aiAuraB; animation-duration: 13s; }
+.ai-chat-panel .ai-chat-viz-aura i:nth-child(3) { bottom: 8%; left: 18%; background: radial-gradient(closest-side, var(--orb-c2, #33dbff), transparent); animation-name: aiAuraC; animation-duration: 9.5s; }
+.ai-chat-panel .ai-chat-viz-aura i:nth-child(4) { bottom: 10%; right: 12%; background: radial-gradient(closest-side, var(--orb-c3, #14d999), transparent); animation-name: aiAuraB; animation-duration: 15s; animation-direction: alternate-reverse; }
+@keyframes aiAuraA { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(14%, 10%) scale(1.12); } 100% { transform: translate(4%, 22%) scale(0.94); } }
+@keyframes aiAuraB { 0% { transform: translate(0, 0) scale(1.05); } 50% { transform: translate(-16%, 12%) scale(0.92); } 100% { transform: translate(-6%, -8%) scale(1.14); } }
+@keyframes aiAuraC { 0% { transform: translate(0, 0) scale(0.95); } 50% { transform: translate(10%, -16%) scale(1.1); } 100% { transform: translate(-12%, -4%) scale(1); } }
+.ai-chat-panel .ai-chat-viz-gen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.35) 50%, transparent 62%);
+  transform: translateX(-110%);
+  animation: aiVizSheen 4.2s cubic-bezier(0.45, 0, 0.25, 1) infinite 0.8s;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-gen::after { background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.06) 50%, transparent 62%); }
+@keyframes aiVizSheen { 0% { transform: translateX(-110%); } 55%, 100% { transform: translateX(110%); } }
+.ai-chat-panel .ai-chat-viz-gen-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  text-align: center;
+}
+.ai-chat-panel .ai-chat-viz-gen-orb { position: relative; width: 56px; height: 56px; }
+.ai-chat-panel .ai-chat-viz-gen-orb .ai-chat-glow { width: 56px; height: 56px; filter: drop-shadow(0 4px 14px rgba(13, 13, 18, 0.25)); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-viz-gen-orb .ai-chat-glow { filter: drop-shadow(0 0 18px rgba(80, 120, 255, 0.25)); }
+.ai-chat-panel .ai-chat-viz-gen-orb::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 1px solid var(--orb-c2, #33dbff);
+  opacity: 0;
+  animation: aiVizRing 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@keyframes aiVizRing { 0% { opacity: 0.45; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.35); } }
+.ai-chat-panel .ai-chat-viz-gen .ai-chat-viz-step {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--seos-text);
+  animation: aiVizBreathe 2.8s ease-in-out infinite;
+}
+@keyframes aiVizBreathe { 0%, 100% { opacity: 0.62; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-viz-aura i,
+  .ai-chat-panel .ai-chat-viz-gen::after,
+  .ai-chat-panel .ai-chat-viz-gen-orb::before,
+  .ai-chat-panel .ai-chat-viz-gen .ai-chat-viz-step,
+  .ai-chat-panel .ai-chat-viz-result-img { animation: none !important; }
+  .ai-chat-panel .ai-chat-viz-gen::after { display: none; }
+}
+/* The photo link in the compact card is an inline <a>: make it a block so its
+   fixed height holds (inline, it grew with the photo and pushed the name,
+   price and button out of the clipped card). */
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-product-img { display: block !important; }
+/* Stack by the chat's own width, not the browser's: a narrow chat panel on a
+   wide screen gets the same card → settings → image column as phones. */
+.ai-chat-msg-bubble:has(.ai-chat-viz-host) { container-type: inline-size; container-name: aivizbubble; }
+@container aivizbubble (max-width: 540px) {
+  .ai-chat-panel .ai-chat-viz-expanded { grid-template-columns: 1fr; align-items: start; }
+  .ai-chat-panel .ai-chat-viz-controls { gap: 8px; }
+  .ai-chat-panel .ai-chat-viz-controls .ai-chat-product-card { display: grid !important; grid-template-columns: 96px 1fr !important; gap: 12px !important; align-items: center !important; padding: 14px !important; max-width: 100% !important; box-sizing: border-box !important; }
+  .ai-chat-panel .ai-chat-viz-controls .ai-chat-product-img { width: 96px !important; height: 96px !important; border-radius: 10px !important; }
+  .ai-chat-panel .ai-chat-viz-controls .ai-chat-product-info { padding: 0 !important; min-width: 0 !important; gap: 4px !important; }
+  .ai-chat-panel .ai-chat-viz-controls .ai-chat-product-title { display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important; overflow: hidden !important; }
+  .ai-chat-panel .ai-chat-viz-controls .ai-chat-product-cta { min-height: 40px !important; max-width: 160px !important; margin-top: 4px !important; }
+  .ai-chat-panel .ai-chat-viz-preview { height: auto; }
+  .ai-chat-panel .ai-chat-viz-image { height: auto; min-height: 0; }
+  .ai-chat-panel .ai-chat-viz-result { height: auto; min-height: 0; aspect-ratio: 4 / 5; }
+}
+/* Once the preview is open, the settings replace the button in the card. */
+.ai-chat-panel .ai-chat-viz-controls .ai-chat-viz-btn { display: none !important; }

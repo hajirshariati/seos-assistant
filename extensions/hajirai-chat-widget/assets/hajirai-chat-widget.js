@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-orb');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 voice-viz');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -38,6 +38,8 @@ if(_cachedRules&&matchesHideRule(_cachedRules))return;
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
+  if(d.orbColors!==undefined)setOrbColors(d.orbColors);
+  if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
   if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
@@ -182,7 +184,6 @@ return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',he
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
-function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
 /* The assistant's mark, after the classic Siri orb: a dark glass sphere
    (in both themes) holding thin curved sheets of light that pass through
    its center and turn in 3D. A sheet face-on is a broad translucent lobe;
@@ -194,12 +195,42 @@ function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-h
    random seed per visit and incommensurate rates, so no visible loop. Idle
    while the chat is open or the tab is hidden; one still frame for reduced
    motion. Without WebGL, a soft 2D glow in a dark circle stands in. */
+/* The five colors of the sheets (Settings → Assistant look): Siri's red,
+   blue, cyan, green and pink unless the store picks its own. Cached so the
+   next page starts in the store's colors before widget-config answers. */
+var ORB_DEFAULT=['#ff1f33','#1a4dff','#33dbff','#14d999','#ff4780'],ORB_KEY='hajirai_orb_colors',ORB_COLORS=ORB_DEFAULT.slice();
+function orbParse(v){
+  if(!v||typeof v!=='object'||v.length!==5)return null;
+  var out=[];
+  for(var i=0;i<5;i++){if(typeof v[i]!=='string'||!/^#[0-9a-f]{6}$/i.test(v[i]))return null;out.push(v[i].toLowerCase())}
+  return out;
+}
+try{var _oc=orbParse(JSON.parse(localStorage.getItem(ORB_KEY)));if(_oc)ORB_COLORS=_oc}catch(e){}
+function hexRgb(h){return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]}
+function orbUniforms(){
+  if(!glowGL||!glowGL.cLocs)return;
+  for(var i=0;i<5;i++){var c=hexRgb(ORB_COLORS[i]);glowGL.gl.uniform3f(glowGL.cLocs[i],c[0]/255,c[1]/255,c[2]/255)}
+}
+function orbCssVars(){
+  for(var i=0;i<5;i++){
+    if(panel)panel.style.setProperty('--orb-c'+i,ORB_COLORS[i]);
+    if(launcher)launcher.style.setProperty('--orb-c'+i,ORB_COLORS[i]);
+  }
+}
+function setOrbColors(v){
+  var c=orbParse(v);
+  ORB_COLORS=c||ORB_DEFAULT.slice();
+  try{if(c)localStorage.setItem(ORB_KEY,JSON.stringify(c));else localStorage.removeItem(ORB_KEY)}catch(e){}
+  orbUniforms();orbCssVars();
+  if(GLOW_STILL&&glows.length)paintGlows(GLOW_SEED);
+}
 var GLOW_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 var GLOW_SEED=Math.random()*100;
 var glows=[],glowGL=null;
 var GLOW_FRAG=[
 'precision mediump float;',
 'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;',
+'uniform vec3 c0;uniform vec3 c1;uniform vec3 c2;uniform vec3 c3;uniform vec3 c4;',
 /* one sheet in its own frame: x along its length from -L1 to L2, widest at
    uc. p shapes the sides: below 1 a rounded lobe, above 1 concave sides
    tapering to a needle tip (a star point). bend curves it; roll turns it
@@ -222,7 +253,7 @@ var GLOW_FRAG=[
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
 ' float T=t*.85+seed*7.;',
 ' vec2 q=uv/.9;float rq=length(q);float e=.03;',
-' vec3 red=vec3(1.,.12,.2),blue=vec3(.1,.3,1.),cyan=vec3(.2,.86,1.),green=vec3(.08,.85,.6),pink=vec3(1.,.28,.5);',
+' vec3 red=c0,blue=c1,cyan=c2,green=c3,pink=c4;',
 /* brighter toward the center, deeper toward the far ends */
 ' float rad=mix(.45,1.1,exp(-rq*rq*2.2));',
 ' vec3 L=vec3(0.);vec3 k;',
@@ -277,16 +308,18 @@ function initGlowGL(){
     gl.uniform1f(gl.getUniformLocation(pr,'seed'),GLOW_SEED);
     gl.viewport(0,0,c.width,c.height);
     var dLoc=gl.getUniformLocation(pr,'dark');gl.uniform1f(dLoc,THEME==='dark'?1:0);
-    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc};
+    var cLocs=[];for(var ci=0;ci<5;ci++)cLocs.push(gl.getUniformLocation(pr,'c'+ci));
+    var g={canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc,cLocs:cLocs};
+    for(var cj=0;cj<5;cj++){var rgb=hexRgb(ORB_COLORS[cj]);gl.uniform3f(cLocs[cj],rgb[0]/255,rgb[1]/255,rgb[2]/255)}
+    return g;
   }catch(e){return null}
 }
 function renderGlowGL(t){
   var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
 }
 /* Fallback without WebGL: soft drifting lights on a 2D canvas. */
-var GLOW_PALETTE=[[26,77,255],[255,31,51],[51,219,255],[20,217,153],[255,71,128]];
 function glowColor(u){
-  var n=GLOW_PALETTE.length,k=((u%n)+n)%n,i=Math.floor(k),f=k-i,a=GLOW_PALETTE[i],b=GLOW_PALETTE[(i+1)%n];
+  var n=ORB_COLORS.length,k=((u%n)+n)%n,i=Math.floor(k),f=k-i,a=hexRgb(ORB_COLORS[i]),b=hexRgb(ORB_COLORS[(i+1)%n]);
   f=f*f*(3-2*f);
   return [Math.round(a[0]+(b[0]-a[0])*f),Math.round(a[1]+(b[1]-a[1])*f),Math.round(a[2]+(b[2]-a[2])*f)];
 }
@@ -308,14 +341,14 @@ function drawGlow2D(g,t){
   ctx.globalCompositeOperation='destination-in';
   ctx.fillStyle='#000';ctx.beginPath();ctx.arc(s/2,s/2,s/2-.5,0,6.2832);ctx.fill();
 }
-function makeGlow(size){
+function makeGlow(size,inPanel){
   var c=document.createElement('canvas');
   c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
   var dpr=Math.min(window.devicePixelRatio||1,3),px=Math.round(size*dpr);
   c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
   var r=function(a,b){return a+Math.random()*(b-a)},lights=[];
   for(var i=0;i<5;i++)lights.push({fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),pc:i+r(-.3,.3),spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)});
-  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
+  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000),inPanel:!!inPanel};
   glows.push(g);
   return c;
 }
@@ -329,7 +362,10 @@ function paintGlows(t){
   }
 }
 function glowLoop(){
-  var idle=document.hidden||launcher.classList.contains('hidden');
+  /* In-chat orbs (the image generator's) leave the list once they're gone. */
+  for(var gi=glows.length-1;gi>=0;gi--)if(glows[gi].inPanel&&!glows[gi].el.isConnected)glows.splice(gi,1);
+  var inChat=false;for(var gj=0;gj<glows.length;gj++)if(glows[gj].inPanel){inChat=true;break}
+  var idle=document.hidden||(launcher.classList.contains('hidden')&&!inChat);
   if(!idle)paintGlows(performance.now()/1000);
   if(idle)setTimeout(glowLoop,300);else requestAnimationFrame(glowLoop);
 }
@@ -371,7 +407,8 @@ panel.innerHTML=
 '<div class="ai-chat-header">'+headerAv+'<div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
-'<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea></div><button class="ai-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>'+
+'<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-chat-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea><button type="button" class="ai-chat-voice-cancel" aria-label="Cancel voice input" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button><span class="ai-chat-voice-status" aria-live="polite"></span>'+
+'<span class="ai-chat-action"><button type="button" class="ai-chat-mic" aria-label="Talk instead of typing" aria-pressed="false" hidden><svg class="ai-chat-mic__mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg><svg class="ai-chat-mic__stop" viewBox="0 0 24 24" fill="currentColor"><rect x="7.5" y="7.5" width="9" height="9" rx="2.2"/></svg></button><button class="ai-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5.5"/><polyline points="6 11.5 12 5.5 18 11.5"/></svg></button></span></div></div>'+
 (DISCL?'<div class="ai-chat-footer">'+esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a></div>':'');
 
 /* Build overlay */
@@ -403,7 +440,7 @@ panel.appendChild(menu);
 document.body.appendChild(overlay);
 document.body.appendChild(panel);
 document.body.appendChild(launcher);
-applyTheme(THEME);
+applyTheme(THEME);orbCssVars();
 
 /* Bubble mode: the × folds the bar into a bubble for the rest of this
    visit. Tapping the bubble opens the chat and brings the bar back; a new
@@ -1091,22 +1128,25 @@ function choiceButtonsHtml(options){
   return choicesWrap(ch);
 }
 
-function vizIcon(){return aiSparkle().replace('<svg ','<svg width="15" height="15" ');}
-function vizImageIcon(){return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';}
-function vizLoadingHtml(step){
+/* "See It Styled": a photo frame with a spark of light at its corner (the
+   frame opens where the spark sits), the spark in the mark's colors. */
+function vizIcon(){return '<svg class="ai-chat-viz-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">'+
+  '<defs><linearGradient id="aiVizSpark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--orb-c2,#33dbff)"/><stop offset=".55" style="stop-color:var(--orb-c1,#1a4dff)"/><stop offset="1" style="stop-color:var(--orb-c4,#ff4780)"/></linearGradient></defs>'+
+  '<path d="M12.2 6H6.4A3.4 3.4 0 0 0 3 9.4v7.2A3.4 3.4 0 0 0 6.4 20h7.2a3.4 3.4 0 0 0 3.4-3.4v-5.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'+
+  '<path d="M3.6 17.6l3.7-3.7a1.6 1.6 0 0 1 2.2 0l4.8 4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'+
+  '<circle cx="12.4" cy="11" r="1.35" fill="currentColor"/>'+
+  '<path d="M18.6 1.6Q19.1 5 22.4 5.5 19.1 6 18.6 9.4 18.1 6 14.8 5.5 18.1 5 18.6 1.6Z" fill="url(#aiVizSpark)"/>'+
+'</svg>';}
+function vizLoadingHtml(){
   // Reuses the `.ai-chat-viz-result` shell so the loading state occupies the
-  // SAME footprint as the finished image (no collapse, no layout jump).
-  // IMPORTANT: the old full-card shimmer ran an infinite background-position
-  // animation across a large area — a heavy repaint loop that could peg the
-  // main thread and trigger "Page Unresponsive". This is now a STATIC fill with
-  // a single small spinner (`.ai-chat-viz-spin`, reduced-motion aware).
+  // SAME footprint as the finished image (no collapse, no layout jump). Inside:
+  // the mark's colors drifting as soft light, the live orb, and one line of
+  // text. Everything that moves is transform/opacity only (composited, no
+  // repaint loop), and it all stops for reduced motion.
   return '<div class="ai-chat-viz-result ai-chat-viz-loading">'+
-    '<div style="display:flex;align-items:center;gap:8px;padding:14px 14px 10px">'+
-      '<span class="ai-chat-viz-spin"></span>'+
-      '<span class="ai-chat-viz-step" style="font-size:13px;color:#1d1d1f;font-weight:600">'+esc(step)+'</span>'+
-    '</div>'+
-    '<div class="ai-chat-viz-loading-fill">'+
-      '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#b8b8b8;display:flex;flex-direction:column;align-items:center;gap:4px">'+vizImageIcon()+'<span style="font-size:11px;color:#a0a0a0">Creating your preview…</span></span>'+
+    '<div class="ai-chat-viz-loading-fill ai-chat-viz-gen">'+
+      '<span class="ai-chat-viz-aura" aria-hidden="true"><i></i><i></i><i></i><i></i></span>'+
+      '<span class="ai-chat-viz-gen-center"><span class="ai-chat-viz-gen-orb" aria-hidden="true"></span><span class="ai-chat-viz-step">Creating your look\u2026</span></span>'+
     '</div>'+
   '</div>';
 }
@@ -1121,9 +1161,9 @@ function vizResultHtml(src){
   '</div>';
 }
 function vizErrorHtml(msg){
-  return '<div style="margin-top:10px;border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:13px 15px;background:#fff">'+
-    '<div style="font-size:13px;color:#555;margin-bottom:9px">'+esc(msg||'Could not create the preview.')+'</div>'+
-    '<button class="ai-chat-viz-retry" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:0;border-radius:999px;cursor:pointer;font-size:13px;font-weight:600;color:#fff;background:var(--ai-chat-primary,#2d6b4f)">Try again</button>'+
+  return '<div class="ai-chat-viz-error">'+
+    '<div class="ai-chat-viz-error-msg">'+esc(msg||'Could not create the preview.')+'</div>'+
+    '<button class="ai-chat-viz-retry" type="button">Try again</button>'+
   '</div>';
 }
 
@@ -1357,20 +1397,16 @@ function injectVizOptions(host,cta,card){
   var scenes=(cta&&cta.scenes&&cta.scenes.length)?cta.scenes:DEFAULT_VIZ_SCENES;
   var wrap=document.createElement('div');
   wrap.className='ai-chat-viz-options';
-  wrap.style.cssText='display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:18px;background:#fff;box-sizing:border-box';
   var head=document.createElement('div');
   head.className='ai-chat-viz-options-title';
   head.textContent='Style the look';
-  head.style.cssText='font-size:13px;color:#1d1d1f;font-weight:600;letter-spacing:-.01em';
   var help=document.createElement('div');
   help.className='ai-chat-viz-options-help';
   help.textContent='Choose a setting';
-  help.style.cssText='font-size:11px;color:#6e6e73;margin-top:-4px';
   wrap.appendChild(head);
   wrap.appendChild(help);
   var seg=document.createElement('div');
   seg.className='ai-chat-viz-seg';
-  seg.style.cssText='display:flex;flex-wrap:wrap;gap:8px';
   scenes.forEach(function(s){
     var chip=document.createElement('button');
     chip.type='button';
@@ -1380,12 +1416,12 @@ function injectVizOptions(host,cta,card){
     chip.textContent=s.label;
     // Quiet, Apple-style pill — small (~32px) and fully rounded, not a CTA block.
     // Wraps cleanly. (The .ai-chat-viz-opt rule also enforces this with !important.)
-    chip.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 10px;border:1px solid rgba(0,0,0,.16);border-radius:999px;background:#fff;color:#1d1d1f;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;box-sizing:border-box;transition:background .15s,color .15s';
+    // Quiet pill, styled (and themed) by the stylesheet; selected = aria-pressed.
     chip.addEventListener('click',function(e){
       if(e){e.preventDefault();e.stopPropagation();}
       var kids=seg.children;
-      for(var i=0;i<kids.length;i++){kids[i].style.background='#fff';kids[i].style.color='#1d1d1f';kids[i].setAttribute('aria-pressed','false');}
-      chip.style.background='#0d0d12';chip.style.color='#fff';chip.setAttribute('aria-pressed','true');
+      for(var i=0;i<kids.length;i++)kids[i].setAttribute('aria-pressed','false');
+      chip.setAttribute('aria-pressed','true');
       var c2={productHandle:cta.productHandle,productTitle:cta.productTitle||'',styleContext:s.ctx,label:cta.label,scenes:cta.scenes};
       vizFetch(host,c2,card);
     });
@@ -1423,9 +1459,10 @@ function vizFetch(host,cta,card){
   if(card)card.dataset.vizState='loading';
   vizSetSceneDisabled(host,true);
   var imgHost=vizImageHost(host);
-  var steps=['Analyzing the product…','Composing the scene…','Styling the look…','Rendering your preview…'];
-  var si=0;imgHost.innerHTML=vizLoadingHtml(steps[0]);scrollBottom();
-  host._vizIv=setInterval(function(){si=Math.min(si+1,steps.length-1);var l=imgHost.querySelector('.ai-chat-viz-step');if(l)l.textContent=steps[si]},2200);
+  imgHost.innerHTML=vizLoadingHtml();
+  var orbSpot=imgHost.querySelector('.ai-chat-viz-gen-orb');
+  if(orbSpot){orbSpot.appendChild(makeGlow(56,true));if(GLOW_STILL)paintGlows(GLOW_SEED)}
+  scrollBottom();
   var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
   host._vizAbort=ctrl;
   host._vizTo=setTimeout(function(){if(ctrl){try{ctrl.abort()}catch(e){}}},60000);
@@ -1864,7 +1901,7 @@ lastUserMessage=text;
 messages.push({role:'user',content:text});
 appendMsg('user',text);
 saveH(messages);
-inputEl.value='';inputEl.style.height='auto';
+inputEl.value='';inputEl.style.height='auto';panel.classList.remove('has-text');
 sendBtn.disabled=true;isStreaming=true;
 typingEl.classList.add('visible');
 scrollBottom();
@@ -2334,7 +2371,7 @@ errorRetryCount=0;lastUserMessage='';
    set a "Choose an option above" placeholder. Without this reset the
    input stays locked after a refresh, leaving the customer unable to
    type. */
-inputEl.disabled=false;inputEl.placeholder=IPLACE;inputEl.value='';
+inputEl.disabled=false;inputEl.placeholder=IPLACE;inputEl.value='';panel.classList.remove('has-text');
 inputEl.style.height='auto';
 sendBtn.disabled=false;
 }
@@ -2348,7 +2385,72 @@ toggle(true);
 closeBtn.addEventListener('click',function(){toggle(false)});
 launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
 overlay.addEventListener('click',function(){toggle(false)});
-sendBtn.addEventListener('click',sendMessage);
+sendBtn.addEventListener('click',function(){if(listening){stopVoice();return}sendMessage()});
+/* Talk instead of typing. The mic (in Send's place while the box is empty) listens with the browser's own
+   speech recognition: words appear in the box as the shopper speaks, and the
+   message sends itself when they pause. Tap Send to finish now,
+   × or Escape to cancel. The assistant still answers in text. Hidden where
+   the browser has no speech recognition, or when the store turns it off. */
+var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
+var micBtn=$('.ai-chat-mic',panel),voiceCancelBtn=$('.ai-chat-voice-cancel',panel),voiceStatus=$('.ai-chat-voice-status',panel);
+var VOICE_OFF=VOICE_OFF||false,rec=null,listening=false,voiceText='',voiceCancelled=false,voiceErr='',voiceBase='',voiceHintT=0,voiceHearT=0;
+function showMic(){var on=!!SpeechRec&&!VOICE_OFF;micBtn.hidden=!on;panel.classList.toggle('has-voice',on);if(!on&&listening)cancelVoice()}
+function growInput(){inputEl.style.height='auto';inputEl.style.height=Math.min(inputEl.scrollHeight,100)+'px';hasText()}
+function hasText(){panel.classList.toggle('has-text',!!inputEl.value.trim())}
+inputEl.addEventListener('input',hasText);
+function voiceHint(msg){
+  clearTimeout(voiceHintT);
+  inputEl.setAttribute('placeholder',msg);voiceStatus.textContent=msg;panel.classList.add('is-voice-hint');
+  voiceHintT=setTimeout(function(){panel.classList.remove('is-voice-hint');if(!listening)inputEl.setAttribute('placeholder',IPLACE);voiceStatus.textContent=''},3400);
+}
+function voiceUI(on){
+  listening=on;
+  panel.classList.toggle('is-listening',on);
+  if(!on)panel.classList.remove('is-hearing');
+  micBtn.setAttribute('aria-pressed',on?'true':'false');
+  micBtn.setAttribute('aria-label',on?'Stop listening':'Talk instead of typing');
+  voiceCancelBtn.hidden=!on;
+  inputEl.readOnly=on;
+  if(on){clearTimeout(voiceHintT);panel.classList.remove('is-voice-hint');inputEl.setAttribute('placeholder','Listening\u2026');voiceStatus.textContent='Listening'}
+  else if(!panel.classList.contains('is-voice-hint')){inputEl.setAttribute('placeholder',IPLACE);voiceStatus.textContent=''}
+}
+function hearing(){panel.classList.add('is-hearing');clearTimeout(voiceHearT);voiceHearT=setTimeout(function(){panel.classList.remove('is-hearing')},420)}
+function startVoice(){
+  if(listening||isStreaming||!SpeechRec||VOICE_OFF)return;
+  try{rec=new SpeechRec()}catch(e){voiceHint('Voice isn\u2019t available here \u2014 please type');return}
+  rec.lang=document.documentElement.getAttribute('lang')||navigator.language||'en-US';
+  rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=1;
+  voiceBase=inputEl.value.trim();voiceText='';voiceCancelled=false;voiceErr='';
+  rec.onspeechstart=hearing;
+  rec.onresult=function(ev){
+    var t='';for(var i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;
+    voiceText=t.replace(/\s+/g,' ').trim();
+    inputEl.value=(voiceBase?voiceBase+' ':'')+voiceText;growInput();hearing();
+  };
+  rec.onerror=function(ev){voiceErr=ev&&ev.error||'error'};
+  rec.onend=function(){
+    var cancelled=voiceCancelled,heard=voiceText,err=voiceErr;
+    rec=null;voiceUI(false);
+    if(cancelled){inputEl.value=voiceBase;growInput();return}
+    if(heard){sendMessage();return}
+    if(err==='not-allowed'||err==='service-not-allowed')voiceHint('Allow microphone access to talk');
+    else if(err==='network'||err==='audio-capture')voiceHint('Voice isn\u2019t available right now \u2014 please type');
+    else voiceHint('Didn\u2019t catch that \u2014 tap the mic and try again');
+  };
+  voiceUI(true);
+  try{rec.start()}catch(e){rec=null;voiceUI(false);voiceHint('Voice isn\u2019t available right now \u2014 please type');return}
+  try{if(navigator.vibrate)navigator.vibrate(8)}catch(e){}
+}
+function stopVoice(){if(rec){try{rec.stop()}catch(e){}}}
+function cancelVoice(){if(rec){voiceCancelled=true;try{rec.abort()}catch(e){}}}
+/* One button, one place: the mic while the box is empty; once there are
+   words (typed or spoken) the same circle is Send. Tapping the mic while it
+   still hears nothing just stops listening. */
+micBtn.addEventListener('click',function(){if(listening){if(voiceText)stopVoice();else cancelVoice()}else startVoice()});
+voiceCancelBtn.addEventListener('click',function(){cancelVoice();inputEl.focus()});
+panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&listening){e.preventDefault();e.stopPropagation();cancelVoice()}},true);
+closeBtn.addEventListener('click',cancelVoice);
+showMic();
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 inputEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&isOpen)toggle(false)});

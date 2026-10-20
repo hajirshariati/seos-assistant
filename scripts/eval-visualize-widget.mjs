@@ -18,6 +18,7 @@ const SRC = readFileSync(
   join(here, "..", "extensions", "hajirai-chat-widget", "assets", "hajirai-chat-widget.js"),
   "utf8",
 );
+const CSS = readFileSync(new URL("../extensions/hajirai-chat-widget/assets/hajirai-chat-widget.css", import.meta.url), "utf8");
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -295,15 +296,24 @@ test("scene buttons are DISABLED while a request is in flight, re-enabled after"
   assert.match(style, /\.ai-chat-viz-opt\[disabled\]\{[^}]*pointer-events:none!important/, "disabled pill ignores clicks");
 });
 
-test("loading is LIGHTWEIGHT — no full-card infinite shimmer repaint loop", () => {
+test("loading is LIGHTWEIGHT — only transform/opacity move, one line of text, reduced motion stops it", () => {
   const loading = fnBody("vizLoadingHtml");
-  // The old heavy shimmer (animated background-position over a big block) is gone.
   assert.doesNotMatch(loading, /animation:aiChatViz /, "no big shimmer animation in the loading card");
-  assert.match(loading, /ai-chat-viz-loading-fill/, "static fill class");
-  assert.match(loading, /ai-chat-viz-spin/, "a single small spinner");
-  const style = fnBody("injectVizStyleOnce");
-  assert.match(style, /\.ai-chat-viz-loading-fill\{[^}]*background:#f4f4f5/, "the fill is STATIC, not animated");
-  assert.match(style, /@media \(prefers-reduced-motion:reduce\)\{\.ai-chat-viz-spin\{animation:none!important\}\}/, "reduced-motion stops the spinner");
+  assert.match(loading, /ai-chat-viz-loading-fill/, "same fill box as before (same footprint)");
+  assert.match(loading, /ai-chat-viz-gen/, "the generating state");
+  assert.match(loading, /Creating your look/, "one line of text in the middle");
+  const fetchBody = fnBody("vizFetch");
+  assert.doesNotMatch(fetchBody, /setInterval/, "no rotating step text");
+  assert.match(fetchBody, /makeGlow\(56,true\)/, "the live orb (the chat's own mark) in the middle");
+  for (const name of ["aiAuraA", "aiAuraB", "aiAuraC", "aiVizSheen", "aiVizRing", "aiVizBreathe"]) {
+    const m = CSS.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\}\\s*\\n`));
+    assert.ok(m, `@keyframes ${name} present`);
+    const props = [...m[1].matchAll(/([a-z-]+)\s*:/g)].map((x) => x[1]);
+    assert.ok(props.every((x) => x === "transform" || x === "opacity"), `${name} animates only transform/opacity (got ${props.join(",")})`);
+  }
+  assert.doesNotMatch(CSS.slice(CSS.indexOf("SEE IT STYLED")), /background-position/, "no background-position animation (the old repaint loop)");
+  const rm = CSS.slice(CSS.indexOf("SEE IT STYLED")).match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/);
+  assert.ok(rm && /ai-chat-viz-aura i/.test(rm[1]) && /animation: none !important/.test(rm[1]), "reduced motion stops every generating animation");
 });
 
 test("the visualizer never lays a full-page/fixed overlay that blocks the chat", () => {
@@ -377,15 +387,19 @@ test("scene panel is a distinct 'Style the look' panel with a 'Choose a setting'
   const body = fnBody("injectVizOptions");
   assert.match(body, /Style the look/, "panel header");
   assert.match(body, /Choose a setting/, "helper text");
-  assert.match(body, /border:1px solid rgba\(0,0,0,\.08\)/, "subtle hairline-bordered panel, visually separate from the card");
-  assert.doesNotMatch(body, /box-shadow/, "no heavy shadow");
+  assert.doesNotMatch(body, /cssText/, "styled (and themed) by the stylesheet, not inline");
+  const rule = CSS.match(/\.ai-chat-panel \.ai-chat-viz-options \{([^}]*)\}/);
+  assert.ok(rule, "panel rule in the stylesheet");
+  assert.match(rule[1], /border: 1px solid var\(--seos-line\)/, "subtle hairline-bordered panel, visually separate from the card");
+  assert.doesNotMatch(rule[1], /box-shadow/, "no heavy shadow");
 });
 
 test("scene pills are quiet, compact (~30px) and wrap cleanly", () => {
-  const body = fnBody("injectVizOptions");
-  assert.match(body, /min-height:30px/, "quiet small pill, not a big CTA");
-  assert.match(body, /border-radius:999px/, "fully rounded pill");
-  assert.match(body, /flex-wrap:wrap/, "pills wrap into rows");
+  const style = fnBody("injectVizStyleOnce");
+  assert.match(style, /\.ai-chat-viz-opt\{[^}]*min-height:30px!important/, "quiet small pill, not a big CTA");
+  assert.match(style, /\.ai-chat-viz-opt\{[^}]*border-radius:999px!important/, "fully rounded pill");
+  assert.match(CSS, /\.ai-chat-panel \.ai-chat-viz-seg \{[^}]*flex-wrap: wrap/, "pills wrap into rows");
+  assert.match(CSS, /\.ai-chat-viz-opt\[aria-pressed="true"\]/, "the chosen setting shows by its pressed state");
 });
 
 console.log(`\n${failed === 0 ? "✅" : "❌"}  ${passed} passed, ${failed} failed\n`);

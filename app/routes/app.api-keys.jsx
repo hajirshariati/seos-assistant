@@ -28,6 +28,8 @@ import prisma from "../db.server";
 import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
 import BrandHeader from "../components/BrandHeader";
+import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards";
+import { parseOrbColors, serializeOrbColors } from "../lib/orb-colors";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -44,6 +46,8 @@ export const loader = async ({ request }) => {
     hasAftershipKey: config.aftershipApiKey !== "",
     hideOnUrls,
     welcomeIntroOn: config.welcomeGlowStyle !== "none",
+    orbColors: parseOrbColors(config.orbColors),
+    voiceInput: config.voiceInput !== false,
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
@@ -81,6 +85,18 @@ export const action = async ({ request }) => {
   // useFetcher (own success/error banners, isolated from the big
   // settings form). Each returns its own response shape.
   const intent = formData.get("intent");
+  if (intent === "save_orb_colors") {
+    const stored = serializeOrbColors([0, 1, 2, 3, 4].map((i) => formData.get(`c${i}`)));
+    if (stored === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
+    await updateShopConfig(session.shop, { orbColors: stored });
+    return { orbSaved: true, colors: parseOrbColors(stored) };
+  }
+
+  if (intent === "save_voice_input") {
+    await updateShopConfig(session.shop, { voiceInput: formData.get("on") === "true" });
+    return { saved: true };
+  }
+
   if (intent === "save_welcome_intro") {
     await updateShopConfig(session.shop, { welcomeGlowStyle: formData.get("on") === "true" ? "subtle" : "none" });
     return { saved: true };
@@ -461,7 +477,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, voiceInput } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -773,6 +789,16 @@ export default function ApiKeys() {
               <BlockStack gap="400">
                 <HideUrlsPanel initial={hideOnUrls} />
                 <WelcomeIntroCard initialOn={welcomeIntroOn} />
+              </BlockStack>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Assistant look & voice"
+              description="The colors of the assistant's animated mark, and the talk button in the chat."
+            >
+              <BlockStack gap="400">
+                <OrbColorsCard initial={orbColors} />
+                <VoiceInputCard initialOn={voiceInput} />
               </BlockStack>
             </Layout.AnnotatedSection>
 
