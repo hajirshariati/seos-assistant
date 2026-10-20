@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 marble');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-sheets');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -183,96 +183,78 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark: flowing light, Siri-style, inside the white button.
-   A WebGL fragment shader (one shared surface, copied into the bar icon and
-   the bubble each frame): layered noise with domain warping makes a slowly
-   flowing field; thin iso-bands of that field are the ribbons — sheets of
-   cyan, electric blue, violet and pink light with crisp curved edges (each
-   band at its own sharpness), layered translucently, brighter where they
-   cross, over a soft diffused glow; everything fades out before the edge.
-   Random seed per visit and incommensurate rates: no visible loop. Idle
-   while the chat is open or the tab is hidden; one still frame for reduced
-   motion. Without WebGL, a soft 2D glow stands in. */
+/* The assistant's mark, after the classic Siri orb. Each colored shape is a
+   thin curved sheet of light passing through the center and turning in 3D:
+   face-on it is a broad translucent lobe, edge-on a sharp bright spike, so
+   the same sheet keeps changing between the two. Light adds where sheets
+   cross, building to a soft white heart. In the bar the light floats with no
+   sphere; the round bubble keeps a faint glass body behind it. One shared
+   WebGL surface is drawn per look and copied into each canvas; random seed
+   per visit and incommensurate rates, so no visible loop. Idle while the
+   chat is open or the tab is hidden; one still frame for reduced motion.
+   Without WebGL, a soft 2D glow stands in. */
 var GLOW_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 var GLOW_SEED=Math.random()*100;
 var glows=[],glowGL=null;
 var GLOW_FRAG=[
 'precision mediump float;',
 'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;uniform float bare;',
-'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
-'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);',
-' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
-/* one petal on a tilted 3D orbit around the core. `ph` is its orbit angle:
-   depth = sin(ph) — in front it is bright, crisp and full-size; swinging
-   behind it dims, softens and foreshortens, then fades back in. The petal
-   also turns on its own axis and is bent by slow noise, so its shape keeps
-   changing. Returns (defined edge, glow beyond it) already weighted by depth. */
-'vec2 petal(vec2 uv,float ph,float tiltY,float spin,float len,float wid,float T,float k){',
-' float depth=sin(ph);',                       /* -1 behind … +1 in front */
-' float front=depth*.5+.5;',
-' vec2 c=vec2(cos(ph)*.34,sin(ph)*tiltY*.34+.04*sin(T*.3+k));',
-' float th=spin;mat2 R=mat2(cos(th),-sin(th),sin(th),cos(th));',
-' vec2 p=R*(uv-c);',
-' p+=.14*vec2(nz(uv*1.6+vec2(T*.5,k)),nz(uv*1.6+vec2(k,-T*.45)));',
-/* foreshortening as it turns: narrower at the sides of the orbit, fuller in front */
-' float fs=mix(.55,1.,abs(depth));',
-' float sc=mix(.72,1.08,front);',
-' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
-' float soft=mix(.8,.5,front)*mix(1.,1.7,bare);',              /* soft clouds with a clear color center */
-' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',
-' float inner=mix(.72,1.,exp(-max(-d,0.)*.9));',
-' float glow=exp(-max(d,0.)*mix(1.2,1.7,front)*mix(1.,.8,bare));',
-' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
-' return vec2(edge*inner,glow)*vis;}',
+/* one sheet: a lens along its own axis, sharp at both tips, one end fuller
+   (skew), bent into a gentle curve. `roll` turns it about its long axis, so
+   its width is cos(roll): a lobe face-on, a spike edge-on. Returns
+   (coverage, bright edge, edge-on-ness). e = edge softness. */
+'vec3 sheet(vec2 q,float ang,float roll,float L1,float L2,float W,float skew,float bend,float e){',
+' float c=cos(ang),s=sin(ang);',
+' vec2 p=vec2(c*q.x+s*q.y,-s*q.x+c*q.y);',
+' p.y-=bend*(p.x*p.x-.12);',
+' float u=(p.x+L1)/(L1+L2);',
+' float in1=step(0.,u)*step(u,1.);float uu=clamp(u,0.,1.);',
+' float h=W*pow(sin(3.14159*uu),.7)*(1.+skew*(uu-.5));',
+' float wf=max(abs(cos(roll)),.07);',
+' float hw=h*wf;float ay=abs(p.y);',
+' float m=(1.-smoothstep(hw-e,hw+e,ay))*in1;',
+' float edge=m*(1.-smoothstep(0.,.10+e,hw-ay));',
+' return vec3(m,edge,1.-wf);}',
 'void main(){',
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
-' float T=t*.42+seed;',
-/* the bar's mark has no sphere: the petals are drawn a little tighter so the
-   light fades out well inside the canvas and floats on the text box */
-' vec2 q=uv*mix(1.,1.6,bare);float rq=length(q);',
-/* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
-' float sph=1.-smoothstep(.955,.995,r);',
-' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
-' body=mix(body,vec3(.26,.24,.46),smoothstep(.55,1.,r)*.8);',
-' body+=vec3(.55,.6,.9)*smoothstep(.80,.96,r)*(1.-smoothstep(.96,1.,r))*.16;',
-' body=mix(body*1.25,body,dark);',
-/* four petals, each on its own slow orbit, breathing and bending */
-' vec3 cyan=vec3(.05,.92,1.),teal=vec3(.12,1.,.60),mag=vec3(1.,.16,.60),vio=vec3(.48,.28,1.);',
-' vec2 p1=petal(q,T*.95+0.0,.45,T*.35+.3*sin(T*.5),.74+.06*sin(T*.8),.25,T,1.);',
-' vec2 p2=petal(q,T*.80+2.0,.55,-T*.3+.3*sin(T*.4+1.),.70+.06*sin(T*.7+1.),.23,T,2.);',
-' vec2 p3=petal(q,T*1.05+4.1,.40,T*.4+.3*sin(T*.6+2.),.76+.06*sin(T*.9+2.),.25,T,3.);',
-' vec2 p4=petal(q,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
-/* additive light: where petals cross the color builds toward white, as in glass */
+' float T=t+seed*7.;',
+/* the light's frame: in the bar it fills a circle of radius .62 of the
+   canvas (so it fades out well inside), in the bubble most of the sphere */
+' float Rs=mix(.86,.62,bare);vec2 q=uv/Rs;float rq=length(q);',
+' float e=mix(.035,.07,bare);',
+' vec3 red=vec3(1.,.1,.18),blue=vec3(.08,.32,1.),cyan=vec3(.22,.88,1.),green=vec3(.12,.86,.62),pink=vec3(1.,.32,.58);',
+' vec3 L=vec3(0.);vec3 k;float lum;float rad=mix(.55,1.3,exp(-rq*rq*1.6));',
+/* five sheets, each with its own pace in the plane and in its roll */
+' k=sheet(q,.21*T+.5*sin(T*.21),.55*T+.4*sin(T*.3),.2,1.,.7,1.1,.25*sin(T*.4),e);',
+' lum=mix(.55,1.15,k.z);L+=red*(k.x*lum*.42+k.y*.2);',
+' k=sheet(q,-.17*T+3.6+.5*sin(T*.19+2.),.47*T+2.1+.4*sin(T*.27+1.),.25,.95,.66,1.,-.3*sin(T*.33+1.),e);',
+' lum=mix(.55,1.15,k.z);L+=blue*(k.x*lum*.5+k.y*.2);',
+' k=sheet(q,.29*T+6.8+.5*sin(T*.23+4.),.83*T+4.+.4*sin(T*.31+2.),.95,.95,.30,.2,.2*sin(T*.37+2.),e);',
+' lum=mix(.6,1.2,k.z);L+=cyan*(k.x*lum*.6+k.y*.22);',
+' k=sheet(q,-.23*T+9.+.5*sin(T*.17+5.),.61*T+5.3+.4*sin(T*.29+3.),.3,.9,.6,.9,-.2*sin(T*.41+3.),e);',
+' lum=mix(.55,1.15,k.z);L+=green*(k.x*lum*.38+k.y*.18);',
+' k=sheet(q,.33*T+2.2+.5*sin(T*.27+6.),.71*T+1.3+.4*sin(T*.35+4.),.8,.95,.27,.4,-.25*sin(T*.39+4.),e);',
+' lum=mix(.6,1.2,k.z);L+=pink*(k.x*lum*.58+k.y*.22);',
+/* the heart: where the sheets meet, soft white */
+' float core=exp(-rq*rq*10.);float halo=exp(-rq*rq*2.8);',
+' L+=vec3(1.)*(core*mix(.85,.6,bare)+halo*.12);',
+/* strong light turns white, as overlapping colored light does */
+' L*=rad;',
+' float wv=max(0.,(L.r+L.g+L.b)/3.-.8);',
+' vec3 col=1.-exp(-(L+vec3(wv*.5))*1.25);',
 ' if(bare>.5){',
-/* floating light: each petal's own color at its own strength, over whatever
-   is behind (white bar or charcoal), with a soft bright heart */
-'  vec4 w=vec4(p1.x*.95+p1.y*.40,p2.x*.95+p2.y*.40,p3.x*.88+p3.y*.38,p4.x*.76+p4.y*.30);',
-'  float sw=w.x+w.y+w.z+w.w;',
-'  vec3 C=(cyan*w.x+mag*w.y+vio*w.z+teal*w.w)/max(sw,1e-3);',
-/* gentler color: a little less saturated, a touch deeper on white */
-'  C=mix(C,vec3(dot(C,vec3(.333))),.2);C=mix(C*.88,C,dark);',
-/* no outline: the light simply thins out toward the edge, floating in the bar */
-'  float R=.64;',
-'  float inside=1.-smoothstep(R-.24,R+.14,r);',
-'  float a=(1.-exp(-sw*mix(2.,2.1,dark)))*inside*mix(.82,.9,dark);',
-/* a small, soft heart of light (was brighter and larger) */
-'  float cw=exp(-rq*rq*16.)*inside*mix(.3,.42,dark);',
-'  vec3 rgb=C*a*(1.-cw)+vec3(cw);float al=a+cw-a*cw;',
-'  gl_FragColor=vec4(rgb,al);return;}',
-' vec3 L=vec3(0.);',
-' L+=cyan*(p1.x*.95+p1.y*.40);',
-' L+=mag*(p2.x*.95+p2.y*.40);',
-' L+=vio*(p3.x*.88+p3.y*.38);',
-' L+=teal*(p4.x*.76+p4.y*.30);',
-/* the white-hot core and its halo */
-' float core=exp(-r*r*14.);float halo=exp(-r*r*2.6);',
-' L+=vec3(1.)*(core*1.1+halo*.3);',
-/* a soft specular on the glass */
-' float spec=pow(max(0.,1.-length(uv-vec2(-.38,.46))*1.7),3.)*.22;',
-' vec3 col=body+L*mix(.78,.9,dark)+vec3(spec);',
-' col=col/(1.+col*.38);',   /* gentle tone map: bright, never clipped flat */
-' float a=sph;',
-' gl_FragColor=vec4(col*a,a);',
+/* floating: the light alone, fading out before the canvas edge; a touch
+   deeper on the white bar so the color holds */
+'  float fade=1.-smoothstep(.92,1.2,rq);',
+'  float a=min(1.,max(col.r,max(col.g,col.b))*mix(1.3,1.,dark))*fade;',
+'  col*=mix(.94,1.,max(dark,smoothstep(.45,.85,min(col.r,min(col.g,col.b)))));',
+'  gl_FragColor=vec4(col*fade,a);return;}',
+/* the bubble: a faint glass body behind the light, lighter toward the rim */
+' float sph=1.-smoothstep(.955,.995,r);',
+' vec3 body=mix(vec3(.05,.05,.08),vec3(.09,.09,.14),uv.y*.5+.5);',
+' body+=vec3(.5,.55,.8)*smoothstep(.82,.96,r)*(1.-smoothstep(.96,1.,r))*.14;',
+' col=body+col*(1.-body);',
+' gl_FragColor=vec4(col*sph,sph);',
 '}'].join('\n');
 function initGlowGL(){
   try{
