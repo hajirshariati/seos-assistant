@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-aa');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-float');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -196,7 +196,7 @@ var GLOW_SEED=Math.random()*100;
 var glows=[],glowGL=null;
 var GLOW_FRAG=[
 'precision mediump float;',
-'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;',
+'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;uniform float bare;',
 'vec2 h2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return -1.+2.*fract(sin(p)*43758.5453);}',
 'float nz(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);',
 ' return mix(mix(dot(h2(i),f),dot(h2(i+vec2(1.,0.)),f-vec2(1.,0.)),u.x),mix(dot(h2(i+vec2(0.,1.)),f-vec2(0.,1.)),dot(h2(i+vec2(1.,1.)),f-vec2(1.,1.)),u.x),u.y);}',
@@ -225,6 +225,9 @@ var GLOW_FRAG=[
 'void main(){',
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
 ' float T=t*.42+seed;',
+/* the bar's mark has no sphere: the petals are drawn a little tighter so the
+   light fades out well inside the canvas and floats on the text box */
+' vec2 q=uv*mix(1.,1.5,bare);float rq=length(q);',
 /* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
 ' float sph=1.-smoothstep(.955,.995,r);',
 ' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
@@ -233,11 +236,22 @@ var GLOW_FRAG=[
 ' body=mix(body*1.25,body,dark);',
 /* four petals, each on its own slow orbit, breathing and bending */
 ' vec3 cyan=vec3(.05,.92,1.),teal=vec3(.12,1.,.60),mag=vec3(1.,.16,.60),vio=vec3(.48,.28,1.);',
-' vec2 p1=petal(uv,T*.95+0.0,.45,T*.35+.3*sin(T*.5),.74+.06*sin(T*.8),.25,T,1.);',
-' vec2 p2=petal(uv,T*.80+2.0,.55,-T*.3+.3*sin(T*.4+1.),.70+.06*sin(T*.7+1.),.23,T,2.);',
-' vec2 p3=petal(uv,T*1.05+4.1,.40,T*.4+.3*sin(T*.6+2.),.76+.06*sin(T*.9+2.),.25,T,3.);',
-' vec2 p4=petal(uv,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
+' vec2 p1=petal(q,T*.95+0.0,.45,T*.35+.3*sin(T*.5),.74+.06*sin(T*.8),.25,T,1.);',
+' vec2 p2=petal(q,T*.80+2.0,.55,-T*.3+.3*sin(T*.4+1.),.70+.06*sin(T*.7+1.),.23,T,2.);',
+' vec2 p3=petal(q,T*1.05+4.1,.40,T*.4+.3*sin(T*.6+2.),.76+.06*sin(T*.9+2.),.25,T,3.);',
+' vec2 p4=petal(q,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
 /* additive light: where petals cross the color builds toward white, as in glass */
+' if(bare>.5){',
+/* floating light: each petal's own color at its own strength, over whatever
+   is behind (white bar or charcoal), with a soft bright heart */
+'  vec4 w=vec4(p1.x*.95+p1.y*.40,p2.x*.95+p2.y*.40,p3.x*.88+p3.y*.38,p4.x*.76+p4.y*.30);',
+'  float sw=w.x+w.y+w.z+w.w;',
+'  vec3 C=(cyan*w.x+mag*w.y+vio*w.z+teal*w.w)/max(sw,1e-3);',
+'  float fade=1.-smoothstep(.5,.8,r);',
+'  float a=(1.-exp(-sw*mix(3.2,2.2,dark)))*fade;',
+'  C=mix(C*.9,C,dark);',
+'  float cw=exp(-rq*rq*12.)*fade*mix(.55,.9,dark);',
+'  gl_FragColor=vec4(C*a*(1.-cw)+vec3(cw),a+cw-a*cw);return;}',
 ' vec3 L=vec3(0.);',
 ' L+=cyan*(p1.x*.95+p1.y*.40);',
 ' L+=mag*(p2.x*.95+p2.y*.40);',
@@ -271,11 +285,11 @@ function initGlowGL(){
     gl.uniform1f(gl.getUniformLocation(pr,'seed'),GLOW_SEED);
     gl.viewport(0,0,c.width,c.height);
     var dLoc=gl.getUniformLocation(pr,'dark');gl.uniform1f(dLoc,THEME==='dark'?1:0);
-    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc};
+    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc,bLoc:gl.getUniformLocation(pr,'bare')};
   }catch(e){return null}
 }
-function renderGlowGL(t){
-  var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
+function renderGlowGL(t,bare){
+  var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.uniform1f(g.bLoc,bare?1:0);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
 }
 /* Fallback without WebGL: soft drifting lights on a 2D canvas. */
 var GLOW_PALETTE=[[79,123,255],[139,92,246],[196,181,253],[240,171,252],[34,211,238]];
@@ -302,24 +316,27 @@ function drawGlow2D(g,t){
   m.addColorStop(0,'rgba(0,0,0,1)');m.addColorStop(.5,'rgba(0,0,0,.95)');m.addColorStop(.8,'rgba(0,0,0,.35)');m.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=m;ctx.fillRect(0,0,s,s);
 }
-function makeGlow(size){
+function makeGlow(size,bare){
   var c=document.createElement('canvas');
   c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
   var dpr=Math.min(window.devicePixelRatio||1,3),px=Math.round(size*dpr);
   c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
   var r=function(a,b){return a+Math.random()*(b-a)},lights=[];
   for(var i=0;i<5;i++)lights.push({fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),pc:i+r(-.3,.3),spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)});
-  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
+  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000),bare:!!bare};
   glows.push(g);
   return c;
 }
 function paintGlows(t){
   if(glowGL===null)glowGL=initGlowGL()||false;
-  if(glowGL)renderGlowGL(t);
-  for(var i=0;i<glows.length;i++){
-    var g=glows[i];
-    if(glowGL){g.ctx.clearRect(0,0,g.px,g.px);g.ctx.drawImage(glowGL.canvas,0,0,g.px,g.px)}
-    else drawGlow2D(g,t+g.t0);
+  /* one pass per look: the floating mark in the bar, the sphere in the bubble */
+  for(var m=0;m<2;m++){
+    var drawn=false;
+    for(var i=0;i<glows.length;i++){
+      var g=glows[i];if(g.bare!==(m===1))continue;
+      if(glowGL){if(!drawn){renderGlowGL(t,m===1);drawn=true}g.ctx.clearRect(0,0,g.px,g.px);g.ctx.drawImage(glowGL.canvas,0,0,g.px,g.px)}
+      else drawGlow2D(g,t+g.t0);
+    }
   }
 }
 function glowLoop(){
@@ -336,7 +353,7 @@ launcher.style.maxWidth='calc(100vw - 32px)';
    across pages. */
 launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"></div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
   '<span class="ai-chat-launcher__orb" aria-hidden="true"></span>';
-$('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(30));
+$('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(60,true));
 $('.ai-chat-launcher__orb',launcher).appendChild(makeGlow(48));
 if(GLOW_STILL)paintGlows(GLOW_SEED);else requestAnimationFrame(glowLoop);
 
