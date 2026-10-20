@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-float');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 theme-toggle');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -38,7 +38,6 @@ if(_cachedRules&&matchesHideRule(_cachedRules))return;
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
-  if(typeof d.theme==='string')applyTheme(d.theme);
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
   if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
@@ -126,16 +125,19 @@ var KLAVIYO_LIST_ID='';
    Tuning fields control thickness, halo extent, animation speed,
    and the three timing phases (fade-in / hold / fade-out). */
 var WELCOME_INTRO=true;
-/* Settings → Appearance (light | dark). Cached so the next page load starts in
-   the right theme before widget-config answers; applied at once when it does. */
-var THEME_KEY='hajirai_theme',THEME='light';
-try{if(localStorage.getItem(THEME_KEY)==='dark')THEME='dark'}catch(e){}
-function applyTheme(next){
-  THEME=next==='dark'?'dark':'light';
-  try{localStorage.setItem(THEME_KEY,THEME)}catch(e){}
+/* Light or dark is the shopper's choice (the sun/moon in the chat header),
+   remembered on this device. Dark until they pick light. A new key: the old
+   one held the store-wide setting this replaces. */
+var THEME_KEY='hajirai_theme_pick',THEME='dark';
+try{if(localStorage.getItem(THEME_KEY)==='light')THEME='light'}catch(e){}
+function applyTheme(next,save){
+  THEME=next==='light'?'light':'dark';
+  if(save){try{localStorage.setItem(THEME_KEY,THEME)}catch(e){}}
   var els=[launcher,panel,overlay];
   for(var i=0;i<els.length;i++)if(els[i])els[i].setAttribute('data-theme',THEME);
   if(glowGL&&glowGL.dLoc)glowGL.gl.uniform1f(glowGL.dLoc,THEME==='dark'?1:0);
+  var tb=panel&&panel.querySelector('.ai-chat-theme-btn');
+  if(tb){var lbl=THEME==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('aria-label',lbl);tb.setAttribute('title',lbl)}
 }
 var SK='hajirai_chat_session';
 var HK='hajirai_chat_history';
@@ -379,7 +381,7 @@ if(CUST_LOGGED_IN&&CUST_NAME){
 }
 
 panel.innerHTML=
-'<div class="ai-chat-header">'+headerAv+'<div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
+'<div class="ai-chat-header">'+headerAv+'<div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea></div><button class="ai-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>'+
@@ -531,6 +533,14 @@ var inputEl=$('.ai-chat-input',panel);
 var sendBtn=$('.ai-chat-send',panel);
 var closeBtn=$('.ai-chat-close-btn',panel);
 var menuBtn=$('.ai-chat-menu-btn',panel);
+/* Sun/moon: switches light / dark with a short cross-fade of the colors. */
+$('.ai-chat-theme-btn',panel).addEventListener('click',function(e){
+  e.stopPropagation();
+  var els=[launcher,panel];
+  for(var i=0;i<els.length;i++)els[i].classList.add('ai-chat-theming');
+  applyTheme(THEME==='dark'?'light':'dark',true);
+  setTimeout(function(){for(var i=0;i<els.length;i++)els[i].classList.remove('ai-chat-theming')},420);
+});
 
 /* Typing hint rotator — shows reassuring text after 4s, rotates every 4s */
 var TYPING_HINTS=['Still looking…','Almost there…','Just a moment…','Thanks for your patience…'];

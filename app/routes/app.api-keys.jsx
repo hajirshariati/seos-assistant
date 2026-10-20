@@ -44,7 +44,6 @@ export const loader = async ({ request }) => {
     hasAftershipKey: config.aftershipApiKey !== "",
     hideOnUrls,
     welcomeIntroOn: config.welcomeGlowStyle !== "none",
-    widgetTheme: config.widgetTheme === "dark" ? "dark" : "light",
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
@@ -82,11 +81,6 @@ export const action = async ({ request }) => {
   // useFetcher (own success/error banners, isolated from the big
   // settings form). Each returns its own response shape.
   const intent = formData.get("intent");
-  if (intent === "save_appearance") {
-    await updateShopConfig(session.shop, { widgetTheme: formData.get("theme") === "dark" ? "dark" : "light" });
-    return { saved: true };
-  }
-
   if (intent === "save_welcome_intro") {
     await updateShopConfig(session.shop, { welcomeGlowStyle: formData.get("on") === "true" ? "subtle" : "none" });
     return { saved: true };
@@ -346,101 +340,6 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
 
 // One switch: the chat opens with a calm, Apple-style motion (the panel
 // springs up, the welcome content rises in). No colors or timings to tune.
-// Settings → Appearance: Light or Dark for the assistant on the storefront.
-// Saves on click (no Save button); the preview shows the launcher and the
-// open panel in the chosen theme.
-const THEMES = [
-  { value: "light", label: "Light", hint: "Soft white, subtle borders, dark text." },
-  { value: "dark", label: "Dark", hint: "Deep charcoal, understated borders, light text, richer light." },
-];
-function AppearanceCard({ initial }) {
-  const fetcher = useFetcher();
-  const [theme, setTheme] = useState(initial === "dark" ? "dark" : "light");
-  const choose = (next) => {
-    if (next === theme) return;
-    setTheme(next);
-    const fd = new FormData();
-    fd.set("intent", "save_appearance");
-    fd.set("theme", next);
-    fetcher.submit(fd, { method: "post" });
-  };
-  const dark = theme === "dark";
-  const c = dark
-    ? { page: "#1c1c21", panel: "#141418", surface: "#232329", line: "rgba(255,255,255,0.1)", text: "#f5f5f7", text2: "#a1a1a6", ink: "#f5f5f7", inkText: "#0d0d12" }
-    : { page: "#ebebef", panel: "#ffffff", surface: "#f5f5f7", line: "rgba(0,0,0,0.08)", text: "#1d1d1f", text2: "#6e6e73", ink: "#0d0d12", inkText: "#ffffff" };
-  const glow = dark
-    ? "radial-gradient(circle at 35% 35%, #4fd6ff 0, rgba(79,214,255,0) 45%), radial-gradient(circle at 65% 60%, #a35cff 0, rgba(163,92,255,0) 50%), radial-gradient(circle at 50% 75%, #ff5fae 0, rgba(255,95,174,0) 45%)"
-    : "radial-gradient(circle at 35% 35%, #7fe3ff 0, rgba(127,227,255,0) 45%), radial-gradient(circle at 65% 60%, #c4a9ff 0, rgba(196,169,255,0) 50%), radial-gradient(circle at 50% 75%, #ffa7d3 0, rgba(255,167,211,0) 45%)";
-  const Orb = ({ size }) => (
-    <span aria-hidden="true" style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: `${glow}, ${c.panel}`, boxShadow: dark ? "0 0 0 1px rgba(255,255,255,0.08), 0 0 14px rgba(120,120,255,0.35)" : "0 0 0 1px rgba(0,0,0,0.06)" }} />
-  );
-  return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">Theme</Text>
-          <Text as="p" tone="subdued">Both are designed on their own terms — not an inverted copy. The assistant's light adapts to each.</Text>
-        </BlockStack>
-        <div role="radiogroup" aria-label="Assistant theme" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {THEMES.map((t) => {
-            const active = t.value === theme;
-            return (
-              <button
-                key={t.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => choose(t.value)}
-                onKeyDown={(e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") choose(t.value === "light" ? "dark" : "light"); }}
-                style={{
-                  textAlign: "left", cursor: "pointer", padding: 14, borderRadius: 14, background: "transparent",
-                  border: `2px solid ${active ? "#0d0d12" : "rgba(0,0,0,0.1)"}`, outlineOffset: 2, font: "inherit",
-                }}
-              >
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text as="span" variant="headingSm">{t.label}</Text>
-                  {active && <Badge tone="success">Active</Badge>}
-                </InlineStack>
-                <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: t.value === "dark" ? "#1c1c21" : "#ebebef" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: t.value === "dark" ? "#141418" : "#fff", borderRadius: 999, padding: "6px 10px", boxShadow: t.value === "dark" ? "0 0 0 1px rgba(255,255,255,0.1)" : "0 0 0 1px rgba(0,0,0,0.08)" }}>
-                    <span aria-hidden="true" style={{ display: "inline-block", width: 18, height: 18, borderRadius: "50%", background: t.value === "dark"
-                      ? "radial-gradient(circle at 35% 35%, #4fd6ff 0, rgba(79,214,255,0) 45%), radial-gradient(circle at 65% 60%, #a35cff 0, rgba(163,92,255,0) 50%), radial-gradient(circle at 50% 75%, #ff5fae 0, rgba(255,95,174,0) 45%), #141418"
-                      : "radial-gradient(circle at 35% 35%, #7fe3ff 0, rgba(127,227,255,0) 45%), radial-gradient(circle at 65% 60%, #c4a9ff 0, rgba(196,169,255,0) 50%), radial-gradient(circle at 50% 75%, #ffa7d3 0, rgba(255,167,211,0) 45%), #fff" }} />
-                    <span style={{ fontSize: 12, color: t.value === "dark" ? "#a1a1a6" : "#6e6e73" }}>How can I help you today?</span>
-                  </div>
-                </div>
-                <div style={{ marginTop: 8 }}><Text as="span" variant="bodySm" tone="subdued">{t.hint}</Text></div>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ borderRadius: 16, background: c.page, padding: 16 }}>
-          <div style={{ width: 280, borderRadius: 16, background: c.panel, boxShadow: `0 0 0 1px ${c.line}, 0 10px 30px rgba(0,0,0,${dark ? 0.5 : 0.12})`, overflow: "hidden", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${c.line}`, color: c.text, fontSize: 13, fontWeight: 600 }}>AI Shopping Assistant<span style={{ marginLeft: "auto", color: c.text2, fontWeight: 400 }}>⋮ ✕</span></div>
-            <div style={{ padding: 12, display: "grid", gap: 8 }}>
-              <div style={{ background: c.surface, color: c.text, borderRadius: 14, padding: "8px 10px", fontSize: 12, width: "80%" }}>Hi! What can I help you find today?</div>
-              <div style={{ background: c.ink, color: c.inkText, borderRadius: 14, padding: "8px 10px", fontSize: 12, width: "45%", justifySelf: "end" }}>Sandals for a trip</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {["Shop Footwear", "Track my order"].map((l) => <span key={l} style={{ background: c.surface, color: c.text, borderRadius: 10, padding: "7px 9px", fontSize: 11, flex: 1 }}>{l}</span>)}
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, borderTop: `1px solid ${c.line}` }}>
-              <span style={{ flex: 1, border: `1px solid ${c.line}`, borderRadius: 999, padding: "7px 10px", fontSize: 12, color: c.text2 }}>How can I help you today?</span>
-              <span style={{ width: 26, height: 26, borderRadius: "50%", background: c.ink }} />
-            </div>
-          </div>
-          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-            <Orb size={30} />
-            <Text as="span" variant="bodySm" tone="subdued">{dark ? "Dark: luminous blue, violet, cyan and a touch of magenta, with a soft atmospheric glow." : "Light: cyan, lavender, blue and pink on white — clear but never harsh."}</Text>
-          </div>
-        </div>
-        {fetcher.state !== "idle" && <Text as="p" variant="bodySm" tone="subdued">Saving…</Text>}
-        {fetcher.state === "idle" && fetcher.data?.saved && <Text as="p" variant="bodySm" tone="success">Saved — live on your storefront.</Text>}
-      </BlockStack>
-    </Card>
-  );
-}
-
 function WelcomeIntroCard({ initialOn }) {
   const fetcher = useFetcher();
   const [on, setOn] = useState(initialOn !== false);
@@ -562,7 +461,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, widgetTheme } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -875,13 +774,6 @@ export default function ApiKeys() {
                 <HideUrlsPanel initial={hideOnUrls} />
                 <WelcomeIntroCard initialOn={welcomeIntroOn} />
               </BlockStack>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Appearance"
-              description="How the assistant looks on your storefront. The choice applies to every shopper as soon as it's saved."
-            >
-              <AppearanceCard initial={widgetTheme} />
             </Layout.AnnotatedSection>
 
             <Layout.Section>

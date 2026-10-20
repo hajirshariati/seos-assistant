@@ -63,7 +63,6 @@ export const loader = async ({ request }) => {
         klaviyoCompanyId: config.klaviyoCompanyId || "",
         klaviyoListId: config.klaviyoListId || "",
         showLoginPill: config.showLoginPill !== false,
-        theme: config.widgetTheme === "dark" ? "dark" : "light",
         // Settings → Support link; the widget falls back to the theme editor's.
         supportUrl: String(config.supportUrl || "").trim(),
         supportLabel: String(config.supportLabel || "").trim(),

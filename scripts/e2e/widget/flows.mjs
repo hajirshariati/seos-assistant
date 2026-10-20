@@ -40,8 +40,9 @@ async function session(path, viewport, label, nCards = 3) {
   await page.waitForSelector(".ai-chat-atc-done", { timeout: 5000 });
   check("one-tap add uses the exact preselected variant", cartLog.length === before + 1 && cartLog.at(-1) === vidFor("savannah-red", "8 US", "Medium"), String(cartLog.at(-1)));
   await page.waitForTimeout(300);
-  const ck = await page.$eval(".ai-chat-atc-primary", (a) => { const cs = getComputedStyle(a); return cs.color + "|" + cs.backgroundColor + "|" + cs.textDecorationLine; });
-  check("Checkout is white text on the button color, no underline", ck === "rgb(255, 255, 255)|rgb(13, 13, 18)|none", ck);
+  const ck = await page.$eval(".ai-chat-atc-primary", (a) => { const cs = getComputedStyle(a); return a.closest(".ai-chat-panel").getAttribute("data-theme") + "|" + cs.color + "|" + cs.backgroundColor + "|" + cs.textDecorationLine; });
+  // Light: white on ink. Dark (the default): charcoal on the light ink.
+  check("Checkout is clear text on the button color, no underline", ck === "light|rgb(255, 255, 255)|rgb(13, 13, 18)|none" || ck === "dark|rgb(13, 13, 18)|rgb(245, 245, 247)|none", ck);
   const vl = await page.$eval(".ai-chat-view-link", (a) => getComputedStyle(a).textDecorationLine);
   check("View product is underlined", vl === "underline", vl);
   const tl = await page.$eval("a.ai-chat-product-title", (a) => getComputedStyle(a).textDecorationLine);

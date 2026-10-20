@@ -3640,3 +3640,35 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-chat-atc-check { color: #0d0d12 !important; }
 /* The True Fit mark is a black tile: shown as its white version on dark. */
 .ai-chat-panel[data-theme="dark"] .ai-chat-tf-logo { filter: invert(1); }
+
+/* ---------- Light / dark switch in the chat header ----------
+   Shows where it goes: a sun in dark mode, a moon in light. The two marks
+   share one spot and trade places with a small turn. */
+.ai-chat-panel .ai-chat-theme-btn { position: relative; }
+.ai-chat-panel .ai-chat-theme-btn svg {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ai-chat-panel .ai-chat-theme-btn__moon { width: 17px !important; height: 17px !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-theme-btn__sun,
+.ai-chat-panel:not([data-theme="dark"]) .ai-chat-theme-btn__moon { opacity: 1; transform: none; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-theme-btn__moon { opacity: 0; transform: rotate(-70deg) scale(0.6); }
+.ai-chat-panel:not([data-theme="dark"]) .ai-chat-theme-btn__sun { opacity: 0; transform: rotate(70deg) scale(0.6); }
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-header__btn:hover { background: rgba(255, 255, 255, 0.08) !important; color: var(--seos-text) !important; }
+}
+.ai-chat-panel .ai-chat-theme-btn:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 1px; }
+/* While switching, colors cross-fade instead of snapping. */
+.ai-chat-theming,
+.ai-chat-theming * {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, fill 0.35s ease, stroke 0.35s ease !important;
+}
+.ai-chat-theming .ai-chat-theme-btn svg { transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-theme-btn svg { transition: none; transform: none !important; }
+  .ai-chat-theming, .ai-chat-theming * { transition: none !important; }
+}

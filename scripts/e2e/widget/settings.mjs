@@ -124,13 +124,15 @@ await run({ ...base, rotateGreetingCta: true }, { width: 1280, height: 900 }, as
   check("rotator: reopening starts in English", (await line()) === "CTA-LINE-X", await line());
 });
 wcNow = {};
-// Settings → Appearance: Dark themes the whole assistant and is remembered
-// for the next page load (no flash of light); Light is the default.
-wcNow = { theme: "dark" };
+// Light / dark is the shopper's choice: dark by default for everyone (a
+// store-wide value from the server is ignored), the sun/moon in the header
+// switches, and the pick is remembered on this device.
+const contrast = async (p) => p.evaluate(async () => { if (!window.axe) { await new Promise((r) => { const s = document.createElement("script"); s.src = "/axe.js"; s.onload = r; s.onerror = r; document.head.appendChild(s); }); } if (!window.axe) return null; const res = await window.axe.run(document.querySelector(".ai-chat-panel"), { runOnly: ["color-contrast"] }); return res.violations.map((v) => v.id + ":" + v.nodes.length); });
+wcNow = { theme: "light" };
 await run(base, { width: 1280, height: 900 }, async (p) => {
   await p.waitForTimeout(400);
   const themed = await p.evaluate(() => [".ai-chat-launcher", ".ai-chat-panel", ".ai-chat-overlay"].map((s) => document.querySelector(s)?.getAttribute("data-theme")).join(","));
-  check("dark: launcher, panel and overlay carry the theme", themed === "dark,dark,dark", themed);
+  check("theme: dark by default (a store-wide value is ignored)", themed === "dark,dark,dark", themed);
   const bg = await p.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-launcher")).backgroundColor);
   check("dark: the launcher bar is charcoal", bg === "rgb(20, 20, 24)", bg);
   await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(700);
@@ -140,16 +142,20 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   await p.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 });
   const card = await p.evaluate(() => ({ card: getComputedStyle(document.querySelector(".ai-chat-product-card")).backgroundColor, user: getComputedStyle(document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")).backgroundColor }));
   check("dark: product card raised charcoal, shopper bubble light", card.card === "rgb(28, 28, 33)" && card.user === "rgb(245, 245, 247)", JSON.stringify(card));
-  const remembered = await p.evaluate(() => localStorage.getItem("hajirai_theme"));
-  check("dark: remembered for the next page load", remembered === "dark", remembered);
-  const axe = await p.evaluate(async () => { if (!window.axe) { await new Promise((r) => { const s = document.createElement("script"); s.src = "/axe.js"; s.onload = r; s.onerror = r; document.head.appendChild(s); }); } if (!window.axe) return null; const res = await window.axe.run(document.querySelector(".ai-chat-panel"), { runOnly: ["color-contrast"] }); return res.violations.map((v) => v.id + ":" + v.nodes.length); });
-  if (axe !== null) check("dark: text contrast passes (axe color-contrast)", axe.length === 0, axe.join(" | "));
-});
-wcNow = { theme: "light" };
-await run(base, { width: 1280, height: 900 }, async (p) => {
-  await p.evaluate(() => { try { localStorage.setItem("hajirai_theme", "dark"); } catch { /* */ } });
+  const axeDark = await contrast(p);
+  if (axeDark !== null) check("dark: text contrast passes (axe color-contrast)", axeDark.length === 0, axeDark.join(" | "));
+  check("switch: offers light mode", (await p.getAttribute(".ai-chat-theme-btn", "aria-label")) === "Switch to light mode");
+  await p.click(".ai-chat-theme-btn"); await p.waitForTimeout(600);
+  const lit = await p.evaluate(() => ({ t: document.querySelector(".ai-chat-panel").getAttribute("data-theme") + "," + document.querySelector(".ai-chat-launcher").getAttribute("data-theme"), bg: getComputedStyle(document.querySelector(".ai-chat-panel")).backgroundColor, open: document.querySelector(".ai-chat-panel").classList.contains("open") || getComputedStyle(document.querySelector(".ai-chat-panel")).display !== "none", pick: localStorage.getItem("hajirai_theme_pick") }));
+  check("switch: panel and bar turn light, chat stays open, choice saved", lit.t === "light,light" && lit.bg === "rgb(255, 255, 255)" && lit.open && lit.pick === "light", JSON.stringify(lit));
+  check("switch: now offers dark mode", (await p.getAttribute(".ai-chat-theme-btn", "aria-label")) === "Switch to dark mode");
+  const axeLight = await contrast(p);
+  if (axeLight !== null) check("light: text contrast passes (axe color-contrast)", axeLight.length === 0, axeLight.join(" | "));
   await p.reload(); await p.waitForTimeout(500);
-  check("light: the saved setting wins over a stale cached theme", (await p.evaluate(() => document.querySelector(".ai-chat-launcher").getAttribute("data-theme") + "," + getComputedStyle(document.querySelector(".ai-chat-launcher")).backgroundColor)) === "light,rgb(255, 255, 255)");
+  check("switch: light remembered after a reload", (await p.evaluate(() => document.querySelector(".ai-chat-launcher").getAttribute("data-theme") + "," + getComputedStyle(document.querySelector(".ai-chat-launcher")).backgroundColor)) === "light,rgb(255, 255, 255)");
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(600);
+  await p.click(".ai-chat-theme-btn"); await p.waitForTimeout(500);
+  check("switch: back to dark", (await p.evaluate(() => document.querySelector(".ai-chat-panel").getAttribute("data-theme") + "," + localStorage.getItem("hajirai_theme_pick"))) === "dark,dark");
 });
 wcNow = {};
 console.log(out.join("\n"));
