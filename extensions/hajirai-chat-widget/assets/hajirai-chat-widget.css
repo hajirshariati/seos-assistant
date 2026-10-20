@@ -3594,3 +3594,15 @@ button.ai-chat-launcher__text {
 @media (hover: hover) {
   .ai-chat-launcher[data-theme="dark"]:hover .ai-chat-glow { filter: brightness(1.08); }
 }
+
+/* The sphere draws its own anti-aliased edge: no CSS clipping (clip-path
+   and rounded overflow cut hard, pixelated edges at this size). */
+.ai-chat-launcher.is-bubble .ai-chat-launcher__orb,
+.ai-chat-launcher__icon.is-orb {
+  clip-path: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+}
+.ai-chat-glow { border-radius: 0; image-rendering: auto; }

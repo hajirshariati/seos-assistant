@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-cloud');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-aa');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -216,9 +216,9 @@ var GLOW_FRAG=[
 ' float fs=mix(.55,1.,abs(depth));',
 ' float sc=mix(.72,1.08,front);',
 ' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
-' float soft=mix(1.1,.75,front);',            /* a cloud of light: no readable outline */
+' float soft=mix(.8,.5,front);',              /* soft clouds with a clear color center */
 ' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',
-' float inner=mix(.8,1.,exp(-max(-d,0.)*.7));',
+' float inner=mix(.72,1.,exp(-max(-d,0.)*.9));',
 ' float glow=exp(-max(d,0.)*mix(1.2,1.7,front));',
 ' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
 ' return vec2(edge*inner,glow)*vis;}',
@@ -226,13 +226,13 @@ var GLOW_FRAG=[
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
 ' float T=t*.42+seed;',
 /* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
-' float sph=1.-smoothstep(.95,1.,r);',
+' float sph=1.-smoothstep(.955,.995,r);',
 ' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
 ' body=mix(body,vec3(.26,.24,.46),smoothstep(.55,1.,r)*.8);',
 ' body+=vec3(.55,.6,.9)*smoothstep(.80,.96,r)*(1.-smoothstep(.96,1.,r))*.16;',
 ' body=mix(body*1.25,body,dark);',
 /* four petals, each on its own slow orbit, breathing and bending */
-' vec3 cyan=vec3(.10,.90,1.),teal=vec3(.18,.95,.62),mag=vec3(1.,.22,.62),vio=vec3(.46,.34,1.);',
+' vec3 cyan=vec3(.05,.92,1.),teal=vec3(.12,1.,.60),mag=vec3(1.,.16,.60),vio=vec3(.48,.28,1.);',
 ' vec2 p1=petal(uv,T*.95+0.0,.45,T*.35+.3*sin(T*.5),.74+.06*sin(T*.8),.25,T,1.);',
 ' vec2 p2=petal(uv,T*.80+2.0,.55,-T*.3+.3*sin(T*.4+1.),.70+.06*sin(T*.7+1.),.23,T,2.);',
 ' vec2 p3=petal(uv,T*1.05+4.1,.40,T*.4+.3*sin(T*.6+2.),.76+.06*sin(T*.9+2.),.25,T,3.);',
@@ -249,7 +249,7 @@ var GLOW_FRAG=[
 /* a soft specular on the glass */
 ' float spec=pow(max(0.,1.-length(uv-vec2(-.38,.46))*1.7),3.)*.22;',
 ' vec3 col=body+L*mix(.78,.9,dark)+vec3(spec);',
-' col=col/(1.+col*.45);',   /* gentle tone map: bright, never clipped flat */
+' col=col/(1.+col*.38);',   /* gentle tone map: bright, never clipped flat */
 ' float a=sph;',
 ' gl_FragColor=vec4(col*a,a);',
 '}'].join('\n');
@@ -305,7 +305,7 @@ function drawGlow2D(g,t){
 function makeGlow(size){
   var c=document.createElement('canvas');
   c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
-  var dpr=Math.min(window.devicePixelRatio||1,2),px=Math.round(size*dpr);
+  var dpr=Math.min(window.devicePixelRatio||1,3),px=Math.round(size*dpr);
   c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
   var r=function(a,b){return a+Math.random()*(b-a)},lights=[];
   for(var i=0;i<5;i++)lights.push({fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),pc:i+r(-.3,.3),spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)});
