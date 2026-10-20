@@ -3,6 +3,7 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
 import prisma from "../db.server";
 import { parseOrbColors, parseOrbBackground } from "../lib/orb-colors";
+import { recordingState } from "../lib/chat-recording.js";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -77,6 +78,9 @@ export const loader = async ({ request }) => {
         orbColors: parseOrbColors(config.orbColors),
         orbBackground: parseOrbBackground(config.orbBackground),
         voiceInput: config.voiceInput !== false,
+        // Test recordings: the widget shows a "recording" note to the people
+        // being recorded (testers, or everyone if the store chose that).
+        recording: (() => { const st = recordingState(config); return { on: st.on, scope: st.scope }; })(),
       },
       {
         // 60s keeps the storefront responsive without making merchant config

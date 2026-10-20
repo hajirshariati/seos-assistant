@@ -142,6 +142,12 @@ model ShopConfig {
   orbBackground          String   @default("")
   // The talk (voice input) button beside Send in the chat.
   voiceInput             Boolean  @default(true)
+  // Conversation recording for testing (Settings → Test recordings): on
+  // until this time (null = off; turning it on sets two weeks out), and who is
+  // recorded — "testers" (only chats opened from the tester link) or
+  // "everyone".
+  recordChatsUntil       DateTime?
+  recordChatsScope       String   @default("testers")
   similarMatchAttributes String   @default("[]")
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)
@@ -372,6 +378,27 @@ model ChatFeedback {
 
   @@index([shop])
   @@index([shop, createdAt])
+  @@index([createdAt])
+}
+
+// Recorded chat turns, only while the store has recording on for testing
+// (see ShopConfig.recordChatsUntil): the shopper's message as typed (contact
+// details removed), the assistant's reply and what it showed. Kept 30 days.
+model ChatRecording {
+  id         String   @id @default(cuid())
+  shop       String
+  sessionId  String
+  tester     String   @default("")
+  page       String   @default("")
+  message    String
+  reply      String
+  products   String[]
+  extras     String   @default("")
+  ok         Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, sessionId])
   @@index([createdAt])
 }
 

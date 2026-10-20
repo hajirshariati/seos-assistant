@@ -158,6 +158,41 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   check("switch: back to dark", (await p.evaluate(() => document.querySelector(".ai-chat-panel").getAttribute("data-theme") + "," + localStorage.getItem("hajirai_theme_pick"))) === "dark,dark");
 });
 wcNow = {};
+// Test recordings: the tester link marks the browser (two weeks), testers'
+// chats carry their name and page and they see the "Test recording on" note;
+// ordinary shoppers send neither and see nothing unless the store records
+// everyone; ?hajirai_tester=off clears it.
+async function recRun(path, wc, fn) {
+  wcNow = wc; cfgNow = base;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto("http://localhost:4795" + path); await p.waitForTimeout(400);
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(600);
+  await fn(p);
+  if (errs.length) check("no JS errors", false, errs.join("|"));
+  await ctx.close(); wcNow = {};
+}
+const ask = async (p) => { const n = bodies.length; await p.fill(".ai-chat-input-area textarea", "hello"); await p.keyboard.press("Enter"); await p.waitForTimeout(700); return bodies.length > n ? bodies.at(-1) : null; };
+const noteShown = (p) => p.evaluate(() => { const n = document.querySelector(".ai-chat-rec-note"); return !!n && !n.hidden && getComputedStyle(n).display !== "none"; });
+await recRun("/?hajirai_tester=Ann%20QA", { recording: { on: true, scope: "testers" } }, async (p) => {
+  check("recording: tester link remembered on this browser", await p.evaluate(() => JSON.parse(localStorage.getItem("hajirai_tester") || "{}").name === "Ann QA"));
+  check("recording: the tester sees the note", await noteShown(p));
+  const b = await ask(p);
+  check("recording: the tester's chat carries their name and page", b?.tester === "Ann QA" && b?.page === "/", JSON.stringify({ t: b?.tester, p: b?.page }));
+});
+await recRun("/", { recording: { on: true, scope: "testers" } }, async (p) => {
+  check("recording: an ordinary shopper sees no note", !(await noteShown(p)));
+  const b = await ask(p);
+  check("recording: an ordinary shopper sends no tester name or page", b && !("tester" in b) && !("page" in b), JSON.stringify(b && { t: b.tester, p: b.page }));
+});
+await recRun("/", { recording: { on: true, scope: "everyone" } }, async (p) => {
+  check("recording everyone: every shopper sees the note", await noteShown(p));
+});
+await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" } }, async (p) => {
+  check("recording off: no note even for a tester", !(await noteShown(p)));
+  await p.goto("http://localhost:4795/?hajirai_tester=off"); await p.waitForTimeout(400);
+  check("recording: ?hajirai_tester=off clears it", await p.evaluate(() => localStorage.getItem("hajirai_tester") === null));
+});
 console.log(out.join("\n"));
 const failed = out.filter((l) => l.startsWith("FAIL")).length;
 console.log(`\n${out.length - failed} passed, ${failed} failed`);

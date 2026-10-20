@@ -5,6 +5,7 @@
 // the same engine (app/lib/lean). Admin test chats skip analytics and the cap.
 
 import { authenticate } from "../shopify.server";
+import { shouldRecord, cleanTester } from "../lib/chat-recording.js";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { getTodayMessageCount } from "../models/ChatUsage.server";
 import { leanChatResponse } from "../lib/lean/respond.server.js";
@@ -117,5 +118,10 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     supportLabel: typeof body.support_label === "string" ? body.support_label : "",
     fitfinder: sanitizeFitfinder(body.fitfinder),
     sizeFinder: sanitizeSizeFinder(body.size_finder),
+    // Test recordings: only while the store has it on, and (by default) only
+    // for testers who opened the store with the tester link.
+    record: shouldRecord(config, { tester: body.tester, internal })
+      ? { sessionId: typeof body.session_id === "string" ? body.session_id : "", tester: internal ? "Test chat" : cleanTester(body.tester), page: typeof body.page === "string" ? body.page : "" }
+      : null,
   });
 }

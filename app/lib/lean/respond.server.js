@@ -19,6 +19,8 @@ import { makeLiveStock } from "./live-stock.server.js";
 import { recordHealth } from "../../models/ChatHealth.server.js";
 import { chatModel } from "../claude-models.js";
 import { buildShopAllLink } from "./shop-all.js";
+import { saveRecording } from "../../models/ChatRecording.server.js";
+import { describeExtras } from "../chat-recording.js";
 
 // The "View all …" button under a set of product cards (opens the store's
 // search for the same thing). Paused for now; flip to true to bring it back.
@@ -79,8 +81,17 @@ export function leanChatResponse({
   supportLabel = "",
   fitfinder = null,
   sizeFinder = null,
+  record = null,
 }) {
   const encoder = new TextEncoder();
+  // Test recordings: each turn (and anything shown with it) is saved for
+  // review while the store has recording on — never blocks the reply.
+  const shown = [];
+  const keep = ({ reply, products = [], ok = true }) => {
+    if (!record) return;
+    saveRecording({ shop, sessionId: record.sessionId, tester: record.tester, page: record.page, message: latestUserMessage, reply, products, extras: describeExtras(shown), ok })
+      .catch((err) => console.error("[recordings] save failed:", err?.message || err));
+  };
   // When the shopper leaves (closes the tab, the widget gives up), the turn
   // stops: no more model calls are made or billed.
   const abort = new AbortController();
@@ -90,6 +101,7 @@ export function leanChatResponse({
     },
     async start(controller) {
       const send = (obj) => {
+        if (record && obj && obj.type && obj.type !== "text" && obj.type !== "products" && obj.type !== "done") shown.push(obj);
         try { controller.enqueue(encoder.encode(sse(obj))); } catch { /* client gone */ }
       };
       // The answer arrives in one piece after the tool calls; until then a
@@ -172,6 +184,7 @@ export function leanChatResponse({
           });
         }
         send({ type: "done" });
+        keep({ reply: result.text, products: result.cards.map((c) => c.title) });
         health(true);
         // Test chats are recorded for the cost estimate only (internal flag).
         recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls, internal })
@@ -194,6 +207,7 @@ export function leanChatResponse({
         if (classified.kind === "rate_limit" && !internal) incrementRateLimitHits(shop).catch(() => {});
         health(false, classified.kind);
         send({ type: "error", message: customerFacingFailureMessage(classified.kind) });
+        keep({ reply: `[failed: ${classified.kind}] ${customerFacingFailureMessage(classified.kind)}`, ok: false });
       } finally {
         clearInterval(heartbeat);
         try { controller.close(); } catch { /* already closed */ }

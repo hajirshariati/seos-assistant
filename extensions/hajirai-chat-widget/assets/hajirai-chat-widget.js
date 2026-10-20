@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 lift-bar');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 test-recordings');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -40,6 +40,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
+  if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers';recordingNote()}
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
@@ -131,6 +132,28 @@ var WELCOME_INTRO=true;
 /* Light or dark is the shopper's choice (the sun/moon in the chat header),
    remembered on this device. Dark until they pick light. A new key: the old
    one held the store-wide setting this replaces. */
+/* Test recordings. Opening the store with ?hajirai_tester=Name marks this
+   browser as a tester for two weeks (?hajirai_tester=off clears it). While
+   the store records, testers' chats are saved for review — and they see a
+   note saying so. Ordinary shoppers are only recorded if the store chose
+   "everyone", and then they see the same note. */
+var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
+(function(){
+  try{
+    var q=new URLSearchParams(location.search).get('hajirai_tester');
+    if(q!==null){
+      var name=String(q).replace(/[<>"'`&\\\/=;:(){}\[\]]/g,'').trim().slice(0,40);
+      if(!name||/^(0|off|false|no)$/i.test(name))localStorage.removeItem(TESTER_KEY);
+      else localStorage.setItem(TESTER_KEY,JSON.stringify({name:/^(1|true|yes|on)$/i.test(name)?'Tester':name,until:Date.now()+14*864e5}));
+    }
+    var t=JSON.parse(localStorage.getItem(TESTER_KEY)||'null');
+    if(t&&t.name&&t.until>Date.now())TESTER=String(t.name).slice(0,40);else if(t)localStorage.removeItem(TESTER_KEY);
+  }catch(e){}
+})();
+function recordingNote(){
+  var n=panel&&panel.querySelector('.ai-chat-rec-note');if(!n)return;
+  n.hidden=!(REC_ON&&(REC_SCOPE==='everyone'||TESTER));
+}
 var THEME_KEY='hajirai_theme_pick',THEME='dark';
 try{if(localStorage.getItem(THEME_KEY)==='light')THEME='light'}catch(e){}
 function applyTheme(next,save){
@@ -433,6 +456,7 @@ panel.innerHTML=
 '<div class="ai-chat-header">'+headerAv+'<div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
+'<div class="ai-chat-rec-note" role="note" hidden><span class="ai-chat-rec-dot" aria-hidden="true"></span>Test recording on \u2014 this chat is saved for review.</div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-chat-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea><button type="button" class="ai-chat-voice-cancel" aria-label="Cancel voice input" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button><span class="ai-chat-voice-status" aria-live="polite"></span>'+
 '<span class="ai-chat-action"><button type="button" class="ai-chat-mic" aria-label="Talk instead of typing" aria-pressed="false" hidden><svg class="ai-chat-mic__mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="18" x2="12" y2="21"/></svg><svg class="ai-chat-mic__stop" viewBox="0 0 24 24" fill="currentColor"><rect x="7.5" y="7.5" width="9" height="9" rx="2.2"/></svg></button><button class="ai-chat-send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5.5"/><polyline points="6 11.5 12 5.5 18 11.5"/></svg></button></span></div></div>'+
 (DISCL?'<div class="ai-chat-footer">'+esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a></div>':'');
@@ -2140,6 +2164,8 @@ if(SUPPORT_LABEL)body.support_label=SUPPORT_LABEL;
 var ffData=ffPayload();
 var tfData=tfPayload();
 if(tfData)body.size_finder=tfData;
+if(TESTER)body.tester=TESTER;
+if(REC_ON&&(REC_SCOPE==='everyone'||TESTER))body.page=location.pathname.slice(0,200);
 if(ffData)body.fitfinder=ffData;
 else loadFitfinder();
 fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'text/event-stream'},body:JSON.stringify(body),signal:abortCtrl.signal}).then(function(r){

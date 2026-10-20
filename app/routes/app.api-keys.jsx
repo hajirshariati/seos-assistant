@@ -29,6 +29,8 @@ import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
 import BrandHeader from "../components/BrandHeader";
 import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards";
+import { TestRecordingCard } from "../components/TestRecordingCard";
+import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
 
 export const loader = async ({ request }) => {
@@ -49,6 +51,8 @@ export const loader = async ({ request }) => {
     orbColors: parseOrbColors(config.orbColors),
     orbBackground: parseOrbBackground(config.orbBackground),
     voiceInput: config.voiceInput !== false,
+    recording: (() => { const st = recordingState(config); return { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope }; })(),
+    shopDomain: session.shop,
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
@@ -92,6 +96,15 @@ export const action = async ({ request }) => {
     if (stored === null || bg === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
     await updateShopConfig(session.shop, { orbColors: stored, orbBackground: bg });
     return { orbSaved: true, colors: parseOrbColors(stored), bg: parseOrbBackground(bg) };
+  }
+
+  if (intent === "save_recording") {
+    const on = formData.get("on") === "true";
+    const scope = formData.get("scope") === "everyone" ? "everyone" : "testers";
+    const until = on ? new Date(Date.now() + RECORD_DAYS * 24 * 60 * 60 * 1000) : null;
+    const saved = await updateShopConfig(session.shop, { recordChatsUntil: until, recordChatsScope: scope });
+    const st = recordingState(saved);
+    return { recording: { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope } };
   }
 
   if (intent === "save_voice_input") {
@@ -479,7 +492,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -802,6 +815,13 @@ export default function ApiKeys() {
                 <OrbColorsCard initial={orbColors} initialBg={orbBackground} />
                 <VoiceInputCard initialOn={voiceInput} />
               </BlockStack>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Testing"
+              description="Record conversations while your team tests the assistant, then review them under Test recordings."
+            >
+              <TestRecordingCard initial={recording} shopDomain={shopDomain} />
             </Layout.AnnotatedSection>
 
             <Layout.Section>

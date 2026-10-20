@@ -5,6 +5,7 @@ import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
+import { listRecordings } from "../models/ChatRecording.server";
 
 const MODEL_LABELS = {
   "claude-sonnet-4-6": "Standard",
@@ -48,6 +49,14 @@ function clampToRetention(range, retentionDays) {
 }
 
 async function buildCsv(shop, section, rangeArg, vote = "") {
+  if (section === "recordings") {
+    // Test recordings (kept 30 days): every recorded turn, oldest first.
+    const rows = (await listRecordings(shop)).reverse();
+    return toCsv(
+      ["Time", "Chat", "Tester", "Page", "Shopper", "Assistant", "Products shown", "Also shown", "OK"],
+      rows.map((r) => [new Date(r.createdAt).toISOString(), r.sessionId, r.tester, r.page, r.message, r.reply, (r.products || []).join(" | "), r.extras, r.ok ? "yes" : "no"]),
+    );
+  }
   if (section === "daily") {
     const daily = await getDailySeries(shop, rangeArg);
     return toCsv(

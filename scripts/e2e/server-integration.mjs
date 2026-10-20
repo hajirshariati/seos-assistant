@@ -107,10 +107,10 @@ function signed(pathname, extra = {}) {
   p.set("signature", crypto.createHmac("sha256", SECRET).update(msg).digest("hex"));
   return `http://localhost:${APP_PORT}${pathname}?${p}`;
 }
-async function chat(message, { ip = "198.51.100.1", history = [], signal } = {}) {
+async function chat(message, { ip = "198.51.100.1", history = [], signal, extra = {} } = {}) {
   const t0 = Date.now();
   const res = await fetch(signed("/chat"), {
-    method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ message, history }), signal,
+    method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ message, history, ...extra }), signal,
   });
   if (!res.headers.get("content-type")?.includes("event-stream")) return { status: res.status, body: await res.json().catch(() => null), ms: Date.now() - t0 };
   const raw = await res.text();
@@ -227,6 +227,36 @@ await test("widget-config, feedback and See It Styled answer signed requests cor
   assert.equal(viz.status, 403, "feature off for this store → refused, no image call");
 });
 
+await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
+  const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
+  const settle = () => new Promise((r) => setTimeout(r, 250));
+  await chat("sandals for plantar fasciitis", { ip: "198.51.100.41", extra: { tester: "Ann", session_id: "sess-a", page: "/" } }); await settle();
+  assert.equal((await rows()).length, 0, "off: nothing recorded, even for a tester");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: new Date(Date.now() + 864e5), recordChatsScope: "testers" } });
+  const cfg = await (await fetch(signed("/widget-config", { cta: "x" }))).json();
+  assert.deepEqual(cfg.recording, { on: true, scope: "testers" });
+  await chat("sandals for plantar fasciitis", { ip: "198.51.100.42", extra: { session_id: "sess-b", page: "/" } }); await settle();
+  assert.equal((await rows()).length, 0, "testers only: an ordinary shopper isn't recorded");
+  await chat("sandals for plantar fasciitis, email me at ann@example.com", { ip: "198.51.100.43", extra: { tester: "Ann", session_id: "sess-a", page: "/products/x?utm=1" } }); await settle();
+  let r = await rows();
+  assert.equal(r.length, 1, "the tester's turn is recorded");
+  assert.equal(r[0].tester, "Ann");
+  assert.equal(r[0].sessionId, "sess-a");
+  assert.equal(r[0].page, "/products/x", "page path without the query");
+  assert.match(r[0].message, /\[email\]/, "contact details removed");
+  assert.match(r[0].reply, /supportive sandals/);
+  assert.equal(r[0].products.length, 2);
+  assert.equal(r[0].ok, true);
+  await chat("FAIL please", { ip: "198.51.100.44", extra: { tester: "Ann", session_id: "sess-a" } }); await settle();
+  r = await rows();
+  assert.equal(r.at(-1).ok, false, "a failed turn is kept, marked failed");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsScope: "everyone" } });
+  await chat("sandals for plantar fasciitis", { ip: "198.51.100.45", extra: { session_id: "sess-c" } }); await settle();
+  r = await rows();
+  assert.equal(r.at(-1).sessionId, "sess-c", "everyone: an ordinary shopper is recorded");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: null, recordChatsScope: "testers" } });
+});
+
 console.log(`\nload: ${LOAD} shoppers at once (each turn = 3 model steps × ${MODEL_DELAY_MS}ms)`);
 let load = null;
 await test(`${LOAD} simultaneous chats all complete correctly`, async () => {
@@ -247,7 +277,7 @@ await test(`${LOAD} simultaneous chats all complete correctly`, async () => {
 
 server.kill();
 mock.close();
-for (const m of ["chatHealthEvent", "chatUsage", "chatFeedback", "chatTopic", "chatProductMention", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop: SHOP } });
+for (const m of ["chatHealthEvent", "chatUsage", "chatFeedback", "chatTopic", "chatProductMention", "chatRecording", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop: SHOP } });
 await prisma.product.deleteMany({ where: { shop: SHOP } });
 await prisma.$disconnect();
 if (failed) console.log("\n--- server log (tail) ---\n" + serverLog.split("\n").slice(-40).join("\n"));

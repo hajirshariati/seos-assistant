@@ -39,6 +39,7 @@ const SCENES = {
   horiz: ["horiz", "many"], horizAtc: ["horiz", "many", "atc1", "pick"], phoneMany: ["phone", "many"], phoneAtc: ["phone", "many", "atc1", "pick"], phoneOneAtc: ["phone", "one", "atc0", "pick"],
   talk: ["talk"], typed: ["typed"],
   bar: ["noopen"], bubble: ["noopen", "bubble"],
+  recording: ["url:/full?hajirai_tester=Ann", "recon"],
   klaviyo: ["kl", "klaviyo"], klaviyoErr: ["kl", "klaviyo", "klbad"], klaviyoDone: ["kl", "klaviyo", "klgood"],
   homeLogged: ["url:/full?login=Dana"], helpersKnown: ["url:/products/savannah-red?tf=known&login=Dana", "fitknown", "reload"],
   typing: ["slowchat", "typing"], cut: ["cut"], e429: ["e429"], thanks: ["one", "thumb"], chips: ["chips"],
@@ -125,6 +126,7 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   await p.route("**/apps/hajirai/chat**", async (route) => { const k = JSON.parse(route.request().postData() || "{}").message; if (!SSE[k]) return route.continue(); route.fulfill({ status: 200, contentType: "text/event-stream", body: SSE[k].concat([{ type: "done" }]).map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") }); });
   if (steps.includes("horiz")) await p.route("**/products/savannah-red**", async (route) => { const res = await route.fetch(); route.fulfill({ response: res, body: (await res.text()).replace(/"showcase"/g, '"horizontal"') }); });
   if (steps.includes("horiz")) await p.route("**/apps/hajirai/widget-config**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ productCardStyle: "horizontal" }) }));
+  if (steps.includes("recon")) await p.route("**/apps/hajirai/widget-config**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ recording: { on: true, scope: "testers" } }) }));
   if (steps.includes("kl")) await p.route("**/apps/hajirai/widget-config**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ klaviyoCompanyId: "ABC123", klaviyoListId: "L1" }) }));
   if (steps.includes("klgood")) await p.route("https://a.klaviyo.com/**", (r) => r.fulfill({ status: 202, body: "" }));
   if (steps.includes("slowchat")) await p.route("**/apps/hajirai/chat**", async () => { await new Promise((res) => setTimeout(res, 20000)); });

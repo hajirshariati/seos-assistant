@@ -4301,3 +4301,29 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-choices .ai-chat-choice-btn:focus-visible,
 .ai-chat-panel .ai-chat-welcome__quickpicks .ai-chat-welcome__qp-btn:focus-visible { outline-offset: -3px !important; }
 .ai-chat-panel .ai-chat-product-card .ai-chat-product-img:focus-visible { outline: 2px solid #0d0d12 !important; outline-offset: -3px !important; }
+
+/* ---------- Test recording note ----------
+   Shown to the people whose chat is being saved for review (testers, or
+   everyone if the store chose that), just above the message box. */
+.ai-chat-panel .ai-chat-rec-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 16px 0;
+  font: 500 11.5px/1.3 var(--seos-font);
+  color: var(--seos-text-2);
+  text-align: center;
+}
+.ai-chat-panel .ai-chat-rec-note[hidden] { display: none; }
+.ai-chat-panel .ai-chat-rec-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.18);
+  animation: aiRecDot 2s ease-in-out infinite;
+}
+@keyframes aiRecDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-rec-dot { animation: none; } }
