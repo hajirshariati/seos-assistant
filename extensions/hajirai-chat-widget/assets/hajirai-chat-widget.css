@@ -4304,25 +4304,31 @@ button.ai-chat-launcher__text {
 
 /* ---------- Test recording note ----------
    Shown to the people whose chat is being saved for review (testers, or
-   everyone if the store chose that), just above the message box. */
+   everyone if the store chose that), as a quiet line under the title. */
 .ai-chat-panel .ai-chat-rec-note {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 6px 16px 0;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
   font: 500 11.5px/1.3 var(--seos-font);
   color: var(--seos-text-2);
-  text-align: center;
+}
+.ai-chat-panel .ai-chat-rec-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .ai-chat-panel .ai-chat-rec-note[hidden] { display: none; }
 .ai-chat-panel .ai-chat-rec-dot {
   width: 7px;
   height: 7px;
   flex: 0 0 7px;
+  margin-left: 1px;
   border-radius: 50%;
   background: #ff3b30;
-  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.18);
+  box-shadow: 0 0 0 2.5px rgba(255, 59, 48, 0.18);
   animation: aiRecDot 2s ease-in-out infinite;
 }
 @keyframes aiRecDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
