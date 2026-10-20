@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-soft');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-cloud');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -216,10 +216,10 @@ var GLOW_FRAG=[
 ' float fs=mix(.55,1.,abs(depth));',
 ' float sc=mix(.72,1.08,front);',
 ' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
-' float soft=mix(.42,.24,front);',            /* feathered: softer still when behind */
-' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',   /* smooth shoulder, no hard line */
-' float inner=mix(.7,1.,exp(-max(-d,0.)*.9));',
-' float glow=exp(-max(d,0.)*mix(1.8,2.6,front));',
+' float soft=mix(1.1,.75,front);',            /* a cloud of light: no readable outline */
+' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',
+' float inner=mix(.8,1.,exp(-max(-d,0.)*.7));',
+' float glow=exp(-max(d,0.)*mix(1.2,1.7,front));',
 ' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
 ' return vec2(edge*inner,glow)*vis;}',
 'void main(){',
@@ -239,13 +239,13 @@ var GLOW_FRAG=[
 ' vec2 p4=petal(uv,T*.68+3.0,.60,-T*.25+.3*sin(T*.45+3.),.60+.05*sin(T*.75+3.),.20,T,4.);',
 /* additive light: where petals cross the color builds toward white, as in glass */
 ' vec3 L=vec3(0.);',
-' L+=cyan*(p1.x*.85+p1.y*.34);',
-' L+=mag*(p2.x*.85+p2.y*.34);',
-' L+=vio*(p3.x*.78+p3.y*.32);',
-' L+=teal*(p4.x*.68+p4.y*.26);',
+' L+=cyan*(p1.x*.95+p1.y*.40);',
+' L+=mag*(p2.x*.95+p2.y*.40);',
+' L+=vio*(p3.x*.88+p3.y*.38);',
+' L+=teal*(p4.x*.76+p4.y*.30);',
 /* the white-hot core and its halo */
-' float core=exp(-r*r*20.);float halo=exp(-r*r*3.0);',
-' L+=vec3(1.)*(core*1.25+halo*.26);',
+' float core=exp(-r*r*14.);float halo=exp(-r*r*2.6);',
+' L+=vec3(1.)*(core*1.1+halo*.3);',
 /* a soft specular on the glass */
 ' float spec=pow(max(0.,1.-length(uv-vec2(-.38,.46))*1.7),3.)*.22;',
 ' vec3 col=body+L*mix(.78,.9,dark)+vec3(spec);',
