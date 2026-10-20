@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 theme-toggle');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 marble');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -218,10 +218,10 @@ var GLOW_FRAG=[
 ' float fs=mix(.55,1.,abs(depth));',
 ' float sc=mix(.72,1.08,front);',
 ' float d=length(p/vec2(len*sc*mix(1.,fs,.6),wid*sc))-1.;',
-' float soft=mix(.8,.5,front);',              /* soft clouds with a clear color center */
+' float soft=mix(.8,.5,front)*mix(1.,1.7,bare);',              /* soft clouds with a clear color center */
 ' float e=clamp(.5-d/soft,0.,1.);float edge=e*e*(3.-2.*e);',
 ' float inner=mix(.72,1.,exp(-max(-d,0.)*.9));',
-' float glow=exp(-max(d,0.)*mix(1.2,1.7,front));',
+' float glow=exp(-max(d,0.)*mix(1.2,1.7,front)*mix(1.,.8,bare));',
 ' float vis=mix(.18,1.,front);',               /* fades as it goes behind the core */
 ' return vec2(edge*inner,glow)*vis;}',
 'void main(){',
@@ -229,7 +229,7 @@ var GLOW_FRAG=[
 ' float T=t*.42+seed;',
 /* the bar's mark has no sphere: the petals are drawn a little tighter so the
    light fades out well inside the canvas and floats on the text box */
-' vec2 q=uv*mix(1.,1.5,bare);float rq=length(q);',
+' vec2 q=uv*mix(1.,1.6,bare);float rq=length(q);',
 /* the sphere: deep indigo glass, lighter toward the rim (Fresnel), a highlight up-left */
 ' float sph=1.-smoothstep(.955,.995,r);',
 ' vec3 body=mix(vec3(.11,.10,.22),vec3(.17,.15,.34),uv.y*.5+.5);',
@@ -249,11 +249,16 @@ var GLOW_FRAG=[
 '  vec4 w=vec4(p1.x*.95+p1.y*.40,p2.x*.95+p2.y*.40,p3.x*.88+p3.y*.38,p4.x*.76+p4.y*.30);',
 '  float sw=w.x+w.y+w.z+w.w;',
 '  vec3 C=(cyan*w.x+mag*w.y+vio*w.z+teal*w.w)/max(sw,1e-3);',
-'  float fade=1.-smoothstep(.5,.8,r);',
-'  float a=(1.-exp(-sw*mix(3.2,2.2,dark)))*fade;',
-'  C=mix(C*.9,C,dark);',
-'  float cw=exp(-rq*rq*12.)*fade*mix(.55,.9,dark);',
-'  gl_FragColor=vec4(C*a*(1.-cw)+vec3(cw),a+cw-a*cw);return;}',
+/* gentler color: a little less saturated, a touch deeper on white */
+'  C=mix(C,vec3(dot(C,vec3(.333))),.2);C=mix(C*.88,C,dark);',
+/* no outline: the light simply thins out toward the edge, floating in the bar */
+'  float R=.64;',
+'  float inside=1.-smoothstep(R-.24,R+.14,r);',
+'  float a=(1.-exp(-sw*mix(2.,2.1,dark)))*inside*mix(.82,.9,dark);',
+/* a small, soft heart of light (was brighter and larger) */
+'  float cw=exp(-rq*rq*16.)*inside*mix(.3,.42,dark);',
+'  vec3 rgb=C*a*(1.-cw)+vec3(cw);float al=a+cw-a*cw;',
+'  gl_FragColor=vec4(rgb,al);return;}',
 ' vec3 L=vec3(0.);',
 ' L+=cyan*(p1.x*.95+p1.y*.40);',
 ' L+=mag*(p2.x*.95+p2.y*.40);',
