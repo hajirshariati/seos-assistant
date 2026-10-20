@@ -3623,3 +3623,20 @@ button.ai-chat-launcher__text {
 @media (hover: hover) {
   .ai-chat-launcher:hover .ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: saturate(1.1) brightness(1.04); }
 }
+
+/* Dark theme: things drawn in "ink" with a white mark. Ink turns near-white
+   in dark mode, so the mark switches to charcoal (or the control keeps a
+   dark face where it sits over a white product photo). */
+.ai-chat-panel[data-theme="dark"] .ai-chat-products-arrow {
+  background: rgba(28, 28, 33, 0.92) !important;
+  color: #f5f5f7 !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-products-arrow:hover { background: #2a2a31 !important; }
+  .ai-chat-panel[data-theme="dark"] .ai-chat-choice-btn:hover { color: #0d0d12 !important; }
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-add { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-check { color: #0d0d12 !important; }
+/* The True Fit mark is a black tile: shown as its white version on dark. */
+.ai-chat-panel[data-theme="dark"] .ai-chat-tf-logo { filter: invert(1); }
