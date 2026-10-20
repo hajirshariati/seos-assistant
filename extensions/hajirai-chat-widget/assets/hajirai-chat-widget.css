@@ -3607,21 +3607,21 @@ button.ai-chat-launcher__text {
 }
 .ai-chat-glow { border-radius: 0; image-rendering: auto; }
 
-/* The bar's mark fills its rounded left end: no sphere, just light floating
-   in the text box. The canvas is larger than the bar and fades out on its
-   own; the bar's rounded edge keeps any last glow inside it. Negative
-   margins keep the bar its usual height. */
+/* The bar's mark: a dark glass sphere set into the bar's rounded left end,
+   an even 5px from its edge (both themes). Negative margins keep the bar
+   its usual height. */
 .ai-chat-launcher:not(.is-bubble) { padding-left: 0 !important; }
 .ai-chat-launcher__icon.is-orb {
-  width: 60px !important;
-  height: 60px !important;
-  margin: -12px -2px -12px -4px !important;
+  width: 40px !important;
+  height: 40px !important;
+  margin: -2px 10px -2px 4px !important;
   flex-shrink: 0;
 }
-.ai-chat-launcher__icon.is-orb .ai-chat-glow,
+.ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: drop-shadow(0 1px 2px rgba(13, 13, 18, 0.22)); }
 .ai-chat-launcher[data-theme="dark"] .ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: none; }
 @media (hover: hover) {
-  .ai-chat-launcher:hover .ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: saturate(1.1) brightness(1.04); }
+  .ai-chat-launcher:hover .ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: drop-shadow(0 1px 3px rgba(13, 13, 18, 0.28)) brightness(1.06); }
+  .ai-chat-launcher[data-theme="dark"]:hover .ai-chat-launcher__icon.is-orb .ai-chat-glow { filter: brightness(1.08); }
 }
 
 /* Dark theme: things drawn in "ink" with a white mark. Ink turns near-white

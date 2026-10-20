@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 siri-sheets');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 siri-orb');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -183,76 +183,79 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
 function aiSparkle(){return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 3.5Q11.9 11.1 19.5 12 11.9 12.9 11 20.5 10.1 12.9 2.5 12 10.1 11.1 11 3.5Z"/><path class="ai-chat-twinkle" d="M19 2.5Q19.35 4.65 21.5 5 19.35 5.35 19 7.5 18.65 5.35 16.5 5 18.65 4.65 19 2.5Z"/></svg>';}
-/* The assistant's mark, after the classic Siri orb. Each colored shape is a
-   thin curved sheet of light passing through the center and turning in 3D:
-   face-on it is a broad translucent lobe, edge-on a sharp bright spike, so
-   the same sheet keeps changing between the two. Light adds where sheets
-   cross, building to a soft white heart. In the bar the light floats with no
-   sphere; the round bubble keeps a faint glass body behind it. One shared
-   WebGL surface is drawn per look and copied into each canvas; random seed
-   per visit and incommensurate rates, so no visible loop. Idle while the
-   chat is open or the tab is hidden; one still frame for reduced motion.
-   Without WebGL, a soft 2D glow stands in. */
+/* The assistant's mark, after the classic Siri orb: a dark glass sphere
+   (in both themes) holding thin curved sheets of light that pass through
+   its center and turn in 3D. A sheet face-on is a broad translucent lobe;
+   edge-on it is a sharp spike, and star-point sheets have concave sides that
+   taper to needle tips. Colored light adds where sheets cross, building to a
+   white burst at the center; each sheet is brightest near the center and
+   deepens toward its far end; the sphere's rim catches a faint tint. One
+   shared WebGL surface is drawn per frame and copied into each canvas;
+   random seed per visit and incommensurate rates, so no visible loop. Idle
+   while the chat is open or the tab is hidden; one still frame for reduced
+   motion. Without WebGL, a soft 2D glow in a dark circle stands in. */
 var GLOW_STILL=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 var GLOW_SEED=Math.random()*100;
 var glows=[],glowGL=null;
 var GLOW_FRAG=[
 'precision mediump float;',
-'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;uniform float bare;',
-/* one sheet: a lens along its own axis, sharp at both tips, one end fuller
-   (skew), bent into a gentle curve. `roll` turns it about its long axis, so
-   its width is cos(roll): a lobe face-on, a spike edge-on. Returns
-   (coverage, bright edge, edge-on-ness). e = edge softness. */
-'vec3 sheet(vec2 q,float ang,float roll,float L1,float L2,float W,float skew,float bend,float e){',
+'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;',
+/* one sheet in its own frame: x along its length from -L1 to L2, widest at
+   uc. p shapes the sides: below 1 a rounded lobe, above 1 concave sides
+   tapering to a needle tip (a star point). bend curves it; roll turns it
+   about its long axis (width x |cos roll|). Returns (coverage, bright edge,
+   edge-on-ness). */
+'vec3 sheet(vec2 q,float ang,float roll,float L1,float L2,float W,float uc,float pw,float bend,float e){',
 ' float c=cos(ang),s=sin(ang);',
 ' vec2 p=vec2(c*q.x+s*q.y,-s*q.x+c*q.y);',
-' p.y-=bend*(p.x*p.x-.12);',
+' p.y-=bend*(p.x*p.x-.1);',
 ' float u=(p.x+L1)/(L1+L2);',
 ' float in1=step(0.,u)*step(u,1.);float uu=clamp(u,0.,1.);',
-' float h=W*pow(sin(3.14159*uu),.7)*(1.+skew*(uu-.5));',
-' float wf=max(abs(cos(roll)),.07);',
+' float f=uu<uc?uu/uc:(1.-uu)/(1.-uc);',
+' float h=W*pow(sin(1.5708*f),pw);',
+' float wf=max(abs(cos(roll)),.05);',
 ' float hw=h*wf;float ay=abs(p.y);',
 ' float m=(1.-smoothstep(hw-e,hw+e,ay))*in1;',
-' float edge=m*(1.-smoothstep(0.,.10+e,hw-ay));',
+' float edge=m*(1.-smoothstep(0.,.07+e,hw-ay));',
 ' return vec3(m,edge,1.-wf);}',
 'void main(){',
 ' vec2 uv=(gl_FragCoord.xy/res)*2.-1.;float r=length(uv);',
-' float T=t+seed*7.;',
-/* the light's frame: in the bar it fills a circle of radius .62 of the
-   canvas (so it fades out well inside), in the bubble most of the sphere */
-' float Rs=mix(.86,.62,bare);vec2 q=uv/Rs;float rq=length(q);',
-' float e=mix(.035,.07,bare);',
-' vec3 red=vec3(1.,.1,.18),blue=vec3(.08,.32,1.),cyan=vec3(.22,.88,1.),green=vec3(.12,.86,.62),pink=vec3(1.,.32,.58);',
-' vec3 L=vec3(0.);vec3 k;float lum;float rad=mix(.55,1.3,exp(-rq*rq*1.6));',
-/* five sheets, each with its own pace in the plane and in its roll */
-' k=sheet(q,.21*T+.5*sin(T*.21),.55*T+.4*sin(T*.3),.2,1.,.7,1.1,.25*sin(T*.4),e);',
-' lum=mix(.55,1.15,k.z);L+=red*(k.x*lum*.42+k.y*.2);',
-' k=sheet(q,-.17*T+3.6+.5*sin(T*.19+2.),.47*T+2.1+.4*sin(T*.27+1.),.25,.95,.66,1.,-.3*sin(T*.33+1.),e);',
-' lum=mix(.55,1.15,k.z);L+=blue*(k.x*lum*.5+k.y*.2);',
-' k=sheet(q,.29*T+6.8+.5*sin(T*.23+4.),.83*T+4.+.4*sin(T*.31+2.),.95,.95,.30,.2,.2*sin(T*.37+2.),e);',
-' lum=mix(.6,1.2,k.z);L+=cyan*(k.x*lum*.6+k.y*.22);',
-' k=sheet(q,-.23*T+9.+.5*sin(T*.17+5.),.61*T+5.3+.4*sin(T*.29+3.),.3,.9,.6,.9,-.2*sin(T*.41+3.),e);',
-' lum=mix(.55,1.15,k.z);L+=green*(k.x*lum*.38+k.y*.18);',
-' k=sheet(q,.33*T+2.2+.5*sin(T*.27+6.),.71*T+1.3+.4*sin(T*.35+4.),.8,.95,.27,.4,-.25*sin(T*.39+4.),e);',
-' lum=mix(.6,1.2,k.z);L+=pink*(k.x*lum*.58+k.y*.22);',
-/* the heart: where the sheets meet, soft white */
-' float core=exp(-rq*rq*10.);float halo=exp(-rq*rq*2.8);',
-' L+=vec3(1.)*(core*mix(.85,.6,bare)+halo*.12);',
+' float T=t*.85+seed*7.;',
+' vec2 q=uv/.9;float rq=length(q);float e=.03;',
+' vec3 red=vec3(1.,.12,.2),blue=vec3(.1,.3,1.),cyan=vec3(.2,.86,1.),green=vec3(.08,.85,.6),pink=vec3(1.,.28,.5);',
+/* brighter toward the center, deeper toward the far ends */
+' float rad=mix(.45,1.1,exp(-rq*rq*2.2));',
+' vec3 L=vec3(0.);vec3 k;',
+/* broad lobes, anchored near the center and spreading outward */
+' k=sheet(q,-.16*T+3.6+.6*sin(T*.19+2.),.42*T+2.1+.5*sin(T*.27+1.),.12,1.02,.86,.58,.5,-.25*sin(T*.33+1.),e);',
+' L+=blue*(k.x*mix(.42,.95,k.z)+k.y*.22);',
+' k=sheet(q,.2*T+.6*sin(T*.21),.5*T+.5*sin(T*.3),.15,.98,.76,.6,.5,.25*sin(T*.4),e);',
+' L+=red*(k.x*mix(.4,.95,k.z)+k.y*.2);',
+' k=sheet(q,-.22*T+9.+.6*sin(T*.17+5.),.57*T+5.3+.5*sin(T*.29+3.),.2,.94,.62,.55,.6,-.2*sin(T*.41+3.),e);',
+' L+=green*(k.x*mix(.34,.9,k.z)+k.y*.18);',
+/* star points: through the center, concave sides, needle tips */
+' k=sheet(q,.27*T+6.8+.6*sin(T*.23+4.),.74*T+4.+.5*sin(T*.31+2.),.95,.97,.46,.5,2.2,.22*sin(T*.37+2.),e);',
+' L+=cyan*(k.x*mix(.6,1.25,k.z)+k.y*.25);',
+' k=sheet(q,.31*T+2.2+.6*sin(T*.27+6.),.66*T+1.3+.5*sin(T*.35+4.),.88,.95,.36,.5,2.2,-.25*sin(T*.39+4.),e);',
+' L+=pink*(k.x*mix(.58,1.2,k.z)+k.y*.25);',
+' k=sheet(q,-.29*T+4.7+.6*sin(T*.25+1.),.79*T+3.2+.5*sin(T*.33+5.),.7,.96,.3,.45,2.4,.3*sin(T*.29+5.),e);',
+' L+=blue*(k.x*mix(.55,1.15,k.z)+k.y*.22);',
+' k=sheet(q,.24*T+7.9+.6*sin(T*.2+3.),.7*T+.4+.5*sin(T*.37+6.),.62,.95,.26,.42,2.4,-.28*sin(T*.31+6.),e);',
+' L+=red*(k.x*mix(.55,1.15,k.z)+k.y*.22);',
+' L*=rad*.78*(1.-smoothstep(.86,1.,r));',
+/* the white burst where the sheets meet */
+' float core=exp(-rq*rq*22.);float halo=exp(-rq*rq*5.);',
+' L+=vec3(1.)*(core*.75+halo*.08);',
 /* strong light turns white, as overlapping colored light does */
-' L*=rad;',
-' float wv=max(0.,(L.r+L.g+L.b)/3.-.8);',
-' vec3 col=1.-exp(-(L+vec3(wv*.5))*1.25);',
-' if(bare>.5){',
-/* floating: the light alone, fading out before the canvas edge; a touch
-   deeper on the white bar so the color holds */
-'  float fade=1.-smoothstep(.92,1.2,rq);',
-'  float a=min(1.,max(col.r,max(col.g,col.b))*mix(1.3,1.,dark))*fade;',
-'  col*=mix(.94,1.,max(dark,smoothstep(.45,.85,min(col.r,min(col.g,col.b)))));',
-'  gl_FragColor=vec4(col*fade,a);return;}',
-/* the bubble: a faint glass body behind the light, lighter toward the rim */
+' float wv=max(0.,(L.r+L.g+L.b)/3.-.95);',
+' vec3 col=1.-exp(-(L+vec3(wv*.6))*1.3);',
+/* the glass: near-black body, a faint tinted rim and a soft lift at the edge */
 ' float sph=1.-smoothstep(.955,.995,r);',
-' vec3 body=mix(vec3(.05,.05,.08),vec3(.09,.09,.14),uv.y*.5+.5);',
-' body+=vec3(.5,.55,.8)*smoothstep(.82,.96,r)*(1.-smoothstep(.96,1.,r))*.14;',
+' vec3 body=mix(vec3(.012,.012,.02),vec3(.035,.035,.055),smoothstep(.3,.95,r));',
+' float ang=atan(uv.y,uv.x);',
+' vec3 tint=mix(blue,red,.5+.5*sin(ang+T*.23))*.9+cyan*.1;',
+' float ring=smoothstep(.86,.97,r)*(1.-smoothstep(.97,.995,r));',
+' body+=tint*ring*.1;',
 ' col=body+col*(1.-body);',
 ' gl_FragColor=vec4(col*sph,sph);',
 '}'].join('\n');
@@ -274,14 +277,14 @@ function initGlowGL(){
     gl.uniform1f(gl.getUniformLocation(pr,'seed'),GLOW_SEED);
     gl.viewport(0,0,c.width,c.height);
     var dLoc=gl.getUniformLocation(pr,'dark');gl.uniform1f(dLoc,THEME==='dark'?1:0);
-    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc,bLoc:gl.getUniformLocation(pr,'bare')};
+    return {canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc};
   }catch(e){return null}
 }
-function renderGlowGL(t,bare){
-  var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.uniform1f(g.bLoc,bare?1:0);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
+function renderGlowGL(t){
+  var g=glowGL;g.gl.uniform1f(g.tLoc,t);g.gl.drawArrays(g.gl.TRIANGLE_STRIP,0,4);
 }
 /* Fallback without WebGL: soft drifting lights on a 2D canvas. */
-var GLOW_PALETTE=[[79,123,255],[139,92,246],[196,181,253],[240,171,252],[34,211,238]];
+var GLOW_PALETTE=[[26,77,255],[255,31,51],[51,219,255],[20,217,153],[255,71,128]];
 function glowColor(u){
   var n=GLOW_PALETTE.length,k=((u%n)+n)%n,i=Math.floor(k),f=k-i,a=GLOW_PALETTE[i],b=GLOW_PALETTE[(i+1)%n];
   f=f*f*(3-2*f);
@@ -290,6 +293,8 @@ function glowColor(u){
 function drawGlow2D(g,t){
   var ctx=g.ctx,s=g.px,S=Math.sin;
   ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,s,s);
+  ctx.fillStyle='#050508';ctx.beginPath();ctx.arc(s/2,s/2,s/2-.5,0,6.2832);ctx.fill();
+  ctx.globalCompositeOperation='lighter';
   for(var i=0;i<g.lights.length;i++){
     var l=g.lights[i];
     var x=s*(.5+l.spread*(S(t*l.fx1+l.px1)*.62+S(t*l.fx2+l.px2)*.38));
@@ -301,31 +306,26 @@ function drawGlow2D(g,t){
     ctx.fillStyle=grd;ctx.fillRect(0,0,s,s);
   }
   ctx.globalCompositeOperation='destination-in';
-  var m=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
-  m.addColorStop(0,'rgba(0,0,0,1)');m.addColorStop(.5,'rgba(0,0,0,.95)');m.addColorStop(.8,'rgba(0,0,0,.35)');m.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=m;ctx.fillRect(0,0,s,s);
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(s/2,s/2,s/2-.5,0,6.2832);ctx.fill();
 }
-function makeGlow(size,bare){
+function makeGlow(size){
   var c=document.createElement('canvas');
   c.className='ai-chat-glow';c.setAttribute('aria-hidden','true');
   var dpr=Math.min(window.devicePixelRatio||1,3),px=Math.round(size*dpr);
   c.width=px;c.height=px;c.style.width=size+'px';c.style.height=size+'px';
   var r=function(a,b){return a+Math.random()*(b-a)},lights=[];
   for(var i=0;i<5;i++)lights.push({fx1:r(.045,.075),fx2:r(.09,.125),fy1:r(.04,.07),fy2:r(.085,.12),fr:r(.05,.09),fc:r(.012,.02),px1:r(0,6.3),px2:r(0,6.3),py1:r(0,6.3),py2:r(0,6.3),pr:r(0,6.3),pc:i+r(-.3,.3),spread:r(.24,.36),radius:r(.24,.34),breath:r(.05,.09),alpha:r(.55,.75)});
-  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000),bare:!!bare};
+  var g={el:c,ctx:c.getContext('2d'),px:px,lights:lights,t0:r(0,1000)};
   glows.push(g);
   return c;
 }
 function paintGlows(t){
   if(glowGL===null)glowGL=initGlowGL()||false;
-  /* one pass per look: the floating mark in the bar, the sphere in the bubble */
-  for(var m=0;m<2;m++){
-    var drawn=false;
-    for(var i=0;i<glows.length;i++){
-      var g=glows[i];if(g.bare!==(m===1))continue;
-      if(glowGL){if(!drawn){renderGlowGL(t,m===1);drawn=true}g.ctx.clearRect(0,0,g.px,g.px);g.ctx.drawImage(glowGL.canvas,0,0,g.px,g.px)}
-      else drawGlow2D(g,t+g.t0);
-    }
+  if(glowGL)renderGlowGL(t);
+  for(var i=0;i<glows.length;i++){
+    var g=glows[i];
+    if(glowGL){g.ctx.clearRect(0,0,g.px,g.px);g.ctx.drawImage(glowGL.canvas,0,0,g.px,g.px)}
+    else drawGlow2D(g,t+g.t0);
   }
 }
 function glowLoop(){
@@ -342,7 +342,7 @@ launcher.style.maxWidth='calc(100vw - 32px)';
    across pages. */
 launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"></div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
   '<span class="ai-chat-launcher__orb" aria-hidden="true"></span>';
-$('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(60,true));
+$('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(40));
 $('.ai-chat-launcher__orb',launcher).appendChild(makeGlow(48));
 if(GLOW_STILL)paintGlows(GLOW_SEED);else requestAnimationFrame(glowLoop);
 
