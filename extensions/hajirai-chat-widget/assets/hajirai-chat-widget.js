@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 states-all');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 layers-globe');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -39,6 +39,7 @@ if(_cachedRules&&matchesHideRule(_cachedRules))return;
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
+  if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
@@ -199,6 +200,8 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
    blue, cyan, green and pink unless the store picks its own. Cached so the
    next page starts in the store's colors before widget-config answers. */
 var ORB_DEFAULT=['#ff1f33','#1a4dff','#33dbff','#14d999','#ff4780'],ORB_KEY='hajirai_orb_colors',ORB_COLORS=ORB_DEFAULT.slice();
+/* The globe's own color behind the light (Settings → Assistant look). */
+var ORB_BG_DEFAULT='#05050a',ORB_BG_KEY='hajirai_orb_bg',ORB_BG=ORB_BG_DEFAULT;
 function orbParse(v){
   if(!v||typeof v!=='object'||v.length!==5)return null;
   var out=[];
@@ -206,10 +209,19 @@ function orbParse(v){
   return out;
 }
 try{var _oc=orbParse(JSON.parse(localStorage.getItem(ORB_KEY)));if(_oc)ORB_COLORS=_oc}catch(e){}
+try{var _ob=localStorage.getItem(ORB_BG_KEY);if(_ob&&/^#[0-9a-f]{6}$/i.test(_ob))ORB_BG=_ob.toLowerCase()}catch(e){}
 function hexRgb(h){return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]}
 function orbUniforms(){
   if(!glowGL||!glowGL.cLocs)return;
   for(var i=0;i<5;i++){var c=hexRgb(ORB_COLORS[i]);glowGL.gl.uniform3f(glowGL.cLocs[i],c[0]/255,c[1]/255,c[2]/255)}
+  var bg=hexRgb(ORB_BG);if(glowGL.bgLoc)glowGL.gl.uniform3f(glowGL.bgLoc,bg[0]/255,bg[1]/255,bg[2]/255);
+}
+function setOrbBackground(v){
+  var ok=typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
+  ORB_BG=ok?v.toLowerCase():ORB_BG_DEFAULT;
+  try{if(ok&&ORB_BG!==ORB_BG_DEFAULT)localStorage.setItem(ORB_BG_KEY,ORB_BG);else localStorage.removeItem(ORB_BG_KEY)}catch(e){}
+  orbUniforms();
+  if(GLOW_STILL&&glows.length)paintGlows(GLOW_SEED);
 }
 function orbCssVars(){
   for(var i=0;i<5;i++){
@@ -230,7 +242,7 @@ var glows=[],glowGL=null;
 var GLOW_FRAG=[
 'precision mediump float;',
 'uniform float t;uniform float seed;uniform vec2 res;uniform float dark;',
-'uniform vec3 c0;uniform vec3 c1;uniform vec3 c2;uniform vec3 c3;uniform vec3 c4;',
+'uniform vec3 c0;uniform vec3 c1;uniform vec3 c2;uniform vec3 c3;uniform vec3 c4;uniform vec3 cbg;',
 /* one sheet in its own frame: x along its length from -L1 to L2, widest at
    uc. p shapes the sides: below 1 a rounded lobe, above 1 concave sides
    tapering to a needle tip (a star point). bend curves it; roll turns it
@@ -280,14 +292,27 @@ var GLOW_FRAG=[
 /* strong light turns white, as overlapping colored light does */
 ' float wv=max(0.,(L.r+L.g+L.b)/3.-.95);',
 ' vec3 col=1.-exp(-(L+vec3(wv*.6))*1.3);',
-/* the glass: near-black body, a faint tinted rim and a soft lift at the edge */
+/* the glass: the globe color, a faint tinted rim and a soft lift at the edge */
 ' float sph=1.-smoothstep(.955,.995,r);',
-' vec3 body=mix(vec3(.012,.012,.02),vec3(.035,.035,.055),smoothstep(.3,.95,r));',
+' float lb=dot(cbg,vec3(.299,.587,.114));',
+/* the store's globe color: a touch lighter toward the rim on dark glass, a
+   touch deeper on light glass */
+' vec3 rimc=lb>.5?cbg*.93:cbg+vec3(.023,.023,.035);',
+' vec3 body=mix(cbg,rimc,smoothstep(.3,.95,r));',
 ' float ang=atan(uv.y,uv.x);',
 ' vec3 tint=mix(blue,red,.5+.5*sin(ang+T*.23))*.9+cyan*.1;',
 ' float ring=smoothstep(.86,.97,r)*(1.-smoothstep(.97,.995,r));',
 ' body+=tint*ring*.1;',
-' col=body+col*(1.-body);',
+/* the light over the glass (premultiplied: col is the light, its brightest
+   channel how much it covers), so it stays vivid on a light globe too */
+' float la=max(col.r,max(col.g,col.b));',
+/* on a light globe the light needs more body to read: stronger coverage and
+   slightly deeper color, while the white heart stays white */
+' float lite=smoothstep(.35,.65,lb);',
+' vec3 hue=col/max(la,.001);',
+' hue=mix(hue,mix(hue*.8,hue,smoothstep(.45,.85,min(hue.r,min(hue.g,hue.b)))),lite);',
+' float cov=min(1.,la*mix(1.,1.7,lite));',
+' col=hue*cov+body*(1.-cov);',
 ' gl_FragColor=vec4(col*sph,sph);',
 '}'].join('\n');
 function initGlowGL(){
@@ -311,6 +336,7 @@ function initGlowGL(){
     var cLocs=[];for(var ci=0;ci<5;ci++)cLocs.push(gl.getUniformLocation(pr,'c'+ci));
     var g={canvas:c,gl:gl,tLoc:gl.getUniformLocation(pr,'t'),dLoc:dLoc,cLocs:cLocs};
     for(var cj=0;cj<5;cj++){var rgb=hexRgb(ORB_COLORS[cj]);gl.uniform3f(cLocs[cj],rgb[0]/255,rgb[1]/255,rgb[2]/255)}
+    g.bgLoc=gl.getUniformLocation(pr,'cbg');var bgc=hexRgb(ORB_BG);gl.uniform3f(g.bgLoc,bgc[0]/255,bgc[1]/255,bgc[2]/255);
     return g;
   }catch(e){return null}
 }
@@ -326,7 +352,7 @@ function glowColor(u){
 function drawGlow2D(g,t){
   var ctx=g.ctx,s=g.px,S=Math.sin;
   ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,s,s);
-  ctx.fillStyle='#050508';ctx.beginPath();ctx.arc(s/2,s/2,s/2-.5,0,6.2832);ctx.fill();
+  ctx.fillStyle=ORB_BG;ctx.beginPath();ctx.arc(s/2,s/2,s/2-.5,0,6.2832);ctx.fill();
   ctx.globalCompositeOperation='lighter';
   for(var i=0;i<g.lights.length;i++){
     var l=g.lights[i];
@@ -854,12 +880,18 @@ function playWelcomeIntro(){
    above every layer of the page; blurred behind the open chat they show up
    as smudges on top of it. Hide those while the chat is open, restore after. */
 var hiddenFloaters=[];
+/* Cookie-consent banners are never hidden: the shopper may need to answer
+   them, and they stay on top of the chat. */
+function isConsentUi(el){
+  var id=(el.id||'')+' '+(typeof el.className==='string'?el.className:'');
+  return /onetrust|optanon|cookiebot|CybotCookiebot|cookie|consent|shopify-pc__|cc-window|truste|didomi|usercentrics|osano|termly|iubenda/i.test(id);
+}
 function hideFloaters(){
   var ours=parseInt(getComputedStyle(overlay).zIndex,10)||0;
   var kids=document.body.children;
   for(var i=0;i<kids.length;i++){
     var el=kids[i];
-    if(el===panel||el===overlay||el===launcher||el.contains(panel))continue;
+    if(el===panel||el===overlay||el===launcher||el.contains(panel)||isConsentUi(el))continue;
     var cs=getComputedStyle(el);
     if((cs.position==='fixed'||cs.position==='sticky')&&cs.visibility!=='hidden'&&(parseInt(cs.zIndex,10)||0)>=ours){
       hiddenFloaters.push([el,el.style.visibility]);
@@ -877,7 +909,7 @@ function inertPage(on){
   var kids=document.body.children;
   for(var i=0;i<kids.length;i++){
     var el=kids[i];
-    if(el===panel||el===overlay||el===launcher||el.contains(panel)||el.inert||/^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(el.tagName))continue;
+    if(el===panel||el===overlay||el===launcher||el.contains(panel)||el.inert||isConsentUi(el)||/^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(el.tagName))continue;
     el.inert=true;inertEls.push(el);
   }
 }

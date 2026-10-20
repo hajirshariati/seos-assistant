@@ -174,12 +174,14 @@ for (const theme of ["dark", "light"]) {
 
 // The store's orb colors reach the page (and are remembered); bad ones fall back
 const PICK = ["#112233", "#445566", "#778899", "#aabbcc", "#ddeeff"];
-wcNow = { orbColors: PICK };
+wcNow = { orbColors: PICK, orbBackground: "#f4efe8" };
 await run({}, async (p) => {
   await p.waitForTimeout(200);
   const got = await p.evaluate(() => ({ css: [0, 1, 2, 3, 4].map((i) => getComputedStyle(document.querySelector(".ai-chat-panel")).getPropertyValue(`--orb-c${i}`).trim()), cached: localStorage.getItem("hajirai_orb_colors") }));
   check("orb colors: the store's five colors applied", JSON.stringify(got.css) === JSON.stringify(PICK), JSON.stringify(got));
   check("orb colors: remembered for the next page", got.cached === JSON.stringify(PICK), got.cached);
+  const bg = await p.evaluate(() => localStorage.getItem("hajirai_orb_bg"));
+  check("globe color: the store's color applied and remembered", bg === "#f4efe8", bg);
 });
 wcNow = { orbColors: ["#112233", "red", "#778899"] };
 await run({}, async (p) => {

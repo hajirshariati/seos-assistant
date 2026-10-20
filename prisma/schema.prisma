@@ -138,6 +138,8 @@ model ShopConfig {
   // The assistant mark's five sheet colors, comma-separated hex; "" = Siri defaults
   // (Settings → Assistant look).
   orbColors              String   @default("")
+  // The globe's own color behind the light, hex; "" = near-black glass.
+  orbBackground          String   @default("")
   // The talk (voice input) button beside Send in the chat.
   voiceInput             Boolean  @default(true)
   similarMatchAttributes String   @default("[]")

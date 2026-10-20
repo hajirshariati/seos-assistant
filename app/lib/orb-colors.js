@@ -4,6 +4,9 @@
 
 export const ORB_DEFAULT_COLORS = ["#ff1f33", "#1a4dff", "#33dbff", "#14d999", "#ff4780"];
 
+// The globe's own color behind the light (near-black glass by default).
+export const ORB_DEFAULT_BG = "#05050a";
+
 // What each color paints, in the order the shader reads them.
 export const ORB_COLOR_ROLES = [
   { label: "Warm lobe & spike", hint: "Siri red" },
@@ -39,4 +42,14 @@ export function serializeOrbColors(values) {
   const colors = (values || []).map(normalizeHex);
   if (colors.length !== 5 || !colors.every(Boolean)) return null;
   return isDefaultOrbColors(colors) ? "" : colors.join(",");
+}
+
+// The globe color: stored as "" (the default) or one hex color.
+export function parseOrbBackground(stored) {
+  return normalizeHex(stored) || ORB_DEFAULT_BG;
+}
+export function serializeOrbBackground(value) {
+  const hex = normalizeHex(value);
+  if (!hex) return null;
+  return hex === ORB_DEFAULT_BG ? "" : hex;
 }

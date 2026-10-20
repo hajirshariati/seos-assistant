@@ -2307,10 +2307,14 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
 }
 
 /* ================================================================
-   LAUNCHER — in front of other apps; the × folds it into a bubble
+   LAUNCHER — the × folds it into a bubble. It sits above the page's
+   content but BELOW everything that floats over it: cart drawers,
+   pop-ups, cookie-consent banners (OneTrust, Shopify's own) and other
+   chat apps. It never covers anything the shopper needs to act on.
+   (The open chat, which the shopper asked for, sits above the page.)
    ================================================================ */
 .ai-chat-launcher {
-  z-index: 2147483647;
+  z-index: 999 !important;
 }
 .ai-chat-launcher__orb {
   display: none;

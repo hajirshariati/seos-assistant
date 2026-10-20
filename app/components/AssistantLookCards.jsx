@@ -5,7 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { Card, BlockStack, InlineStack, Text, Button, Checkbox, TextField } from "@shopify/polaris";
 import { ORB_FRAG } from "../lib/orb-shader";
-import { ORB_DEFAULT_COLORS, ORB_COLOR_ROLES, normalizeHex, isDefaultOrbColors } from "../lib/orb-colors";
+import { ORB_DEFAULT_COLORS, ORB_DEFAULT_BG, ORB_COLOR_ROLES, normalizeHex } from "../lib/orb-colors";
+
+// The five light colors, then the globe's own color behind them.
+const ROLES = [...ORB_COLOR_ROLES, { label: "Globe background", hint: "deep black glass" }];
+const DEFAULTS = [...ORB_DEFAULT_COLORS, ORB_DEFAULT_BG];
 
 function hexToRgb(hex) {
   const h = normalizeHex(hex) || "#000000";
@@ -14,6 +18,7 @@ function hexToRgb(hex) {
 
 // The mark, animated, at the size it's drawn: the same shader the widget runs.
 function OrbPreview({ colors, size = 96 }) {
+  // colors: the five light colors, then the globe color.
   const ref = useRef(null);
   const colorsRef = useRef(colors);
   const redrawRef = useRef(null);
@@ -43,7 +48,7 @@ function OrbPreview({ colors, size = 96 }) {
     gl.uniform1f(gl.getUniformLocation(pr, "dark"), 1);
     gl.viewport(0, 0, canvas.width, canvas.height);
     const tLoc = gl.getUniformLocation(pr, "t");
-    const cLocs = [0, 1, 2, 3, 4].map((i) => gl.getUniformLocation(pr, `c${i}`));
+    const cLocs = [0, 1, 2, 3, 4].map((i) => gl.getUniformLocation(pr, `c${i}`)).concat([gl.getUniformLocation(pr, "cbg")]);
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
     const draw = (now) => {
@@ -63,17 +68,18 @@ function OrbPreview({ colors, size = 96 }) {
   return <canvas ref={ref} aria-hidden="true" style={{ width: size, height: size, display: "block" }} />;
 }
 
-export function OrbColorsCard({ initial }) {
+export function OrbColorsCard({ initial, initialBg = ORB_DEFAULT_BG }) {
   const fetcher = useFetcher();
-  const [saved, setSaved] = useState(initial);
-  const [colors, setColors] = useState(initial);
-  const [drafts, setDrafts] = useState(initial);
+  const start = [...initial, initialBg];
+  const [saved, setSaved] = useState(start);
+  const [colors, setColors] = useState(start);
+  const [drafts, setDrafts] = useState(start);
   const valid = colors.every((c) => normalizeHex(c));
   const dirty = colors.some((c, i) => normalizeHex(c) !== normalizeHex(saved[i]));
   const busy = fetcher.state !== "idle";
 
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.orbSaved) setSaved(fetcher.data.colors);
+    if (fetcher.state === "idle" && fetcher.data?.orbSaved) setSaved([...fetcher.data.colors, fetcher.data.bg]);
   }, [fetcher.state, fetcher.data]);
 
   const setOne = (i, value) => {
@@ -84,12 +90,13 @@ export function OrbColorsCard({ initial }) {
   const save = (next) => {
     const fd = new FormData();
     fd.set("intent", "save_orb_colors");
-    next.forEach((c, i) => fd.set(`c${i}`, c));
+    next.slice(0, 5).forEach((c, i) => fd.set(`c${i}`, c));
+    fd.set("bg", next[5]);
     fetcher.submit(fd, { method: "post" });
   };
   const reset = () => {
-    setColors(ORB_DEFAULT_COLORS.slice());
-    setDrafts(ORB_DEFAULT_COLORS.slice());
+    setColors(DEFAULTS.slice());
+    setDrafts(DEFAULTS.slice());
   };
 
   return (
@@ -98,8 +105,9 @@ export function OrbColorsCard({ initial }) {
         <BlockStack gap="100">
           <Text as="h2" variant="headingMd">Assistant mark colors</Text>
           <Text as="p" tone="subdued">
-            The five colors of the light sheets turning inside the assistant&apos;s mark, in the chat bar and the bubble.
-            They blend where they cross, so pick colors that work together. Changes reach your storefront within a minute.
+            The five colors of the light sheets turning inside the assistant&apos;s mark, and the globe&apos;s own color
+            behind them, in the chat bar and the bubble. The light blends where it crosses, so pick colors that work
+            together. Changes reach your storefront within a minute.
           </Text>
         </BlockStack>
         <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
@@ -114,8 +122,8 @@ export function OrbColorsCard({ initial }) {
           </div>
           <style>{".orb-swatch::-webkit-color-swatch-wrapper{padding:0}.orb-swatch::-webkit-color-swatch{border:0;border-radius:50%}.orb-swatch::-moz-color-swatch{border:0;border-radius:50%}"}</style>
           <div style={{ display: "grid", gap: 10, flex: "1 1 280px", minWidth: 260 }}>
-            {ORB_COLOR_ROLES.map((role, i) => (
-              <div key={role.label} style={{ display: "grid", gridTemplateColumns: "36px 1fr 120px", gap: 10, alignItems: "center" }}>
+            {ROLES.map((role, i) => (
+              <div key={role.label} style={{ display: "grid", gridTemplateColumns: "36px 1fr 120px", gap: 10, alignItems: "center", ...(i === 5 ? { marginTop: 6, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.08)" } : {}) }}>
                 <input
                   className="orb-swatch"
                   type="color"
@@ -142,7 +150,7 @@ export function OrbColorsCard({ initial }) {
         </div>
         <InlineStack gap="300" blockAlign="center">
           <Button variant="primary" onClick={() => save(colors)} disabled={!dirty || !valid} loading={busy}>Save colors</Button>
-          <Button onClick={reset} disabled={isDefaultOrbColors(colors)}>Reset to Siri colors</Button>
+          <Button onClick={reset} disabled={colors.every((c, i) => normalizeHex(c) === DEFAULTS[i])}>Reset to defaults</Button>
           {!busy && fetcher.data?.orbSaved && !dirty && <Text as="span" variant="bodySm" tone="success">Saved — live on your storefront within a minute.</Text>}
           {fetcher.data?.orbError && <Text as="span" variant="bodySm" tone="critical">{fetcher.data.orbError}</Text>}
         </InlineStack>
@@ -168,8 +176,8 @@ export function VoiceInputCard({ initialOn }) {
           <BlockStack gap="100">
             <Text as="h2" variant="headingMd">Talk button</Text>
             <Text as="p" tone="subdued">
-              A mic beside Send: shoppers tap it and speak, their words appear as they talk, and the message sends
-              when they pause. The assistant still answers in text. Uses the browser&apos;s built-in speech
+              A mic in the message box: shoppers tap it and speak, their words appear as they talk, and the message
+              sends when they pause (the mic turns into Send as soon as there are words). The assistant still answers in text. Uses the browser&apos;s built-in speech
               recognition (Chrome, Safari, Edge) and is hidden where that isn&apos;t available.
             </Text>
           </BlockStack>

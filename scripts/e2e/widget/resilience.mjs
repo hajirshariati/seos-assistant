@@ -165,6 +165,32 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 8b. Below everything that floats: a cookie-consent banner (OneTrust) and a
+// cart drawer both sit on top of the chat bar; the consent banner is never
+// hidden or locked while the chat is open, and stays above it.
+{
+  const { ctx, page } = await open("/full");
+  await page.evaluate(() => {
+    const ot = document.createElement("div"); ot.id = "onetrust-consent-sdk";
+    ot.innerHTML = '<div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;height:140px;background:#fff;z-index:2147483645"><button id="ot-accept">Accept</button></div>';
+    document.body.appendChild(ot);
+  });
+  await page.waitForTimeout(300);
+  const under = await page.evaluate(() => { const r = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!top && !!top.closest("#onetrust-consent-sdk"); });
+  check("layers: the cookie banner covers the chat bar, not the other way round", under);
+  await page.evaluate(() => { document.getElementById("onetrust-consent-sdk").remove(); const d = document.createElement("div"); d.id = "drawer"; d.style.cssText = "position:fixed;top:0;right:0;bottom:0;width:100%;background:#eee;z-index:1000"; document.body.appendChild(d); });
+  await page.waitForTimeout(200);
+  const drawer = await page.evaluate(() => { const r = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id === "drawer"; });
+  check("layers: a cart drawer covers the chat bar", drawer);
+  await page.evaluate(() => { document.getElementById("drawer").remove(); const ot = document.createElement("div"); ot.id = "onetrust-consent-sdk"; ot.innerHTML = '<div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;height:90px;background:#fff;z-index:2147483645"><button id="ot-accept" style="width:200px;height:40px">Accept</button></div>'; document.body.appendChild(ot); });
+  await page.click(".ai-chat-launcher__text", { force: true }); await page.waitForTimeout(800);
+  const open1 = await page.evaluate(() => ({ visible: getComputedStyle(document.getElementById("onetrust-consent-sdk")).visibility !== "hidden", inert: !!document.getElementById("onetrust-consent-sdk").inert, panelOpen: document.querySelector(".ai-chat-panel").classList.contains("open") || getComputedStyle(document.querySelector(".ai-chat-panel")).display !== "none" }));
+  check("layers: with the chat open, the cookie banner stays visible and usable", open1.visible && !open1.inert && open1.panelOpen, JSON.stringify(open1));
+  const onTop = await page.evaluate(() => { const r = document.getElementById("ot-accept").getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id === "ot-accept"; });
+  check("layers: the cookie banner's button is on top of the open chat", onTop);
+  await ctx.close();
+}
+
 // 9. Keyboard: open with Enter, Tab stays inside, Escape returns focus.
 {
   const { ctx, page } = await open();

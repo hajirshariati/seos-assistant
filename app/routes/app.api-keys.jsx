@@ -29,7 +29,7 @@ import { getShopPlan } from "../lib/billing.server";
 import { PlanGate } from "../components/PlanGate";
 import BrandHeader from "../components/BrandHeader";
 import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards";
-import { parseOrbColors, serializeOrbColors } from "../lib/orb-colors";
+import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -47,6 +47,7 @@ export const loader = async ({ request }) => {
     hideOnUrls,
     welcomeIntroOn: config.welcomeGlowStyle !== "none",
     orbColors: parseOrbColors(config.orbColors),
+    orbBackground: parseOrbBackground(config.orbBackground),
     voiceInput: config.voiceInput !== false,
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
@@ -87,9 +88,10 @@ export const action = async ({ request }) => {
   const intent = formData.get("intent");
   if (intent === "save_orb_colors") {
     const stored = serializeOrbColors([0, 1, 2, 3, 4].map((i) => formData.get(`c${i}`)));
-    if (stored === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
-    await updateShopConfig(session.shop, { orbColors: stored });
-    return { orbSaved: true, colors: parseOrbColors(stored) };
+    const bg = serializeOrbBackground(formData.get("bg"));
+    if (stored === null || bg === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
+    await updateShopConfig(session.shop, { orbColors: stored, orbBackground: bg });
+    return { orbSaved: true, colors: parseOrbColors(stored), bg: parseOrbBackground(bg) };
   }
 
   if (intent === "save_voice_input") {
@@ -477,7 +479,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, voiceInput } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -797,7 +799,7 @@ export default function ApiKeys() {
               description="The colors of the assistant's animated mark, and the talk button in the chat."
             >
               <BlockStack gap="400">
-                <OrbColorsCard initial={orbColors} />
+                <OrbColorsCard initial={orbColors} initialBg={orbBackground} />
                 <VoiceInputCard initialOn={voiceInput} />
               </BlockStack>
             </Layout.AnnotatedSection>

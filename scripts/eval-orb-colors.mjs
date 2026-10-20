@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { ORB_FRAG } from "../app/lib/orb-shader.js";
-import { ORB_DEFAULT_COLORS, normalizeHex, parseOrbColors, serializeOrbColors, isDefaultOrbColors } from "../app/lib/orb-colors.js";
+import { ORB_DEFAULT_COLORS, ORB_DEFAULT_BG, normalizeHex, parseOrbColors, serializeOrbColors, isDefaultOrbColors, parseOrbBackground, serializeOrbBackground } from "../app/lib/orb-colors.js";
 
 let passed = 0;
 let failed = 0;
@@ -56,6 +56,19 @@ test("saving: the defaults store as empty, invalid input is refused", () => {
   assert.equal(serializeOrbColors(["#111111", "nope", "#333333", "#444444", "#555555"]), null);
   assert.equal(serializeOrbColors(["#111111"]), null);
   assert.ok(isDefaultOrbColors(ORB_DEFAULT_COLORS));
+});
+
+test("the globe color: same default in widget and Settings, always a valid color", () => {
+  assert.match(ORB_FRAG, /uniform vec3 cbg;/, "the shader takes the globe color");
+  const m = widget.match(/var ORB_BG_DEFAULT='(#[0-9a-f]{6})'/);
+  assert.ok(m, "widget default present");
+  assert.equal(m[1], ORB_DEFAULT_BG);
+  assert.equal(parseOrbBackground(""), ORB_DEFAULT_BG);
+  assert.equal(parseOrbBackground("nope"), ORB_DEFAULT_BG);
+  assert.equal(parseOrbBackground("#FFFFFF"), "#ffffff");
+  assert.equal(serializeOrbBackground(ORB_DEFAULT_BG), "", "default stores as empty");
+  assert.equal(serializeOrbBackground("#fff"), "#ffffff");
+  assert.equal(serializeOrbBackground("blue"), null, "invalid refused");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
