@@ -4260,3 +4260,40 @@ button.ai-chat-launcher__text {
 /* No avatar photo: the header's placeholder is a light circle in dark mode,
    so its icon is charcoal (like the welcome placeholder). */
 .ai-chat-panel[data-theme="dark"] .ai-chat-header__avatar.ai-chat-header__avatar--placeholder { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+
+/* ======================================================================
+   INTERACTION STATES — hover, press and keyboard focus, in both themes
+   ====================================================================== */
+/* Answer chips: hover inverts, like light mode (there: black chip, white
+   text; here: light chip, charcoal text). The resting dark rule above is
+   !important, so hover and press must be too. */
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-choice-btn:hover {
+    background: var(--seos-ink) !important;
+    border-color: var(--seos-ink) !important;
+    color: #0d0d12 !important;
+  }
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-choice-btn:active {
+  background: #d9d9de !important;
+  border-color: #d9d9de !important;
+  color: #0d0d12 !important;
+}
+/* One clear keyboard-focus ring for every control, in the ink color (dark in
+   light mode, light in dark mode) and offset from the control so it reads on
+   any surface. Only for keyboard focus — taps and clicks don't show it. The
+   message box shows focus on its capsule instead. */
+.ai-chat-panel :is(button, a[href], [role="button"], input:not(.ai-chat-input)):focus-visible,
+.ai-chat-launcher :is(button, a[href], [role="button"]):focus-visible,
+.ai-chat-launcher.is-bubble:focus-visible {
+  outline: 2px solid var(--seos-ink) !important;
+  outline-offset: 2px !important;
+}
+.ai-chat-panel .ai-chat-input-wrap:focus-within { border-color: var(--seos-text-2) !important; }
+/* Where a control sits against a clipping edge (a card's rounded corners, a
+   row that scrolls sideways), its focus ring is drawn just inside it so it's
+   never cut off. Product photos sit on white in both themes: their ring is
+   charcoal. */
+.ai-chat-panel .ai-chat-choices .ai-chat-choice-btn:focus-visible,
+.ai-chat-panel .ai-chat-welcome__quickpicks .ai-chat-welcome__qp-btn:focus-visible { outline-offset: -3px !important; }
+.ai-chat-panel .ai-chat-product-card .ai-chat-product-img:focus-visible { outline: 2px solid #0d0d12 !important; outline-offset: -3px !important; }

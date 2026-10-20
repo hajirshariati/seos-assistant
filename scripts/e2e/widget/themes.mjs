@@ -38,6 +38,7 @@ const SCENES = {
   orth: ["orth"], orthAdd: ["orth", "tap0"], choices: ["choices"], fit: ["fit"], report: ["report"], size: ["size"], support: ["support"], error: ["error"],
   horiz: ["horiz", "many"], horizAtc: ["horiz", "many", "atc1", "pick"], phoneMany: ["phone", "many"], phoneAtc: ["phone", "many", "atc1", "pick"], phoneOneAtc: ["phone", "one", "atc0", "pick"],
   talk: ["talk"], typed: ["typed"],
+  bar: ["noopen"], bubble: ["noopen", "bubble"],
   klaviyo: ["kl", "klaviyo"], klaviyoErr: ["kl", "klaviyo", "klbad"], klaviyoDone: ["kl", "klaviyo", "klgood"],
   homeLogged: ["url:/full?login=Dana"], helpersKnown: ["url:/products/savannah-red?tf=known&login=Dana", "fitknown", "reload"],
   typing: ["slowchat", "typing"], cut: ["cut"], e429: ["e429"], thanks: ["one", "thumb"], chips: ["chips"],
@@ -73,6 +74,45 @@ const probe = () => {
   }
   return [...out];
 };
+// Hover, keyboard focus and press: every button, link and field in the open
+// chat (and the launcher) is put in each state and its text and icons must
+// still read against what's behind them.
+const tagInteractive = () => {
+  document.querySelectorAll("[data-hv]").forEach((e) => e.removeAttribute("data-hv"));
+  const sel = "button, a[href], input, textarea, [role=button]";
+  let i = 0;
+  for (const e of document.querySelectorAll(`.ai-chat-panel :is(${sel}), .ai-chat-launcher :is(${sel})`)) {
+    const r = e.getBoundingClientRect(); if (!r.width || !r.height) continue;
+    let hid = false; for (let a = e; a && a !== document.body; a = a.parentElement) { const s = getComputedStyle(a); if (s.display === "none" || s.visibility === "hidden" || Number(s.opacity) < 0.05) { hid = true; break; } }
+    if (hid || e.closest(".is-out, .is-stale") || e.disabled) continue;
+    e.setAttribute("data-hv", String(i++));
+  }
+  return i;
+};
+const checkOne = ([k, state]) => {
+  const el = document.querySelectorAll("[data-hv]")[k]; if (!el) return [];
+  const lum = (c) => { const m = c && c.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return { L: 0.2126 * r + 0.7152 * g + 0.0722 * b, a: m[3] === undefined ? 1 : Number(m[3]) }; };
+  const theme = document.querySelector(".ai-chat-panel").getAttribute("data-theme");
+  const bgOf = (e) => { for (let x = e; x; x = x.parentElement) { const l = lum(getComputedStyle(x).backgroundColor); if (l && l.a > 0.5) return l.L; } return theme === "dark" ? 0.008 : 1; };
+  const cr = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  const nm = (e) => (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : e.tagName.toLowerCase());
+  const out = [];
+  const nodes = [el, ...el.querySelectorAll("*")];
+  for (const n of nodes) {
+    const cs = getComputedStyle(n);
+    if (cs.visibility === "hidden" || Number(cs.opacity) < 0.05) continue;
+    const own = [...n.childNodes].some((t) => t.nodeType === 3 && t.textContent.trim());
+    if (own || (n.tagName === "INPUT" && n.value)) { const fg = lum(cs.color); if (fg) { const c = cr(fg.L, bgOf(n)); if (c < 3) out.push(`${state} TEXT ${c.toFixed(1)} ${nm(el)}${n !== el ? " > " + nm(n) : ""} "${(n.value || n.textContent).trim().slice(0, 24)}"`); } }
+    if (n.tagName && n.tagName.toLowerCase() === "svg" && !n.closest(".ai-chat-viz-icon")) {
+      const paints = [...n.querySelectorAll("path,line,polyline,polygon,circle,rect")].some((q) => { const a = getComputedStyle(q); return (a.stroke !== "none" && /currentcolor|rgb/i.test(a.stroke)) || (a.fill !== "none" && /rgb/i.test(a.fill)); });
+      const fg = lum(cs.color); if (paints && fg) { const c = cr(fg.L, bgOf(n)); if (c < 2) out.push(`${state} ICON ${c.toFixed(1)} ${nm(el)}`); }
+    }
+  }
+  if (state === "focus") { const cs = getComputedStyle(el); const ring = (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || (cs.boxShadow && cs.boxShadow !== "none"); if (!ring && !["INPUT", "TEXTAREA"].includes(el.tagName)) out.push(`focus NO-RING ${nm(el)}`); if (ring && cs.outlineStyle !== "none") { const oc = lum(cs.outlineColor); if (oc && cr(oc.L, parseFloat(cs.outlineOffset) < 0 ? bgOf(el) : bgOf(el.parentElement)) < 1.5) out.push(`focus FAINT-RING ${nm(el)}`);
+      const grow = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth); const r = el.getBoundingClientRect();
+      if (grow > 0) for (let a = el.parentElement; a && a !== document.body && !a.matches(".ai-chat-messages"); a = a.parentElement) { const ac = getComputedStyle(a); if (/(hidden|auto|scroll|clip)/.test(ac.overflowX + ac.overflowY)) { const ar = a.getBoundingClientRect(); if (r.top - grow < ar.top - 0.5 || r.bottom + grow > ar.bottom + 0.5 || (r.left - grow < ar.left - 0.5 && r.left >= ar.left) || (r.right + grow > ar.right + 0.5 && r.right <= ar.right)) { out.push(`focus CLIPPED-RING ${nm(el)} by ${nm(a)}`); } break; } } } }
+  return out;
+};
 const b = await chromium.launch();
 const report = [];
 for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entries(SCENES)) {
@@ -92,8 +132,9 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   for (const [k, ms, body] of [["vizslow", 30000, { ok: true, imageDataUrl: img }], ["vizok", 300, { ok: true, imageDataUrl: img }], ["vizbad", 300, { ok: false, message: "Could not create the preview right now." }]]) if (steps.includes(k)) await p.route("**/apps/hajirai/visualize**", async (r) => { await new Promise((res) => setTimeout(res, ms)); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }); });
   const urlStep = steps.find((x) => x.startsWith("url:"));
   await p.goto("http://localhost:4791" + (urlStep ? urlStep.slice(4) : "/products/savannah-red")); await p.waitForTimeout(500);
-  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(1100);
+  if (!steps.includes("noopen")) { await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(1100); }
   for (const st of steps) {
+    if (st === "bubble") { await p.click(".ai-chat-launcher__close"); await p.waitForTimeout(700); }
     if (SSE[st]) { await p.fill(".ai-chat-input", st); await p.keyboard.press("Enter"); await p.waitForTimeout(1200); }
     if (st === "menu") { await p.click(".ai-chat-menu-btn"); await p.waitForTimeout(300); }
     if (st === "atc0") { await p.click(".ai-chat-product-card >> nth=0 >> [data-atc]"); await p.waitForTimeout(600); }
@@ -117,7 +158,21 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   await p.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); if (m) m.scrollTop = m.scrollHeight; });
   await p.waitForTimeout(250);
   const issues = await p.evaluate(probe);
-  const pb = await (await p.$(".ai-chat-panel")).boundingBox();
+  // the pseudo-state pass
+  await p.addStyleTag({ content: "*,*::before,*::after{transition:none!important}" });
+  const count = await p.evaluate(tagInteractive);
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send("DOM.enable"); await cdp.send("CSS.enable");
+  const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+  const { nodeIds } = await cdp.send("DOM.querySelectorAll", { nodeId: root.nodeId, selector: "[data-hv]" });
+  for (let k = 0; k < Math.min(count, nodeIds.length); k++) {
+    for (const [state, forced] of [["hover", ["hover"]], ["focus", ["focus", "focus-visible", "focus-within"]], ["press", ["active", "hover"]]]) {
+      await cdp.send("CSS.forcePseudoState", { nodeId: nodeIds[k], forcedPseudoClasses: forced });
+      for (const x of await p.evaluate(checkOne, [k, state])) issues.push(x);
+      await cdp.send("CSS.forcePseudoState", { nodeId: nodeIds[k], forcedPseudoClasses: [] });
+    }
+  }
+  const pb = steps.includes("noopen") ? await (await p.$(".ai-chat-launcher")).boundingBox() : await (await p.$(".ai-chat-panel")).boundingBox();
   if (OUT) await p.screenshot({ path: `${OUT}/${theme}-${name}.png`, clip: pb });
   report.push(`== ${theme} ${name}${errs.length ? "  JSERR " + errs.join("|") : ""}\n${issues.join("\n")}`);
   await ctx.close();
