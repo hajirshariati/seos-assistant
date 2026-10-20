@@ -20,6 +20,10 @@ import { recordHealth } from "../../models/ChatHealth.server.js";
 import { chatModel } from "../claude-models.js";
 import { buildShopAllLink } from "./shop-all.js";
 
+// The "View all …" button under a set of product cards (opens the store's
+// search for the same thing). Paused for now; flip to true to bring it back.
+const SHOW_SHOP_ALL_LINK = false;
+
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
 // Store info for Claude: the store team's uploaded notes first (they win if
@@ -141,7 +145,7 @@ export function leanChatResponse({
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
         for (const ev of result.events || []) send(ev);
-        if (result.cards.length > 1) {
+        if (SHOW_SHOP_ALL_LINK && result.cards.length > 1) {
           const link = buildShopAllLink(result.shopAllSearch, { pattern: config.storefrontSearchUrlPattern });
           if (link) send({ type: "link", ...link });
         }
