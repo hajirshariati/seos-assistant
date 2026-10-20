@@ -191,6 +191,27 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 8c. Phone: other apps' buttons (a Feedback tab, a help "Chat" button) sit
+// along the bottom; the chat bar lifts just above them and leaves them be. A
+// cookie banner never pushes it up.
+{
+  const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 } });
+  await page.evaluate(() => {
+    const mk = (id, css) => { const b = document.createElement("button"); b.id = id; b.textContent = id; b.style.cssText = "position:fixed;bottom:14px;height:52px;border-radius:26px;z-index:99999;" + css; document.body.appendChild(b); };
+    mk("fb", "right:120px;width:110px;background:#0b6b7d;color:#fff");
+    mk("help", "right:12px;width:100px;background:#444;color:#fff");
+  });
+  await page.waitForTimeout(2600);
+  const r = await page.evaluate(() => ({ bar: document.querySelector(".ai-chat-launcher").getBoundingClientRect().bottom, fb: document.getElementById("fb").getBoundingClientRect(), help: document.getElementById("help").getBoundingClientRect() }));
+  check("phone: the chat bar lifts above other apps' bottom buttons", r.bar <= Math.min(r.fb.top, r.help.top) - 4, JSON.stringify(r));
+  check("phone: those buttons stay where they were", Math.round(r.fb.bottom) === 830 && Math.round(r.help.bottom) === 830, JSON.stringify(r));
+  await page.evaluate(() => { document.getElementById("fb").remove(); document.getElementById("help").remove(); const ot = document.createElement("div"); ot.id = "onetrust-consent-sdk"; ot.innerHTML = '<div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;height:120px;background:#fff;z-index:2147483645"><button>Accept</button></div>'; document.body.appendChild(ot); });
+  await page.waitForTimeout(2600);
+  const under = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { bottom: Math.round(l.bottom), coveredBy: !!document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2)?.closest("#onetrust-consent-sdk") }; });
+  check("phone: a cookie banner covers the bar instead of pushing it up", under.coveredBy && under.bottom === 832, JSON.stringify(under));
+  await ctx.close();
+}
+
 // 9. Keyboard: open with Enter, Tab stays inside, Escape returns focus.
 {
   const { ctx, page } = await open();

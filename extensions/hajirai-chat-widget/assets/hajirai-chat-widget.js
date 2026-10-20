@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 layers-globe');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-20 lift-bar');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -494,7 +494,7 @@ function floatingAt(x,y){
   var vw=window.innerWidth,vh=window.innerHeight;
   for(var i=0;i<list.length;i++){
     var el=list[i];
-    if(el===document.body||el===document.documentElement||launcher.contains(el)||panel.contains(el)||el===overlay)continue;
+    if(el===document.body||el===document.documentElement||launcher.contains(el)||panel.contains(el)||el===overlay||inConsentUi(el))continue;
     var r=el.getBoundingClientRect();
     if(r.width*r.height>vw*vh*0.25)continue;/* page content, not a floating button */
     for(var a=el;a&&a!==document.body;a=a.parentElement){
@@ -511,7 +511,7 @@ function floatingNear(r){
   var cands=[].slice.call(document.body.children).concat([].slice.call(document.querySelectorAll('iframe')));
   for(var i=0;i<cands.length;i++){
     var el=cands[i];
-    if(el===launcher||el===panel||el===overlay||launcher.contains(el)||panel.contains(el))continue;
+    if(el===launcher||el===panel||el===overlay||launcher.contains(el)||panel.contains(el)||inConsentUi(el))continue;
     var cs=getComputedStyle(el);
     if(cs.position!=='fixed'||cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0)continue;
     var b=el.getBoundingClientRect();
@@ -521,9 +521,14 @@ function floatingNear(r){
   }
   return out;
 }
+/* Other apps' floating buttons (help chat, feedback tabs) sit above the bar
+   and bubble; when one overlaps, the bar or bubble moves up just above it
+   (on phones the bar spans the width, so it lifts over them). Cookie
+   banners are left to cover it — it never jumps over those. */
+function inConsentUi(el){for(var a=el;a&&a!==document.body;a=a.parentElement){if(isConsentUi(a))return true}return false}
 function placeLauncher(){
   launcher.style.bottom='';
-  if(!launcher.classList.contains('is-bubble'))return;
+  if(launcher.classList.contains('hidden'))return;
   for(var pass=0;pass<4;pass++){
     var r=launcher.getBoundingClientRect();
     var hits=[].concat(floatingNear(r),floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
@@ -535,12 +540,13 @@ function placeLauncher(){
 try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1'){launcher.classList.add('is-bubble');launcher.title='Ask AI'}}catch(e){}
 launcherA11y();
 window.addEventListener('resize',placeLauncher);
+setTimeout(placeLauncher,600);
 /* Other apps' buttons (Zendesk and the like) load late — often only after
    the first scroll or tap — and fade or slide in, so no single moment is
-   the right one to look. While the bubble shows, check every couple of
+   the right one to look. While the bar or bubble shows, check every couple of
    seconds (a few rectangle reads; nothing moves unless it has to). */
 setInterval(function(){
-  if(launcher.classList.contains('is-bubble')&&!document.hidden)placeLauncher();
+  if(!document.hidden&&!launcher.classList.contains('hidden'))placeLauncher();
 },2000);
 
 /* Hide on mobile if configured */
@@ -972,7 +978,7 @@ if(isOpen){
   stopGreetCtaRotator();
   panel.classList.remove('open');
   overlay.classList.remove('visible');
-  launcher.classList.remove('hidden');
+  launcher.classList.remove('hidden');placeLauncher();
   launcher.inert=false;launcher.removeAttribute('aria-hidden');
   document.body.classList.remove('ai-chat-blurred');
   restoreFloaters();
