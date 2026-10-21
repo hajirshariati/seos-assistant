@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 phone-bottom-row');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 pdp-sticky-column');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -557,9 +557,13 @@ function floatingAt(x,y){
     if(el===document.body||el===document.documentElement||launcher.contains(el)||panel.contains(el)||el===overlay||inConsentUi(el))continue;
     var r=el.getBoundingClientRect();
     if(r.width*r.height>vw*vh*0.25)continue;/* page content, not a floating button */
+    /* Floating = fixed, or sticky to the bottom of the screen. A column that
+       sticks as the page scrolls (a product page's details) is page content,
+       not something floating over the bar. */
     for(var a=el;a&&a!==document.body;a=a.parentElement){
-      var pos=getComputedStyle(a).position;
-      if(pos==='fixed'||pos==='sticky'){found.push(r);break}
+      var acs=getComputedStyle(a),pos=acs.position;
+      if(pos==='fixed'||(pos==='sticky'&&acs.bottom!=='auto'&&acs.top==='auto')){found.push(r);break}
+      if(pos==='sticky')break;
     }
   }
   return found;
@@ -602,7 +606,11 @@ function placeLauncher(){
     if(phone)hits=hits.filter(function(h){return h.width>=vw*0.6&&!isLifted(h)});
     if(!hits.length)break;
     var top=Math.min.apply(null,hits.map(function(h){return h.top}));
-    launcher.style.bottom=Math.round(window.innerHeight-top+12)+'px';
+    var want=Math.round(window.innerHeight-top+12);
+    /* Never climb into the middle of the screen: if that's what it would
+       take, stay at the bottom. */
+    if(want>window.innerHeight*0.4){launcher.style.bottom='';break}
+    launcher.style.bottom=want+'px';
   }
   liftFloaters(phone);
 }

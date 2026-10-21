@@ -261,6 +261,24 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 8e. Desktop product page: the details column sticks while the page
+// scrolls (size buttons and all) and runs under the bar. That's page
+// content: the bar stays at the bottom instead of climbing over each button
+// and off the screen.
+{
+  const { ctx, page } = await open("/full", { viewport: { width: 1280, height: 800 } });
+  await page.evaluate(() => {
+    const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;gap:20px;padding:20px";
+    wrap.innerHTML = '<div style="flex:1;height:3000px;background:#eee"></div><div id="col" style="width:420px;position:sticky;top:0;align-self:flex-start;height:780px;display:grid;gap:8px;align-content:end">' + Array.from({ length: 12 }, (_, i) => '<button style="height:52px">Size ' + (6 + i) + '</button>').join("") + "</div>";
+    document.body.prepend(wrap);
+  });
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await page.waitForTimeout(2600);
+  const r = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { top: Math.round(l.top), bottom: Math.round(l.bottom) }; });
+  check("desktop product page: a sticky details column doesn't push the bar off the screen", r.bottom >= 760 && r.top < 800, JSON.stringify(r));
+  await ctx.close();
+}
+
 // 9. Keyboard: open with Enter, Tab stays inside, Escape returns focus.
 {
   const { ctx, page } = await open();
