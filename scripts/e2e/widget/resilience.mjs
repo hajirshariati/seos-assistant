@@ -191,24 +191,73 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
-// 8c. Phone: other apps' buttons (a Feedback tab, a help "Chat" button) sit
-// along the bottom; the chat bar lifts just above them and leaves them be. A
-// cookie banner never pushes it up.
+// 8c. Phone: the chat bar is the bottom row. Other apps' small buttons (a
+// Feedback tab, a help "Chat" button) are lifted above it; a full-width
+// sticky Add to cart bar stays at the bottom with the chat bar right on top
+// of it — at once when the theme publishes its height. A cookie banner
+// never pushes it up, and a decorative layer that ignores taps doesn't count.
 {
   const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 } });
   await page.evaluate(() => {
     const mk = (id, css) => { const b = document.createElement("button"); b.id = id; b.textContent = id; b.style.cssText = "position:fixed;bottom:14px;height:52px;border-radius:26px;z-index:99999;" + css; document.body.appendChild(b); };
     mk("fb", "right:120px;width:110px;background:#0b6b7d;color:#fff");
     mk("help", "right:12px;width:100px;background:#444;color:#fff");
+    const fade = document.createElement("div"); fade.id = "fade"; fade.style.cssText = "position:fixed;left:0;right:0;bottom:0;height:120px;pointer-events:none;background:rgba(255,255,255,.4);z-index:29"; document.body.appendChild(fade);
   });
-  await page.waitForTimeout(2600);
-  const r = await page.evaluate(() => ({ bar: document.querySelector(".ai-chat-launcher").getBoundingClientRect().bottom, fb: document.getElementById("fb").getBoundingClientRect(), help: document.getElementById("help").getBoundingClientRect() }));
-  check("phone: the chat bar lifts above other apps' bottom buttons", r.bar <= Math.min(r.fb.top, r.help.top) - 4, JSON.stringify(r));
-  check("phone: those buttons stay where they were", Math.round(r.fb.bottom) === 830 && Math.round(r.help.bottom) === 830, JSON.stringify(r));
+  await page.waitForTimeout(900);
+  const bar = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { top: Math.round(l.top), bottom: Math.round(l.bottom) }; });
+  const r = await page.evaluate(() => ({ fb: document.getElementById("fb").getBoundingClientRect(), help: document.getElementById("help").getBoundingClientRect() }));
+  const b1 = await bar();
+  check("phone: the chat bar stays at the very bottom (a tap-through layer doesn't count)", b1.bottom === 832, JSON.stringify(b1));
+  check("phone: other apps' buttons lift above the chat bar", Math.max(r.fb.bottom, r.help.bottom) <= b1.top - 4, JSON.stringify({ b1, fb: r.fb.bottom, help: r.help.bottom }));
+  // A sticky Add to cart bar (theme-published height, as on Aetrex's PDP).
+  await page.evaluate(() => {
+    const s = document.createElement("div"); s.id = "sticky"; s.style.cssText = "position:fixed;left:0;right:0;bottom:0;height:80px;background:#fff;z-index:1000000"; document.body.appendChild(s);
+    document.documentElement.style.setProperty("--sticky-buy-bar-height", "80px"); document.body.classList.add("has-sticky-buy-bar");
+  });
+  const b2 = await bar();
+  check("phone: with a sticky Add to cart bar the chat bar sits right on top of it, at once", b2.bottom === 844 - 80 - 8, JSON.stringify(b2));
+  await page.waitForTimeout(700);
+  const r2 = await page.evaluate(() => ({ fb: document.getElementById("fb").getBoundingClientRect().bottom, help: document.getElementById("help").getBoundingClientRect().bottom, sticky: document.getElementById("sticky").getBoundingClientRect().top }));
+  const b3 = await bar();
+  check("phone: …and the buttons stay above the chat bar", Math.max(r2.fb, r2.help) <= b3.top - 4 && b3.bottom <= r2.sticky, JSON.stringify({ b3, r2 }));
+  // The sticky bar slides away again: the chat bar returns to the bottom.
+  await page.evaluate(() => { document.getElementById("sticky").remove(); document.documentElement.style.setProperty("--sticky-buy-bar-height", "0px"); document.body.classList.remove("has-sticky-buy-bar"); });
+  await page.waitForTimeout(700);
+  check("phone: back at the bottom once the sticky bar is gone", (await bar()).bottom === 832);
+  // Opening the chat hands the buttons back their own places.
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(900);
+  const back = await page.evaluate(() => [document.getElementById("fb"), document.getElementById("help")].map((e) => e.style.getPropertyValue("translate")));
+  check("phone: with the chat open the lifted buttons are put back", back.every((t) => !t), JSON.stringify(back));
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(400);
   await page.evaluate(() => { document.getElementById("fb").remove(); document.getElementById("help").remove(); const ot = document.createElement("div"); ot.id = "onetrust-consent-sdk"; ot.innerHTML = '<div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;height:120px;background:#fff;z-index:2147483645"><button>Accept</button></div>'; document.body.appendChild(ot); });
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(900);
   const under = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { bottom: Math.round(l.bottom), coveredBy: !!document.elementFromPoint(l.left + l.width / 2, l.top + l.height / 2)?.closest("#onetrust-consent-sdk") }; });
   check("phone: a cookie banner covers the bar instead of pushing it up", under.coveredBy && under.bottom === 832, JSON.stringify(under));
+  await ctx.close();
+}
+
+// 8d. Phone, Aetrex-style row: a help launcher plus a Feedback button that
+// re-aligns itself beside the launcher every 200ms (as the theme's does).
+// Lifting them above the chat bar must settle — no tug of war, no jitter.
+{
+  const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 } });
+  await page.evaluate(() => {
+    const z = document.createElement("iframe"); z.id = "launcher"; z.style.cssText = "position:fixed;right:12px;bottom:14px;width:110px;height:64px;border:0;z-index:999998;background:#333"; document.body.appendChild(z);
+    const f = document.createElement("div"); f.id = "tf"; f.style.cssText = "position:fixed;right:134px;bottom:20px;height:46px;width:100px;border-radius:23px;background:#0b6a80;z-index:999998"; document.body.appendChild(f);
+    let bottom = 20;
+    setInterval(() => { const zr = z.getBoundingClientRect(), fr = f.getBoundingClientRect(); const dy = (fr.top + fr.height / 2) - (zr.top + zr.height / 2); if (Math.abs(dy) > 0.5) { bottom += dy; f.style.bottom = bottom + "px"; } }, 200);
+  });
+  const snap = () => page.evaluate(() => ({ z: Math.round(document.getElementById("launcher").getBoundingClientRect().bottom), f: Math.round(document.getElementById("tf").getBoundingClientRect().bottom), fc: Math.round((() => { const r = document.getElementById("tf").getBoundingClientRect(); return r.top + r.height / 2; })()), zc: Math.round((() => { const r = document.getElementById("launcher").getBoundingClientRect(); return r.top + r.height / 2; })()), bar: Math.round(document.querySelector(".ai-chat-launcher").getBoundingClientRect().top) }));
+  await page.waitForTimeout(2500);
+  const a = await snap();
+  await page.waitForTimeout(1500);
+  const b = await snap();
+  check("phone row: the launcher and Feedback settle above the chat bar", Math.max(b.z, b.f) <= b.bar - 4, JSON.stringify(b));
+  check("phone row: Feedback stays lined up with the launcher", Math.abs(b.fc - b.zc) <= 1, JSON.stringify(b));
+  check("phone row: nothing keeps moving (no jitter)", JSON.stringify(a) === JSON.stringify(b), JSON.stringify({ a, b }));
   await ctx.close();
 }
 
@@ -247,10 +296,15 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   const open1 = await page.evaluate(() => {
     const p = document.querySelector(".ai-chat-panel");
     const f = document.querySelector(".ai-chat-footer");
-    return { h: Math.round(p.getBoundingClientRect().height), kb: p.classList.contains("is-kb"), footer: f ? getComputedStyle(f).display : "none" };
+    const ia = getComputedStyle(document.querySelector(".ai-chat-input-area")).backgroundColor;
+    return { h: Math.round(p.getBoundingClientRect().height), kb: p.classList.contains("is-kb"), footer: f ? getComputedStyle(f).display : "none", fill: getComputedStyle(p).boxShadow, ia };
   });
   check("phone keyboard: chat fits the visible area above the keyboard", open1.h === 480 && open1.kb, JSON.stringify(open1));
   check("phone keyboard: fine print hidden while typing", open1.footer === "none", open1.footer);
+  // Safari's address pill and form arrows sit between the page and the
+  // keyboard and show the page through them: the chat's background fills
+  // that strip, in the message bar's own colour.
+  check("phone keyboard: the strip under the message bar is the chat's colour", open1.fill.startsWith(open1.ia) && /180px/.test(open1.fill), JSON.stringify({ fill: open1.fill, ia: open1.ia }));
   await page.evaluate(() => window.__kb(844));
   await page.waitForTimeout(100);
   const closed = await page.evaluate(() => {

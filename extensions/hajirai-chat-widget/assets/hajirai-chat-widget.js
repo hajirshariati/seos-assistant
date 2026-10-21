@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 cart-sync');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 phone-bottom-row');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -573,7 +573,7 @@ function floatingNear(r){
     var el=cands[i];
     if(el===launcher||el===panel||el===overlay||launcher.contains(el)||panel.contains(el)||inConsentUi(el))continue;
     var cs=getComputedStyle(el);
-    if(cs.position!=='fixed'||cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0)continue;
+    if(cs.position!=='fixed'||cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0||cs.pointerEvents==='none')continue;
     var b=el.getBoundingClientRect();
     if(!b.width||!b.height||b.width*b.height>window.innerWidth*window.innerHeight*0.25)continue;
     if(b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom)continue;
@@ -586,16 +586,61 @@ function floatingNear(r){
    (on phones the bar spans the width, so it lifts over them). Cookie
    banners are left to cover it — it never jumps over those. */
 function inConsentUi(el){for(var a=el;a&&a!==document.body;a=a.parentElement){if(isConsentUi(a))return true}return false}
+/* Phones: the bar is the bottom row. Only a full-width bar pinned to the
+   bottom (a sticky Add to cart) sits below it; other apps' small buttons
+   (help chat, Feedback, a cart pill) are lifted above it instead — with the
+   CSS translate property, so the scripts that place them keep working. */
+var PHONE_BAR=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
+function phoneBar(){return !!(PHONE_BAR&&PHONE_BAR.matches)&&!launcher.classList.contains('is-bubble')}
 function placeLauncher(){
   launcher.style.bottom='';
-  if(launcher.classList.contains('hidden'))return;
+  if(launcher.classList.contains('hidden')){liftFloaters(false);return}
+  var phone=phoneBar(),vw=window.innerWidth;
   for(var pass=0;pass<4;pass++){
     var r=launcher.getBoundingClientRect();
     var hits=[].concat(floatingNear(r),floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
-    if(!hits.length)return;
+    if(phone)hits=hits.filter(function(h){return h.width>=vw*0.6&&!isLifted(h)});
+    if(!hits.length)break;
     var top=Math.min.apply(null,hits.map(function(h){return h.top}));
     launcher.style.bottom=Math.round(window.innerHeight-top+12)+'px';
   }
+  liftFloaters(phone);
+}
+var liftedEls=[];
+function isLifted(rect){for(var i=0;i<liftedEls.length;i++){var b=liftedEls[i].el.getBoundingClientRect();if(b.top===rect.top&&b.left===rect.left)return true}return false}
+function liftOf(el){for(var i=0;i<liftedEls.length;i++)if(liftedEls[i].el===el)return liftedEls[i];return null}
+function setLift(el,by){
+  var rec=liftOf(el);
+  if(!rec){rec={el:el,by:0,was:el.style.getPropertyValue('translate')};liftedEls.push(rec)}
+  if(rec.by!==by){rec.by=by;el.style.setProperty('translate','0 '+(-by)+'px','important')}
+  return rec;
+}
+function dropLift(rec){
+  if(rec.was)rec.el.style.setProperty('translate',rec.was);else rec.el.style.removeProperty('translate');
+}
+function liftFloaters(on){
+  var keep=[];
+  if(on){
+    var b=launcher.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight,line=b.top-10;
+    var cands=[].slice.call(document.body.children).concat([].slice.call(document.querySelectorAll('iframe')));
+    for(var i=0;i<cands.length;i++){
+      var el=cands[i];
+      if(el===launcher||el===panel||el===overlay||launcher.contains(el)||panel.contains(el)||inConsentUi(el)||keep.indexOf(el)!==-1)continue;
+      var cs=getComputedStyle(el);
+      if(cs.position!=='fixed'||cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0||cs.pointerEvents==='none')continue;
+      var r=el.getBoundingClientRect();
+      if(!r.width||!r.height||r.width>=vw*0.6||r.width*r.height>vw*vh*0.25)continue;
+      if(r.right<=b.left||r.left>=b.right)continue;
+      var rec=liftOf(el),by=rec?rec.by:0,natTop=r.top+by,natBottom=r.bottom+by;
+      if(natBottom<=line+2||natTop>=vh)continue;/* clear of the bar where it stands */
+      /* Lift only as far as needed; once clear, hold still (its own script
+         may line it up with its neighbours from there). */
+      if(r.bottom>line+2)by=Math.round(natBottom-line);
+      if(natTop-by<vh*0.3)continue;/* would end up mid-screen: leave it */
+      setLift(el,by);keep.push(el);
+    }
+  }
+  liftedEls=liftedEls.filter(function(rec){if(keep.indexOf(rec.el)!==-1)return true;dropLift(rec);return false});
 }
 try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1'){launcher.classList.add('is-bubble');launcher.title='Ask AI'}}catch(e){}
 launcherA11y();
@@ -605,9 +650,19 @@ setTimeout(placeLauncher,600);
    the first scroll or tap — and fade or slide in, so no single moment is
    the right one to look. While the bar or bubble shows, check every couple of
    seconds (a few rectangle reads; nothing moves unless it has to). */
+var placeTicks=0;
 setInterval(function(){
-  if(!document.hidden&&!launcher.classList.contains('hidden'))placeLauncher();
-},2000);
+  if(document.hidden)return;
+  /* Phones: a sticky Add to cart bar or a help button can appear at any
+     moment, so look often (a few rectangle reads); elsewhere every 2s. */
+  placeTicks+=1;
+  if(phoneBar()||placeTicks%7===0||liftedEls.length)placeLauncher();
+},300);
+var placeFrame=0;
+window.addEventListener('scroll',function(){
+  if(placeFrame||!phoneBar())return;
+  placeFrame=requestAnimationFrame(function(){placeFrame=0;placeLauncher()});
+},{passive:true});
 
 /* Hide on mobile if configured */
 var isMobileHidden=false;
