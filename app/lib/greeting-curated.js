@@ -33,7 +33,28 @@ const CURATED = {
     hi: "आज हम आपकी क्या मदद कर सकते हैं?",
     fa: "امروز چطور می\u200cتوانم کمکتان کنم؟",
   },
+  "what can i help you with today": {
+    es: "¿En qué te puedo ayudar hoy?",
+    ar: "بماذا يمكنني مساعدتك اليوم؟",
+    ja: "今日はどのようなお手伝いができますか？",
+    he: "במה אפשר לעזור היום?",
+    hi: "आज हम आपकी किस चीज़ में मदद कर सकते हैं?",
+    fa: "امروز چه کمکی از دستم برمی\u200cآید؟",
+  },
+  "what are you looking for today": {
+    es: "¿Qué estás buscando hoy?",
+    ar: "ما الذي تبحث عنه اليوم؟",
+    ja: "今日は何をお探しですか？",
+    he: "מה אתם מחפשים היום?",
+    hi: "आज आप क्या ढूँढ रहे हैं?",
+    fa: "امروز دنبال چه چیزی هستید؟",
+  },
 };
+// Same line without "today", or with "may": the same translation.
+CURATED["how can i help you"] = CURATED["how can i help you today"];
+CURATED["how may i help you today"] = CURATED["how can i help you today"];
+CURATED["what can i help you find"] = CURATED["what can i help you find today"];
+CURATED["what can i help you with"] = CURATED["what can i help you with today"];
 export function phraseKey(phrase) {
   return String(phrase || "").toLowerCase().replace(/[’']/g, "'").replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim();
 }

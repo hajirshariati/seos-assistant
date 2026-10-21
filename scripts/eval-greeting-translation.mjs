@@ -22,8 +22,12 @@ test("Persian reads naturally (with the ZWNJ in می‌توانم)", () => {
   assert.equal(fa("How can I help you today?"), "امروز چطور می‌توانم کمکتان کنم؟");
   assert.equal(fa("What can I help you find today?"), "امروز دنبال چه چیزی هستید؟");
 });
+test("the other common welcome lines are hand-translated too", () => {
+  assert.equal(fa("What can I help you with today?"), "امروز چه کمکی از دستم برمی\u200cآید؟");
+  for (const p of ["What are you looking for today?", "How can I help you?", "How may I help you today?", "What can I help you find?", "What can I help you with?"]) assert.ok(curatedTranslations(p), p);
+});
 test("Persian uses Persian letters (ی ک), not Arabic (ي ك)", () => {
-  for (const p of ["How can I help you today?", "What can I help you find today?"]) assert.ok(!/[يك]/.test(fa(p)), fa(p));
+  for (const p of ["How can I help you today?", "What can I help you find today?", "What can I help you with today?", "What are you looking for today?"]) assert.ok(!/[يك]/.test(fa(p)), fa(p));
 });
 test("casing, spacing and punctuation don't matter", () => {
   assert.ok(curatedTranslations("  how can I help you today "));
