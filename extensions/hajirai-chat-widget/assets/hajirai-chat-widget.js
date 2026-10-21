@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 pdp-sticky-column');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 scroll-lock-fa');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -1079,6 +1079,26 @@ if(window.visualViewport){
   window.visualViewport.addEventListener('resize',fitToKeyboard);
   window.visualViewport.addEventListener('scroll',fitToKeyboard);
 }
+/* Phones: the open chat covers the screen, so the page behind it must not
+   move. Swipes on parts of the chat that don't scroll (the home screen, the
+   header) used to scroll the store page underneath. The page is pinned where
+   it was and put back exactly there on close. */
+var pageLock=null;
+function lockPage(on){
+  var html=document.documentElement,b=document.body.style;
+  if(on){
+    if(pageLock||!KB_MQ||!KB_MQ.matches)return;
+    var y=window.pageYOffset||html.scrollTop||0;
+    pageLock={y:y,pos:b.position,top:b.top,left:b.left,right:b.right,width:b.width,ov:html.style.overflow};
+    b.position='fixed';b.top=(-y)+'px';b.left='0';b.right='0';b.width='100%';html.style.overflow='hidden';
+  }else if(pageLock){
+    var l=pageLock;pageLock=null;
+    b.position=l.pos;b.top=l.top;b.left=l.left;b.right=l.right;b.width=l.width;html.style.overflow=l.ov;
+    var sb=html.style.scrollBehavior;html.style.scrollBehavior='auto';
+    window.scrollTo(0,l.y);
+    html.style.scrollBehavior=sb;
+  }
+}
 function toggle(force){
 var want=typeof force==='boolean'?force:!isOpen;
 if(want&&HIDDEN_BY_URL)return;
@@ -1093,6 +1113,7 @@ if(isOpen){
   document.body.classList.add('ai-chat-blurred');
   hideFloaters();
   inertPage(true);
+  lockPage(true);
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   playWelcomeIntro();
@@ -1106,6 +1127,7 @@ if(isOpen){
   document.body.classList.remove('ai-chat-blurred');
   restoreFloaters();
   inertPage(false);
+  lockPage(false);
   menu.style.display='none';
   var back=focusBeforeOpen&&document.body.contains(focusBeforeOpen)&&focusBeforeOpen!==document.body?focusBeforeOpen:(launcher.classList.contains('is-bubble')?launcher:$('.ai-chat-launcher__text',launcher)||launcher);
   focusBeforeOpen=null;

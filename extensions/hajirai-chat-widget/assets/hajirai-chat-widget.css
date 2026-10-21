@@ -2851,7 +2851,11 @@ button.ai-chat-launcher__text {
    "Start here" 2×2 → one row of popular chips. The home screen never
    scrolls: everything keeps its natural height and the banner takes
    whatever is left (down to nothing on very short screens). */
-.ai-chat-panel .ai-chat-messages.is-welcome { overflow: hidden; }
+.ai-chat-panel .ai-chat-messages.is-welcome { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+/* It fits on most screens; on a short one it scrolls (without a bar). */
+.ai-chat-panel .ai-chat-messages.is-welcome::-webkit-scrollbar { display: none; }
+/* Swipes inside the open chat never carry over to the page behind it. */
+.ai-chat-panel { overscroll-behavior: contain; }
 .ai-chat-panel .ai-chat-welcome {
   display: flex;
   flex-direction: column;

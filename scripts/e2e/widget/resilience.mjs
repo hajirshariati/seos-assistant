@@ -17,8 +17,8 @@ const results = [];
 const check = (name, ok, detail = "") => results.push({ name, ok: Boolean(ok), detail: ok ? "" : String(detail).slice(0, 300) });
 const url = (p) => `http://localhost:${PORT}${p}`;
 
-async function open(path = "/full", { viewport = { width: 1280, height: 900 }, init } = {}) {
-  const ctx = await browser.newContext({ viewport });
+async function open(path = "/full", { viewport = { width: 1280, height: 900 }, init, ctxOpts = {} } = {}) {
+  const ctx = await browser.newContext({ viewport, ...ctxOpts });
   if (init) await ctx.addInitScript(init);
   const page = await ctx.newPage();
   const errors = [];
@@ -276,6 +276,39 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await page.waitForTimeout(2600);
   const r = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { top: Math.round(l.top), bottom: Math.round(l.bottom) }; });
   check("desktop product page: a sticky details column doesn't push the bar off the screen", r.bottom >= 760 && r.top < 800, JSON.stringify(r));
+  await ctx.close();
+}
+
+// 8f. Phone: with the chat open, swiping or scrolling on its home screen
+// never moves the store page behind it, and closing the chat puts the page
+// back exactly where the shopper left it.
+{
+  const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 }, ctxOpts: { isMobile: true, hasTouch: true } });
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.waitForTimeout(200);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(900);
+  // Where the page sits on screen, however it's held there.
+  const pageTop = () => page.evaluate(() => Math.round(-document.body.getBoundingClientRect().top));
+  const before = await pageTop();
+  await page.mouse.move(195, 300);
+  await page.mouse.wheel(0, 800);
+  await page.waitForTimeout(300);
+  const client = await ctx.newCDPSession(page);
+  await client.send("Input.synthesizeScrollGesture", { x: 195, y: 400, yDistance: -500, speed: 2000, gestureSourceType: "touch" });
+  await page.waitForTimeout(400);
+  // iPhone Safari hands a swipe on a part of the chat that can't scroll to
+  // the page; desktop Chrome doesn't, so also try to move the page directly —
+  // it must not be able to move at all while the chat is open.
+  await page.evaluate(() => window.scrollBy(0, 500));
+  await page.waitForTimeout(200);
+  const after = await pageTop();
+  check("phone: swiping on the open chat's home screen doesn't scroll the page behind", before === 600 && after === 600, JSON.stringify({ before, after }));
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(500);
+  const y = await page.evaluate(() => Math.round(window.scrollY));
+  const free = await page.evaluate(() => ({ pos: document.body.style.position, ov: document.documentElement.style.overflow }));
+  check("phone: closing the chat puts the page back where it was, unlocked", y === 600 && !free.pos && !free.ov, JSON.stringify({ y, free }));
   await ctx.close();
 }
 
