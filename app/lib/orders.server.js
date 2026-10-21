@@ -1,0 +1,164 @@
+// A signed-in shopper's orders, shaped for the chat's order cards and the
+// in-chat return flow. Live from the Shopify Admin API; nothing is stored.
+//
+// Only ever called for the customer Shopify signed into the request (the app
+// proxy's logged_in_customer_id, HMAC-verified), and every order is checked
+// to belong to that customer before anything is shown or returned.
+
+import { ADMIN_API_VERSION } from "./admin-api-version.js";
+
+const ORDER_FIELDS = `
+  id
+  name
+  createdAt
+  cancelledAt
+  displayFulfillmentStatus
+  returnStatus
+  customer { id }
+  lineItems(first: 20) {
+    nodes {
+      id
+      title
+      quantity
+      refundableQuantity
+      image { url(transform: { maxWidth: 160 }) }
+      variant { selectedOptions { name value } product { handle } }
+    }
+  }
+  fulfillments(first: 5) {
+    createdAt
+    deliveredAt
+    estimatedDeliveryAt
+    displayStatus
+    trackingInfo { company number url }
+  }
+`;
+
+const CUSTOMER_ORDERS_QUERY = `
+  query ChatOrders($id: ID!, $first: Int!) {
+    customer(id: $id) {
+      email
+      orders(first: $first, sortKey: CREATED_AT, reverse: true) { nodes { ${ORDER_FIELDS} } }
+    }
+  }
+`;
+
+const ORDER_QUERY = `
+  query ChatOrder($id: ID!) {
+    order(id: $id) { ${ORDER_FIELDS} email }
+  }
+`;
+
+export async function adminGraphql({ shop, accessToken, query, variables, timeoutMs = 7000 }) {
+  const res = await fetch(`https://${shop}/admin/api/${ADMIN_API_VERSION}/graphql.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": accessToken },
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`Admin API ${res.status}`);
+  const json = await res.json();
+  if (json.errors?.length) throw new Error(`Admin API: ${json.errors.map((e) => e.message).join("; ").slice(0, 300)}`);
+  return json.data;
+}
+
+const numericId = (gid) => String(gid || "").match(/(\d+)$/)?.[1] || "";
+const day = (iso) => (iso ? String(iso).slice(0, 10) : "");
+
+// Where the order is, in the four steps the card shows.
+const STAGES = ["ordered", "shipped", "out_for_delivery", "delivered"];
+export function orderStage(o) {
+  if (o.cancelledAt) return "cancelled";
+  const f = o.fulfillments || [];
+  const statuses = f.map((x) => String(x.displayStatus || "").toUpperCase());
+  if (f.some((x) => x.deliveredAt) || statuses.includes("DELIVERED")) return "delivered";
+  if (statuses.includes("OUT_FOR_DELIVERY")) return "out_for_delivery";
+  if (statuses.includes("ATTEMPTED_DELIVERY")) return "out_for_delivery";
+  if (f.length || /^(FULFILLED|PARTIALLY_FULFILLED)$/i.test(o.displayFulfillmentStatus || "")) return "shipped"; // not UNFULFILLED
+  return "ordered";
+}
+const STAGE_LABEL = {
+  ordered: "Processing",
+  shipped: "On its way",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+const RETURN_LABEL = {
+  RETURN_REQUESTED: "Return requested",
+  IN_PROGRESS: "Return in progress",
+  INSPECTION_COMPLETE: "Return received",
+  RETURNED: "Returned",
+  RETURN_FAILED: "Return issue",
+};
+
+// The card for one order: no addresses, no payment details, no email.
+export function toOrderCard(o, { trackingBase = "", email = "" } = {}) {
+  const stage = orderStage(o);
+  const fulfillments = o.fulfillments || [];
+  const latest = [...fulfillments].reverse().find((f) => (f.trackingInfo || []).length) || fulfillments[fulfillments.length - 1] || null;
+  const tracking = (latest?.trackingInfo || [])[0] || null;
+  const number = String(o.name || "").replace(/^#/, "");
+  let trackUrl = tracking?.url || "";
+  const base = String(trackingBase || "").replace(/\/+$/, "");
+  if (base && number && email) trackUrl = `${base}?order-number=${encodeURIComponent(number)}&email=${encodeURIComponent(email)}`;
+  else if (base && tracking?.number) trackUrl = `${base}/tracking/${encodeURIComponent(tracking.number)}`;
+  const items = (o.lineItems?.nodes || []).map((li) => {
+    const opts = {};
+    for (const so of li.variant?.selectedOptions || []) if (so?.name && so.value && so.value !== "Default Title") opts[so.name] = so.value;
+    return {
+      lineId: numericId(li.id),
+      title: String(li.title || "").slice(0, 120),
+      options: opts,
+      image: li.image?.url || "",
+      quantity: li.quantity || 1,
+      returnable: Math.max(0, li.refundableQuantity ?? 0),
+      handle: li.variant?.product?.handle || "",
+    };
+  });
+  const returnStatus = RETURN_LABEL[o.returnStatus] || "";
+  return {
+    id: numericId(o.id),
+    number,
+    date: day(o.createdAt),
+    stage,
+    stageLabel: STAGE_LABEL[stage],
+    step: Math.max(0, STAGES.indexOf(stage)),
+    shippedAt: day(fulfillments[0]?.createdAt),
+    deliveredAt: day(fulfillments.find((f) => f.deliveredAt)?.deliveredAt),
+    eta: stage === "delivered" ? "" : day(latest?.estimatedDeliveryAt),
+    carrier: tracking?.company || "",
+    trackUrl,
+    returnStatus,
+    // Returns can start once it has shipped; AfterShip applies the store's
+    // own return policy (window, final sale) when the return is created.
+    canReturn: !o.cancelledAt && stage !== "ordered" && items.some((i) => i.returnable > 0),
+    items,
+  };
+}
+
+// The signed-in customer's recent orders as cards (and their email, kept
+// server-side for prefilled tracking/return links).
+export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "" }) {
+  const data = await adminGraphql({
+    shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
+    variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 10) },
+  });
+  const customer = data?.customer;
+  if (!customer) return { orders: [] };
+  console.log(`[pii-access] shop=${shop} customer=${customerId} fields=orders purpose=customer_service source=admin_api`);
+  let nodes = customer.orders?.nodes || [];
+  const want = String(orderNumber || "").replace(/[^0-9a-z]/gi, "").toLowerCase();
+  if (want) nodes = nodes.filter((o) => String(o.name || "").replace(/[^0-9a-z]/gi, "").toLowerCase().endsWith(want));
+  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, email: customer.email || "" })) };
+}
+
+// One order, only if it belongs to this customer (for starting a return).
+export async function getOwnedOrder({ shop, accessToken, customerId, orderId }) {
+  const id = String(orderId || "").replace(/\D/g, "");
+  if (!id) return null;
+  const data = await adminGraphql({ shop, accessToken, query: ORDER_QUERY, variables: { id: `gid://shopify/Order/${id}` } });
+  const o = data?.order;
+  if (!o || numericId(o.customer?.id) !== String(customerId)) return null;
+  return o;
+}

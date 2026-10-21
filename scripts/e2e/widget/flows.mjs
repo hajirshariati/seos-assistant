@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -349,6 +349,89 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("theme cart: published like the theme's own add, with the drawer's HTML", st.pub.join("|") === "chat-widget:cart-drawer", st.pub.join("|"));
   check("theme cart: the drawer stays closed and the chat keeps focus", st.drawerHidden && st.inChat);
   check("theme cart: no theme errors, no JS errors", st.errs.length === 0 && errors.length === 0, [...st.errs, ...errors].join(" | "));
+  await ctx.close();
+}
+// Orders & returns. Signed out: a sign-in card; Shopify's sign-in opens in a
+// small window and the chat carries on with the orders. Then a return with
+// an exchange: items → reason → "Exchange for a bigger size" → the return is
+// started and the same shoe comes back in the next size, ready to add.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "where is my order?");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-ord--signin", { timeout: 6000 });
+  check("orders signed out: a sign-in card, no order details", (await page.$$(".ai-ord[data-ord]")).length === 0);
+  const [popup] = await Promise.all([page.waitForEvent("popup"), page.click("[data-ord-login]")]);
+  await popup.waitForEvent("close", { timeout: 8000 }).catch(() => {});
+  check("orders: Shopify's sign-in opens in a small window that closes itself", popup.isClosed());
+  await page.waitForSelector(".ai-ord[data-ord]", { timeout: 8000 });
+  const cardsInfo = await page.evaluate(() => [...document.querySelectorAll(".ai-ord[data-ord]")].map((c) => ({
+    num: c.querySelector(".ai-ord__num").textContent, pill: c.querySelector(".ai-ord__pill").textContent,
+    done: c.querySelectorAll(".ai-ord__steps li.is-done").length, when: c.querySelector(".ai-ord__when")?.textContent || "",
+    track: c.querySelector("a.ai-ord__btn")?.getAttribute("href") || "", ret: !!c.querySelector("[data-ord-return]"),
+  })));
+  check("orders: after sign-in the chat picks up with the order cards", cardsInfo.length === 2 && page.url().endsWith("/full"), JSON.stringify(cardsInfo));
+  check("orders: status, progress, delivery line and tracking on each card", cardsInfo[0].pill === "Delivered" && cardsInfo[0].done === 4 && /Delivered/.test(cardsInfo[0].when) && cardsInfo[0].track === "https://track.example/1Z999" && cardsInfo[1].pill === "On its way" && cardsInfo[1].done === 2 && /Arrives by/.test(cardsInfo[1].when), JSON.stringify(cardsInfo));
+  check("orders: only a shipped order offers a return", cardsInfo[0].ret && !cardsInfo[1].ret);
+  await page.screenshot({ path: out("orders-cards") });
+  // Return → exchange
+  await page.click('.ai-ord[data-ord="5001"] [data-ord-return]');
+  const next = '.ai-ord[data-ord="5001"] [data-ret-next="reason"]';
+  check("return: Next waits until an item is picked", await page.$eval(next, (b) => b.disabled));
+  await page.click('[data-ret-item="9001"]');
+  await page.click(next);
+  await page.click('[data-ret-reason="too_small"]');
+  const choices = await page.$$eval('.ai-ord[data-ord="5001"] [data-ret-submit]', (bs) => bs.map((b) => b.textContent));
+  check("return: too small offers Exchange for a bigger size or Continue return", choices.join("|") === "Exchange for a bigger size|Continue return", choices.join("|"));
+  await page.screenshot({ path: out("orders-return-choice") });
+  await page.click('[data-ret-submit="exchange"]');
+  await page.waitForSelector(".ai-ret__done", { timeout: 6000 });
+  const sent = returnBodies.at(-1);
+  check("return: the return is sent for that item, reason and exchange", sent?.orderId === "5001" && sent.items?.length === 1 && sent.items[0].lineId === "9001" && sent.reason === "too_small" && sent.exchange === true && sent.refundTo === "original_payment", JSON.stringify(sent));
+  check("return: confirmation shows the return number", /Return started · #R1001/.test(await page.textContent(".ai-ret__done")));
+  await page.waitForFunction(() => [...document.querySelectorAll(".ai-chat-product-card")].some((c) => /8\.5 US/.test(c.getAttribute("data-preselect") || "")), null, { timeout: 4000 }).catch(() => {});
+  const ex = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-product-card")].at(-1); return { handle: c?.getAttribute("data-handle"), pre: c?.getAttribute("data-preselect") || "", msg: c?.closest(".ai-chat-msg")?.querySelector("p")?.textContent || "" }; });
+  check("exchange: the same shoe comes back in the next size, ready to add", ex.handle === "savannah-red" && /8\.5 US/.test(ex.pre) && /new size in 8\.5 US/.test(ex.msg), JSON.stringify(ex));
+  check("return: the order's Return button is gone once started", !(await page.$('.ai-ord[data-ord="5001"] [data-ord-return]')));
+  await page.screenshot({ path: out("orders-exchange") });
+  // A return AfterShip can't take: the prefilled returns page instead.
+  await page.fill(".ai-chat-input-area textarea", "I want to return something");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelectorAll('.ai-ord[data-ord="5001"] [data-ord-return]').length === 1, null, { timeout: 6000 });
+  const fresh = '.ai-chat-msg:last-child .ai-ord[data-ord="5001"]';
+  await page.click(`${fresh} [data-ord-return]`);
+  await page.click(`${fresh} [data-ret-item="9002"]`);
+  await page.click(`${fresh} [data-ret-next="reason"]`);
+  await page.click(`${fresh} [data-ret-reason="other"]`);
+  const single = await page.$$eval(`${fresh} [data-ret-submit]`, (bs) => bs.map((b) => b.textContent));
+  check("return: other reasons get one Start return button", single.join("|") === "Start return", single.join("|"));
+  await page.click(`${fresh} [data-ret-submit="return"]`);
+  await page.waitForSelector(`${fresh} .ai-ret__err`, { timeout: 6000 });
+  check("return: if it can't be started here, the prefilled returns page is one tap away", (await page.$eval(`${fresh} .ai-ret a.ai-ord__btn`, (a) => a.getAttribute("href"))) === "https://returns.example/?order-number=1171674");
+  check("orders & returns: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Pop-ups blocked: sign-in runs in the same tab and the chat resumes on return.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await ctx.addInitScript(() => { window.open = () => null; });
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "track my order");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-ord-login]", { timeout: 6000 });
+  await page.click("[data-ord-login]");
+  await page.waitForSelector(".ai-ord[data-ord]", { timeout: 10000 });
+  check("sign-in without pop-ups: back on the same page, chat open with the orders", page.url().endsWith("/full") && await page.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open")), page.url());
+  await page.screenshot({ path: out("orders-phone") });
   await ctx.close();
 }
 await browser.close();

@@ -5,10 +5,8 @@
 // adds no routing of its own — Claude decides when to call them.
 
 import {
-  CUSTOMER_ORDERS_TOOL,
   FIT_PREDICTOR_TOOL,
   REVIEWS_TOOL,
-  getCustomerOrders,
   getFitRecommendation,
   getProductReviews,
 } from "./store-actions.server.js";
@@ -18,6 +16,7 @@ import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
+import { ordersTool } from "./orders-tool.server.js";
 import { MAX_RULES_CHARS } from "../knowledge-check.js";
 
 function parseJson(raw, fallback) {
@@ -141,7 +140,10 @@ export async function buildLeanStoreExtras({
     },
   });
 
-  if (vip) wrap(CUSTOMER_ORDERS_TOOL, (input) => getCustomerOrders(input || {}, ctx));
+  // Orders and returns for every shopper: signed in → their order cards;
+  // signed out → a sign-in button (no VIP mode needed — it's their own data).
+  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl });
+  wrap(orders.definition, orders.run);
 
   if (config.fitPredictorEnabled === true) {
     wrap(FIT_PREDICTOR_TOOL, async (input) => {

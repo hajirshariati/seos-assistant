@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 kb-lock');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 orders-returns');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -2106,6 +2106,189 @@ function leaveHome(fromRect){
     setTimeout(done,900);
   }else done();
 }
+/* ── Orders & returns in the chat ──
+   "Where's my order?": signed-in shoppers see their orders as cards
+   (status, progress, items, tracking). Signed out, a sign-in card opens
+   Shopify's own sign-in in a small window and the chat carries on once
+   they're in. "Return an item" walks through items → reason → refund, or an
+   exchange (the return plus the same shoe in the next size, ready to add). */
+var RETURNS_URL='/apps/hajirai/returns';
+var RESUME_KEY='hajirai_resume';
+var pendingOrders=null,pendingLogin=null;
+var ordersById={};
+var RET_REASONS=[
+  {key:'too_small',label:'Too small',change:'a bigger size'},
+  {key:'too_large',label:'Too large',change:'a smaller size'},
+  {key:'too_narrow',label:'Too narrow',change:'a wider width'},
+  {key:'too_wide',label:'Too wide',change:'a narrower width'},
+  {key:'changed_mind',label:'Changed my mind'},
+  {key:'damaged',label:'Damaged or defective'},
+  {key:'not_as_described',label:'Not as described'},
+  {key:'other',label:'Other'}
+];
+var ORD_STEPS=['Ordered','Shipped','Out for delivery','Delivered'];
+function fmtDay(d){if(!d)return'';try{var p=String(d).split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch(e){return d}}
+function optLine(o){var v=[];for(var k in (o||{}))if(Object.prototype.hasOwnProperty.call(o,k))v.push(o[k]);return v.join(' · ')}
+var ORD_ICON={bag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+  user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'};
+function orderCardHtml(o){
+  ordersById[o.id]=o;
+  var cancelled=o.stage==='cancelled';
+  var h='<div class="ai-ord" data-ord="'+esc(o.id)+'">';
+  h+='<div class="ai-ord__head"><div class="ai-ord__id"><div class="ai-ord__num">Order #'+esc(o.number)+'</div><div class="ai-ord__date">Placed '+esc(fmtDay(o.date))+'</div></div>';
+  h+='<span class="ai-ord__pill is-'+esc(o.stage)+'">'+esc(o.stageLabel)+'</span></div>';
+  if(!cancelled){
+    h+='<ol class="ai-ord__steps" aria-label="Progress: '+esc(o.stageLabel)+'">';
+    for(var i=0;i<ORD_STEPS.length;i++)h+='<li class="'+(i<=o.step?'is-done':'')+(i===o.step?' is-now':'')+'"><span class="ai-ord__dot"></span><span class="ai-ord__steplabel">'+ORD_STEPS[i]+'</span></li>';
+    h+='</ol>';
+    var when=o.deliveredAt?'Delivered '+fmtDay(o.deliveredAt):o.eta?'Arrives by '+fmtDay(o.eta):o.stage==='ordered'?'We’re getting it ready':'On its way';
+    h+='<div class="ai-ord__when">'+esc(when)+(o.carrier?' <span class="ai-ord__carrier">· '+esc(o.carrier)+'</span>':'')+'</div>';
+  }
+  if(o.returnStatus)h+='<div class="ai-ord__return">'+esc(o.returnStatus)+'</div>';
+  h+='<ul class="ai-ord__items">';
+  var items=o.items||[];
+  for(var j=0;j<Math.min(items.length,3);j++){var it=items[j];
+    h+='<li class="ai-ord__item">'+(safeUrl(it.image)?'<img src="'+safeUrl(it.image)+'" alt="" loading="lazy">':'<span class="ai-ord__ph">'+ORD_ICON.bag+'</span>')+
+      '<div class="ai-ord__itxt"><div class="ai-ord__ititle">'+esc(it.title)+'</div>'+(optLine(it.options)||it.quantity>1?'<div class="ai-ord__iopt">'+esc(optLine(it.options))+(it.quantity>1?(optLine(it.options)?' · ':'')+'Qty '+it.quantity:'')+'</div>':'')+'</div></li>';}
+  if(items.length>3)h+='<li class="ai-ord__more">+'+(items.length-3)+' more</li>';
+  h+='</ul><div class="ai-ord__actions">';
+  if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
+  if(o.canReturn)h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">Return an item</button>';
+  h+='</div></div>';
+  return h;
+}
+function ordersHtml(list){
+  var h='<div class="ai-ords">';
+  for(var i=0;i<Math.min(list.length,3);i++)h+=orderCardHtml(list[i]);
+  return h+'</div>';
+}
+function loginCardHtml(intent){
+  return '<div class="ai-ord ai-ord--signin"><div class="ai-ord__signin-icon">'+ORD_ICON.user+'</div>'+
+    '<div class="ai-ord__signin-text"><div class="ai-ord__num">Sign in to see your orders</div><div class="ai-ord__date">Track packages and start returns right here.</div></div>'+
+    '<button type="button" class="ai-ord__btn is-primary" data-ord-login="'+esc(intent||'track')+'">Sign in</button></div>';
+}
+/* Sign-in: Shopify's own sign-in in a small window; it lands on a page that
+   tells the chat and closes. Blocked pop-up: same tab, and the chat picks up
+   where it left off when the shopper comes back. */
+function startSignIn(intent){
+  var q=lastAskedOrders||'Where’s my order?';
+  try{sessionStorage.setItem(RESUME_KEY,JSON.stringify({q:q,intent:intent,at:Date.now()}))}catch(e){}
+  var back=location.pathname+location.search;
+  var landing='/apps/hajirai/signed-in?back='+encodeURIComponent(back);
+  var url=CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?')+'return_url='+encodeURIComponent(landing)+'&return_to='+encodeURIComponent(landing);
+  var w=null;
+  try{var W=Math.min(480,screen.availWidth),H=Math.min(720,screen.availHeight);w=window.open(url,'hajirai-signin','popup=yes,width='+W+',height='+H+',left='+Math.max(0,(screen.availWidth-W)/2)+',top='+Math.max(0,(screen.availHeight-H)/2))}catch(e){w=null}
+  if(!w)location.href=url;
+}
+var lastAskedOrders='';
+function resumeAfterSignIn(){
+  var r=null;try{r=JSON.parse(sessionStorage.getItem(RESUME_KEY)||'null');sessionStorage.removeItem(RESUME_KEY)}catch(e){}
+  if(!r||Date.now()-(r.at||0)>15*60*1000)return;
+  CUST_LOGGED_IN=true;
+  var pill=panel.querySelector('.ai-chat-header__login-pill');if(pill)pill.remove();
+  /* The sign-in cards above have done their job. */
+  var done=panel.querySelectorAll('[data-ord-login]');
+  for(var i=0;i<done.length;i++){var sp=document.createElement('span');sp.className='ai-ord__signedin';sp.innerHTML=ORD_ICON.check+'Signed in';done[i].replaceWith(sp)}
+  if(!isOpen)toggle(true);
+  setTimeout(function(){inputEl.value=r.q||'Where’s my order?';sendMessage()},isOpen?150:700);
+}
+window.addEventListener('message',function(e){
+  if(e.origin!==location.origin||!e.data||e.data.type!=='hajirai-signed-in')return;
+  resumeAfterSignIn();
+});
+/* Came back from a same-tab sign-in. */
+if(CUST_LOGGED_IN){try{if(sessionStorage.getItem(RESUME_KEY))setTimeout(resumeAfterSignIn,600)}catch(e){}}
+
+/* The return walkthrough, inside the order card. */
+function retState(card){return card.__ret||(card.__ret={items:{},reason:'',refundTo:'original_payment'})}
+function renderReturn(card,step){
+  var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
+  var st=retState(card);
+  var box=card.querySelector('.ai-ret');
+  if(!box){box=document.createElement('div');box.className='ai-ret';card.appendChild(box)}
+  card.classList.add('is-returning');
+  var h='';
+  if(step==='items'){
+    var ret=o.items.filter(function(i){return i.returnable>0});
+    if(ret.length===1&&!Object.keys(st.items).length)st.items[ret[0].lineId]=1;
+    h+='<div class="ai-ret__title">What would you like to return?</div><div class="ai-ret__list">';
+    for(var i=0;i<ret.length;i++){var it=ret[i],on=!!st.items[it.lineId];
+      h+='<button type="button" class="ai-ret__item'+(on?' is-on':'')+'" role="checkbox" aria-checked="'+on+'" data-ret-item="'+esc(it.lineId)+'">'+
+        (safeUrl(it.image)?'<img src="'+safeUrl(it.image)+'" alt="">':'<span class="ai-ord__ph">'+ORD_ICON.bag+'</span>')+
+        '<span class="ai-ret__itxt"><span class="ai-ord__ititle">'+esc(it.title)+'</span><span class="ai-ord__iopt">'+esc(optLine(it.options))+'</span></span><span class="ai-ret__check">'+ORD_ICON.check+'</span></button>';}
+    h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-cancel>Cancel</button><button type="button" class="ai-ord__btn is-primary" data-ret-next="reason"'+(Object.keys(st.items).length?'':' disabled')+'>Next</button></div>';
+  }else if(step==='reason'){
+    h+='<div class="ai-ret__title">Why are you returning it?</div><div class="ai-ret__reasons">';
+    for(var r=0;r<RET_REASONS.length;r++)h+='<button type="button" class="ai-ret__reason'+(st.reason===RET_REASONS[r].key?' is-on':'')+'" data-ret-reason="'+RET_REASONS[r].key+'">'+esc(RET_REASONS[r].label)+'</button>';
+    h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="items">Back</button></div>';
+  }else if(step==='confirm'){
+    var rs=null;for(var k=0;k<RET_REASONS.length;k++)if(RET_REASONS[k].key===st.reason)rs=RET_REASONS[k];
+    var picked=o.items.filter(function(i){return st.items[i.lineId]});
+    h+='<div class="ai-ret__title">'+(rs&&rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
+    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs?rs.label:'')+'</div></div>';
+    h+='<div class="ai-ret__refund" role="radiogroup" aria-label="Refund to"><span>Refund to</span>'+
+      '<button type="button" role="radio" aria-checked="'+(st.refundTo==='original_payment')+'" class="'+(st.refundTo==='original_payment'?'is-on':'')+'" data-ret-refund="original_payment">Original payment</button>'+
+      '<button type="button" role="radio" aria-checked="'+(st.refundTo==='store_credit')+'" class="'+(st.refundTo==='store_credit'?'is-on':'')+'" data-ret-refund="store_credit">Store credit</button></div>';
+    if(rs&&rs.change){
+      h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="exchange">Exchange for '+esc(rs.change)+'</button>'+
+        '<button type="button" class="ai-ord__btn" data-ret-submit="return">Continue return</button></div>'+
+        '<div class="ai-ret__note">Exchange: we start the return, then show you the new size to add to your cart. Your refund for this pair is issued once it’s back with us.</div>';
+    }else{
+      h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="return">Start return</button></div>';
+    }
+    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="reason">Back</button></div>';
+  }else if(step==='sending'){
+    h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>Starting your return…</div>';
+  }
+  box.innerHTML=h;
+  scrollBottom();
+}
+function submitReturn(card,mode){
+  var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
+  var st=retState(card);
+  var items=[];for(var id in st.items)if(st.items[id])items.push({lineId:id,quantity:1});
+  renderReturn(card,'sending');
+  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,refundTo:st.refundTo,exchange:mode==='exchange'})})
+  .then(function(r){return r.json().catch(function(){return{}})})
+  .then(function(d){
+    var box=card.querySelector('.ai-ret');
+    if(d&&d.ok){
+      card.classList.add('is-returned');
+      box.innerHTML='<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div><div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
+        '<div class="ai-ret__note">'+(d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.')+' Refund to '+(d.refundTo==='store_credit'?'store credit':'your original payment')+' once it’s back with us.</div>'+
+        '<div class="ai-ret__choices">'+(safeUrl(d.labelUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.labelUrl)+'" target="_blank" rel="noopener">Get return label</a>':'')+(safeUrl(d.returnsUrl)?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
+      var act=card.querySelector('[data-ord-return]');if(act)act.remove();
+      if(mode==='exchange'&&d.exchangeCards&&d.exchangeCards.length){
+        var ex=d.exchangeCards[0],to=ex.exchange_to?' in '+ex.exchange_to:'';
+        var txt='Here’s your new size'+to+' — tap Add to cart, then check out whenever you’re ready.';
+        if(!ex.exchange_to)txt='Here’s the same style — pick your new size and tap Add to cart.';
+        var cards=d.exchangeCards.map(function(c){var x={};for(var k in c)if(k!=='exchange_from'&&k!=='exchange_to')x[k]=c[k];return x});
+        setTimeout(function(){appendMsg('assistant',txt,cards);messages.push({role:'assistant',content:txt,products:cards});saveH(messages)},350);
+      }
+    }else{
+      box.innerHTML='<div class="ai-ret__err" role="alert">'+esc((d&&d.message)||'Something went wrong — please try again.')+'</div>'+
+        '<div class="ai-ret__choices">'+(safeUrl(d&&d.fallbackUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.fallbackUrl)+'" target="_blank" rel="noopener">Finish on our returns page</a>':'')+'<button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';
+    }
+    scrollBottom();
+  })
+  .catch(function(){var box=card.querySelector('.ai-ret');if(box)box.innerHTML='<div class="ai-ret__err" role="alert">Connection problem — please try again.</div><div class="ai-ret__choices"><button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>'});
+}
+panel.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-refund],[data-ret-submit],[data-ret-cancel]');
+  if(!t||!panel.contains(t))return;
+  if(t.hasAttribute('data-ord-login')){e.preventDefault();startSignIn(t.getAttribute('data-ord-login'));return}
+  var card=t.closest('.ai-ord');if(!card)return;
+  var st=retState(card);
+  if(t.hasAttribute('data-ord-return')){renderReturn(card,'items');return}
+  if(t.hasAttribute('data-ret-cancel')){var b=card.querySelector('.ai-ret');if(b)b.remove();card.classList.remove('is-returning');card.__ret=null;return}
+  if(t.hasAttribute('data-ret-item')){var id=t.getAttribute('data-ret-item');st.items[id]=st.items[id]?0:1;if(!st.items[id])delete st.items[id];renderReturn(card,'items');return}
+  if(t.hasAttribute('data-ret-next')){renderReturn(card,t.getAttribute('data-ret-next'));return}
+  if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');renderReturn(card,'confirm');return}
+  if(t.hasAttribute('data-ret-refund')){st.refundTo=t.getAttribute('data-ret-refund');renderReturn(card,'confirm');return}
+  if(t.hasAttribute('data-ret-submit')){submitReturn(card,t.getAttribute('data-ret-submit'));return}
+});
+
 function sendMessage(){
 var text=inputEl.value.trim();
 if(!text||isStreaming)return;
@@ -2121,6 +2304,7 @@ leaveHome(fromRect);
 var stale=msgsEl.querySelectorAll('.ai-chat-choices, .ai-chat-suggestions, .ai-chat-welcome__qps, .ai-chat-welcome__ctas, .ai-chat-dead-end');
 for(var si=0;si<stale.length;si++){stale[si].classList.add('is-stale')}
 lastUserMessage=text;
+if(/order|track|ship|deliver|package|return|exchange|refund/i.test(text))lastAskedOrders=text;
 messages.push({role:'user',content:text});
 appendMsg('user',text);
 saveH(messages);
@@ -2352,7 +2536,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -2385,6 +2569,8 @@ if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
   fitResult=String(p.key);
 }
+if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders}
+if(p.type==='login_prompt'){pendingLogin=p.intent||'track'}
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
@@ -2523,6 +2709,16 @@ if(fitResult&&mDiv){
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
   if(fitP&&fitObj)fitP.insertAdjacentHTML('afterend',fitCardHtml(fitObj));
   fitResult=null;
+}
+if(pendingOrders&&mDiv){
+  var ob=$('.ai-chat-msg-bubble',mDiv);
+  if(ob)ob.insertAdjacentHTML('beforeend',ordersHtml(pendingOrders));
+  pendingOrders=null;
+}
+if(pendingLogin&&mDiv){
+  var lb2=$('.ai-chat-msg-bubble',mDiv);
+  if(lb2)lb2.insertAdjacentHTML('beforeend',loginCardHtml(pendingLogin));
+  pendingLogin=null;
 }
 if(sizeFinder&&mDiv){
   var tfb=$('.ai-chat-msg-bubble',mDiv);

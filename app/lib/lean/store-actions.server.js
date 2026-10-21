@@ -44,27 +44,6 @@ export const FIT_PREDICTOR_TOOL = {
   },
 };
 
-export const CUSTOMER_ORDERS_TOOL = {
-  name: "get_customer_orders",
-  description:
-    "Fetch the logged-in customer's order history, including tracking info and delivery status. Call this when the customer asks about their orders, shipping, tracking, delivery, a specific order number, past purchases, or reorder. Returns order number, date, status, line items, total, tracking numbers with carrier and URL, and estimated/actual delivery date. Never exposes email, street addresses, or payment info. If the customer mentions a specific order number, pass it as orderNumber to filter.",
-  input_schema: {
-    type: "object",
-    properties: {
-      limit: {
-        type: "integer",
-        description: "Number of recent orders to fetch. Default 5, max 10.",
-        minimum: 1,
-        maximum: 10,
-      },
-      orderNumber: {
-        type: "string",
-        description: "Optional. A specific order number the customer mentioned (e.g. '1023' or '#1023'). If provided, only matching orders are returned. If the match is empty, the tool returns an empty orders array (order may be too old or doesn't belong to this customer).",
-      },
-    },
-  },
-};
-
 function numericShopifyId(gid) {
   if (!gid) return null;
   const match = String(gid).match(/(\d+)$/);
@@ -573,64 +552,6 @@ async function getFitRecommendation({ handle, customerSizeHint }, ctx) {
 // loggedInCustomerId from the request context — never accepts a customer id
 // from the AI's arguments.
 
-function normalizeOrderNumber(raw) {
-  return String(raw || "").replace(/[^0-9a-z]/gi, "").toLowerCase();
-}
-
-async function getCustomerOrders({ limit, orderNumber }, ctx) {
-  if (!ctx?.loggedInCustomerId || !ctx?.accessToken || !ctx?.shop) {
-    return { error: "Customer is not logged in." };
-  }
-  if (ctx.vipModeEnabled !== true) {
-    return { error: "VIP mode is not enabled for this store." };
-  }
-  // If filtering by order number, fetch the max so we can match older orders.
-  const needle = orderNumber ? normalizeOrderNumber(orderNumber) : "";
-  const orderLimit = needle ? 10 : Math.max(1, Math.min(parseInt(limit, 10) || 5, 10));
-  const ctxData = await fetchCustomerContext({
-    shop: ctx.shop,
-    accessToken: ctx.accessToken,
-    customerId: ctx.loggedInCustomerId,
-    orderLimit,
-  });
-  if (!ctxData) return { error: "Could not fetch order history." };
-
-  let orders = ctxData.recentOrders || [];
-  if (needle) {
-    orders = orders.filter((o) => normalizeOrderNumber(o.name) === needle || normalizeOrderNumber(o.name).endsWith(needle));
-  }
-
-  // Branded tracking + returns page URLs (AfterShip, Parcel Panel, etc).
-  // When set, override carrier URLs and attach a returns link per order so
-  // the AI can guide self-serve returns instead of routing to support.
-  const trackingBase = (ctx.trackingPageUrl || "").replace(/\/+$/, "");
-  const returnsBase = (ctx.returnsPageUrl || "").replace(/\/+$/, "");
-  const email = ctxData._email || "";
-  for (const order of orders) {
-    const orderNum = String(order.name || "").replace(/^#/, "");
-    if (trackingBase) {
-      for (const f of order.fulfillments || []) {
-        for (const t of f.tracking || []) {
-          if (t.number) t.url = `${trackingBase}/tracking/${encodeURIComponent(t.number)}`;
-        }
-      }
-      if (orderNum && email) {
-        order.trackingPageUrl = `${trackingBase}?order-number=${encodeURIComponent(orderNum)}&email=${encodeURIComponent(email)}`;
-      }
-    }
-    if (returnsBase && orderNum && email) {
-      order.returnsPageUrl = `${returnsBase}?order-number=${encodeURIComponent(orderNum)}&email=${encodeURIComponent(email)}`;
-    }
-  }
-
-  return {
-    firstName: ctxData.firstName,
-    numberOfOrders: ctxData.numberOfOrders,
-    amountSpent: ctxData.amountSpent,
-    orders,
-  };
-}
-
 export const REVIEWS_TOOL = {
   name: "get_product_reviews",
   description:
@@ -642,4 +563,4 @@ export const REVIEWS_TOOL = {
   },
 };
 
-export { getProductReviews, getReturnInsights, getFitRecommendation, getCustomerOrders };
+export { getProductReviews, getReturnInsights, getFitRecommendation };

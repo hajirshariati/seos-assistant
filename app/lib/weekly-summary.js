@@ -3,6 +3,7 @@
 
 const TOOL_LABELS = {
   get_customer_orders: "Order status",
+  get_my_orders: "Order status",
   get_fit_recommendation: "Size / fit help",
   get_product_reviews: "Reviews",
   show_newsletter_signup: "Newsletter signup",

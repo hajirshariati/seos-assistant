@@ -30,6 +30,14 @@ const SSE = {
   klaviyo: [{ type: "text", text: "Want early access to new arrivals?" }, { type: "klaviyo_form" }],
   chips: ev("Which style? <<Sneakers>> <<Sandals>> <<Boots>> <<Loafers>> <<Wedges>> <<Mary Janes>> <<Clogs>> <<Slippers>>"),
   viz: ev("Here it is.", [JIL], [{ type: "visualize_cta", productHandle: "jillian-black", productTitle: "Jillian", productImage: img, label: "See It Styled", scenes: null }]),
+  orders: ev("Here are your recent orders.", [], [{ type: "order_cards", intent: "track", orders: [
+    { id: "5001", number: "1171674", date: "2026-10-14", stage: "delivered", stageLabel: "Delivered", step: 3, deliveredAt: "2026-10-18", eta: "", carrier: "UPS", trackUrl: "https://track.example/1", returnStatus: "", canReturn: true,
+      items: [{ lineId: "9001", title: "Savannah Adjustable Quarter Strap Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: img, quantity: 1, returnable: 1, handle: "savannah-red" }, { lineId: "9002", title: "Women's Casual Orthotics", options: {}, image: "", quantity: 2, returnable: 2, handle: "orthotic-one" }] },
+    { id: "5002", number: "1172010", date: "2026-10-20", stage: "shipped", stageLabel: "On its way", step: 1, deliveredAt: "", eta: "2026-10-24", carrier: "USPS", trackUrl: "https://track.example/2", returnStatus: "Return in progress", canReturn: false,
+      items: [{ lineId: "9003", title: "Jillian Braided Quarter Strap Sandal - Black", options: { Size: "9 US" }, image: "", quantity: 1, returnable: 1, handle: "jillian-black" }] },
+    { id: "5003", number: "1169000", date: "2026-09-02", stage: "cancelled", stageLabel: "Cancelled", step: 0, deliveredAt: "", eta: "", carrier: "", trackUrl: "", returnStatus: "", canReturn: false, items: [{ lineId: "9004", title: "Orthotic Flip Flops", options: {}, image: "", quantity: 1, returnable: 0, handle: "x" }] },
+  ] }]),
+  signin: ev("Sign in and I'll pull up your orders right here.", [], [{ type: "login_prompt", intent: "track" }]),
 };
 // scene name -> steps
 const SCENES = {
@@ -43,12 +51,15 @@ const SCENES = {
   klaviyo: ["kl", "klaviyo"], klaviyoErr: ["kl", "klaviyo", "klbad"], klaviyoDone: ["kl", "klaviyo", "klgood"],
   homeLogged: ["url:/full?login=Dana"], helpersKnown: ["url:/products/savannah-red?tf=known&login=Dana", "fitknown", "reload"],
   typing: ["slowchat", "typing"], cut: ["cut"], e429: ["e429"], thanks: ["one", "thumb"], chips: ["chips"],
+  signin: ["signin"], orders: ["orders"], phoneOrders: ["phone", "orders"],
+  retItems: ["orders", "ret"], retReason: ["orders", "ret", "retitem", "retnext"], retConfirm: ["orders", "ret", "retitem", "retnext", "retsmall"],
+  retDone: ["retok", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"], retErr: ["retbad", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"],
   vizGen: ["vizslow", "viz", "vizgo"], vizDone: ["vizok", "viz", "vizgo", "wait3"], vizErr: ["vizbad", "viz", "vizgo", "wait3"],
 };
 const probe = () => {
   const theme = document.querySelector(".ai-chat-panel").getAttribute("data-theme");
   const lum = (c) => { const m = c && c.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return { L: 0.2126 * r + 0.7152 * g + 0.0722 * b, a: m[3] === undefined ? 1 : Number(m[3]) }; };
-  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-header__avatar, .ai-chat-welcome__avatar, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow";
+  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-header__avatar, .ai-chat-welcome__avatar, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow, .ai-ord__btn.is-primary, .ai-ord__steps, .ai-ret__refund button.is-on, .ai-ret__item.is-on .ai-ret__check";
   const PHOTO = ".ai-chat-product-img, .ai-chat-product-img *, .ai-chat-atc-thumb, .ai-chat-atc-thumb *, img, .ai-chat-viz-result-imgwrap, canvas, .ai-chat-glow";
   const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const cs = getComputedStyle(e); const l = lum(cs.backgroundColor); if (l && l.a > 0.5) return { l: l.L, el: e }; } return { l: theme === "dark" ? 0 : 1, el: document.body }; };
   const nm = (e) => (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : e.tagName.toLowerCase());
@@ -132,6 +143,8 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   if (steps.includes("slowchat")) await p.route("**/apps/hajirai/chat**", async () => { await new Promise((res) => setTimeout(res, 20000)); });
   if (steps.includes("e429")) await p.route("**/apps/hajirai/chat**", (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfter: 5 }) }));
   for (const [k, ms, body] of [["vizslow", 30000, { ok: true, imageDataUrl: img }], ["vizok", 300, { ok: true, imageDataUrl: img }], ["vizbad", 300, { ok: false, message: "Could not create the preview right now." }]]) if (steps.includes(k)) await p.route("**/apps/hajirai/visualize**", async (r) => { await new Promise((res) => setTimeout(res, ms)); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }); });
+  if (steps.includes("retok")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, rma: "R1001", labelUrl: "https://label.example/1", returnsUrl: "https://returns.example/", refundTo: "original_payment", exchangeCards: [{ ...JIL, preselect: { Size: "9.5 US" }, exchange_to: "9.5 US" }] }) }));
+  if (steps.includes("retbad")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, message: "I couldn't start this return here — you can finish it on our returns page.", fallbackUrl: "https://returns.example/" }) }));
   const urlStep = steps.find((x) => x.startsWith("url:"));
   await p.goto("http://localhost:4791" + (urlStep ? urlStep.slice(4) : "/products/savannah-red")); await p.waitForTimeout(500);
   if (!steps.includes("noopen")) { await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(1100); }
@@ -155,6 +168,11 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
     if (st === "vizgo") { await p.click(".ai-chat-viz-btn"); await p.waitForTimeout(1300); }
     if (st === "wait3") { await p.waitForTimeout(1500); }
     if (st === "talk") { await p.click(".ai-chat-mic"); await p.waitForTimeout(700); }
+    if (st === "ret") { await p.click('[data-ord-return="5001"]'); await p.waitForTimeout(300); }
+    if (st === "retitem") { await p.click('[data-ret-item="9001"]'); await p.waitForTimeout(200); }
+    if (st === "retnext") { await p.click('[data-ret-next="reason"]'); await p.waitForTimeout(200); }
+    if (st === "retsmall") { await p.click('[data-ret-reason="too_small"]'); await p.waitForTimeout(300); }
+    if (st === "retgo") { await p.click('[data-ret-submit="exchange"]'); await p.waitForTimeout(1200); }
     if (st === "typed") { await p.fill(".ai-chat-input", "red sandals"); await p.waitForTimeout(400); }
   }
   await p.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); if (m) m.scrollTop = m.scrollHeight; });

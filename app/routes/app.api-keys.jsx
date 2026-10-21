@@ -752,7 +752,7 @@ export default function ApiKeys() {
                     onChange={setReturnsPageUrl}
                     placeholder="https://returns.yourstore.com"
                     autoComplete="off"
-                    helpText="AfterShip Returns or similar self-serve portal. When set, logged-in customers asking about returns or exchanges get a pre-filled link to this page (with their order number + email) instead of being routed to the support team."
+                    helpText="Your AfterShip Returns page. Used for “View return” after a return is started in the chat, and as the fallback (prefilled with the order number and email) when a return can't be started in the chat."
                   />
                   <TextField
                     label="Search results page"
@@ -1059,17 +1059,17 @@ export default function ApiKeys() {
                         </Badge>
                       </InlineStack>
                       <Text as="p" tone="subdued" variant="bodySm">
-                        Return-reason data for sizing intelligence — if customers return products as "too small", the AI picks that up.
+                        In-chat returns: signed-in customers pick the items and a reason in the chat and the return is created in AfterShip Returns (your return rules, labels and emails stay as they are). "Too small" / "Too large" also offers an exchange: the return plus the same shoe in the next size, ready to add to cart.
                       </Text>
                       <TextField
-                        label="Aftership API key"
+                        label="AfterShip Returns API key"
                         labelHidden
                         type="password"
                         value={aftershipKey}
                         onChange={setAftershipKey}
                         placeholder={hasAftershipKey ? "••••••••••••••••" : "Paste key to enable"}
                         autoComplete="off"
-                        helpText="Enables fit intelligence and sizing guidance from return-reason data."
+                        helpText="An AfterShip Returns API key (Settings → API keys in AfterShip; your plan needs API access). Without it, the chat sends customers to the returns page below, with their order filled in."
                       />
                     </BlockStack>
                   </Card>

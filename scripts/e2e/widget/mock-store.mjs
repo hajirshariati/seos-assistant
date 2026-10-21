@@ -7,6 +7,18 @@ const W = new URL("../../../extensions/hajirai-chat-widget/assets/", import.meta
 export const cartLog = [];
 export const chatBodies = [];
 export const fitSaves = [];
+export const returnBodies = [];
+const { signedInPage } = await import("../../../app/lib/signed-in-page.js");
+// A signed-in shopper's orders, shaped like app/lib/orders.server.js cards.
+const ORDERS = [
+  { id: "5001", number: "1171674", date: "2026-10-14", stage: "delivered", stageLabel: "Delivered", step: 3, shippedAt: "2026-10-15", deliveredAt: "2026-10-18", eta: "", carrier: "UPS", trackUrl: "https://track.example/1Z999", returnStatus: "", canReturn: true,
+    items: [
+      { lineId: "9001", title: "Savannah Adjustable Quarter Strap Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: "", quantity: 1, returnable: 1, handle: "savannah-red" },
+      { lineId: "9002", title: "Women's Casual Orthotics", options: {}, image: "", quantity: 1, returnable: 1, handle: "orthotic-one" },
+    ] },
+  { id: "5002", number: "1172010", date: "2026-10-20", stage: "shipped", stageLabel: "On its way", step: 1, shippedAt: "2026-10-21", deliveredAt: "", eta: "2026-10-24", carrier: "USPS", trackUrl: "https://track.example/9400", returnStatus: "", canReturn: false,
+    items: [{ lineId: "9003", title: "Jillian Braided Quarter Strap Sandal - Black", options: { Size: "9 US", Width: "Wide" }, image: "", quantity: 1, returnable: 1, handle: "jillian-black" }] },
+];
 const FF_CONFIG = {
   enabled: true, loggedIn: true, savedFit: null,
   quiz: { title: "Find my fit", questions: [{ id: "q_arch", text: "Do you have flat feet?", helpText: "Look at a wet footprint.", options: [{ id: "a", label: "Yes", sublabel: "Flat feet" }, { id: "b", label: "No / Unsure" }] }] },
@@ -95,9 +107,27 @@ export function start(port) {
         const send = (code, type, data) => { resp.writeHead(code, { "Content-Type": type }); resp.end(data); };
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
-        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || ""));
+        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : "")));
         if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
         if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
+        // Sign-in: sets the session cookie and goes back where it was told
+        // (as Shopify's sign-in does), here straight to the chat's landing page.
+        if (u.pathname === "/account/login" && (u.searchParams.get("return_url") || u.searchParams.get("return_to"))) {
+          const to = u.searchParams.get("return_url") || u.searchParams.get("return_to");
+          resp.writeHead(302, { Location: to.startsWith("/") ? to : "/", "Set-Cookie": "signedin=1; Path=/" });
+          return resp.end();
+        }
+        if (u.pathname === "/apps/hajirai/signed-in") return send(200, "text/html", signedInPage(u.searchParams.get("back")));
+        if (u.pathname === "/apps/hajirai/returns" && req.method === "POST") {
+          const b = JSON.parse(body || "{}");
+          returnBodies.push(b);
+          if (!/signedin=1/.test(req.headers.cookie || "")) return send(401, "application/json", JSON.stringify({ error: "sign_in_required" }));
+          if (b.reason === "other") return send(200, "application/json", JSON.stringify({ ok: false, error: "return_not_created", message: "I couldn't start this return here — you can finish it on our returns page.", fallbackUrl: "https://returns.example/?order-number=1171674" }));
+          return send(200, "application/json", JSON.stringify({
+            ok: true, rma: "R1001", labelUrl: "", returnsUrl: "https://returns.example/?order-number=1171674", refundTo: b.refundTo || "original_payment",
+            exchangeCards: b.exchange ? [{ ...cards[0], preselect: { Size: "8.5 US", Width: "Medium" }, exchange_from: "8 US", exchange_to: "8.5 US" }] : [],
+          }));
+        }
         if (u.pathname === "/account/logout" || u.pathname === "/account/login") return send(200, "text/html", "<!doctype html><title>account</title>" + u.pathname);
         const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
@@ -146,6 +176,22 @@ export function start(port) {
             resp.write(`data: ${JSON.stringify({ type: "text", text: "Here's the Jillian in 9 - 9.5 US, ready to add." })}\n\n`);
             resp.write(`data: ${JSON.stringify({ type: "products", products: [{ ...cards[1], preselect: { Size: "9 US", Width: "Medium" } }] })}\n\n`);
             resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+            return resp.end();
+          }
+          if (/order|return/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            const intent = /return/i.test(parsed.message) ? "return" : "track";
+            if (/signedin=1/.test(req.headers.cookie || "")) {
+              w({ type: "text", text: intent === "return" ? "Here are your orders — tap Return an item on the one you'd like to return." : "Here are your recent orders." });
+              w({ type: "products", products: [] });
+              w({ type: "order_cards", intent, orders: ORDERS });
+            } else {
+              w({ type: "text", text: "Sign in and I'll pull up your orders right here." });
+              w({ type: "products", products: [] });
+              w({ type: "login_prompt", intent });
+            }
+            w({ type: "done" });
             return resp.end();
           }
           if (/fit/i.test(parsed.message || "")) {

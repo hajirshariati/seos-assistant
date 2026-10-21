@@ -38,6 +38,8 @@ export function describeExtras(events = []) {
     else if (e.type === "fitfinder_fit") out.push(`FIT ${e.key}`);
     else if (e.type === "fit_report") out.push(`fit report ${e.recommendedSize || ""}`.trim());
     else if (e.type === "klaviyo_form") out.push("sign-up form");
+    else if (e.type === "login_prompt") out.push("sign-in button");
+    else if (e.type === "order_cards" && Array.isArray(e.orders)) out.push(`orders: ${e.orders.map((o) => `#${o.number} ${o.stageLabel}`).join(", ")}`);
     else if (e.type === "link" && e.label) out.push(`link: ${e.label}`);
     else if (e.type === "suggestions" && Array.isArray(e.questions)) out.push(`suggested: ${e.questions.slice(0, 4).join(" | ")}`);
   }
