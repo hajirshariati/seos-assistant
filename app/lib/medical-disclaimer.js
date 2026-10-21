@@ -19,6 +19,11 @@ const MEDICAL_TERM_RE = new RegExp(
   "overpronat\\w*|supinat\\w*|flat\\s+feet|flat[-\\s]?foot|fallen\\s+arch(?:es)?|high\\s+arch(?:es)?|" +
   "heel\\s+(?:pain|spurs?)|arch\\s+pain|foot\\s+pain|feet\\s+(?:hurt|ache|pain)|ankle\\s+pain|knee\\s+pain|" +
   "diabet\\w*|arthrit\\w*|swollen\\s+feet|edema|" +
+  // Everyday phrasings: "my heels hurt", "sore feet", "pain in my arch".
+  "(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?|balls?\\s+of\\s+(?:my\\s+)?feet)\\s+(?:hurts?|hurting|aches?|aching|(?:are|is|get|gets|feel|feels)\\s+(?:so\\s+|really\\s+|very\\s+)?(?:sore|achy|painful|swollen|numb))|" +
+  "(?:sore|achy|aching|painful|tired|swollen|numb)\\s+(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?)|" +
+  "pain\\s+in\\s+(?:my|the)\\s+(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?|ball)|" +
+  "neuropath\\w*|hammer\\s?toes?|gout|morton\\W?s|achilles|tendon\\w*|shin\\s+splints?|hallux|" +
   "orthotics?|insoles?|inserts?|arch\\s+supports?)\\b",
   "i",
 );

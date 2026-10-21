@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-20 rec-note-header');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 cart-sync');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -142,7 +142,7 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
   try{
     var q=new URLSearchParams(location.search).get('hajirai_tester');
     if(q!==null){
-      var name=String(q).replace(/[<>"'`&\\\/=;:(){}\[\]]/g,'').trim().slice(0,40);
+      var name=String(q).replace(/[^A-Za-z0-9 ._\u00C0-\u024F-]/g,'').trim().slice(0,40);
       if(!name||/^(0|off|false|no)$/i.test(name))localStorage.removeItem(TESTER_KEY);
       else localStorage.setItem(TESTER_KEY,JSON.stringify({name:/^(1|true|yes|on)$/i.test(name)?'Tester':name,until:Date.now()+14*864e5}));
     }
@@ -202,7 +202,44 @@ function markChatAttributed(){
 function addToCart(vid,qty){
 return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})})
 .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var err=new Error(d.description||d.message||'Could not add to cart');err.status=r.status;throw err}return d})})
-.then(function(d){markChatAttributed();document.dispatchEvent(new CustomEvent('cart:refresh'));document.dispatchEvent(new CustomEvent('cart:updated'));return fetch(SHOP_ROOT+'cart.js',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(cart){document.querySelectorAll('[data-cart-count],.cart-count,.header__cart-count,.cart-count-bubble span[aria-hidden]').forEach(function(e){e.textContent=cart.item_count});return d}).catch(function(){return d})})
+.then(function(d){markChatAttributed();return syncThemeCart().then(function(){return d},function(){return d})})
+}
+/* After an add from the chat, bring the store's own cart UI up to date in
+   the background — header and dock counts, the cart drawer's contents — so
+   the item is there when the shopper closes the chat. Never opens the drawer.
+   Themes with a pubsub cart (Aetrex's) get the update they publish for their
+   own adds, with the drawer's section HTML attached (their drawer reads it);
+   others get the common refresh events and count selectors. */
+function syncThemeCart(){
+  var ids=[],nodes=document.querySelectorAll('cart-items[data-section-id]'),i;
+  for(i=0;i<nodes.length;i++){var id=nodes[i].getAttribute('data-section-id');if(id&&ids.indexOf(id)===-1)ids.push(id)}
+  ids=ids.slice(0,5);
+  var cartP=fetch(SHOP_ROOT+'cart.js',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}}).then(function(r){return r.json()});
+  var secP=ids.length?fetch(location.pathname+'?sections='+encodeURIComponent(ids.join(',')),{credentials:'same-origin'}).then(function(r){return r.ok?r.json():{}}).catch(function(){return{}}):Promise.resolve({});
+  return Promise.all([cartP,secP]).then(function(res){
+    var cart=res[0]||{},sec=res[1]||{},ps=window.theme&&window.theme.pubsub;
+    var focus=document.activeElement,inChat=!!(focus&&panel&&panel.contains(focus));
+    /* Every drawer/cart section must have fresh HTML, or the theme would
+       read a missing one as an empty cart. */
+    var complete=ids.every(function(id){return typeof sec[id]==='string'});
+    var published=false;
+    if(ps&&ps.PUB_SUB_EVENTS&&ps.PUB_SUB_EVENTS.cartUpdate&&typeof ps.publish==='function'&&complete&&!cart.errors){
+      cart.sections=sec;
+      try{ps.publish(ps.PUB_SUB_EVENTS.cartUpdate,{source:'chat-widget',cart:cart});published=true}catch(e){}
+    }
+    if(!published){
+      try{document.dispatchEvent(new CustomEvent('cart:refresh',{detail:{open:false}}))}catch(e){}
+      try{document.dispatchEvent(new CustomEvent('cart:updated',{detail:{cart:cart}}))}catch(e){}
+    }
+    if(typeof cart.item_count==='number'){
+      document.querySelectorAll('cart-count,[data-cart-count],.cart-count,.header__cart-count,.cart-count-bubble span[aria-hidden]').forEach(function(e){
+        e.textContent=cart.item_count;
+        if(e.tagName.toLowerCase()==='cart-count')e.hidden=cart.item_count===0;
+      });
+    }
+    /* The theme's cart code can move focus into its (closed) drawer. */
+    if(inChat&&document.activeElement!==focus&&focus.focus){try{focus.focus({preventScroll:true})}catch(e){}}
+  });
 }
 
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -2029,26 +2066,24 @@ if(!KLAVIYO_COMPANY_ID||!KLAVIYO_LIST_ID)return;
 var d=appendMsg('assistant',label||'Stay Connected');
 var b=$('.ai-chat-msg-bubble',d);
 if(!b)return;
-/* Styled (light and dark) by the stylesheet. */
+/* Styled (light and dark) by the stylesheet. Email only — a phone number for
+   texts would need its own SMS consent wording. */
 var formHtml='<div class="ai-chat-klaviyo-form">'
 +'<input type="email" class="ai-kl-email" placeholder="Email address" aria-label="Email address" autocomplete="email" required />'
-+'<input type="tel" class="ai-kl-phone" placeholder="Phone number (optional)" aria-label="Phone number, optional" autocomplete="tel" />'
 +'<button class="ai-kl-submit" type="submit">Subscribe</button>'
++'<p class="ai-kl-note">By subscribing you agree to get marketing emails from us. Unsubscribe anytime. <a href="'+esc(safeUrl(PRIVURL)||'/policies/privacy-policy')+'" target="_blank" rel="noopener">Privacy Policy</a></p>'
 +'<div class="ai-kl-status" role="status" aria-live="polite" hidden></div>'
 +'</div>';
 b.insertAdjacentHTML('beforeend',formHtml);
 var form=$('.ai-chat-klaviyo-form',b);
 var emailIn=$('.ai-kl-email',form);
-var phoneIn=$('.ai-kl-phone',form);
 var submitBtn=$('.ai-kl-submit',form);
 var statusEl=$('.ai-kl-status',form);
 submitBtn.addEventListener('click',function(){
   var email=(emailIn.value||'').trim();
   if(!email||email.indexOf('@')===-1){statusEl.hidden=false;statusEl.classList.add('is-error');statusEl.textContent='Please enter a valid email.';return}
   submitBtn.disabled=true;submitBtn.textContent='Subscribing...';
-  var phone=(phoneIn.value||'').trim();
   var profileAttrs={email:email};
-  if(phone)profileAttrs.phone_number=phone;
   fetch('https://a.klaviyo.com/client/subscriptions/?company_id='+encodeURIComponent(KLAVIYO_COMPANY_ID),{
     method:'POST',
     headers:{'Content-Type':'application/json','revision':'2024-10-15'},
@@ -2183,7 +2218,7 @@ if(e.name==='AbortError')return;
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
 /* The store's own limits and settings: say so plainly — retrying won't help. */
 if(e.status===429&&e.code==='rate_limited'){showStreamError('You\'re sending messages quickly — please wait a few seconds and try again.');return}
-if(e.status===402||e.status===503||(e.status===429&&e.code==='daily_cap_reached')){showStreamError(e.message||'The assistant isn\'t available right now. Our customer service team will be glad to help.');return}
+if(e.status===402||e.status===503||(e.status===429&&(e.code==='daily_cap_reached'||e.code==='store_busy'))){showStreamError(e.message||'The assistant isn\'t available right now. Our customer service team will be glad to help.');return}
 if(e.status===413||e.status===400){showStreamError('That message couldn\'t be sent. Please try a shorter question, or start a new chat from the menu.');return}
 showHighTraffic();
 });

@@ -328,6 +328,29 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("inert: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Aetrex-style theme cart: after an add in the chat, the header and dock
+// counts and the (closed) cart drawer show the item without a page refresh,
+// the drawer stays closed and the chat keeps focus.
+{
+  const { ctx, page, errors } = await session("/aetrex", { width: 1280, height: 860 }, "aetrex", 1);
+  await page.focus(".ai-chat-input");
+  await page.click('.ai-chat-product-card[data-handle="savannah-red"] [data-atc]');
+  await page.waitForSelector(".ai-chat-atc-done", { timeout: 5000 });
+  await page.waitForFunction(() => window.__published.length > 0 || document.getElementById("hdr-count").textContent !== "0", null, { timeout: 4000 }).catch(() => {});
+  const st = await page.evaluate(() => ({
+    hdr: document.getElementById("hdr-count").textContent, hdrHidden: document.getElementById("hdr-count").hidden,
+    dock: document.getElementById("dock-count").textContent, drawer: document.getElementById("MiniCart-cart-drawer").textContent,
+    drawerHidden: document.getElementById("CartDrawer").hidden, pub: window.__published.map((p) => p.source + ":" + Object.keys(p.cart.sections || {}).join(",")),
+    errs: window.__cartErrors, inChat: !!document.activeElement.closest(".ai-chat-panel"),
+  }));
+  const n = String(cartLog.length);
+  check("theme cart: header and dock counts update without a refresh", st.hdr === n && st.dock === n && !st.hdrHidden, JSON.stringify(st));
+  check("theme cart: the closed drawer already holds the new item", st.drawer.includes(`${n} item(s)`), st.drawer);
+  check("theme cart: published like the theme's own add, with the drawer's HTML", st.pub.join("|") === "chat-widget:cart-drawer", st.pub.join("|"));
+  check("theme cart: the drawer stays closed and the chat keeps focus", st.drawerHidden && st.inChat);
+  check("theme cart: no theme errors, no JS errors", st.errs.length === 0 && errors.length === 0, [...st.errs, ...errors].join(" | "));
+  await ctx.close();
+}
 await browser.close();
 srv.close();
 console.log(results.join("\n"));

@@ -23,7 +23,10 @@ app.use(compression());
 app.use("/assets", express.static("build/client/assets", { immutable: true, maxAge: "1y" }));
 app.use(express.static("build/client"));
 app.use(express.static("public", { maxAge: "1h" }));
-app.use(morgan("tiny"));
+// The request log keeps the path only: app-proxy and admin query strings
+// carry signatures, session tokens and the signed-in customer's id.
+morgan.token("path", (req) => String(req.originalUrl || req.url || "").split("?")[0]);
+app.use(morgan(":method :path :status :res[content-length] - :response-time ms"));
 app.all("*", createRequestHandler({ build, mode: process.env.NODE_ENV }));
 
 app.listen(port, () => {

@@ -135,6 +135,8 @@ const server = spawn(process.execPath, ["server.mjs"], {
     ...process.env, NODE_ENV: "production", PORT: String(APP_PORT), DATABASE_URL: DB, ENCRYPTION_KEY,
     SHOPIFY_API_KEY: "integration-key", SHOPIFY_API_SECRET: SECRET, SHOPIFY_APP_URL: `http://localhost:${APP_PORT}`, SCOPES: "read_products",
     ANTHROPIC_BASE_URL: `http://localhost:${MODEL_PORT}`, DISABLE_CATALOG_SYNC_SCHEDULER: "true",
+    // The load test below sends far more than a store would per minute.
+    CHAT_STORE_PER_MIN: "100000", CHAT_STORE_PER_HOUR: "100000",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });

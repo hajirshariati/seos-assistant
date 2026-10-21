@@ -288,6 +288,11 @@ await test("the orthotic-chat check only fires on a short answer that switches t
   assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "orthotics for boots", shownProducts: [boot] }), false);
   assert.equal(leftOrthoticChat({ lastAssistantText: "Here are some sandals you might like.", latestUserMessage: "boots", shownProducts: [boot] }), false, "not an orthotic chat");
   assert.equal(leftOrthoticChat({ lastAssistantText: ask, latestUserMessage: "boots", shownProducts: [] }), false);
+  // Live store, 2026-10: shoes named "Orthotic Slide" made every follow-up
+  // ("brown") look like it left an orthotic chat and forced a rewrite.
+  assert.equal(leftOrthoticChat({ lastAssistantText: "The Milos Orthotic Slide comes in black and army. Which color would you like?", latestUserMessage: "brown", shownProducts: [boot] }), false, "a shoe named orthotic");
+  assert.equal(leftOrthoticChat({ lastAssistantText: "The Maui flip flop has a built-in orthotic footbed. Want to see more sandals?", latestUserMessage: "yes", shownProducts: [boot] }), false, "shoe copy mentioning a footbed");
+  assert.equal(leftOrthoticChat({ lastAssistantText: "Got it. Do you want the orthotic for sneakers or dress shoes?", latestUserMessage: "sneakers", shownProducts: [boot] }), true, "still fires on a real orthotic question");
 });
 // Live store, 2026-10: the assistant pre-picked a sold-out size (Blaire in
 // 6 - 6.5 US) and said "just tap Add to cart". A size is only pre-picked when

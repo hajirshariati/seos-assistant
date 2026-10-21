@@ -12,7 +12,7 @@ import { leanChatResponse } from "../lib/lean/respond.server.js";
 import { sanitizeHistory, withoutTrailingCopy } from "../lib/lean/history.js";
 import { sanitizeFitfinder } from "../lib/orthotic-finder.js";
 import { sanitizeSizeFinder } from "../lib/lean/size-finder.server.js";
-import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
+import { checkIpShopRate, checkStoreChatRate, clientIp } from "../lib/rate-limit.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
 
 // Real questions are short; very long pastes would crowd out the context.
@@ -62,6 +62,18 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
       { error: "rate_limited", retryAfter: rate.retryAfter },
       { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
     );
+  }
+  // Store-wide ceiling: however the requests are spread across addresses,
+  // the store's chat spend per minute and per hour stays bounded.
+  if (!internal) {
+    const store = checkStoreChatRate(shop);
+    if (!store.ok) {
+      recordHealth({ shop, ok: false, errorKind: "store_rate_limited" });
+      return Response.json(
+        { error: "store_busy", retryAfter: store.retryAfter, message: "I'm getting a lot of questions right now — please try again in a minute." },
+        { status: 429, headers: { "Retry-After": String(store.retryAfter) } },
+      );
+    }
   }
 
   const config = await getShopConfig(shop);

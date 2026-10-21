@@ -215,6 +215,6 @@ export function leanChatResponse({
     },
   });
   return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "private, no-store", Connection: "keep-alive" },
   });
 }

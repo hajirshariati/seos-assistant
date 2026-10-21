@@ -115,10 +115,18 @@ export function echoesFollowUps(text, followUps = []) {
 // question ("boots" = orthotics for boots). If the turn ends up showing only
 // shoes, Claude is asked to look again — it decides; this only spots the switch.
 const ORTHOTIC_TALK = /orthotic|insole|insert|footbed|\bfit [abcd]\b/i;
+// Shoes that carry the word in their name or copy ("Milos Orthotic Slide",
+// "built-in orthotic footbed") aren't an orthotic conversation.
+const SHOE_ORTHOTIC = /\b(?:built[- ]in|removable|cushioned|contoured|supportive)\s+(?:orthotic|footbed|insole)s?(?:\s+footbeds?)?|\borthotic\s+(?:slides?|flip[- ]?flops?|sandals?|thongs?|clogs?|sneakers?|shoes?|boots?|loafers?|wedges?|footbeds?)\b/gi;
+function askedAboutOrthotic(text) {
+  // The last reply talked about an orthotic and asked the shopper something.
+  const t = String(text || "").replace(SHOE_ORTHOTIC, " ");
+  return t.includes("?") && ORTHOTIC_TALK.test(t);
+}
 export function leftOrthoticChat({ lastAssistantText = "", latestUserMessage = "", shownProducts = [] } = {}) {
   const said = String(latestUserMessage || "").trim();
   if (!said || said.split(/\s+/).length > 3 || ORTHOTIC_TALK.test(said)) return false;
-  if (!ORTHOTIC_TALK.test(String(lastAssistantText || ""))) return false;
+  if (!askedAboutOrthotic(lastAssistantText)) return false;
   return shownProducts.length > 0 && shownProducts.every((p) => productKind(p) === "footwear");
 }
 

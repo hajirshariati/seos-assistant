@@ -314,6 +314,8 @@ export async function syncCatalog(admin, shop) {
 
     let cursor = null;
     let totalSeen = 0;
+    let pages = 0;
+    const syncStarted = Date.now();
     let throttleRetries = 0;
     const seenIds = new Set();
     for (;;) {
@@ -371,7 +373,7 @@ export async function syncCatalog(admin, shop) {
 
       const page = json?.data?.products;
       if (!page) throw new Error("No products data in GraphQL response");
-      console.log(`[syncCatalog] ${shop}: page of ${page.nodes?.length || 0}, total ${totalSeen}`);
+      pages += 1;
 
       for (const node of page.nodes) {
         await upsertProduct(shop, node, mappings);
@@ -393,6 +395,9 @@ export async function syncCatalog(admin, shop) {
       if (removed.count) console.log(`[syncCatalog] ${shop}: removed ${removed.count} product(s) no longer in Shopify`);
     }
 
+    // One line per sync, not one per page: a page can hold as few as two
+    // products, and per-page lines buried the chat logs.
+    console.log(`[syncCatalog] ${shop}: synced ${totalSeen} products in ${pages} pages (${pageSize} per page) in ${Math.round((Date.now() - syncStarted) / 1000)}s`);
     await setSyncState(shop, {
       status: "idle",
       lastSyncedAt: new Date(),

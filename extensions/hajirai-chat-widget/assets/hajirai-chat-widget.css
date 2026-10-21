@@ -3564,6 +3564,13 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-chat-send { background: var(--seos-ink) !important; color: #0d0d12 !important; }
 .ai-chat-panel[data-theme="dark"] .ai-chat-atc-val { background: var(--seos-surface); color: var(--seos-text); border-color: var(--seos-line); }
 .ai-chat-panel[data-theme="dark"] .ai-chat-atc-val.is-on { background: var(--seos-ink) !important; color: #0d0d12 !important; }
+/* A sold-out size: an empty, dashed chip with dimmed, struck-through text —
+   never the light-mode #fafafa fill. */
+.ai-chat-panel[data-theme="dark"] .ai-chat-atc-val.is-out {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.38) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.16) !important;
+}
 .ai-chat-panel[data-theme="dark"] .ai-chat-viz-btn { background: transparent; color: var(--seos-text); border-color: var(--seos-line-strong); }
 /* Input */
 .ai-chat-panel[data-theme="dark"] .ai-chat-input-wrap,
@@ -4256,6 +4263,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-klaviyo-form .ai-kl-submit:disabled { opacity: 0.6; cursor: default; }
 .ai-chat-panel .ai-chat-klaviyo-form .ai-kl-submit:focus-visible,
 .ai-chat-panel .ai-chat-klaviyo-form input:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-chat-klaviyo-form .ai-kl-note { margin: 0; font: 400 11.5px/1.4 var(--seos-font); text-align: center; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-klaviyo-form .ai-kl-note a { color: inherit; text-decoration: underline; }
 .ai-chat-panel .ai-chat-klaviyo-form .ai-kl-status { font-size: 12px; text-align: center; color: var(--seos-text-2); }
 .ai-chat-panel .ai-chat-klaviyo-form .ai-kl-status[hidden] { display: none; }
 .ai-chat-panel .ai-chat-klaviyo-form .ai-kl-status.is-error { color: #d70015; }

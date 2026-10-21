@@ -27,7 +27,7 @@ const product = (handle, title, price, soldOut = []) => ({
 });
 const PRODUCTS = {
   "savannah-red": product("savannah-red", "Savannah Adjustable Quarter Strap Sandal - Red", 129.95, ["8 US/Wide", "9 US/Medium", "9 US/Wide"]),
-  "jillian-black": product("jillian-black", "Jillian Braided Quarter Strap Sandal - Black", 119.95),
+  "jillian-black": product("jillian-black", "Jillian Braided Quarter Strap Sandal - Black", 119.95, ["7.5 US/Medium", "7.5 US/Wide"]),
   "orthotic-one": { id: 9, handle: "orthotic-one", title: "Women's Casual Orthotics", price: 6995, options: [{ name: "Title", values: ["Default Title"] }], variants: [{ id: 5555, title: "Default Title", options: ["Default Title"], available: true, price: 6995 }] },
 };
 const img = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f1ede6"/><path d="M30 130 Q100 60 170 120 L170 140 L30 140Z" fill="#8a2b2b"/></svg>');
@@ -67,6 +67,24 @@ ${tf === "absent" ? "" : `window.AetrexTrueFitTile={state:{busy:false,finderOpen
     setTimeout(function(){document.body.classList.remove("tfc-show-modal");s.finderOpen=false;setTimeout(function(){s.recommendation="9 - 9.5 US"},800)},1200);
   },300)})}};${tf === "known" ? "setTimeout(function(){window.AetrexTrueFitTile.state.recommendation=\"9 - 9.5 US\";try{localStorage.setItem(\"tfTileProfile\",\"1\")}catch(e){}},700);" : ""}`}
 </script><script src="/w.js"></script></body></html>`;
+// A stand-in for the Aetrex theme's cart: <cart-count> in the header and the
+// mobile dock, a closed drawer with <cart-items data-section-id>, and a
+// theme.pubsub whose cartUpdate subscribers behave like the real ones —
+// including throwing when the drawer's section HTML is missing, and a
+// cart:refresh listener that reads event.detail.open.
+const aetrexPage = () => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
+<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",greeting:"Hi!"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}
+window.__cartErrors=[];window.__published=[];window.__drawerOpened=0;
+window.theme={pubsub:{PUB_SUB_EVENTS:{cartUpdate:"cart-update"},subs:{},subscribe:function(e,f){(this.subs[e]=this.subs[e]||[]).push(f)},publish:function(e,d){window.__published.push(d);(this.subs[e]||[]).forEach(function(f){f(d)})}}};
+document.addEventListener("cart:refresh",function(ev){try{ev.detail.open}catch(err){window.__cartErrors.push("cart:refresh without detail")}});
+</script></head>
+<body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><header style="padding:20px">Aetrex <a href="/cart">Bag <cart-count id="hdr-count" hidden>0</cart-count></a></header>
+<nav id="dock">Dock <cart-count id="dock-count" hidden>0</cart-count></nav>
+<div id="CartDrawer" data-section-id="cart-drawer" hidden><cart-items data-section-id="cart-drawer"><div id="MiniCart-cart-drawer">Your cart is empty</div></cart-items></div>
+<script>
+theme.pubsub.subscribe("cart-update",function(ev){document.querySelectorAll("cart-count").forEach(function(c){c.innerText=ev.cart.item_count;c.hidden=ev.cart.item_count===0})});
+theme.pubsub.subscribe("cart-update",function(ev){var html=ev.cart.sections["cart-drawer"];var doc=new DOMParser().parseFromString(html,"text/html");var up=doc.querySelector("#MiniCart-cart-drawer");document.querySelector("#MiniCart-cart-drawer").innerHTML=up?up.innerHTML:"";var t=document.querySelector("#MiniCart-cart-drawer a");if(t)t.focus();});
+</script><script src="/w.js"></script></body></html>`;
 export function start(port) {
   return new Promise((res) => {
     const srv = http.createServer((req, resp) => {
@@ -78,6 +96,8 @@ export function start(port) {
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
         if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || ""));
+        if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
+        if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
         if (u.pathname === "/account/logout" || u.pathname === "/account/login") return send(200, "text/html", "<!doctype html><title>account</title>" + u.pathname);
         const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));

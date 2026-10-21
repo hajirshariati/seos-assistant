@@ -11,6 +11,8 @@ function hashValue(value) {
 // Shoppers sometimes type contact details; the stored transcript doesn't keep them.
 export function redactContactDetails(text) {
   return String(text || "")
+    // Also URL-encoded (%40), as in an order-tracking link with the email in it.
+    .replace(/[^\s@<>()"'&?=/]+%40[^\s@<>()"'&?=/]+\.[a-z]{2,}/gi, "[email]")
     .replace(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/gi, "[email]")
     .replace(/\+?\(?\d[\d\s().-]{7,}\d/g, "[number]");
 }

@@ -5,7 +5,7 @@
 
 import seosLogo from "../assets/SEoS.png";
 
-const LAST_UPDATED = "June 12, 2026";
+const LAST_UPDATED = "October 21, 2026";
 const SUPPORT_EMAIL = "hajiraiapp@gmail.com";
 
 export const meta = () => [
@@ -187,7 +187,7 @@ export default function PrivacyPolicy() {
         </ul>
         <p>When a shopper uses the chat widget on the storefront:</p>
         <ul>
-          <li>Chat messages are processed transiently to generate AI responses. They are not stored in our database after the reply is delivered, except in the feedback case described below. Operational logs at our hosting provider record that a message was handled (store, length, timing) but not the message text, and rotate automatically.</li>
+          <li>Chat messages are processed transiently to generate AI responses. They are not stored in our database after the reply is delivered, except in the feedback case described below. Operational logs at our hosting provider record that a message was handled (store, length, timing) and the product searches it led to (such as &quot;men&apos;s sandals, arch support&quot;), but not the message text, and rotate automatically. Request logs record the page path only, not query strings.</li>
           <li>We do not build shopper profiles and do not store shopper names, emails, or addresses. The one customer-linked record we keep is described below: when a chat-assisted session leads to an order, the order&apos;s Shopify customer ID is recorded for the merchant&apos;s conversion reporting.</li>
           <li>Anonymous usage metrics (message count, AI model used, token usage, cost, tool calls) are recorded per store for billing and analytics. Test conversations run by the merchant from the app&apos;s admin are flagged internal and are not recorded in analytics or counted against plan usage.</li>
           <li>If the shopper rates a response thumbs-up or thumbs-down, the conversation up to that point is stored alongside the rating so the merchant can review what the AI got right or wrong. Email addresses and phone numbers in it are replaced with placeholders before it is stored. It is keyed only by a one-way, secret-keyed hash of the source IP — not by customer ID, email, or any other identifier — and is automatically deleted after 90 days.</li>
@@ -220,7 +220,8 @@ export default function PrivacyPolicy() {
           <li><strong>Anthropic (Claude API)</strong> — chat messages are sent for AI processing under the merchant&apos;s API account. Per Anthropic&apos;s API terms, API content is not used to train models. <a href="https://www.anthropic.com/privacy" rel="noreferrer">anthropic.com/privacy</a></li>
           <li><strong>OpenAI or Voyage AI (optional, embeddings)</strong> — product text and shopper search queries for semantic matching. <a href="https://openai.com/policies/privacy-policy" rel="noreferrer">openai.com/privacy</a> · <a href="https://www.voyageai.com/privacy" rel="noreferrer">voyageai.com/privacy</a></li>
           <li><strong>Google Gemini or OpenAI (optional, &quot;See It Styled&quot; images)</strong> — the product&apos;s photos and the shopper&apos;s description of where they&apos;ll wear it are sent to generate a styled preview image. No shopper identity is sent. <a href="https://policies.google.com/privacy" rel="noreferrer">policies.google.com/privacy</a> · <a href="https://openai.com/policies/privacy-policy" rel="noreferrer">openai.com/privacy</a></li>
-          <li><strong>Klaviyo (optional)</strong> — if the merchant enables the in-chat sign-up form, the email (and optional phone number) the shopper types is sent from their browser directly to the merchant&apos;s Klaviyo list; it does not pass through or stay on our servers. <a href="https://www.klaviyo.com/privacy" rel="noreferrer">klaviyo.com/privacy</a></li>
+          <li><strong>Voice input (optional, the shopper&apos;s browser)</strong> — when a shopper taps the microphone, their browser&apos;s built-in speech recognition (for example Google in Chrome, Apple in Safari) turns speech into text. The audio goes to the browser maker under its own terms, never to us; only the resulting text is sent, as a chat message.</li>
+          <li><strong>Klaviyo (optional)</strong> — if the merchant enables the in-chat sign-up form, the email the shopper types is sent from their browser directly to the merchant&apos;s Klaviyo list; it does not pass through or stay on our servers. <a href="https://www.klaviyo.com/privacy" rel="noreferrer">klaviyo.com/privacy</a></li>
           <li><strong>Merchant&apos;s fit service (optional)</strong> — if the merchant connects an external size-advice service, it receives the store domain, the product handle and, for a signed-in shopper, their Shopify customer ID.</li>
           <li><strong>Yotpo (optional)</strong> — loyalty points, tier, and rewards lookups. <a href="https://www.yotpo.com/privacy-policy" rel="noreferrer">yotpo.com/privacy-policy</a></li>
           <li><strong>Aftership (optional)</strong> — tracking links route to the merchant&apos;s branded tracking page.</li>
