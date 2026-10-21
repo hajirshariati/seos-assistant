@@ -6,7 +6,7 @@
 import seosLogo from "../assets/SEoS.png";
 
 const LAST_UPDATED = "October 21, 2026";
-const SUPPORT_EMAIL = "hajiraiapp@gmail.com";
+const SUPPORT_EMAIL = "help@aetrex.com";
 
 export const meta = () => [
   { title: "Privacy Policy — SEoS Assistant" },

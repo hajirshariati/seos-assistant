@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { PHASES, STEPS, CADENCE_SECTIONS } from "../lib/onboarding-data";
 import seosLogo from "../assets/SEoS.png";
 
-const SUPPORT_EMAIL = "hajiraiapp@gmail.com";
+const SUPPORT_EMAIL = "help@aetrex.com";
 
 export const meta = () => [
   { title: "Setup guide — SEoS Assistant" },

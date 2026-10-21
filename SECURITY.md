@@ -1,6 +1,6 @@
 # Security & Incident Response Policy — SEoS Assistant
 
-_Last updated: June 18, 2026 · Owner: Hajir Shariati (hajiraiapp@gmail.com)_
+_Last updated: June 18, 2026 · Owner: Hajir Shariati (help@aetrex.com)_
 
 This is the internal operational policy for how the SEoS Assistant app
 protects merchant and customer data and responds to security incidents.
@@ -68,7 +68,7 @@ leaked credential, vulnerability report):
 
 ## 5. Reporting a vulnerability
 
-Email **hajiraiapp@gmail.com** with details. We aim to acknowledge
+Email **help@aetrex.com** with details. We aim to acknowledge
 within 2 business days.
 
 ## 6. Review
