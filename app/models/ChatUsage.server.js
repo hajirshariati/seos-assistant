@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { dayKeyIn, dayKeysBetween } from "../lib/store-day.js";
 import { computeCost } from "../lib/pricing.server";
 import { summarizeUsageRecords } from "../lib/usage-summary.js";
 
@@ -88,7 +89,8 @@ export async function getUsageSummary(shop, range = 30) {
   return summarizeUsageRecords(records, start.toISOString(), end.toISOString());
 }
 
-export async function getDailySeries(shop, range = 30) {
+export async function getDailySeries(shop, range = 30, { timeZone = "" } = {}) {
+  const dayKey = dayKeyIn(timeZone);
   const { start, end } = resolveRange(range);
   const [usageRows, feedbackRows] = await Promise.all([
     prisma.chatUsage.findMany({
@@ -102,12 +104,11 @@ export async function getDailySeries(shop, range = 30) {
   ]);
 
   const map = new Map();
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().split("T")[0];
+  for (const key of dayKeysBetween(start, end, dayKey)) {
     map.set(key, { date: key, messages: 0, cost: 0, tokens: 0, toolCalls: 0, up: 0, down: 0 });
   }
   for (const r of usageRows) {
-    const key = r.createdAt.toISOString().split("T")[0];
+    const key = dayKey(r.createdAt);
     const row = map.get(key);
     if (!row) continue;
     // Image-styling rows add cost but aren't messages (see getUsageSummary).
@@ -121,7 +122,7 @@ export async function getDailySeries(shop, range = 30) {
     row.toolCalls += r.toolCalls || 0;
   }
   for (const r of feedbackRows) {
-    const key = r.createdAt.toISOString().split("T")[0];
+    const key = dayKey(r.createdAt);
     const row = map.get(key);
     if (!row) continue;
     if (r.vote === "up") row.up += 1;

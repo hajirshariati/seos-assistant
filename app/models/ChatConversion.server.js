@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { dayKeyIn, dayKeysBetween } from "../lib/store-day.js";
 
 function resolveRange(arg) {
   if (arg && typeof arg === "object" && arg.startDate && arg.endDate) {
@@ -53,19 +54,19 @@ export async function getConversionSummary(shop, range = 30) {
 // One row per calendar day across the range (zero-filled) so the home
 // page metric strip can draw orders / revenue sparklines without
 // re-deriving the date scaffold client-side.
-export async function getConversionDailySeries(shop, range = 30) {
+export async function getConversionDailySeries(shop, range = 30, { timeZone = "" } = {}) {
+  const dayKey = dayKeyIn(timeZone);
   const { start, end } = resolveRange(range);
   const rows = await prisma.chatConversion.findMany({
     where: { shop, createdAt: { gte: start, lte: end } },
     select: { totalAmount: true, createdAt: true },
   });
   const map = new Map();
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().split("T")[0];
+  for (const key of dayKeysBetween(start, end, dayKey)) {
     map.set(key, { date: key, count: 0, revenue: 0 });
   }
   for (const r of rows) {
-    const key = r.createdAt.toISOString().split("T")[0];
+    const key = dayKey(r.createdAt);
     const row = map.get(key);
     if (!row) continue;
     row.count += 1;

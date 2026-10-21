@@ -12,6 +12,7 @@ import { getShopConfig, getKnowledgeFiles, updateShopConfig } from "../models/Sh
 import { getCatalogSyncState, syncCatalogAsync } from "../models/Product.server";
 import { countEnrichmentsByShop } from "../models/ProductEnrichment.server";
 import { getUsageSummary, getDailySeries } from "../models/ChatUsage.server";
+import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getConversionSummary, getConversionDailySeries } from "../models/ChatConversion.server";
 import { listDecisionTrees } from "../models/DecisionTree.server";
@@ -20,6 +21,8 @@ import seosLogo from "../assets/SEoS.png";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
+  // "Today" is the store's day, in its own time zone.
+  const timeZone = await getShopTimeZone(admin, session.shop);
   const [config, files, syncState, enrichmentCount, usage, feedback, conversions, decisionTrees, dailySeries, conversionSeries] = await Promise.all([
     getShopConfig(session.shop),
     getKnowledgeFiles(session.shop),
@@ -29,8 +32,8 @@ export const loader = async ({ request }) => {
     getFeedbackSummary(session.shop, 30),
     getConversionSummary(session.shop, 30),
     listDecisionTrees(session.shop).catch(() => []),
-    getDailySeries(session.shop, 30).catch(() => []),
-    getConversionDailySeries(session.shop, 30).catch(() => []),
+    getDailySeries(session.shop, 30, { timeZone }).catch(() => []),
+    getConversionDailySeries(session.shop, 30, { timeZone }).catch(() => []),
   ]);
   const storeKnowledgeCount = await listStoreKnowledge(session.shop).then((d) => d.length).catch(() => 0);
 
@@ -1579,7 +1582,7 @@ export default function Home() {
   // Metric strip definitions. Each metric carries its 30-day daily
   // series (date + value) for the sparkline and the hover detail chart.
   // Strip shows TODAY's live numbers (the last row of the zero-filled
-  // daily series is the current UTC day); the hover dropdown keeps the
+  // daily series is the store's current day, in its time zone); the hover dropdown keeps the
   // 30-day trend chart with the 30-day total for context.
   const metrics = useMemo(() => {
     const days = Array.isArray(dailySeries) ? dailySeries : [];

@@ -1,6 +1,7 @@
 import { authenticate } from "../shopify.server";
 import { getShopPlan } from "../lib/billing.server";
 import { getDailySeries, getUsageSummary } from "../models/ChatUsage.server";
+import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
@@ -48,7 +49,7 @@ function clampToRetention(range, retentionDays) {
   return range;
 }
 
-async function buildCsv(shop, section, rangeArg, vote = "") {
+async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
   if (section === "recordings") {
     // Test recordings (kept 30 days): every recorded turn, oldest first.
     const rows = (await listRecordings(shop)).reverse();
@@ -58,7 +59,7 @@ async function buildCsv(shop, section, rangeArg, vote = "") {
     );
   }
   if (section === "daily") {
-    const daily = await getDailySeries(shop, rangeArg);
+    const daily = await getDailySeries(shop, rangeArg, { timeZone });
     return toCsv(
       ["Date", "Messages", "Cost (USD)", "Tokens", "Tool Calls", "Helpful", "Not Helpful"],
       daily.map((d) => [d.date, d.messages, d.cost.toFixed(4), d.tokens, d.toolCalls, d.up, d.down]),
@@ -143,7 +144,7 @@ async function buildCsv(shop, section, rangeArg, vote = "") {
 // had a default component, causing React Router v7 to call the component
 // renderer with the Response object and crash on the destructured data.
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
 
   const section = url.searchParams.get("section");
@@ -159,7 +160,8 @@ export const loader = async ({ request }) => {
   const rangeArg = { startDate, endDate };
 
   const vote = url.searchParams.get("vote") || "";
-  const csv = await buildCsv(session.shop, section, rangeArg, vote);
+  const timeZone = section === "daily" ? await getShopTimeZone(admin, session.shop) : "";
+  const csv = await buildCsv(session.shop, section, rangeArg, vote, timeZone);
   if (!csv) {
     return new Response(`Unknown export section: ${section}`, { status: 400 });
   }

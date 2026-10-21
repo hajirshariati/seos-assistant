@@ -7,6 +7,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { getUsageSummary, getDailySeries, getReplyCostSample } from "../models/ChatUsage.server";
+import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getShopPlan } from "../lib/billing.server";
 import { getFeedbackSummary, cleanupOldFeedback, getRecentQuestions } from "../models/ChatFeedback.server";
 import {
@@ -92,7 +93,7 @@ export const loader = async ({ request }) => {
     getProductsByTool(session.shop, rangeArg, 10),
     getInterestBreakdown(session.shop, rangeArg),
     getRecentQuestions(session.shop, rangeArg, 20),
-    getDailySeries(session.shop, rangeArg),
+    getShopTimeZone(admin, session.shop).then((timeZone) => getDailySeries(session.shop, rangeArg, { timeZone })),
     getUsageSummary(session.shop, prevRange),
     getFeedbackSummary(session.shop, prevRange),
     getConversionSummary(session.shop, rangeArg),
