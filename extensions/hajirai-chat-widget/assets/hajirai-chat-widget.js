@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 scroll-lock-fa');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-21 kb-lock');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -1062,15 +1062,25 @@ panel.addEventListener('keydown',function(e){
    covers the bottom of it. Size the chat to what's actually visible so the
    message bar sits right on the keyboard, with no gap and nothing hidden. */
 var KB_MQ=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
+/* The keyboard is measured against the tallest visible height seen while
+   no field was being typed in (iOS sometimes shrinks the page's own height
+   too, so comparing with that alone missed the keyboard until a scroll). */
+var vvFull=0,vvWidth=0;
+function typingInChat(){var a=document.activeElement;return !!(a&&panel.contains(a)&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'))}
 function fitToKeyboard(){
   var vv=window.visualViewport;
-  var kb=!!(vv&&isOpen&&KB_MQ&&KB_MQ.matches&&window.innerHeight-vv.height>120);
+  if(vv&&vv.width!==vvWidth){vvWidth=vv.width;vvFull=0}/* turned the phone */
+  if(vv&&!typingInChat())vvFull=Math.max(vvFull,vv.height);
+  var full=Math.max(vvFull,window.innerHeight);
+  var kb=!!(vv&&isOpen&&KB_MQ&&KB_MQ.matches&&full-vv.height>120);
+  var was=panel.classList.contains('is-kb');
   panel.classList.toggle('is-kb',kb);
   if(kb){
     panel.style.setProperty('height',vv.height+'px','important');
     panel.style.setProperty('max-height',vv.height+'px','important');
     panel.style.setProperty('top',vv.offsetTop+'px','important');
-    scrollBottom();
+    /* The home screen starts at its top; a conversation shows its latest. */
+    if(!was){if(msgsEl&&msgsEl.classList.contains('is-welcome'))msgsEl.scrollTop=0;else scrollBottom()}
   }else{
     panel.style.removeProperty('height');panel.style.removeProperty('max-height');panel.style.removeProperty('top');
   }
@@ -1079,6 +1089,35 @@ if(window.visualViewport){
   window.visualViewport.addEventListener('resize',fitToKeyboard);
   window.visualViewport.addEventListener('scroll',fitToKeyboard);
 }
+/* iOS reports the keyboard's height while it slides in, and not always once
+   it has settled: look again a few times after the field gains or loses
+   focus. */
+function settleKeyboard(){[0,80,200,350,550,800,1100].forEach(function(ms){setTimeout(fitToKeyboard,ms)})}
+panel.addEventListener('focusin',settleKeyboard);
+panel.addEventListener('focusout',settleKeyboard);
+/* Phones: the chat's frame (header, message bar) stays put under the
+   finger. Only parts that can actually scroll — the conversation, the home
+   screen on a short phone, a row of cards — move; at their ends the swipe
+   stops instead of dragging the whole chat (and, with the keyboard up,
+   Safari's view of the page) along. */
+var touchX=0,touchY=0;
+panel.addEventListener('touchstart',function(e){var t=e.touches&&e.touches[0];if(t){touchX=t.clientX;touchY=t.clientY}},{passive:true});
+panel.addEventListener('touchmove',function(e){
+  if(!isOpen||!KB_MQ||!KB_MQ.matches||!e.cancelable)return;
+  var t=e.touches&&e.touches[0];if(!t||e.touches.length>1)return;
+  var dx=t.clientX-touchX,dy=t.clientY-touchY,sideways=Math.abs(dx)>Math.abs(dy);
+  for(var el=e.target;el&&el!==panel;el=el.parentElement){
+    if(el.nodeType!==1)continue;
+    var cs=getComputedStyle(el);
+    if(sideways&&/(auto|scroll)/.test(cs.overflowX)&&el.scrollWidth>el.clientWidth+1)return;
+    if(!sideways&&/(auto|scroll)/.test(cs.overflowY)&&el.scrollHeight>el.clientHeight+1){
+      var atTop=el.scrollTop<=0,atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-1;
+      if(!((dy>0&&atTop)||(dy<0&&atEnd)))return;
+      break;
+    }
+  }
+  e.preventDefault();
+},{passive:false});
 /* Phones: the open chat covers the screen, so the page behind it must not
    move. Swipes on parts of the chat that don't scroll (the home screen, the
    header) used to scroll the store page underneath. The page is pinned where

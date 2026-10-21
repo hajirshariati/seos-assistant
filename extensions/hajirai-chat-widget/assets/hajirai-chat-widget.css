@@ -3850,7 +3850,10 @@ button.ai-chat-launcher__text {
 }
 .ai-chat-panel .ai-chat-input-icon,
 .ai-chat-panel.is-listening .ai-chat-wave { height: 32px !important; align-self: flex-end; }
-.ai-chat-panel .ai-chat-input { padding: 6px 0 !important; min-height: 32px; }
+.ai-chat-panel .ai-chat-input { padding: 6px 0 !important; min-height: 32px; line-height: 20px !important; }
+/* One line of text is exactly as tall as the mic / Send circle (6 + 20 + 6),
+   so the circle sits centred in the capsule instead of a little low (the
+   browser's own line height made the line taller on iPhone). */
 .ai-chat-panel .ai-chat-voice-cancel { margin: 3px 0 !important; }
 .ai-chat-panel .ai-chat-mic {
   width: 32px;

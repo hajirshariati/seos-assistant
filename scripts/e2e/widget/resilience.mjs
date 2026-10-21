@@ -312,6 +312,50 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 9c. iPhone keyboard, the hard way: the keyboard slides in while the page's
+// own height shrinks too, and no resize event arrives once it has settled.
+// The chat still fits above it at once, the home screen shows its top, the
+// fine print steps aside, the chat's frame doesn't drag under the finger
+// (only content that can scroll does), and the mic sits centred in the bar.
+{
+  const init = () => {
+    const vv = new EventTarget();
+    vv.height = window.innerHeight; vv.width = window.innerWidth; vv.offsetTop = 0; vv.offsetLeft = 0; vv.scale = 1;
+    Object.defineProperty(window, "visualViewport", { get: () => vv, configurable: true });
+    let ih = null;
+    const real = Object.getOwnPropertyDescriptor(window, "innerHeight") || Object.getOwnPropertyDescriptor(Window.prototype, "innerHeight");
+    Object.defineProperty(window, "innerHeight", { get: () => (ih === null ? real.get.call(window) : ih), configurable: true });
+    window.__kbQuiet = (h, page) => { vv.height = h; ih = page; }; // no event, as on iOS
+  };
+  const { ctx, page } = await open("/full", { viewport: { width: 390, height: 844 }, init, ctxOpts: { isMobile: true, hasTouch: true } });
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(900);
+  const mic = await page.evaluate(() => { const w = document.querySelector(".ai-chat-input-wrap").getBoundingClientRect(), m = document.querySelector(".ai-chat-action").getBoundingClientRect(); return { wrap: (w.top + w.bottom) / 2, mic: (m.top + m.bottom) / 2 }; });
+  check("message bar: the mic / Send circle is centred in the bar", Math.abs(mic.wrap - mic.mic) <= 0.5, JSON.stringify(mic));
+  await page.evaluate(() => { document.querySelector(".ai-chat-messages").scrollTop = 9999; document.querySelector(".ai-chat-input").blur(); });
+  await page.evaluate(() => { document.querySelector(".ai-chat-input").focus(); window.__kbQuiet(300, 640); });
+  await page.waitForTimeout(1300);
+  const st = await page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"), f = document.querySelector(".ai-chat-footer"), m = document.querySelector(".ai-chat-messages"); return { kb: p.classList.contains("is-kb"), h: Math.round(p.getBoundingClientRect().height), footer: f ? getComputedStyle(f).display : "none", welcome: m.classList.contains("is-welcome"), top: m.scrollTop, scrollable: m.scrollHeight > m.clientHeight }; });
+  check("iPhone keyboard: noticed without a scroll, even when the page height shrinks too", st.kb && st.h === 300 && st.footer === "none", JSON.stringify(st));
+  check("iPhone keyboard: the home screen shows its top, not its bottom", st.welcome && st.top === 0, JSON.stringify(st));
+  // A swipe on the frame (header, message bar) is held; one on content that
+  // can scroll goes through.
+  const swipe = (sel, dy) => page.evaluate(([sel, dy]) => {
+    const el = document.querySelector(sel); const r = el.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const t = (yy) => new Touch({ identifier: 1, target: el, clientX: x, clientY: yy });
+    el.dispatchEvent(new TouchEvent("touchstart", { touches: [t(y)], bubbles: true, cancelable: true }));
+    const mv = new TouchEvent("touchmove", { touches: [t(y + dy)], bubbles: true, cancelable: true });
+    el.dispatchEvent(mv);
+    return mv.defaultPrevented;
+  }, [sel, dy]);
+  const header = await swipe(".ai-chat-header", -60);
+  const bar = await swipe(".ai-chat-input-wrap", -60);
+  const content = st.scrollable ? await swipe(".ai-chat-welcome", -60) : false;
+  check("iPhone keyboard: dragging the header or the message bar doesn't move the chat", header && bar, JSON.stringify({ header, bar }));
+  check("iPhone keyboard: the home screen's content still scrolls under the finger", st.scrollable && content === false, JSON.stringify({ scrollable: st.scrollable, prevented: content }));
+  await ctx.close();
+}
+
 // 9. Keyboard: open with Enter, Tab stays inside, Escape returns focus.
 {
   const { ctx, page } = await open();
