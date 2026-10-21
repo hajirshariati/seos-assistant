@@ -261,6 +261,46 @@ check("executor proceeds normally when all required attributes are present", asy
   assert(!r.needMoreInfo, "should not gate when required attrs are present");
 });
 
+console.log("\nmerchant policy: no Active, Conform only for diabetes/neuropathy, Premium Memory Foam leads");
+{
+  const GENDERS = ["Men", "Women"];
+  const USE_CASES = ["dress", "dress_no_removable", "dress_premium", "casual", "athletic_running", "athletic_training", "athletic_general", "cleats", "skates", "winter_boots", "work_all_day", "comfort"];
+  const CONDITIONS = ["none", "plantar_fasciitis", "heel_spurs", "metatarsalgia", "mortons_neuroma", "overpronation_flat_feet", "diabetic", "neuropathy"];
+  const PROFILES = [{ arch: "Medium / High Arch", posted: false }, { arch: "Flat / Low Arch", posted: true }];
+  const every = [];
+  for (const gender of GENDERS) for (const useCase of USE_CASES) for (const condition of CONDITIONS) for (const p of PROFILES) {
+    const metSupport = condition === "metatarsalgia" || condition === "mortons_neuroma";
+    const r = resolveTree({ gender, useCase, condition, metSupport, ...p }, definition.resolver);
+    every.push({ condition, title: r.resolved?.title || "", runnerUp: r.runnerUp?.title || "" });
+  }
+  check("Active orthotics never recommended (winner or runner-up), any answers", () => {
+    const hit = every.find((x) => /\bactive\s+(posted\s+)?orthotics?\b/i.test(`${x.title} ${x.runnerUp}`));
+    assert(!hit, `got ${hit?.title} / ${hit?.runnerUp}`);
+  });
+  check("Conform only when the shopper said diabetes or neuropathy", () => {
+    const hit = every.find((x) => !["diabetic", "neuropathy"].includes(x.condition) && /conform/i.test(`${x.title} ${x.runnerUp}`));
+    assert(!hit, `condition=${hit?.condition} got ${hit?.title} / ${hit?.runnerUp}`);
+  });
+  check("Neuropathy (Women, casual) → Conform", () => assert.match(
+    resolveTree({ gender: "Women", useCase: "casual", condition: "neuropathy", arch: "Medium / High Arch", posted: false }, definition.resolver).resolved?.title || "", /conform/i));
+  check("Athletic court/general (Men) → Compete, not Active", () =>
+    assert.equal(sku({ gender: "Men", useCase: "athletic_general", arch: "Medium / High Arch", posted: false, metSupport: false }), "L400M"));
+  check("Just comfort (Women, medium arch) → Premium Memory Foam L2300W", () =>
+    assert.equal(sku({ gender: "Women", useCase: "comfort", condition: "none", arch: "Medium / High Arch", posted: false, metSupport: false }), "L2300W"));
+  check("Just comfort (Men, flat arch, posted) → Premium Memory Foam Posted L2320M", () =>
+    assert.equal(sku({ gender: "Men", useCase: "comfort", condition: "none", arch: "Flat / Low Arch", posted: true, metSupport: false }), "L2320M"));
+  check("Work all day (Women, medium arch) → Premium Memory Foam at Work A2300W", () =>
+    assert.equal(sku({ gender: "Women", useCase: "work_all_day", arch: "Medium / High Arch", posted: false, metSupport: false }), "A2300W"));
+  check("Premium Memory Foam leads over regular Memory Foam at the same fit", () => {
+    const r = resolveTree({ gender: "Men", useCase: "comfort_memory_foam_everyday", arch: "Flat / Low Arch", posted: true, metSupport: true }, definition.resolver);
+    assert.equal(r.resolved?.masterSku, "L2325M");
+  });
+  check("Premium Memory Foam never beats a better clinical fit (heel spurs keeps L2460W)", () =>
+    assert.equal(sku({ gender: "Women", useCase: "comfort", condition: "heel_spurs" }), "L2460W"));
+  check("Kids comfort never gets an adult Premium Memory Foam", () =>
+    assert(!/premium memory foam/i.test(resolveTree({ gender: "Kids", useCase: "comfort" }, definition.resolver).resolved?.title || "")));
+}
+
 console.log("\nbackward compat");
 check("Old funnel-shaped seeds still work — only resolver.masterIndex is read at runtime", () => {
   // Even though the seed has q_use_case / q_gender / chips etc., the

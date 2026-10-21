@@ -71,9 +71,30 @@ const CONDITION_TARGETS = {
   heel_spurs:        (m) => /heel\s*spurs?/i.test(m.title || "") || m.condition === "heel_spurs",
   mortons_neuroma:   (m) => /morton/i.test(m.title || "")        || m.condition === "mortons_neuroma" || m.metSupport === true,
   metatarsalgia:     (m) => /metatars/i.test(m.title || "")      || m.condition === "metatarsalgia"   || m.metSupport === true,
-  diabetic:          (m) => /conform|diabet/i.test(m.title||"")  || m.condition === "diabetic",
+  diabetic:          (m) => isConform(m),
+  neuropathy:        (m) => isConform(m),
   plantar_fasciitis: (m) => /plantar\s*fasciitis\s*kit/i.test(m.title||"") || m.condition === "plantar_fasciitis",
 };
+
+// Merchant recommendation policy (Aetrex, 2026-10):
+//   - Active orthotics are never recommended (Compete covers athletic).
+//   - Conform is only for shoppers who said diabetes or neuropathy.
+//   - Premium Memory Foam leads over the other comfort / memory-foam
+//     options whenever it fits the shopper's arch, posting and met needs.
+// Applied here, by title, so it holds for whatever mapping is uploaded.
+const isActiveLine = (m) => /\bactive\s+(?:posted\s+)?orthotics?\b/i.test(m.title || "");
+function isConform(m) {
+  return /\bconform\b|diabet/i.test(m.title || "") || m.condition === "diabetic" || m.useCase === "diabetic";
+}
+const CONFORM_CONDITIONS = new Set(["diabetic", "neuropathy"]);
+const isPremiumMemoryFoam = (m) => /premium\s+memory\s+foam/i.test(m.title || "");
+const isMemoryFoam = (m) => /memory\s+foam/i.test(m.title || "") || /memory_foam/.test(m.useCase || "");
+
+function recommendable(m, attrs) {
+  if (isActiveLine(m)) return false;
+  if (isConform(m) && !CONFORM_CONDITIONS.has(attrs.condition)) return false;
+  return true;
+}
 
 function score(candidate, attrs) {
   let s = 0;
@@ -97,6 +118,9 @@ function score(candidate, attrs) {
   ) {
     s += 0.5;
   }
+  // Premium Memory Foam leads at an equal clinical fit. Under 1, so it
+  // never overrides an arch / gender / posted / metSupport difference.
+  if (isPremiumMemoryFoam(candidate)) s += 0.75;
   return s;
 }
 
@@ -116,6 +140,7 @@ export function resolveTree(answers, resolver) {
   }
 
   const attrs = applyDefaults(answers || {}, resolver.defaults);
+  const pool = resolver.masterIndex.filter((m) => recommendable(m, attrs));
 
   // Specialty condition takes priority over use-case. If the
   // customer reports e.g. heel_spurs and a heel-spur-specific SKU
@@ -159,14 +184,14 @@ export function resolveTree(answers, resolver) {
     // Stage 3: if still zero, bail with missingSpecialty so the caller
     // can tell the customer truthfully (do NOT silently broaden again).
     if (attrs.useCase) {
-      candidates = resolver.masterIndex.filter(
+      candidates = pool.filter(
         (m) => genderMatch(m, attrs.gender) && m.useCase === attrs.useCase && specialtyTest(m),
       );
     } else {
       candidates = [];
     }
     if (candidates.length === 0) {
-      candidates = resolver.masterIndex.filter(
+      candidates = pool.filter(
         (m) => genderMatch(m, attrs.gender) && specialtyTest(m),
       );
     }
@@ -179,7 +204,7 @@ export function resolveTree(answers, resolver) {
       };
     }
   } else {
-    candidates = resolver.masterIndex.filter((m) => {
+    candidates = pool.filter((m) => {
       if (!genderMatch(m, attrs.gender)) return false;
       for (const k of HARD_FILTER_ATTRS) {
         if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== "" && m[k] !== attrs[k]) {
@@ -188,6 +213,14 @@ export function resolveTree(answers, resolver) {
       }
       return true;
     });
+    // "Just want comfort", or a memory-foam context: Premium Memory Foam
+    // joins the candidates (it lives under its own useCase) and leads.
+    // The at-work version stays with work shoes.
+    if (attrs.useCase === "comfort" || candidates.some(isMemoryFoam)) {
+      for (const m of pool) {
+        if (isPremiumMemoryFoam(m) && !/\bwork\b/i.test(m.title || "") && genderMatch(m, attrs.gender) && !candidates.includes(m)) candidates.push(m);
+      }
+    }
   }
 
   // Score also rewards exact gender match so a Men's SKU is preferred
@@ -204,7 +237,7 @@ export function resolveTree(answers, resolver) {
     // posting-correct orthotic. The caller frames it honestly via
     // `relaxedUseCase`. Skipped for Kids (handled by the kids logic below).
     if (attrs.useCase && !isKidsGender(attrs.gender)) {
-      const relaxedPool = resolver.masterIndex.filter((m) => genderMatch(m, attrs.gender));
+      const relaxedPool = pool.filter((m) => genderMatch(m, attrs.gender));
       if (relaxedPool.length > 0) {
         const relaxedScored = relaxedPool
           .map((c) => ({ c, s: score(c, attrs) }))

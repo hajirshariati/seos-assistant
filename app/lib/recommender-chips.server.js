@@ -126,6 +126,9 @@ export function orthoticChipLabelsForAttribute(tree, attribute, answers = {}) {
   let labels = chips
     .map((c) => collapseDuplicateSlashLabel(String(c.label).trim()))
     .filter(Boolean);
+  // Conform is for diabetes and neuropathy alike; say both on the chip
+  // (trees saved before this still read "Diabetic feet").
+  if (node.attribute === "condition") labels = labels.map((l) => (/^diabetic feet$/i.test(l) ? "Diabetes or neuropathy" : l));
   if (node.attribute === "gender") {
     const contextNoun = getGenderChipContextNoun(tree?.definition);
     labels = labels.map((l) => decorateGenderChipLabel(l, contextNoun));

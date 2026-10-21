@@ -115,7 +115,7 @@
           "value": "overpronation_flat_feet"
         },
         {
-          "label": "Diabetic feet",
+          "label": "Diabetes or neuropathy",
           "value": "diabetic"
         },
         {
@@ -191,7 +191,7 @@
   "attributePrompts": {
     "gender": "Who are these orthotics for — a man, woman, or kid?",
     "useCase": "What kind of shoes will the orthotics go in? Pick the closest match — dress shoes, casual/everyday, athletic (running/training/general gym), cleats (soccer, football, baseball, lacrosse, rugby, any spike/stud sport shoe), hockey skates, winter boots, work boots, or general comfort (walking, standing all day). If the customer plays a field/court sport, that's CLEATS — never 'comfort'.",
-    "condition": "Any specific foot pain or condition we should match? (plantar fasciitis, heel spurs, ball-of-foot pain / metatarsalgia, Morton's neuroma, overpronation / flat feet, diabetic feet, or none — just looking for comfort)",
+    "condition": "Any specific foot pain or condition we should match? (plantar fasciitis, heel spurs, ball-of-foot pain / metatarsalgia, Morton's neuroma, overpronation / flat feet, diabetes or neuropathy, or none — just looking for comfort)",
     "arch": "What's your arch type — flat / low, medium, or high? If you're not sure, that's fine.",
     "overpronation": "When you walk or stand, do your ankles tend to roll inward, or do you have flat-feet symptoms? (yes / no / not sure)"
   },
