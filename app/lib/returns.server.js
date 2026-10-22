@@ -69,9 +69,10 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 // AfterShip's 422 response names the required fields: order.store,
 // a top-level return_method and a top-level refund_destination. Refunds go
 // to the original payment (no store credit). The store's external_id format
-// isn't documented anywhere we can reach, so on a 422 we try the full
-// myshopify domain after the short store key; the full error body is
-// returned so the log says exactly which field it wants.
+// isn't documented anywhere we can reach, so on a 422 or 404 ("Order not
+// found" when the store id doesn't match) we try the full myshopify domain
+// after the short store key. Every attempt's error is returned so the log
+// shows what AfterShip said to each.
 const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
 
@@ -98,6 +99,7 @@ export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, co
 
 export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", fetchImpl = fetch }) {
   const bodies = aftershipReturnBodies({ shop, order, items, reasonLabel, comment });
+  const errors = [];
   let last = null;
   for (const body of bodies) {
     let res, json = null, text = "";
@@ -124,8 +126,9 @@ export async function createAftershipReturn({ apiKey, shop = "", order, items, r
     }
     // The whole error body (order/line ids and field names only, no PII).
     const msg = json?.meta?.message || json?.message || `HTTP ${res.status}`;
-    last = { ok: false, status: res.status, error: `${msg} ${String(text).slice(0, 800)}`.trim() };
-    if (res.status !== 422) break;
+    errors.push(`[store=${body.order?.store?.external_id || "-"}] ${msg} ${String(text).slice(0, 800)}`.trim());
+    last = { ok: false, status: res.status, error: errors.join(" | ") };
+    if (res.status !== 422 && res.status !== 404) break;
   }
   return last;
 }

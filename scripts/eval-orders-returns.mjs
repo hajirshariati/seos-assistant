@@ -88,6 +88,16 @@ await test("AfterShip 422: retried once with the full store domain; full error k
   assert.deepEqual(bodies[1].order.store, { platform: "shopify", external_id: "aetrex.myshopify.com" });
   assert.equal(r.ok, false); assert.match(r.error, /store/); assert.match(r.error, /is required/);
 });
+await test("AfterShip 404 'Order not found': retried with the full store domain", async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => { bodies.push(JSON.parse(init.body)); return bodies.length === 1
+    ? new Response(JSON.stringify({ meta: { code: 40400, message: "Order not found" } }), { status: 404 })
+    : new Response(JSON.stringify({ data: { return: { id: "r9", rma_number: "RMA9" } } }), { status: 201 }); };
+  const r = await createAftershipReturn({ apiKey: "k", shop: "aetrex.myshopify.com", order: { id: "5001" }, items: [{ lineId: "9001", quantity: 1 }], reasonLabel: "Other", fetchImpl });
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].order.store.external_id, "aetrex.myshopify.com");
+  assert.ok(r.ok && r.rma === "RMA9");
+});
 await test("AfterShip: never asks for store credit", async () => {
   let b = null;
   await createAftershipReturn({ apiKey: "k", order: { id: "1" }, items: [{ lineId: "2", quantity: 1 }], reasonLabel: "Other", refundTo: "store_credit", fetchImpl: async (u, i) => { b = JSON.parse(i.body); return new Response("{}", { status: 201 }); } });
