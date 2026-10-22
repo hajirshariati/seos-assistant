@@ -1,5 +1,6 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { deleteChatReturnsForOrders } from "../models/ChatReturn.server";
 
 // GDPR: Shopify forwards customer-deletion requests here. Chat
 // interactions are anonymized (hash of source IP, no customer key),
@@ -26,6 +27,14 @@ export const action = async ({ request }) => {
     console.log(
       `[webhook ${topic}] anonymized ${result.count} conversion row(s) for customer ${customerId} on ${shop}`,
     );
+  }
+
+  // Returns started in the chat hold only order and line ids; drop them for
+  // the orders Shopify names.
+  const rawOrders = Array.isArray(payload?.orders_to_redact) ? payload.orders_to_redact : [];
+  if (rawOrders.length) {
+    const removed = await deleteChatReturnsForOrders(shop, rawOrders);
+    if (removed) console.log(`[webhook ${topic}] removed ${removed} chat return(s) on ${shop}`);
   }
 
   return new Response();

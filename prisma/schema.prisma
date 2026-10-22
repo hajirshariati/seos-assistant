@@ -558,3 +558,27 @@ model KnowledgeChunk {
   @@index([shop, fileType])
   @@index([sourceFileId])
 }
+
+// Returns started in the chat, so the chat shows the same thing wherever the
+// shopper comes back (another tab, device, a day later) and a retry or a
+// double tap never starts a second return. Order and line ids only — no
+// names, emails or addresses. Kept 120 days.
+model ChatReturn {
+  id            String   @id @default(cuid())
+  shop          String
+  orderId       String
+  lineIds       String[]
+  reasonKey     String
+  methodKey     String   @default("")
+  methodLabel   String   @default("")
+  findUrl       String   @default("")
+  exchange      Boolean  @default(false)
+  rma           String   @default("")
+  returnId      String   @default("")
+  labelUrl      String   @default("")
+  exchangeCards Json?
+  createdAt     DateTime @default(now())
+
+  @@index([shop, orderId])
+  @@index([createdAt])
+}

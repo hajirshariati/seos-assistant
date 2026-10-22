@@ -23,6 +23,7 @@ export const action = async ({ request }) => {
     db.chatProductMention.deleteMany({ where: { shop } }),
     db.chatTopic.deleteMany({ where: { shop } }),
     db.chatRecording.deleteMany({ where: { shop } }),
+    db.chatReturn.deleteMany({ where: { shop } }),
     // Every shop-scoped table — ChatConversion holds a Shopify
     // customerId, so leaving it behind is a privacy-compliance gap;
     // the rest were added after the original delete list and drifted.

@@ -14,7 +14,8 @@ export const ORDERS_TOOL = {
     "The customer's own orders: status, delivery progress, tracking, and the button to start a return or exchange. Use for where is my order, tracking, delivery, an order number, past purchases, or wanting to return or exchange something they bought. " +
     "The orders appear as cards under your reply — keep your reply to one short sentence and don't repeat what the cards show (numbers, dates, tracking). " +
     "If the customer isn't signed in, a sign-in button appears instead: say in one sentence that they need to sign in to see their orders. " +
-    "For returns and exchanges, tell them to tap \"Return an item\" on the order — the chat walks them through it (items, reason, refund or a different size). Never promise a refund amount or timing.",
+    "For returns and exchanges, tell them to tap \"Return an item\" on the order — the chat walks them through it (items, reason, how to send it back, refund or a different size). " +
+    "If a return was already started (return_started_in_chat), say so and point to the card, which shows the return number, label and drop-off steps; never start a second one. Never promise a refund amount or timing.",
   input_schema: {
     type: "object",
     properties: {
@@ -45,7 +46,8 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
       const summary = orders.map((o) => ({
         number: o.number, date: o.date, status: o.stageLabel, eta: o.eta || undefined, delivered: o.deliveredAt || undefined,
         return_status: o.returnStatus || undefined, can_return: o.canReturn,
-        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", window_closed: `past the ${returnWindowDays()}-day return window`, cancelled: "cancelled", nothing_left: "already returned" }[o.returnBlocked],
+        return_started_in_chat: o.returns?.length ? o.returns.map((r) => ({ rma: r.rma || undefined, on: r.date, how: r.method?.label || undefined, exchange: r.exchange || undefined })) : undefined,
+        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", window_closed: `past the ${returnWindowDays()}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
         items: o.items.map((i) => i.title).slice(0, 4),
       }));
       return {

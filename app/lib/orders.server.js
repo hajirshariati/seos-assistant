@@ -1,11 +1,13 @@
 // A signed-in shopper's orders, shaped for the chat's order cards and the
-// in-chat return flow. Live from the Shopify Admin API; nothing is stored.
+// in-chat return flow. Live from the Shopify Admin API; the only thing kept
+// is a note of returns started in the chat (order and line ids, ChatReturn).
 //
 // Only ever called for the customer Shopify signed into the request (the app
 // proxy's logged_in_customer_id, HMAC-verified), and every order is checked
 // to belong to that customer before anything is shown or returned.
 
 import { ADMIN_API_VERSION } from "./admin-api-version.js";
+import { findChatReturns } from "../models/ChatReturn.server.js";
 
 const ORDER_FIELDS = `
   id
@@ -107,7 +109,22 @@ export function returnBlock(o, stage, items, now = Date.now()) {
 }
 
 // The card for one order: no addresses, no payment details, no email.
-export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now() } = {}) {
+// A return the chat already started for this order, as the card shows it.
+export function chatReturnView(r) {
+  return {
+    rma: r.rma || "",
+    labelUrl: r.labelUrl || "",
+    method: { key: r.methodKey || "", label: r.methodLabel || "", findUrl: r.findUrl || "" },
+    exchange: Boolean(r.exchange),
+    date: day(r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt),
+    lineIds: (r.lineIds || []).map(String),
+    // The new-size cards of an exchange, so they can be shown again if the
+    // shopper lost them (connection dropped, chat cleared).
+    exchangeCards: Array.isArray(r.exchangeCards) ? r.exchangeCards : [],
+  };
+}
+
+export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now(), chatReturns = [] } = {}) {
   const stage = orderStage(o);
   const fulfillments = o.fulfillments || [];
   const latest = [...fulfillments].reverse().find((f) => (f.trackingInfo || []).length) || fulfillments[fulfillments.length - 1] || null;
@@ -117,6 +134,10 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
   const base = String(trackingBase || "").replace(/\/+$/, "");
   if (base && number && email) trackUrl = `${base}?order-number=${encodeURIComponent(number)}&email=${encodeURIComponent(email)}`;
   else if (base && tracking?.number) trackUrl = `${base}/tracking/${encodeURIComponent(tracking.number)}`;
+  // Units already in a return started in the chat (Shopify only lowers
+  // refundableQuantity once the refund is issued).
+  const inChatReturn = {};
+  for (const r of chatReturns) for (const id of r.lineIds || []) inChatReturn[id] = (inChatReturn[id] || 0) + 1;
   const items = (o.lineItems?.nodes || []).map((li) => {
     const opts = {};
     for (const so of li.variant?.selectedOptions || []) if (so?.name && so.value && so.value !== "Default Title") opts[so.name] = so.value;
@@ -126,7 +147,7 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
       options: opts,
       image: li.image?.url || "",
       quantity: li.quantity || 1,
-      returnable: Math.max(0, li.refundableQuantity ?? 0),
+      returnable: Math.max(0, (li.refundableQuantity ?? 0) - (inChatReturn[numericId(li.id)] || 0)),
       handle: li.variant?.product?.handle || "",
     };
   });
@@ -145,6 +166,7 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
     carrier: tracking?.company || "",
     trackUrl,
     returnStatus,
+    returns: chatReturns.map(chatReturnView),
     // AfterShip still applies the store's own policy (final sale…) on top.
     canReturn: !blocked,
     returnBlocked: blocked,
@@ -154,7 +176,7 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
 
 // The signed-in customer's recent orders as cards (and their email, kept
 // server-side for prefilled tracking/return links).
-export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "" }) {
+export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", lookupReturns = findChatReturns }) {
   const data = await adminGraphql({
     shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
     variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 10) },
@@ -165,7 +187,9 @@ export async function getOrderCards({ shop, accessToken, customerId, first = 5, 
   let nodes = customer.orders?.nodes || [];
   const want = String(orderNumber || "").replace(/[^0-9a-z]/gi, "").toLowerCase();
   if (want) nodes = nodes.filter((o) => String(o.name || "").replace(/[^0-9a-z]/gi, "").toLowerCase().endsWith(want));
-  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, email: customer.email || "" })) };
+  const started = await lookupReturns(shop, nodes.map((o) => numericId(o.id)));
+  const forOrder = (o) => started.filter((r) => r.orderId === numericId(o.id));
+  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, email: customer.email || "", chatReturns: forOrder(o) })) };
 }
 
 // One order, only if it belongs to this customer (for starting a return).

@@ -8,6 +8,16 @@ export const cartLog = [];
 export const chatBodies = [];
 export const fitSaves = [];
 export const returnBodies = [];
+// Returns the "server" has started, like the ChatReturn table: orderId → list.
+export const startedReturns = {};
+// Test switches: drop the connection after the next return is created (the
+// shopper never hears back), or make the next request slow.
+export const mockCtl = { dropNextPost: false, slowPostMs: 0 };
+export const METHODS = [
+  { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
+  { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
+];
+let rmaSeq = 1000;
 const { signedInPage } = await import("../../../app/lib/signed-in-page.js");
 // A signed-in shopper's orders, shaped like app/lib/orders.server.js cards.
 const ORDERS = [
@@ -97,6 +107,15 @@ document.addEventListener("cart:refresh",function(ev){try{ev.detail.open}catch(e
 theme.pubsub.subscribe("cart-update",function(ev){document.querySelectorAll("cart-count").forEach(function(c){c.innerText=ev.cart.item_count;c.hidden=ev.cart.item_count===0})});
 theme.pubsub.subscribe("cart-update",function(ev){var html=ev.cart.sections["cart-drawer"];var doc=new DOMParser().parseFromString(html,"text/html");var up=doc.querySelector("#MiniCart-cart-drawer");document.querySelector("#MiniCart-cart-drawer").innerHTML=up?up.innerHTML:"";var t=document.querySelector("#MiniCart-cart-drawer a");if(t)t.focus();});
 </script><script src="/w.js"></script></body></html>`;
+// The order as the server would show it now: returns started, what's left.
+function orderNow(o) {
+  const rs = startedReturns[o.id] || [];
+  const used = {};
+  for (const r of rs) for (const l of r.lineIds) used[l] = (used[l] || 0) + 1;
+  const items = o.items.map((i) => ({ ...i, returnable: Math.max(0, i.returnable - (used[i.lineId] || 0)) }));
+  const left = items.some((i) => i.returnable > 0);
+  return { ...o, items, canReturn: o.canReturn && left, returnBlocked: !o.canReturn ? "not_delivered" : left ? "" : "nothing_left", returns: rs };
+}
 export function start(port) {
   return new Promise((res) => {
     const srv = http.createServer((req, resp) => {
@@ -127,15 +146,34 @@ export function start(port) {
         }
         if (u.pathname === "/apps/hajirai/signed-in" && u.searchParams.get("check")) return send(200, "application/json", JSON.stringify({ signedIn: /signedin=1/.test(req.headers.cookie || "") }));
         if (u.pathname === "/apps/hajirai/signed-in") return send(200, "text/html", signedInPage(u.searchParams.get("back")));
+        if (u.pathname === "/apps/hajirai/returns" && req.method === "GET") {
+          if (!/signedin=1/.test(req.headers.cookie || "")) return send(401, "application/json", JSON.stringify({ error: "sign_in_required" }));
+          const o = ORDERS.find((x) => x.id === u.searchParams.get("orderId"));
+          if (!o) return send(404, "application/json", JSON.stringify({ error: "order_not_found" }));
+          const now = orderNow(o);
+          return send(200, "application/json", JSON.stringify({ ok: true, order: now, methods: METHODS, returnsUrl: "https://returns.example/?order-number=" + o.number, message: now.canReturn ? "" : now.returnBlocked === "nothing_left" ? "Everything in this order is already being returned." : "You can start a return once the order has been delivered." }));
+        }
         if (u.pathname === "/apps/hajirai/returns" && req.method === "POST") {
           const b = JSON.parse(body || "{}");
           returnBodies.push(b);
           if (!/signedin=1/.test(req.headers.cookie || "")) return send(401, "application/json", JSON.stringify({ error: "sign_in_required" }));
           if (b.reason === "other") return send(200, "application/json", JSON.stringify({ ok: false, error: "return_not_created", message: "I couldn't start this return here — you can finish it on our returns page.", fallbackUrl: "https://returns.example/?order-number=1171674" }));
-          return send(200, "application/json", JSON.stringify({
-            ok: true, rma: "R1001", labelUrl: "", returnsUrl: "https://returns.example/?order-number=1171674", refundTo: b.refundTo || "original_payment",
-            exchangeCards: b.exchange ? [{ ...cards[0], preselect: { Size: "8.5 US", Width: "Medium" }, exchange_from: "8 US", exchange_to: "8.5 US" }] : [],
-          }));
+          const o = ORDERS.find((x) => x.id === b.orderId);
+          const lineIds = (b.items || []).map((i) => i.lineId);
+          const rs = (startedReturns[b.orderId] ||= []);
+          const reply = (r, extra = {}) => ({ ok: true, rma: r.rma, labelUrl: r.labelUrl, returnsUrl: "https://returns.example/?order-number=" + (o?.number || ""), method: r.method, exchange: r.exchange, lineIds: r.lineIds, refundTo: "original_payment", exchangeCards: r.exchangeCards, ...extra });
+          // Same as the real server: a return already started for these lines comes back as is.
+          const prior = [...rs].reverse().find((r) => lineIds.every((l) => r.lineIds.includes(l)));
+          if (prior) return send(200, "application/json", JSON.stringify(reply(prior, { already: true })));
+          const m = METHODS.find((x) => x.key === b.method) || METHODS[0];
+          const r = { rma: "R" + ++rmaSeq, labelUrl: m.key === "usps" ? "https://label.example/" + rmaSeq : "", method: { key: m.key, label: m.label, findUrl: m.findUrl }, exchange: !!b.exchange, lineIds, date: "2026-10-22",
+            exchangeCards: b.exchange ? [{ ...cards[0], preselect: { Size: "8.5 US", Width: "Medium" }, exchange_from: "8 US", exchange_to: "8.5 US" }] : [] };
+          const finish = () => {
+            rs.push(r);
+            if (mockCtl.dropNextPost) { mockCtl.dropNextPost = false; return req.socket.destroy(); }
+            send(200, "application/json", JSON.stringify(reply(r)));
+          };
+          return mockCtl.slowPostMs ? setTimeout(finish, mockCtl.slowPostMs) : finish();
         }
         if (u.pathname === "/account/logout" || u.pathname === "/account/login") return send(200, "text/html", "<!doctype html><title>account</title>" + u.pathname);
         const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
@@ -194,7 +232,7 @@ export function start(port) {
             if (/signedin=1/.test(req.headers.cookie || "")) {
               w({ type: "text", text: intent === "return" ? "Here are your orders — tap Return an item on the one you'd like to return." : "Here are your recent orders." });
               w({ type: "products", products: [] });
-              w({ type: "order_cards", intent, orders: ORDERS });
+              w({ type: "order_cards", intent, orders: ORDERS.map(orderNow), returnMethods: METHODS });
             } else {
               w({ type: "text", text: "Sign in and I'll pull up your orders right here." });
               w({ type: "products", products: [] });

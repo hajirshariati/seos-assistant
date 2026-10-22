@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -383,6 +383,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   // Return → exchange
   await page.click('.ai-ord[data-ord="5001"] [data-ord-return]');
   const next = '.ai-ord[data-ord="5001"] [data-ret-next="reason"]';
+  await page.waitForSelector(next, { timeout: 6000 });
   check("return: Next waits until an item is picked", await page.$eval(next, (b) => b.disabled));
   // Tapping inside the return must not jump the chat to the bottom.
   const before = await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); const c = document.querySelector('.ai-ord[data-ord="5001"]'); m.scrollTo({ top: m.scrollTop + c.getBoundingClientRect().top - m.getBoundingClientRect().top, behavior: "instant" }); return { top: m.scrollTop, room: m.scrollHeight - m.clientHeight - m.scrollTop }; });
@@ -392,8 +393,14 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("return: tapping an item keeps the chat where it is (no jump to the bottom)", before.room > 60 && after < before.top + before.room - 40, JSON.stringify({ before, after }));
   await page.click(next);
   await page.click('[data-ret-reason="too_small"]');
+  await page.waitForSelector('.ai-ord[data-ord="5001"] .ai-ret__method');
+  const methods = await page.$$eval('.ai-ord[data-ord="5001"] .ai-ret__method', (bs) => bs.map((b) => b.querySelector(".ai-ret__mlabel").textContent + "|" + b.getAttribute("aria-checked")));
+  check("return: asks how to send it back, first option picked", methods.length === 2 && methods[0] === "Drop off at any Happy Returns location|true", methods.join(" / "));
+  check("return: Happy Returns links to the drop-off finder", (await page.getAttribute('.ai-ord[data-ord="5001"] .ai-ret__find', "href")) === "https://locations.example/");
+  await page.screenshot({ path: out("orders-return-method") });
+  await page.click('.ai-ord[data-ord="5001"] [data-ret-next="confirm"]');
   const choices = await page.$$eval('.ai-ord[data-ord="5001"] [data-ret-submit]', (bs) => bs.map((b) => b.textContent));
-  check("return: too small offers Exchange for a bigger size or Continue return", choices.join("|") === "Exchange for a bigger size|Continue return", choices.join("|"));
+  check("return: too small offers Exchange for a bigger size or Return for a refund", choices.join("|") === "Exchange for a bigger size|Return for a refund", choices.join("|"));
   check("return: no store credit option (refunds go to the original payment)", !/store credit/i.test(await page.textContent('.ai-ord[data-ord="5001"] .ai-ret')));
   await page.screenshot({ path: out("orders-return-choice") });
   await page.click('[data-ret-submit="exchange"]');
@@ -404,23 +411,120 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.waitForFunction(() => [...document.querySelectorAll(".ai-chat-product-card")].some((c) => /8\.5 US/.test(c.getAttribute("data-preselect") || "")), null, { timeout: 4000 }).catch(() => {});
   const ex = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-product-card")].at(-1); return { handle: c?.getAttribute("data-handle"), pre: c?.getAttribute("data-preselect") || "", msg: c?.closest(".ai-chat-msg")?.querySelector("p")?.textContent || "" }; });
   check("exchange: the same shoe comes back in the next size, ready to add", ex.handle === "savannah-red" && /8\.5 US/.test(ex.pre) && /new size in 8\.5 US/.test(ex.msg), JSON.stringify(ex));
-  check("return: the order's Return button is gone once started", !(await page.$('.ai-ord[data-ord="5001"] [data-ord-return]')));
+  check("return: the card shows the return, and offers only what's left", /Return another item/.test(await page.textContent('.ai-ord[data-ord="5001"] [data-ord-return]')) && /Return started · #R1001/.test(await page.textContent('.ai-ord[data-ord="5001"] .ai-ret--started')));
   await page.screenshot({ path: out("orders-exchange") });
   // A return AfterShip can't take: the prefilled returns page instead.
   await page.fill(".ai-chat-input-area textarea", "I want to return something");
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.querySelectorAll('.ai-ord[data-ord="5001"] [data-ord-return]').length === 1, null, { timeout: 6000 });
   const fresh = '.ai-chat-msg:last-child .ai-ord[data-ord="5001"]';
+  await page.waitForSelector(`${fresh} [data-ord-return]`, { timeout: 6000 });
   await page.click(`${fresh} [data-ord-return]`);
-  await page.click(`${fresh} [data-ret-item="9002"]`);
+  await page.waitForSelector(`${fresh} [data-ret-item]`);
+  const left = await page.$$eval(`${fresh} [data-ret-item]`, (bs) => bs.map((b) => b.getAttribute("data-ret-item") + ":" + b.getAttribute("aria-checked")));
+  check("return: the item already being returned isn't offered again; the one left is picked", left.join(",") === "9002:true", left.join(","));
   await page.click(`${fresh} [data-ret-next="reason"]`);
   await page.click(`${fresh} [data-ret-reason="other"]`);
+  await page.click(`${fresh} [data-ret-next="confirm"]`);
   const single = await page.$$eval(`${fresh} [data-ret-submit]`, (bs) => bs.map((b) => b.textContent));
   check("return: other reasons get one Start return button", single.join("|") === "Start return", single.join("|"));
   await page.click(`${fresh} [data-ret-submit="return"]`);
   await page.waitForSelector(`${fresh} .ai-ret__err`, { timeout: 6000 });
-  check("return: if it can't be started here, the prefilled returns page is one tap away", (await page.$eval(`${fresh} .ai-ret a.ai-ord__btn`, (a) => a.getAttribute("href"))) === "https://returns.example/?order-number=1171674");
+  check("return: if it can't be started here, the prefilled returns page is one tap away", (await page.$eval(`${fresh} .ai-ret:not(.ai-ret--started) a.ai-ord__btn`, (a) => a.getAttribute("href"))) === "https://returns.example/?order-number=1171674");
   check("orders & returns: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Returns hold up whatever the shopper does: reload half-way, lose the
+// connection at the worst moment, double-tap, get signed out, come back later.
+{
+  for (const k of Object.keys(startedReturns)) delete startedReturns[k];
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  await ctx.addCookies([{ name: "signedin", value: "1", url: "http://localhost:4789" }]);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const open = async () => { await page.click(".ai-chat-launcher__text"); await page.waitForTimeout(500); };
+  const ask = async (q) => { await page.fill(".ai-chat-input-area textarea", q); await page.keyboard.press("Enter"); };
+  await page.goto("http://localhost:4789/full?login=Ann");
+  await open();
+  await ask("I want to return something");
+  const last = '.ai-chat-msg:last-child .ai-ord[data-ord="5001"]';
+  await page.waitForSelector(`${last} [data-ord-return]`, { timeout: 6000 });
+  await page.click(`${last} [data-ord-return]`);
+  await page.click(`${last} [data-ret-item="9001"]`);
+  await page.click(`${last} [data-ret-next="reason"]`);
+  await page.click(`${last} [data-ret-reason="too_large"]`);
+  await page.click(`${last} [data-ret-method="usps"]`);
+  await page.click(`${last} [data-ret-next="confirm"]`);
+  // 1. Reload half-way: the cards come back and so does the return, at the same step.
+  await page.reload();
+  await open();
+  await page.waitForSelector('.ai-ord[data-ord="5001"] [data-ret-submit]', { timeout: 6000 });
+  const kept = await page.textContent('.ai-ord[data-ord="5001"] .ai-ret__summary');
+  check("reload: the order cards come back with the chat", (await page.$$(".ai-ord[data-ord]")).length === 2);
+  check("reload: the return picks up at the same step with the same choices", /Savannah/.test(kept) && /Reason: Too large/.test(kept) && /Send back: USPS drop-off/.test(kept), kept);
+  // 2. The connection drops right after the store started the return.
+  mockCtl.dropNextPost = true;
+  const posts = returnBodies.length;
+  await page.click('.ai-ord[data-ord="5001"] [data-ret-submit="return"]');
+  await page.waitForSelector('.ai-ord[data-ord="5001"] .ai-ret--started', { timeout: 8000 });
+  // (The browser itself may resend the request on a reset connection — the
+  // store must still end up with exactly one return.)
+  check("lost connection: the chat checks, finds the return went through and shows it — one return, not two", /Return started · #R\d+/.test(await page.textContent('.ai-ord[data-ord="5001"] .ai-ret--started')) && startedReturns["5001"].length === 1 && returnBodies.length >= posts + 1, JSON.stringify({ n: startedReturns["5001"]?.length, posts: returnBodies.length - posts, txt: await page.textContent('.ai-ord[data-ord="5001"] .ai-ret--started') }));
+  check("lost connection: the label for the chosen method is right there", /^https:\/\/label\.example\//.test(await page.getAttribute('.ai-ord[data-ord="5001"] .ai-ret--started a.ai-ord__btn', "href") || ""));
+  // 3. Come back later: the card still shows the return, nothing to redo.
+  await page.reload();
+  await open();
+  await page.waitForSelector('.ai-ord[data-ord="5001"] .ai-ret--started', { timeout: 6000 });
+  check("later: the return is still shown on the card after a reload", /USPS drop-off/.test(await page.textContent('.ai-ord[data-ord="5001"] .ai-ret--started')));
+  await page.screenshot({ path: out("returns-started-after-reload") });
+  // 4. Double tap on the second item: one return, not two.
+  mockCtl.slowPostMs = 600;
+  await page.click('.ai-ord[data-ord="5001"] [data-ord-return]');
+  await page.waitForSelector('.ai-ord[data-ord="5001"] [data-ret-item="9002"][aria-checked="true"]');
+  await page.click('.ai-ord[data-ord="5001"] [data-ret-next="reason"]');
+  await page.click('.ai-ord[data-ord="5001"] [data-ret-reason="damaged"]');
+  await page.click('.ai-ord[data-ord="5001"] [data-ret-next="confirm"]');
+  await page.dblclick('.ai-ord[data-ord="5001"] [data-ret-submit="return"]');
+  await page.waitForFunction(() => document.querySelectorAll('.ai-ord[data-ord="5001"] .ai-ret--started').length === 2, null, { timeout: 6000 });
+  mockCtl.slowPostMs = 0;
+  check("double tap: one return for the item", startedReturns["5001"].length === 2 && !(await page.$('.ai-ord[data-ord="5001"] [data-ord-return]')));
+  // 5. Asking again shows the same state everywhere.
+  await ask("where is my order?");
+  await page.waitForFunction(() => document.querySelectorAll('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] .ai-ret--started').length === 2, null, { timeout: 6000 });
+  check("asking again: both returns shown, no Return button", !(await page.$(`${last} [data-ord-return]`)));
+  check("returns hold up: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Signed out half-way: sign in again and finish where they left off.
+{
+  for (const k of Object.keys(startedReturns)) delete startedReturns[k];
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  await ctx.addCookies([{ name: "signedin", value: "1", url: "http://localhost:4789" }]);
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:4789/full?login=Ann");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "I want to return something");
+  await page.keyboard.press("Enter");
+  const card = '.ai-ord[data-ord="5001"]';
+  await page.waitForSelector(`${card} [data-ord-return]`, { timeout: 6000 });
+  await page.click(`${card} [data-ord-return]`);
+  await page.click(`${card} [data-ret-item="9002"]`);
+  await page.click(`${card} [data-ret-next="reason"]`);
+  await page.click(`${card} [data-ret-reason="damaged"]`);
+  await page.click(`${card} [data-ret-next="confirm"]`);
+  await ctx.clearCookies();
+  await page.click(`${card} [data-ret-submit="return"]`);
+  await page.waitForSelector(`${card} .ai-ret [data-ord-login]`, { timeout: 6000 });
+  check("signed out: asked to sign in again, choices kept", /sign in again/i.test(await page.textContent(`${card} .ai-ret`)));
+  const [popup] = await Promise.all([page.waitForEvent("popup"), page.click(`${card} .ai-ret [data-ord-login]`)]);
+  await popup.waitForEvent("close", { timeout: 8000 }).catch(() => {});
+  await page.waitForSelector('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] [data-ret-submit]', { timeout: 10000 });
+  const resumed = await page.textContent('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] .ai-ret__summary');
+  check("signed in again: the return is waiting at the last step", /Orthotics/.test(resumed) && /Damaged/.test(resumed), resumed);
+  await page.click('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] [data-ret-submit="return"]');
+  await page.waitForSelector('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] .ai-ret--started', { timeout: 6000 });
+  check("signed in again: the return goes through", (startedReturns["5001"] || []).length === 1);
   await ctx.close();
 }
 // Shopify's sign-in cuts the pop-up's link back to the chat (COOP).

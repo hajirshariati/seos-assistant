@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
-const { toOrderCard, orderStage, getOwnedOrder } = await import("../app/lib/orders.server.js");
-const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods } = await import("../app/lib/returns.server.js");
+const { toOrderCard, orderStage, getOwnedOrder, getOrderCards } = await import("../app/lib/orders.server.js");
+const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 
 let passed = 0, failed = 0;
@@ -73,6 +73,42 @@ await test("AfterShip: the chosen method's type is sent", async () => {
   let b = null;
   await createAftershipReturn({ apiKey: "k", shop: "a.myshopify.com", order: { id: "1" }, items: [{ lineId: "2", quantity: 1 }], reasonLabel: "Other", methodType: "happy_returns", fetchImpl: async (u, i) => { b = JSON.parse(i.body); return new Response("{}", { status: 201 }); } });
   assert.deepEqual(b.return_method, { type: "happy_returns" });
+});
+await test("a return started in the chat: shown on the card, its items no longer returnable", () => {
+  const started = [{ orderId: "5001", lineIds: ["9001"], rma: "RMA1", labelUrl: "https://l/1", methodKey: "usps", methodLabel: "USPS drop-off", findUrl: "", exchange: true, exchangeCards: [{ handle: "x" }], createdAt: new Date("2026-10-20T10:00:00Z") }];
+  const c = toOrderCard(delivered(), { now: NOW, chatReturns: started });
+  assert.equal(c.items[0].returnable, 0);
+  assert.equal(c.canReturn, false); assert.equal(c.returnBlocked, "nothing_left");
+  assert.deepEqual(c.returns[0], { rma: "RMA1", labelUrl: "https://l/1", method: { key: "usps", label: "USPS drop-off", findUrl: "" }, exchange: true, date: "2026-10-20", lineIds: ["9001"], exchangeCards: [{ handle: "x" }] });
+  // Two of a line: one unit still free.
+  const two = delivered({ lineItems: { nodes: [{ ...order().lineItems.nodes[0], quantity: 2, refundableQuantity: 2 }] } });
+  const c2 = toOrderCard(two, { now: NOW, chatReturns: started });
+  assert.equal(c2.items[0].returnable, 1); assert.equal(c2.canReturn, true);
+});
+await test("retry / double tap / another tab: the earlier return is found, never a second one", () => {
+  const started = [{ lineIds: ["1"], rma: "A" }, { lineIds: ["1", "2"], rma: "B" }];
+  assert.equal(priorReturn(started, ["1"]).rma, "B", "newest covering return");
+  assert.equal(priorReturn(started, ["2"]).rma, "B");
+  assert.equal(priorReturn(started, ["3"]), null, "a different item is a new return");
+  assert.equal(priorReturn(started, ["1", "3"]), null);
+  assert.equal(priorReturn([], ["1"]), null); assert.equal(priorReturn(started, []), null);
+});
+await test("why a return can't start, in plain words", () => {
+  assert.match(blockedMessage("window_closed"), /within 30 days/);
+  assert.match(blockedMessage("not_delivered"), /once the order has been delivered/);
+  assert.match(blockedMessage("nothing_left"), /already being returned/);
+});
+await test("order list: returns started in the chat are attached to their orders", async () => {
+  const realFetch = globalThis.fetch;
+  const other = { ...delivered(), id: "gid://shopify/Order/5002", name: "#1171675" };
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [delivered(), other] } } } }), { status: 200 });
+  try {
+    let asked = null;
+    const { orders } = await getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async (shop, ids) => { asked = ids; return [{ orderId: "5002", lineIds: ["9001"], rma: "R2", createdAt: new Date() }]; } });
+    assert.deepEqual(asked, ["5001", "5002"]);
+    assert.equal(orders[0].returns.length, 0);
+    assert.equal(orders[1].returns[0].rma, "R2");
+  } finally { globalThis.fetch = realFetch; }
 });
 await test("a return only works on the shopper's own order", async () => {
   const realFetch = globalThis.fetch;

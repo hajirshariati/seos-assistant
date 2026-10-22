@@ -752,7 +752,7 @@ try{
    customer signs out (or someone else signs in on this device), their chat
    and size history don't follow to the next person. */
 var OWNER_KEY='hajirai_chat_owner',TF_LAST='hajirai_tf_last';
-function forgetPersonal(){try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(TF_LAST)}catch(e){}_memSess=''}
+function forgetPersonal(){try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(TF_LAST);localStorage.removeItem('hajirai_ret_progress');localStorage.removeItem('hajirai_ret_done')}catch(e){}_memSess=''}
 (function(){
   var now=CUST_LOGGED_IN?'c:'+String(C.customerId||CUST_NAME||'1'):'guest',was=null;
   try{was=localStorage.getItem(OWNER_KEY)}catch(e){}
@@ -2129,17 +2129,34 @@ var RET_REASONS=[
 ];
 /* How it goes back (Happy Returns, mail…), as the store offers them. */
 var RET_METHODS=[];
-function retMethod(st){for(var i=0;i<RET_METHODS.length;i++)if(RET_METHODS[i].key===st.method)return RET_METHODS[i];return null}
 var ORD_STEPS=['Ordered','Shipped','Out for delivery','Delivered'];
 function fmtDay(d){if(!d)return'';try{var p=String(d).split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch(e){return d}}
 function optLine(o){var v=[];for(var k in (o||{}))if(Object.prototype.hasOwnProperty.call(o,k))v.push(o[k]);return v.join(' · ')}
 var ORD_ICON={bag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
   user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'};
+/* Returns started for this order: what the server knows plus what this
+   browser saw go through (so the card is right even before it asks again). */
+function cardReturns(o){
+  var out=(o.returns||[]).slice(),loc=doneGet(o.id);
+  for(var i=0;i<loc.length;i++){var l=loc[i],dup=false;
+    for(var j=0;j<out.length;j++)if((l.rma&&out[j].rma===l.rma)||String(out[j].lineIds)===String(l.lineIds))dup=true;
+    if(!dup)out.push(l)}
+  return out;
+}
+/* Items still free to return, after returns started in the chat. */
+function returnableItems(o){
+  var local=doneGet(o.id),fromLocal={};
+  for(var k=0;k<local.length;k++)for(var m=0;m<(local[k].lineIds||[]).length;m++)fromLocal[local[k].lineIds[m]]=1;
+  /* Server counts are already in returnable; only subtract what it hasn't seen yet. */
+  var serverSeen={};for(var s=0;s<(o.returns||[]).length;s++)for(var t=0;t<(o.returns[s].lineIds||[]).length;t++)serverSeen[o.returns[s].lineIds[t]]=1;
+  return (o.items||[]).filter(function(it){var left=it.returnable-((fromLocal[it.lineId]&&!serverSeen[it.lineId])?1:0);return left>0});
+}
 function orderCardHtml(o){
   ordersById[o.id]=o;
   var cancelled=o.stage==='cancelled';
-  var h='<div class="ai-ord" data-ord="'+esc(o.id)+'">';
+  var started=cardReturns(o);
+  var h='<div class="ai-ord'+(started.length?' is-returned':'')+'" data-ord="'+esc(o.id)+'">';
   h+='<div class="ai-ord__head"><div class="ai-ord__id"><div class="ai-ord__num">Order #'+esc(o.number)+'</div><div class="ai-ord__date">Placed '+esc(fmtDay(o.date))+'</div></div>';
   h+='<span class="ai-ord__pill is-'+esc(o.stage)+'">'+esc(o.stageLabel)+'</span></div>';
   if(!cancelled){
@@ -2149,16 +2166,18 @@ function orderCardHtml(o){
     var when=o.deliveredAt?'Delivered '+fmtDay(o.deliveredAt):o.eta?'Arrives by '+fmtDay(o.eta):o.stage==='ordered'?'We’re getting it ready':'On its way';
     h+='<div class="ai-ord__when">'+esc(when)+(o.carrier?' <span class="ai-ord__carrier">· '+esc(o.carrier)+'</span>':'')+'</div>';
   }
-  if(o.returnStatus)h+='<div class="ai-ord__return">'+esc(o.returnStatus)+'</div>';
+  if(o.returnStatus&&!started.length)h+='<div class="ai-ord__return">'+esc(o.returnStatus)+'</div>';
   h+='<ul class="ai-ord__items">';
   var items=o.items||[];
   for(var j=0;j<Math.min(items.length,3);j++){var it=items[j];
     h+='<li class="ai-ord__item">'+(safeUrl(it.image)?'<img src="'+safeUrl(it.image)+'" alt="" loading="lazy">':'<span class="ai-ord__ph">'+ORD_ICON.bag+'</span>')+
       '<div class="ai-ord__itxt"><div class="ai-ord__ititle">'+esc(it.title)+'</div>'+(optLine(it.options)||it.quantity>1?'<div class="ai-ord__iopt">'+esc(optLine(it.options))+(it.quantity>1?(optLine(it.options)?' · ':'')+'Qty '+it.quantity:'')+'</div>':'')+'</div></li>';}
   if(items.length>3)h+='<li class="ai-ord__more">+'+(items.length-3)+' more</li>';
-  h+='</ul><div class="ai-ord__actions">';
+  h+='</ul>';
+  for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
+  h+='<div class="ai-ord__actions">';
   if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
-  if(o.canReturn)h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">Return an item</button>';
+  if(o.canReturn&&returnableItems(o).length)h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
   h+='</div></div>';
   return h;
 }
@@ -2223,17 +2242,53 @@ document.addEventListener('visibilitychange',function(){if(document.visibilitySt
 /* Came back from a same-tab sign-in. */
 if(CUST_LOGGED_IN){try{if(sessionStorage.getItem(RESUME_KEY))setTimeout(resumeAfterSignIn,600)}catch(e){}}
 
-/* The return walkthrough, inside the order card. */
-function retState(card){return card.__ret||(card.__ret={items:{},reason:''})}
-function renderReturn(card,step){
-  var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
+/* The return walkthrough, inside the order card. It holds up whatever the
+   shopper does: the step they're on is kept (closing the chat or reloading
+   picks it up again), a return that went through is remembered (the card
+   shows it, never a second "Return an item" for the same thing), and the
+   server never starts the same return twice, so retrying is always safe. */
+var RP_KEY='hajirai_ret_progress',RD_KEY='hajirai_ret_done',RET_KEEP_MS=2*24*60*60*1000;
+function lsJson(k){try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return{}}}
+function lsPut(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function progGet(id){var all=lsJson(RP_KEY),p=all[id];return p&&Date.now()-(p.at||0)<RET_KEEP_MS?p:null}
+function progSet(id,st,step){var all=lsJson(RP_KEY);all[id]={step:step,items:st.items||{},reason:st.reason||'',method:st.method||'',at:Date.now()};
+  for(var k in all)if(Date.now()-(all[k].at||0)>RET_KEEP_MS)delete all[k];lsPut(RP_KEY,all)}
+function progClear(id){var all=lsJson(RP_KEY);if(all[id]){delete all[id];lsPut(RP_KEY,all)}}
+function doneGet(id){var all=lsJson(RD_KEY);return Array.isArray(all[id])?all[id]:[]}
+function doneAdd(id,d){var all=lsJson(RD_KEY),list=Array.isArray(all[id])?all[id]:[];
+  for(var i=0;i<list.length;i++)if((d.rma&&list[i].rma===d.rma)||String(list[i].lineIds)===String(d.lineIds)){list[i]=Object.assign({},list[i],d);all[id]=list;lsPut(RD_KEY,all);return}
+  list.push(d);all[id]=list.slice(-5);lsPut(RD_KEY,all)}
+function retState(card){
+  if(card.__ret)return card.__ret;
+  var p=progGet(card.getAttribute('data-ord'));
+  return(card.__ret=p?{items:p.items||{},reason:p.reason||'',method:p.method||''}:{items:{},reason:'',method:''});
+}
+function retMethodByKey(k){for(var i=0;i<RET_METHODS.length;i++)if(RET_METHODS[i].key===k)return RET_METHODS[i];return null}
+/* The "return started" panel: the same wherever and whenever it's shown. */
+function doneHtml(d,o){
+  var m=d.method||{},find=safeUrl(m.findUrl),label=safeUrl(d.labelUrl);
+  var titles=(o&&o.items||[]).filter(function(i){return (d.lineIds||[]).indexOf(i.lineId)>-1}).map(function(i){return i.title});
+  var how=find?'Bring it to a drop-off location — your drop-off code and steps are in your email. No box or label needed.':label?'Your return label is ready — print it, pack the item and drop it off.':'Your return label and drop-off steps are in your email.';
+  return '<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div>'+
+    '<div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
+    (titles.length?'<div class="ai-ret__why">'+esc(titles.join(', '))+'</div>':'')+
+    (m.label?'<div class="ai-ret__why">'+esc(m.label)+'</div>':'')+
+    '<div class="ai-ret__note">'+how+' Refund to your original payment once it’s back with us.'+(d.exchange?' Your new size is in the chat above — add it to your cart whenever you’re ready.':'')+'</div>'+
+    '<div class="ai-ret__choices">'+(label?'<a class="ai-ord__btn is-primary" href="'+label+'" target="_blank" rel="noopener">Get return label</a>':'')+
+    (find?'<a class="ai-ord__btn'+(label?'':' is-primary')+'" href="'+find+'" target="_blank" rel="noopener">Find a drop-off location</a>':'')+
+    (safeUrl(d.returnsUrl||(o&&o.returnsUrl))?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl||o.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
+}
+function renderReturn(card,step,info){
+  var id=card.getAttribute('data-ord'),o=ordersById[id];if(!o)return;
   var st=retState(card);
-  var box=card.querySelector('.ai-ret');
-  if(!box){box=document.createElement('div');box.className='ai-ret';card.appendChild(box)}
+  var box=card.querySelector('.ai-ret:not(.ai-ret--started)');
+  if(!box){box=document.createElement('div');box.className='ai-ret';var acts=card.querySelector('.ai-ord__actions');card.insertBefore(box,acts||null)}
   card.classList.add('is-returning');
   var h='';
+  if(step==='items'||step==='reason'||step==='method'||step==='confirm')progSet(id,st,step);
   if(step==='items'){
-    var ret=o.items.filter(function(i){return i.returnable>0});
+    var ret=returnableItems(o);
+    for(var sk in st.items)if(!ret.some(function(i){return i.lineId===sk}))delete st.items[sk];
     if(ret.length===1&&!Object.keys(st.items).length)st.items[ret[0].lineId]=1;
     h+='<div class="ai-ret__title">What would you like to return?</div><div class="ai-ret__list">';
     for(var i=0;i<ret.length;i++){var it=ret[i],on=!!st.items[it.lineId];
@@ -2244,32 +2299,45 @@ function renderReturn(card,step){
   }else if(step==='reason'){
     h+='<div class="ai-ret__title">Why are you returning it?</div><div class="ai-ret__reasons">';
     for(var r=0;r<RET_REASONS.length;r++)h+='<button type="button" class="ai-ret__reason'+(st.reason===RET_REASONS[r].key?' is-on':'')+'" data-ret-reason="'+RET_REASONS[r].key+'">'+esc(RET_REASONS[r].label)+'</button>';
-    h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="items">Back</button></div>';
+    h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="items">Back</button><button type="button" class="ai-ret__link" data-ret-cancel>Cancel</button></div>';
   }else if(step==='method'){
-    h+='<div class="ai-ret__title">How would you like to send it back?</div><div class="ai-ret__methods">';
+    if(!retMethodByKey(st.method)&&RET_METHODS.length)st.method=RET_METHODS[0].key;
+    h+='<div class="ai-ret__title">How would you like to send it back?</div><div class="ai-ret__methods" role="radiogroup">';
     for(var m=0;m<RET_METHODS.length;m++){var rm=RET_METHODS[m],mon=st.method===rm.key;
       h+='<button type="button" class="ai-ret__method'+(mon?' is-on':'')+'" role="radio" aria-checked="'+mon+'" data-ret-method="'+esc(rm.key)+'">'+
         '<span class="ai-ret__mtop"><span class="ai-ret__mlabel">'+esc(rm.label)+'</span>'+(rm.fee?'<span class="ai-ret__mfee">'+esc(rm.fee)+'</span>':'')+'</span>'+
         (rm.detail?'<span class="ai-ret__mdetail">'+esc(rm.detail)+'</span>':'')+'</button>';}
     h+='</div>';
-    var cur=retMethod(st);
+    var cur=retMethodByKey(st.method);
     if(cur&&safeUrl(cur.findUrl))h+='<a class="ai-ret__find" href="'+safeUrl(cur.findUrl)+'" target="_blank" rel="noopener">Find a drop-off location near you</a>';
     h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="reason">Back</button><button type="button" class="ai-ord__btn is-primary" data-ret-next="confirm"'+(cur?'':' disabled')+'>Next</button></div>';
   }else if(step==='confirm'){
     var rs=null;for(var k=0;k<RET_REASONS.length;k++)if(RET_REASONS[k].key===st.reason)rs=RET_REASONS[k];
+    if(!rs){renderReturn(card,'reason');return}
     var picked=o.items.filter(function(i){return st.items[i.lineId]});
-    h+='<div class="ai-ret__title">'+(rs&&rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
-    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs?rs.label:'')+'</div>'+(RET_METHODS.length>1&&retMethod(st)?'<div class="ai-ret__why">Send back: '+esc(retMethod(st).label)+(retMethod(st).fee?' · '+esc(retMethod(st).fee):'')+'</div>':'')+'</div>';
-    if(rs&&rs.change){
+    if(!picked.length){renderReturn(card,'items');return}
+    var cm=RET_METHODS.length>1?retMethodByKey(st.method):null;
+    h+='<div class="ai-ret__title">'+(rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
+    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs.label)+'</div>'+(cm?'<div class="ai-ret__why">Send back: '+esc(cm.label)+(cm.fee?' · '+esc(cm.fee):'')+'</div>':'')+'</div>';
+    if(rs.change){
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="exchange">Exchange for '+esc(rs.change)+'</button>'+
-        '<button type="button" class="ai-ord__btn" data-ret-submit="return">Continue return</button></div>'+
+        '<button type="button" class="ai-ord__btn" data-ret-submit="return">Return for a refund</button></div>'+
         '<div class="ai-ret__note">Exchange: we start the return, then show you the new size to add to your cart. Your refund for this pair is issued once it’s back with us.</div>';
     }else{
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="return">Start return</button></div>';
     }
-    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="'+(RET_METHODS.length>1?'method':'reason')+'">Back</button></div>';
-  }else if(step==='sending'){
-    h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>Starting your return…</div>';
+    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="'+(RET_METHODS.length>1?'method':'reason')+'">Back</button><button type="button" class="ai-ret__link" data-ret-cancel>Cancel</button></div>';
+  }else if(step==='loading'||step==='sending'||step==='checking'){
+    h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>'+(step==='sending'?'Starting your return…':step==='checking'?'Checking on your return…':'Getting your order…')+'</div>';
+  }else if(step==='signin'){
+    lastAskedOrders='I’d like to finish my return';
+    h+='<div class="ai-ret__err" role="alert">Please sign in again to finish your return — we’ll keep your choices.</div>'+
+      '<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ord-login="return">Sign in</button></div>';
+  }else if(step==='blocked'||step==='error'){
+    var msg=(info&&info.message)||'Something went wrong — please try again.';
+    h+='<div class="ai-ret__err" role="alert">'+esc(msg)+'</div><div class="ai-ret__choices">'+
+      (safeUrl(info&&info.url)?'<a class="ai-ord__btn'+(step==='blocked'?'':' is-primary')+'" href="'+safeUrl(info.url)+'" target="_blank" rel="noopener">'+(step==='blocked'?'Our returns page':'Finish on our returns page')+'</a>':'')+
+      (step==='error'?'<button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button>':'<button type="button" class="ai-ord__btn" data-ret-cancel>Close</button>')+'</div>';
   }
   box.innerHTML=h;
   keepInView(box);
@@ -2282,52 +2350,122 @@ function keepInView(el){requestAnimationFrame(function(){
   if(r.bottom>m.bottom-pad)msgsEl.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
   else if(r.top<m.top+pad)msgsEl.scrollTop-=m.top+pad-r.top;
 })}
-function submitReturn(card,mode){
-  var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
-  var st=retState(card);
-  var items=[];for(var id in st.items)if(st.items[id])items.push({lineId:id,quantity:1});
-  renderReturn(card,'sending');
-  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,method:st.method||'',exchange:mode==='exchange'})})
-  .then(function(r){return r.json().catch(function(){return{}})})
-  .then(function(d){
-    var box=card.querySelector('.ai-ret');
-    if(d&&d.ok){
-      card.classList.add('is-returned');
-      var dm=d.method||{},find=safeUrl(dm.findUrl);
-      var how=find?'We’ve emailed your drop-off code and steps — no box or label needed.':d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.';
-      box.innerHTML='<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div><div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
-        (RET_METHODS.length>1&&dm.label?'<div class="ai-ret__why">'+esc(dm.label)+'</div>':'')+
-        '<div class="ai-ret__note">'+how+' Refund to your original payment once it’s back with us.</div>'+
-        '<div class="ai-ret__choices">'+(safeUrl(d.labelUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.labelUrl)+'" target="_blank" rel="noopener">Get return label</a>':'')+(find?'<a class="ai-ord__btn'+(safeUrl(d.labelUrl)?'':' is-primary')+'" href="'+find+'" target="_blank" rel="noopener">Find a drop-off location</a>':'')+(safeUrl(d.returnsUrl)?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
-      var act=card.querySelector('[data-ord-return]');if(act)act.remove();
-      if(mode==='exchange'&&d.exchangeCards&&d.exchangeCards.length){
-        var ex=d.exchangeCards[0],to=ex.exchange_to?' in '+ex.exchange_to:'';
-        var txt='Here’s your new size'+to+' — tap Add to cart, then check out whenever you’re ready.';
-        if(!ex.exchange_to)txt='Here’s the same style — pick your new size and tap Add to cart.';
-        var cards=d.exchangeCards.map(function(c){var x={};for(var k in c)if(k!=='exchange_from'&&k!=='exchange_to')x[k]=c[k];return x});
-        setTimeout(function(){appendMsg('assistant',txt,cards);messages.push({role:'assistant',content:txt,products:cards});saveH(messages)},350);
-      }
-    }else{
-      box.innerHTML='<div class="ai-ret__err" role="alert">'+esc((d&&d.message)||'Something went wrong — please try again.')+'</div>'+
-        '<div class="ai-ret__choices">'+(safeUrl(d&&d.fallbackUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.fallbackUrl)+'" target="_blank" rel="noopener">Finish on our returns page</a>':'')+'<button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';
+/* fetch with a time limit; resolves {status, d} and never throws on HTTP errors. */
+function retFetch(url,opts,ms){
+  var ctl=typeof AbortController!=='undefined'?new AbortController():null,timer=ctl?setTimeout(function(){ctl.abort()},ms):0;
+  opts=Object.assign({credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}},opts||{});
+  if(ctl)opts.signal=ctl.signal;
+  return fetch(url,opts).then(function(r){return r.json().catch(function(){return{}}).then(function(d){clearTimeout(timer);return{status:r.status,d:d||{}}})},function(e){clearTimeout(timer);throw e});
+}
+/* Swap a card for one built from fresh order data, everywhere it appears,
+   and keep the saved chat history in step. */
+function refreshCards(fresh,keep){
+  if(!fresh||!fresh.id)return keep;
+  ordersById[fresh.id]=fresh;
+  var cards=panel.querySelectorAll('.ai-ord[data-ord="'+String(fresh.id).replace(/"/g,'')+'"]'),out=keep;
+  for(var i=0;i<cards.length;i++){var c=cards[i],tmp=document.createElement('div');tmp.innerHTML=orderCardHtml(fresh);var nc=tmp.firstChild;
+    if(c===keep){nc.__ret=c.__ret;out=nc}
+    c.replaceWith(nc)}
+  var changed=false;
+  for(var m=0;m<messages.length;m++){var os=messages[m].orders;if(!os)continue;
+    for(var j=0;j<os.length;j++)if(os[j].id===fresh.id){os[j]=fresh;changed=true}}
+  if(changed)saveH(messages);
+  return out;
+}
+function startReturn(card){
+  var id=card.getAttribute('data-ord');
+  renderReturn(card,'loading');
+  retFetch(RETURNS_URL+'?orderId='+encodeURIComponent(id),{method:'GET'},15000).then(function(res){
+    if(res.status===401){renderReturn(card,'signin');return}
+    var d=res.d;
+    if(!d.ok||!d.order){renderReturn(card,'items');return}
+    if(Array.isArray(d.methods)&&d.methods.length)RET_METHODS=d.methods;
+    if(d.returnsUrl)d.order.returnsUrl=d.returnsUrl;
+    card=refreshCards(d.order,card);
+    if(!d.order.canReturn||!returnableItems(d.order).length){
+      if((d.order.returns||[]).length){progClear(id);var b=card.querySelector('.ai-ret:not(.ai-ret--started)');if(b)b.remove();card.classList.remove('is-returning');return}
+      renderReturn(card,'blocked',{message:d.message||'This order can’t be returned.',url:d.returnsUrl});return;
     }
-    keepInView(box);
-  })
-  .catch(function(){var box=card.querySelector('.ai-ret');if(box){box.innerHTML='<div class="ai-ret__err" role="alert">Connection problem — please try again.</div><div class="ai-ret__choices"><button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';keepInView(box)}});
+    var pg=progGet(id),step=pg&&pg.step;
+    if(step==='sending'){var ps=[];for(var k in retState(card).items)if(retState(card).items[k])ps.push(k);checkAfterDrop(card,ps,'return');return}
+    renderReturn(card,/^(reason|method|confirm)$/.test(step||'')?step:'items');
+  },function(){renderReturn(card,'items')});
+}
+function finishReturn(card,d,mode,picked){
+  var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
+  var prevShown=doneGet(o.id).some(function(x){return (d.rma&&x.rma===d.rma)&&x.exShown});
+  var rec={rma:d.rma||'',labelUrl:d.labelUrl||'',returnsUrl:d.returnsUrl||'',method:d.method||{},exchange:!!d.exchange||mode==='exchange',lineIds:d.lineIds||picked,at:Date.now(),exShown:prevShown};
+  doneAdd(o.id,rec);progClear(o.id);card.__ret=null;
+  card=refreshCards(o,card);
+  var exCards=d.exchangeCards||[];
+  if(exCards.length&&!prevShown){
+    doneAdd(o.id,Object.assign({},rec,{exShown:true}));
+    var ex=exCards[0],to=ex.exchange_to?' in '+ex.exchange_to:'';
+    var txt=ex.exchange_to?'Here’s your new size'+to+' — tap Add to cart, then check out whenever you’re ready.':'Here’s the same style — pick your new size and tap Add to cart.';
+    var cards=exCards.map(function(c){var x={};for(var k in c)if(k!=='exchange_from'&&k!=='exchange_to')x[k]=c[k];return x});
+    setTimeout(function(){appendMsg('assistant',txt,cards);messages.push({role:'assistant',content:txt,products:cards});saveH(messages);scrollBottom()},350);
+  }else{var p=card.querySelector('.ai-ret--started:last-of-type');if(p)keepInView(p)}
+}
+/* The connection dropped mid-way: ask the store whether it went through
+   before offering to try again (a retry is safe either way). */
+function checkAfterDrop(card,picked,mode){
+  var id=card.getAttribute('data-ord');
+  renderReturn(card,'checking');
+  retFetch(RETURNS_URL+'?orderId='+encodeURIComponent(id),{method:'GET'},15000).then(function(res){
+    if(res.status===401){var s2=retState(card);progSet(id,s2,'confirm');renderReturn(card,'signin');return}
+    var o=res.d&&res.d.order,hit=null;
+    for(var i=0;o&&i<(o.returns||[]).length;i++){var r=o.returns[i];if(picked.every(function(l){return r.lineIds.indexOf(l)>-1}))hit=r}
+    if(hit){if(Array.isArray(res.d.methods)&&res.d.methods.length)RET_METHODS=res.d.methods;finishReturn(card,Object.assign({},hit,{returnsUrl:res.d.returnsUrl||''}),hit.exchange?'exchange':mode,picked);return}
+    if(o)card=refreshCards(o,card);
+    progSet(id,retState(card),'confirm');
+    renderReturn(card,'error',{message:'Your return wasn’t started yet — the connection dropped. Tap Try again; it won’t start twice.'});
+  },function(){renderReturn(card,'error',{message:'Connection problem — your return may not have started. Tap Try again; it won’t start twice.'})});
+}
+function submitReturn(card,mode){
+  var id=card.getAttribute('data-ord'),o=ordersById[id];if(!o)return;
+  var st=retState(card);
+  var items=[],picked=[];for(var k in st.items)if(st.items[k]){items.push({lineId:k,quantity:1});picked.push(k)}
+  if(!items.length){renderReturn(card,'items');return}
+  progSet(id,st,'sending');
+  renderReturn(card,'sending');
+  retFetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({orderId:id,items:items,reason:st.reason,method:st.method||'',exchange:mode==='exchange'})},30000)
+  .then(function(res){
+    var d=res.d;
+    if(res.status===401){progSet(id,st,'confirm');renderReturn(card,'signin');return}
+    if(d.ok){finishReturn(card,d,mode,picked);return}
+    progSet(id,st,'confirm');
+    if(d.order){card=refreshCards(d.order,card)}
+    if(res.status===409||d.error==='already_returned'){progClear(id);renderReturn(card,'blocked',{message:d.message,url:d.fallbackUrl||o.returnsUrl});return}
+    renderReturn(card,'error',{message:d.message||'Something went wrong — please try again.',url:d.fallbackUrl});
+  },function(){progSet(id,st,'sending');checkAfterDrop(card,picked,mode)});
+}
+/* Pick up any return left half-way (chat closed, page reloaded, signed in
+   again) on the newest card for that order. */
+function resumeReturns(){
+  var all=lsJson(RP_KEY);
+  for(var id in all){
+    if(!progGet(id))continue;
+    var cards=panel.querySelectorAll('.ai-ord[data-ord="'+String(id).replace(/"/g,'')+'"]');if(!cards.length)continue;
+    var card=cards[cards.length-1],step=all[id].step;
+    if(card.querySelector('.ai-ret:not(.ai-ret--started)'))continue;
+    if(step==='sending'){var st=retState(card),picked=[];for(var k in st.items)if(st.items[k])picked.push(k);checkAfterDrop(card,picked,'return');continue}
+    if(!ordersById[id]||!ordersById[id].canReturn){progClear(id);continue}
+    renderReturn(card,step||'items');
+  }
 }
 panel.addEventListener('click',function(e){
   var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-method],[data-ret-submit],[data-ret-cancel]');
   if(!t||!panel.contains(t))return;
   if(t.hasAttribute('data-ord-login')){e.preventDefault();startSignIn(t.getAttribute('data-ord-login'));return}
   var card=t.closest('.ai-ord');if(!card)return;
-  var st=retState(card);
-  if(t.hasAttribute('data-ord-return')){renderReturn(card,'items');return}
-  if(t.hasAttribute('data-ret-cancel')){var b=card.querySelector('.ai-ret');if(b)b.remove();card.classList.remove('is-returning');card.__ret=null;return}
-  if(t.hasAttribute('data-ret-item')){var id=t.getAttribute('data-ret-item');st.items[id]=st.items[id]?0:1;if(!st.items[id])delete st.items[id];renderReturn(card,'items');return}
+  var id=card.getAttribute('data-ord'),st=retState(card);
+  if(t.hasAttribute('data-ord-return')){startReturn(card);return}
+  if(t.hasAttribute('data-ret-cancel')){var b=card.querySelector('.ai-ret:not(.ai-ret--started)');if(b)b.remove();card.classList.remove('is-returning');card.__ret=null;progClear(id);return}
+  if(t.hasAttribute('data-ret-item')){var li=t.getAttribute('data-ret-item');st.items[li]=st.items[li]?0:1;if(!st.items[li])delete st.items[li];renderReturn(card,'items');return}
   if(t.hasAttribute('data-ret-next')){renderReturn(card,t.getAttribute('data-ret-next'));return}
-  if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');if(RET_METHODS.length>1){if(!st.method)st.method=RET_METHODS[0].key;renderReturn(card,'method')}else renderReturn(card,'confirm');return}
+  if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');renderReturn(card,RET_METHODS.length>1?'method':'confirm');return}
   if(t.hasAttribute('data-ret-method')){st.method=t.getAttribute('data-ret-method');renderReturn(card,'method');return}
-  if(t.hasAttribute('data-ret-submit')){submitReturn(card,t.getAttribute('data-ret-submit'));return}
+  if(t.hasAttribute('data-ret-submit')){if(card.__sending)return;card.__sending=true;setTimeout(function(){card.__sending=false},1500);submitReturn(card,t.getAttribute('data-ret-submit'));return}
 });
 
 function sendMessage(){
@@ -2726,6 +2864,8 @@ if(cleanText){
   else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi]);ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}}}}
   var _saved={role:'assistant',content:cleanText,products:prods||[]};
   if(linkCTA&&linkCTA.url)_saved.linkCTA={url:linkCTA.url,label:linkCTA.label||''};
+  /* Order cards come back with the chat (reload, another page). */
+  if(pendingOrders){_saved.orders=pendingOrders.slice(0,3);if(RET_METHODS.length)_saved.returnMethods=RET_METHODS}
   messages.push(_saved);saveH(messages)
 }
 if(vizCta&&vizCta.productHandle&&mDiv){
@@ -2755,6 +2895,7 @@ if(pendingOrders&&mDiv){
   var ob=$('.ai-chat-msg-bubble',mDiv);
   if(ob)ob.insertAdjacentHTML('beforeend',ordersHtml(pendingOrders));
   pendingOrders=null;
+  setTimeout(resumeReturns,0);
 }
 if(pendingLogin&&mDiv){
   var lb2=$('.ai-chat-msg-bubble',mDiv);
@@ -2982,6 +3123,12 @@ else for(var i=0;i<messages.length;i++){
   var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
   var _cta=messages[i].linkCTA;
   if(_cta&&_cta.url&&_md){var _lb=$('.ai-chat-msg-bubble',_md);if(_lb)_lb.insertAdjacentHTML('beforeend',ctaHtml(_cta))}
+  var _os=messages[i].orders;
+  if(Array.isArray(_os)&&_os.length&&_md){
+    if(Array.isArray(messages[i].returnMethods)&&messages[i].returnMethods.length)RET_METHODS=messages[i].returnMethods;
+    var _ob=$('.ai-chat-msg-bubble',_md);if(_ob)_ob.insertAdjacentHTML('beforeend',ordersHtml(_os));
+  }
 }
+if(messages.length)resumeReturns();
 
 })();

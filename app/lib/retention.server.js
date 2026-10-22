@@ -4,6 +4,7 @@ import { cleanupOldTopics } from "../models/ChatTopic.server";
 import { cleanupOldUsage } from "../models/ChatUsage.server";
 import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
+import { cleanupOldReturns } from "../models/ChatReturn.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +33,11 @@ async function runOnce() {
     await cleanupOldRecordings();
   } catch (err) {
     console.error("[retention] cleanupOldRecordings failed:", err?.message || err);
+  }
+  try {
+    await cleanupOldReturns();
+  } catch (err) {
+    console.error("[retention] cleanupOldReturns failed:", err?.message || err);
   }
   await cleanupOldHealth();
 }
