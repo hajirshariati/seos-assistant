@@ -20,7 +20,7 @@ test("both default lines have every language, with the right direction", () => {
 });
 test("Persian reads naturally (with the ZWNJ in می‌توانم)", () => {
   assert.equal(fa("How can I help you today?"), "امروز چطور می‌توانم کمکتان کنم؟");
-  assert.equal(fa("What can I help you find today?"), "امروز دنبال چه چیزی هستید؟");
+  assert.equal(fa("What can I help you find today?"), "امروز دنبال چه می\u200cگردید؟");
 });
 test("the other common welcome lines are hand-translated too", () => {
   assert.equal(fa("What can I help you with today?"), "امروز چه کمکی از دستم برمی\u200cآید؟");

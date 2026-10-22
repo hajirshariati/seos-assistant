@@ -2177,7 +2177,11 @@ function orderCardHtml(o){
   for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
   h+='<div class="ai-ord__actions">';
   if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
-  if(o.canReturn&&returnableItems(o).length)h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
+  if(o.canReturn&&returnableItems(o).length){
+    /* The store runs returns on its own page: open it with the order filled in. */
+    if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))h+='<a class="ai-ord__btn" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
+    else h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
+  }
   h+='</div></div>';
   return h;
 }
@@ -2378,6 +2382,7 @@ function startReturn(card){
   retFetch(RETURNS_URL+'?orderId='+encodeURIComponent(id),{method:'GET'},15000).then(function(res){
     if(res.status===401){renderReturn(card,'signin');return}
     var d=res.d;
+    if(d.error==='returns_off'){progClear(id);renderReturn(card,'blocked',{message:d.message,url:d.returnsUrl});return}
     if(!d.ok||!d.order){renderReturn(card,'items');return}
     if(Array.isArray(d.methods)&&d.methods.length)RET_METHODS=d.methods;
     if(d.returnsUrl)d.order.returnsUrl=d.returnsUrl;
@@ -2449,7 +2454,7 @@ function resumeReturns(){
     var card=cards[cards.length-1],step=all[id].step;
     if(card.querySelector('.ai-ret:not(.ai-ret--started)'))continue;
     if(step==='sending'){var st=retState(card),picked=[];for(var k in st.items)if(st.items[k])picked.push(k);checkAfterDrop(card,picked,'return');continue}
-    if(!ordersById[id]||!ordersById[id].canReturn){progClear(id);continue}
+    if(!ordersById[id]||!ordersById[id].canReturn||ordersById[id].returnMode==='page'){progClear(id);continue}
     renderReturn(card,step||'items');
   }
 }

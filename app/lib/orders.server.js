@@ -124,7 +124,14 @@ export function chatReturnView(r) {
   };
 }
 
-export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now(), chatReturns = [] } = {}) {
+// The store's returns page, prefilled with the order (as AfterShip expects).
+export function returnsPageLink(base, number, email) {
+  const b = String(base || "").replace(/\/+$/, "");
+  if (!b) return "";
+  return number && email ? `${b}?order-number=${encodeURIComponent(number)}&email=${encodeURIComponent(email)}` : b;
+}
+
+export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = "", now = Date.now(), chatReturns = [] } = {}) {
   const stage = orderStage(o);
   const fulfillments = o.fulfillments || [];
   const latest = [...fulfillments].reverse().find((f) => (f.trackingInfo || []).length) || fulfillments[fulfillments.length - 1] || null;
@@ -166,6 +173,7 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
     carrier: tracking?.company || "",
     trackUrl,
     returnStatus,
+    returnsUrl: returnsPageLink(returnsBase, number, email || o.email || ""),
     returns: chatReturns.map(chatReturnView),
     // AfterShip still applies the store's own policy (final sale…) on top.
     canReturn: !blocked,
@@ -176,7 +184,7 @@ export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now()
 
 // The signed-in customer's recent orders as cards (and their email, kept
 // server-side for prefilled tracking/return links).
-export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", lookupReturns = findChatReturns }) {
+export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", returnsBase = "", lookupReturns = findChatReturns }) {
   const data = await adminGraphql({
     shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
     variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 10) },
@@ -189,7 +197,7 @@ export async function getOrderCards({ shop, accessToken, customerId, first = 5, 
   if (want) nodes = nodes.filter((o) => String(o.name || "").replace(/[^0-9a-z]/gi, "").toLowerCase().endsWith(want));
   const started = await lookupReturns(shop, nodes.map((o) => numericId(o.id)));
   const forOrder = (o) => started.filter((r) => r.orderId === numericId(o.id));
-  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, email: customer.email || "", chatReturns: forOrder(o) })) };
+  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o) })) };
 }
 
 // One order, only if it belongs to this customer (for starting a return).

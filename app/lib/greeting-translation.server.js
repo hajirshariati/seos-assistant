@@ -23,7 +23,7 @@ import { TARGET_LANGUAGES, curatedTranslations } from "./greeting-curated.js";
 
 // Bumped when the translation method changes, so older cached translations
 // are made again.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 // Public entry point. Returns an array of {code, dir, text}, or [] while the
 // translations aren't ready (the widget then shows the phrase in English).
@@ -74,6 +74,8 @@ async function translatePhrase(phrase, apiKey) {
 
   const prompt = `You are a native-speaking retail copywriter for each language below. Rewrite this short welcome line from an online shoe store's shopping assistant so it sounds the way a friendly, polite shop assistant would naturally say it in that language — idiomatic, not word-for-word. Keep it about as short as the English and keep it a question if the English is one.
 
+Write each one as a native speaker would phrase it from scratch, never as a translation: no calques of English structure (e.g. Persian "دنبال چه چیزی هستید" is a calque; "دنبال چه می‌گردید" is how people say it). If a native shopper would find it odd, rephrase it.
+
 Phrase: "${phrase}"
 
 Languages:
@@ -81,11 +83,11 @@ ${langList}
 
 Per language:
 - es: neutral Latin-American Spanish, informal "tú".
-- ar: Modern Standard Arabic.
-- ja: polite retail Japanese (です／ます).
+- ar: Modern Standard Arabic as used on shop websites, short and warm (e.g. "عمّ تبحث اليوم؟").
+- ja: polite retail Japanese as a shop greets customers (本日は…, お探しですか, ご用件).
 - he: address the shopper in the plural so it isn't gendered.
 - hi: everyday Devanagari Hindi; prefer "हम" or a phrasing without a gendered verb ending.
-- fa: standard written Persian (not colloquial, not Arabic): Persian letters ی and ک, a zero-width non-joiner where Persian needs one (می‌توانم, کمکتان), polite plural "شما" forms.
+- fa: natural, polite standard Persian the way an Iranian shop assistant would write it (not stiff, not slang, not Arabic): Persian letters ی and ک, a zero-width non-joiner where Persian needs one (می‌توانم, می‌گردید), polite plural forms.
 
 Return ONLY a JSON array with no prose, no markdown fences, no explanation. Each element must be an object with two fields: "code" (the ISO 639-1 code from the list above) and "text" (the line, no surrounding quotes). Example shape:
 [{"code":"es","text":"..."},{"code":"ar","text":"..."}]`;

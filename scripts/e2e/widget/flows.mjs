@@ -495,6 +495,24 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("returns hold up: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Returns in the chat turned off: the card opens the store's returns page.
+{
+  for (const k of Object.keys(startedReturns)) delete startedReturns[k];
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  await ctx.addCookies([{ name: "signedin", value: "1", url: "http://localhost:4789" }]);
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:4789/full?login=Ann");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "I want to return something on the returns page");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector('.ai-ord[data-ord="5001"]', { timeout: 6000 });
+  const btn = await page.$eval('.ai-ord[data-ord="5001"] .ai-ord__actions', (a) => [...a.children].map((c) => c.tagName + ":" + c.textContent + ":" + (c.getAttribute("href") || "")));
+  check("returns off: the card offers Start a return, opening the prefilled returns page", btn.includes("A:Start a return:https://returns.example/?order-number=1171674") && !btn.some((b) => /Return an item/.test(b)), btn.join(" | "));
+  check("returns off: no in-chat return button on any card", !(await page.$("[data-ord-return]")));
+  check("returns off: an order that isn't delivered gets no return button", !(await page.$('.ai-ord[data-ord="5002"] .ai-ord__actions a[href*="returns.example"]')));
+  await ctx.close();
+}
 // Signed out half-way: sign in again and finish where they left off.
 {
   for (const k of Object.keys(startedReturns)) delete startedReturns[k];

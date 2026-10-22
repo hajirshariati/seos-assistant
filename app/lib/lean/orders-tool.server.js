@@ -8,14 +8,23 @@
 import { getOrderCards, returnWindowDays } from "../orders.server.js";
 import { returnMethods } from "../returns.server.js";
 
+const IN_CHAT_RETURNS =
+    "For returns and exchanges, tell them to tap \"Return an item\" on the order — the chat walks them through it (items, reason, how to send it back, refund or a different size). " +
+    "If a return was already started (return_started_in_chat), say so and point to the card, which shows the return number, label and drop-off steps; never start a second one. Never promise a refund amount or timing.";
+// The store has returns in the chat turned off: the card's button opens the
+// store's returns page with the order filled in.
+const PAGE_RETURNS =
+    "Returns and exchanges aren't started in this chat: tell them to tap \"Start a return\" on the order, which opens the store's returns page with their order filled in (exchanges are chosen there too). " +
+    "If there's no such button (has_returns_page false), point them to customer service. Never promise a refund amount or timing.";
+
 export const ORDERS_TOOL = {
   name: "get_my_orders",
   description:
     "The customer's own orders: status, delivery progress, tracking, and the button to start a return or exchange. Use for where is my order, tracking, delivery, an order number, past purchases, or wanting to return or exchange something they bought. " +
     "The orders appear as cards under your reply — keep your reply to one short sentence and don't repeat what the cards show (numbers, dates, tracking). " +
     "If the customer isn't signed in, a sign-in button appears instead: say in one sentence that they need to sign in to see their orders. " +
-    "For returns and exchanges, tell them to tap \"Return an item\" on the order — the chat walks them through it (items, reason, how to send it back, refund or a different size). " +
-    "If a return was already started (return_started_in_chat), say so and point to the card, which shows the return number, label and drop-off steps; never start a second one. Never promise a refund amount or timing.",
+    IN_CHAT_RETURNS,
+
   input_schema: {
     type: "object",
     properties: {
@@ -25,9 +34,9 @@ export const ORDERS_TOOL = {
   },
 };
 
-export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "" }) {
+export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true }) {
   return {
-    definition: ORDERS_TOOL,
+    definition: returnsInChat ? ORDERS_TOOL : { ...ORDERS_TOOL, description: ORDERS_TOOL.description.replace(IN_CHAT_RETURNS, PAGE_RETURNS) },
     run: async (input = {}) => {
       const intent = input.intent === "return" ? "return" : "track";
       if (!loggedInCustomerId) {
@@ -38,7 +47,9 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         };
       }
       if (!accessToken) return { error: "Orders aren't available right now." };
-      const { orders } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl });
+      const { orders } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl });
+      // Returns in the chat turned off: the card's button opens the returns page.
+      if (!returnsInChat) for (const o of orders) o.returnMode = "page";
       if (!orders.length) {
         return { signed_in: true, orders: [], note: input.orderNumber ? "No order with that number on this account. Ask them to check the number, or point to customer service." : "No orders on this account yet." };
       }
@@ -48,15 +59,18 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         return_status: o.returnStatus || undefined, can_return: o.canReturn,
         return_started_in_chat: o.returns?.length ? o.returns.map((r) => ({ rma: r.rma || undefined, on: r.date, how: r.method?.label || undefined, exchange: r.exchange || undefined })) : undefined,
         why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", window_closed: `past the ${returnWindowDays()}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
+        has_returns_page: returnsInChat ? undefined : Boolean(o.returnsUrl),
         items: o.items.map((i) => i.title).slice(0, 4),
       }));
       return {
         signed_in: true,
         orders: summary,
-        note: intent === "return"
+        note: intent === "return" && !returnsInChat
+          ? `The order cards are shown with a "Start a return" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering) that opens the returns page with the order filled in. Tell them to tap it; if none can be returned, say why in one sentence (why_no_return).`
+          : intent === "return"
           ? `The order cards are shown with a "Return an item" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
           : "The order cards are shown under your reply.",
-        _events: [{ type: "order_cards", intent, orders, returnMethods: returnMethods().map(({ type, ...m }) => m) }],
+        _events: [{ type: "order_cards", intent, orders, returnMethods: returnsInChat ? returnMethods().map(({ type, ...m }) => m) : [] }],
       };
     },
   };

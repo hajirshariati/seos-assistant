@@ -220,5 +220,23 @@ await test("chat tool: signed in → order cards for the widget, a short summary
   } finally { globalThis.fetch = realFetch; }
 });
 
+await test("returns in chat off: cards send shoppers to the prefilled returns page, the model is told so", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [order({ createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), fulfillments: [{ ...order().fulfillments[0], deliveredAt: new Date().toISOString() }] })] } } } }), { status: 200 });
+  try {
+    const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77", returnsPageUrl: "https://returns.example/", returnsInChat: false });
+    assert.match(t.definition.description, /Start a return/); assert.doesNotMatch(t.definition.description, /walks them through/);
+    const r = await t.run({ intent: "return" });
+    const card = r._events[0].orders[0];
+    assert.equal(card.returnMode, "page");
+    assert.equal(card.returnsUrl, "https://returns.example?order-number=1171674&email=jo%40x.com");
+    assert.deepEqual(r._events[0].returnMethods, []);
+    assert.equal(r.orders[0].has_returns_page, true);
+    assert.match(r.note, /Start a return/);
+    const on = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77", returnsPageUrl: "https://returns.example/" });
+    assert.match(on.definition.description, /walks them through/);
+    assert.equal((await on.run({})).orders[0].has_returns_page, undefined);
+  } finally { globalThis.fetch = realFetch; }
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

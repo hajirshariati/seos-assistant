@@ -26,6 +26,19 @@ function returnsPage(config, number, email) {
   return number && email ? `${base}?order-number=${encodeURIComponent(number)}&email=${encodeURIComponent(email)}` : base;
 }
 
+// Returns in the chat are turned off for this store: the returns page instead
+// (a card saved in someone's chat from before still gets a sensible answer).
+function returnsOff(config, card, order) {
+  const url = returnsPage(config, card.number, order.email || "");
+  return {
+    ok: false,
+    error: "returns_off",
+    message: url ? "Returns and exchanges are started on our returns page — your order is filled in." : "To start a return or exchange, please contact our customer service team.",
+    returnsUrl: url,
+    fallbackUrl: url,
+  };
+}
+
 // The methods as the chat shows them (AfterShip's own type stays here).
 const publicMethods = () => returnMethods().map(({ type, ...m }) => m);
 
@@ -78,6 +91,7 @@ export const loader = async ({ request }) => {
     if (!order) return Response.json({ error: "order_not_found", message: "We couldn't find that order on your account." }, { status: 404 });
     const config = await getShopConfig(shop);
     const card = toOrderCard(order, { chatReturns: await findChatReturns(shop, [orderId]) });
+    if (config.returnsInChat === false) return Response.json(returnsOff(config, card, order));
     return Response.json({
       ok: true,
       order: card,
@@ -113,6 +127,7 @@ export const action = async ({ request }) => {
       const started = await findChatReturns(shop, [orderId]);
       const card = toOrderCard(order, { chatReturns: started });
       const fallbackUrl = returnsPage(config, card.number, order.email || "");
+      if (config.returnsInChat === false) return Response.json(returnsOff(config, card, order), { status: 409 });
 
       // Already started (a retry after a lost connection, a second tap, the
       // same flow in another tab): the same answer, not a second return.

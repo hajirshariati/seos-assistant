@@ -17,37 +17,40 @@ export const TARGET_LANGUAGES = [
 // shop talk rather than word-for-word (the machine Persian read stiffly).
 // A store's own phrase is translated by the model, cached per phrase.
 const CURATED = {
+  // The way a shop assistant greets you, in each language — not the English
+  // sentence word for word. Persian: standard written Persian with the
+  // zero-width non-joiner (می‌گردید); "دنبال چه چیزی هستید" read stiffly.
   "what can i help you find today": {
     es: "¿Qué te ayudo a encontrar hoy?",
-    ar: "ما الذي تبحث عنه اليوم؟",
-    ja: "今日は何をお探しですか？",
-    he: "מה תרצו למצוא היום?",
+    ar: "عمّ تبحث اليوم؟",
+    ja: "本日は何をお探しですか？",
+    he: "מה אתם מחפשים היום?",
     hi: "आज आप क्या ढूँढ रहे हैं?",
-    fa: "امروز دنبال چه چیزی هستید؟",
+    fa: "امروز دنبال چه می\u200cگردید؟",
   },
   "how can i help you today": {
     es: "¿En qué puedo ayudarte hoy?",
     ar: "كيف يمكنني مساعدتك اليوم؟",
-    ja: "今日はどのようにお手伝いできますか？",
+    ja: "本日はどのようなご用件でしょうか？",
     he: "איך אפשר לעזור היום?",
-    hi: "आज हम आपकी क्या मदद कर सकते हैं?",
+    hi: "आज हम आपकी कैसे मदद कर सकते हैं?",
     fa: "امروز چطور می\u200cتوانم کمکتان کنم؟",
   },
   "what can i help you with today": {
     es: "¿En qué te puedo ayudar hoy?",
     ar: "بماذا يمكنني مساعدتك اليوم؟",
-    ja: "今日はどのようなお手伝いができますか？",
+    ja: "本日はどのようなご用件でしょうか？",
     he: "במה אפשר לעזור היום?",
     hi: "आज हम आपकी किस चीज़ में मदद कर सकते हैं?",
     fa: "امروز چه کمکی از دستم برمی\u200cآید؟",
   },
   "what are you looking for today": {
-    es: "¿Qué estás buscando hoy?",
-    ar: "ما الذي تبحث عنه اليوم؟",
-    ja: "今日は何をお探しですか？",
+    es: "¿Qué buscas hoy?",
+    ar: "عمّ تبحث اليوم؟",
+    ja: "本日は何をお探しですか？",
     he: "מה אתם מחפשים היום?",
     hi: "आज आप क्या ढूँढ रहे हैं?",
-    fa: "امروز دنبال چه چیزی هستید؟",
+    fa: "امروز دنبال چه می\u200cگردید؟",
   },
 };
 // Same line without "today", or with "may": the same translation.

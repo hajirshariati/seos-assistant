@@ -57,6 +57,7 @@ export const loader = async ({ request }) => {
     supportLabel: config.supportLabel || "",
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
+    returnsInChat: config.returnsInChat !== false,
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -185,6 +186,8 @@ export const action = async ({ request }) => {
 
   const returnsPageUrl = formData.get("returnsPageUrl");
   if (returnsPageUrl !== null) data.returnsPageUrl = returnsPageUrl.trim();
+  const returnsInChat = formData.get("returnsInChat");
+  if (returnsInChat !== null) data.returnsInChat = returnsInChat === "true";
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -492,7 +495,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -511,6 +514,7 @@ export default function ApiKeys() {
   const [supportLabel, setSupportLabel] = useState(initSupportLabel);
   const [trackingPageUrl, setTrackingPageUrl] = useState(initTrackingPageUrl);
   const [returnsPageUrl, setReturnsPageUrl] = useState(initReturnsPageUrl);
+  const [returnsInChat, setReturnsInChat] = useState(initReturnsInChat);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -539,6 +543,7 @@ export default function ApiKeys() {
     supportLabel: initSupportLabel,
     trackingPageUrl: initTrackingPageUrl,
     returnsPageUrl: initReturnsPageUrl,
+    returnsInChat: initReturnsInChat,
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -581,6 +586,7 @@ export default function ApiKeys() {
     setSupportLabel(s.supportLabel);
     setTrackingPageUrl(s.trackingPageUrl);
     setReturnsPageUrl(s.returnsPageUrl);
+    setReturnsInChat(s.returnsInChat);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -753,6 +759,14 @@ export default function ApiKeys() {
                     placeholder="https://returns.yourstore.com"
                     autoComplete="off"
                     helpText="Your AfterShip Returns page. Used for “View return” after a return is started in the chat, and as the fallback (prefilled with the order number and email) when a return can't be started in the chat."
+                  />
+                  <Checkbox
+                    label="Returns and exchanges in the chat"
+                    checked={returnsInChat}
+                    onChange={setReturnsInChat}
+                    helpText={returnsInChat
+                      ? "On: signed-in shoppers start returns and exchanges right in the chat (uses the AfterShip API key). Turn off to send them to the returns page instead."
+                      : "Off: order cards show “Start a return”, which opens the returns page above with the order filled in. Order tracking is unaffected."}
                   />
                   <TextField
                     label="Search results page"
@@ -1197,6 +1211,7 @@ export default function ApiKeys() {
           <input type="hidden" name="supportLabel" value={supportLabel} />
           <input type="hidden" name="trackingPageUrl" value={trackingPageUrl} />
           <input type="hidden" name="returnsPageUrl" value={returnsPageUrl} />
+          <input type="hidden" name="returnsInChat" value={String(returnsInChat)} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />

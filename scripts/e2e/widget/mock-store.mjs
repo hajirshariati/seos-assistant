@@ -232,7 +232,9 @@ export function start(port) {
             if (/signedin=1/.test(req.headers.cookie || "")) {
               w({ type: "text", text: intent === "return" ? "Here are your orders — tap Return an item on the one you'd like to return." : "Here are your recent orders." });
               w({ type: "products", products: [] });
-              w({ type: "order_cards", intent, orders: ORDERS.map(orderNow), returnMethods: METHODS });
+              // "…on the returns page": the store has returns in the chat turned off.
+              const page = /returns page/i.test(parsed.message);
+              w({ type: "order_cards", intent, orders: ORDERS.map(orderNow).map((o) => page ? { ...o, returnMode: "page", returnsUrl: "https://returns.example/?order-number=" + o.number } : o), returnMethods: page ? [] : METHODS });
             } else {
               w({ type: "text", text: "Sign in and I'll pull up your orders right here." });
               w({ type: "products", products: [] });

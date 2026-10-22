@@ -109,6 +109,7 @@ export async function buildLeanStoreExtras({
     aftershipApiKey: config.aftershipApiKey || "",
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
+    returnsInChat: config.returnsInChat !== false,
   };
 
   const [rulesRes, campaignsRes, customerRes, recRes] = await Promise.allSettled([
@@ -142,7 +143,7 @@ export async function buildLeanStoreExtras({
 
   // Orders and returns for every shopper: signed in → their order cards;
   // signed out → a sign-in button (no VIP mode needed — it's their own data).
-  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl });
+  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat });
   wrap(orders.definition, orders.run);
 
   if (config.fitPredictorEnabled === true) {
