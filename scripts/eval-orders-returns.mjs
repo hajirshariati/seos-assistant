@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
 const { toOrderCard, orderStage, getOwnedOrder } = await import("../app/lib/orders.server.js");
-const { nextOption, createAftershipReturn, reasonByKey } = await import("../app/lib/returns.server.js");
+const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 
 let passed = 0, failed = 0;
@@ -79,14 +79,21 @@ await test("AfterShip: a refund return for the order's items, keyed by the store
   assert.deepEqual(b.return_items[0], { external_order_item_id: "9001", intended_return_quantity: 1, return_reason: "Too small", resolution: "refund" });
   assert.ok(r.ok && r.rma === "RMA77");
 });
-await test("AfterShip 422: retried once with the full store domain; full error kept", async () => {
+await test("AfterShip 422 (e.g. unknown reason): not retried; AfterShip's message kept", async () => {
   const bodies = [];
-  const fetchImpl = async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ meta: { code: 42201, message: "Unprocessable entity", details: [{ path: "store", info: "is required" }] } }), { status: 422 }); };
+  const fetchImpl = async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ meta: { code: 42200, message: "return reason is not found in the matched return reason group" } }), { status: 422 }); };
   const r = await createAftershipReturn({ apiKey: "k", shop: "aetrex.myshopify.com", order: { id: "5001" }, items: [{ lineId: "9001", quantity: 1 }], reasonLabel: "Other", fetchImpl });
-  assert.equal(bodies.length, 2);
+  assert.equal(bodies.length, 1);
   assert.deepEqual(bodies[0].order.store, { platform: "shopify", external_id: "aetrex" });
-  assert.deepEqual(bodies[1].order.store, { platform: "shopify", external_id: "aetrex.myshopify.com" });
-  assert.equal(r.ok, false); assert.match(r.error, /store/); assert.match(r.error, /is required/);
+  assert.equal(r.status, 422); assert.match(r.error, /return reason is not found/);
+});
+await test("reason names: the store's own AfterShip names when mapped, our label otherwise", () => {
+  const env = JSON.stringify({ too_small: "Too Small - Need a bigger size", other: "  " });
+  assert.equal(aftershipReasonName("too_small", env), "Too Small - Need a bigger size");
+  assert.equal(aftershipReasonName("other", env), "Other", "blank entry falls back");
+  assert.equal(aftershipReasonName("damaged", env), "Damaged or defective");
+  assert.equal(aftershipReasonName("too_small", "not json"), "Too small");
+  assert.equal(aftershipReasonName("too_small", undefined), "Too small");
 });
 await test("AfterShip 404 'Order not found': retried with the full store domain", async () => {
   const bodies = [];

@@ -20,6 +20,16 @@ export const RETURN_REASONS = [
 ];
 export const reasonByKey = (k) => RETURN_REASONS.find((r) => r.key === k) || null;
 
+// AfterShip only accepts a reason whose name matches one in the store's
+// return reason group, word for word. AFTERSHIP_RETURN_REASONS maps our keys
+// to the store's names, e.g. {"too_small":"Too Small","other":"Other"}.
+export function aftershipReasonName(key, env = process.env.AFTERSHIP_RETURN_REASONS) {
+  let map = {};
+  try { map = env ? JSON.parse(env) : {}; } catch { map = {}; }
+  const name = typeof map?.[key] === "string" ? map[key].trim() : "";
+  return name || reasonByKey(key)?.label || "";
+}
+
 // Narrow → wide, both naming styles (Medium/Wide and AA/B/D/EE…).
 const WIDTH_WORDS = { narrow: 0, slim: 0, medium: 1, regular: 1, standard: 1, wide: 2, "extra wide": 3, xw: 3, xxw: 4 };
 const WIDTH_LETTERS = ["AAAA", "AAA", "AA", "A", "B", "C", "D", "E", "EE", "EEE", "EEEE"];
@@ -69,9 +79,8 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 // AfterShip's 422 response names the required fields: order.store,
 // a top-level return_method and a top-level refund_destination. Refunds go
 // to the original payment (no store credit). The store's external_id format
-// isn't documented anywhere we can reach, so on a 422 or 404 ("Order not
-// found" when the store id doesn't match) we try the full myshopify domain
-// after the short store key. Every attempt's error is returned so the log
+// isn't documented; the short store key is what matched live, so the full
+// myshopify domain is only tried after a 404 ("Order not found"). Every attempt's error is returned so the log
 // shows what AfterShip said to each.
 const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
@@ -128,7 +137,9 @@ export async function createAftershipReturn({ apiKey, shop = "", order, items, r
     const msg = json?.meta?.message || json?.message || `HTTP ${res.status}`;
     errors.push(`[store=${body.order?.store?.external_id || "-"}] ${msg} ${String(text).slice(0, 800)}`.trim());
     last = { ok: false, status: res.status, error: errors.join(" | ") };
-    if (res.status !== 422 && res.status !== 404) break;
+    // Only "Order not found" means the store id may be wrong; any other
+    // refusal (a 422 about the reason, the window…) is the real answer.
+    if (res.status !== 404) break;
   }
   return last;
 }

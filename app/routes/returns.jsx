@@ -8,7 +8,7 @@ import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { getOwnedOrder, toOrderCard } from "../lib/orders.server.js";
-import { reasonByKey, exchangeCard, createAftershipReturn } from "../lib/returns.server.js";
+import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName } from "../lib/returns.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -66,7 +66,7 @@ export const action = async ({ request }) => {
         shop,
         order,
         items,
-        reasonLabel: reason.label,
+        reasonLabel: aftershipReasonName(reason.key),
         comment: exchange ? `${comment ? `${comment} — ` : ""}Exchanging for another size (ordered in chat)` : comment,
       });
       if (!created.ok) console.error(`[returns] AfterShip create failed shop=${shop} order=${card.number}: ${created.error}`);
