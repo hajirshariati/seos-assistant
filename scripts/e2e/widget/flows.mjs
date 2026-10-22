@@ -426,7 +426,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.click(`${fresh} [data-ret-reason="other"]`);
   await page.click(`${fresh} [data-ret-next="confirm"]`);
   const single = await page.$$eval(`${fresh} [data-ret-submit]`, (bs) => bs.map((b) => b.textContent));
-  check("return: other reasons get one Start return button", single.join("|") === "Start return", single.join("|"));
+  check("return: other reasons get one Submit return button", single.join("|") === "Submit return", single.join("|"));
   await page.click(`${fresh} [data-ret-submit="return"]`);
   await page.waitForSelector(`${fresh} .ai-ret__err`, { timeout: 6000 });
   check("return: if it can't be started here, the prefilled returns page is one tap away", (await page.$eval(`${fresh} .ai-ret:not(.ai-ret--started) a.ai-ord__btn`, (a) => a.getAttribute("href"))) === "https://returns.example/?order-number=1171674");
@@ -492,6 +492,8 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await ask("where is my order?");
   await page.waitForFunction(() => document.querySelectorAll('.ai-chat-msg:last-child .ai-ord[data-ord="5001"] .ai-ret--started').length === 2, null, { timeout: 6000 });
   check("asking again: both returns shown, no Return button", !(await page.$(`${last} [data-ord-return]`)));
+  const order = await page.$eval('.ai-chat-msg:last-child .ai-ord[data-ord="5001"]', (c) => [...c.children].map((n) => n.className.split(" ")[0]).join(">"));
+  check("card layout: items, then Track package, then the returns started", /ai-ord__items>ai-ord__actions>ai-ret>ai-ret$/.test(order), order);
   check("returns hold up: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }

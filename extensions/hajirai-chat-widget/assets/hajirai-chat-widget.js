@@ -2174,7 +2174,7 @@ function orderCardHtml(o){
       '<div class="ai-ord__itxt"><div class="ai-ord__ititle">'+esc(it.title)+'</div>'+(optLine(it.options)||it.quantity>1?'<div class="ai-ord__iopt">'+esc(optLine(it.options))+(it.quantity>1?(optLine(it.options)?' · ':'')+'Qty '+it.quantity:'')+'</div>':'')+'</div></li>';}
   if(items.length>3)h+='<li class="ai-ord__more">+'+(items.length-3)+' more</li>';
   h+='</ul>';
-  for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
+  /* Actions sit right under the items; returns started show below them. */
   h+='<div class="ai-ord__actions">';
   if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
   if(o.canReturn&&returnableItems(o).length){
@@ -2182,7 +2182,9 @@ function orderCardHtml(o){
     if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))h+='<a class="ai-ord__btn" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
     else h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
   }
-  h+='</div></div>';
+  h+='</div>';
+  for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
+  h+='</div>';
   return h;
 }
 function ordersHtml(list){
@@ -2286,7 +2288,7 @@ function renderReturn(card,step,info){
   var id=card.getAttribute('data-ord'),o=ordersById[id];if(!o)return;
   var st=retState(card);
   var box=card.querySelector('.ai-ret:not(.ai-ret--started)');
-  if(!box){box=document.createElement('div');box.className='ai-ret';var acts=card.querySelector('.ai-ord__actions');card.insertBefore(box,acts||null)}
+  if(!box){box=document.createElement('div');box.className='ai-ret';card.appendChild(box)}
   card.classList.add('is-returning');
   var h='';
   if(step==='items'||step==='reason'||step==='method'||step==='confirm')progSet(id,st,step);
@@ -2328,11 +2330,11 @@ function renderReturn(card,step,info){
         '<button type="button" class="ai-ord__btn" data-ret-submit="return">Return for a refund</button></div>'+
         '<div class="ai-ret__note">Exchange: we start the return, then show you the new size to add to your cart. Your refund for this pair is issued once it’s back with us.</div>';
     }else{
-      h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="return">Start return</button></div>';
+      h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="return">Submit return</button></div>';
     }
     h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="'+(RET_METHODS.length>1?'method':'reason')+'">Back</button><button type="button" class="ai-ret__link" data-ret-cancel>Cancel</button></div>';
   }else if(step==='loading'||step==='sending'||step==='checking'){
-    h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>'+(step==='sending'?'Starting your return…':step==='checking'?'Checking on your return…':'Getting your order…')+'</div>';
+    h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>'+(step==='sending'?'Submitting your return…':step==='checking'?'Checking on your return…':'Getting your order…')+'</div>';
   }else if(step==='signin'){
     lastAskedOrders='I’d like to finish my return';
     h+='<div class="ai-ret__err" role="alert">Please sign in again to finish your return — we’ll keep your choices.</div>'+
