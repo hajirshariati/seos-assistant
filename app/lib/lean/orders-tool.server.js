@@ -5,7 +5,8 @@
 // the chat continues once they're signed in. Order details never go to
 // anyone Shopify hasn't signed in as that customer.
 
-import { getOrderCards } from "../orders.server.js";
+import { getOrderCards, returnWindowDays } from "../orders.server.js";
+import { returnMethods } from "../returns.server.js";
 
 export const ORDERS_TOOL = {
   name: "get_my_orders",
@@ -43,15 +44,17 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
       // What the model sees: the gist only. The cards carry the details.
       const summary = orders.map((o) => ({
         number: o.number, date: o.date, status: o.stageLabel, eta: o.eta || undefined, delivered: o.deliveredAt || undefined,
-        return_status: o.returnStatus || undefined, can_return: o.canReturn, items: o.items.map((i) => i.title).slice(0, 4),
+        return_status: o.returnStatus || undefined, can_return: o.canReturn,
+        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", window_closed: `past the ${returnWindowDays()}-day return window`, cancelled: "cancelled", nothing_left: "already returned" }[o.returnBlocked],
+        items: o.items.map((i) => i.title).slice(0, 4),
       }));
       return {
         signed_in: true,
         orders: summary,
         note: intent === "return"
-          ? "The order cards are shown with a \"Return an item\" button on returnable orders. Tell them to tap it on the order they want to return."
+          ? `The order cards are shown with a "Return an item" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
           : "The order cards are shown under your reply.",
-        _events: [{ type: "order_cards", intent, orders }],
+        _events: [{ type: "order_cards", intent, orders, returnMethods: returnMethods().map(({ type, ...m }) => m) }],
       };
     },
   };

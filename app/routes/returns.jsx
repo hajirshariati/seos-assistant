@@ -7,8 +7,8 @@
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
-import { getOwnedOrder, toOrderCard } from "../lib/orders.server.js";
-import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName } from "../lib/returns.server.js";
+import { getOwnedOrder, toOrderCard, returnWindowDays } from "../lib/orders.server.js";
+import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName, returnMethods } from "../lib/returns.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -44,7 +44,14 @@ export const action = async ({ request }) => {
     const order = await getOwnedOrder({ shop, accessToken: session.accessToken, customerId, orderId: body.orderId });
     if (!order) return Response.json({ error: "order_not_found", message: "We couldn't find that order on your account." }, { status: 404 });
     const card = toOrderCard(order);
-    if (!card.canReturn) return Response.json({ error: "not_returnable", message: "This order can't be returned yet — it hasn't shipped." }, { status: 409 });
+    if (!card.canReturn) {
+      const message = card.returnBlocked === "window_closed"
+        ? `Returns can be started within ${returnWindowDays()} days of placing the order, and this one is past that window.`
+        : card.returnBlocked === "not_delivered"
+          ? "You can start a return once the order has been delivered."
+          : "This order can't be returned.";
+      return Response.json({ error: "not_returnable", message }, { status: 409 });
+    }
 
     // Only this order's items, never more than can still be returned.
     const items = [];
@@ -58,6 +65,9 @@ export const action = async ({ request }) => {
     const fallbackUrl = returnsPage(config, card.number, order.email || "");
     const exchange = body.exchange === true && Boolean(reason.change);
     const comment = String(body.comment || "").replace(/[<>]/g, "").slice(0, 500);
+    // Only a method the store offers; the first one when none was picked.
+    const methods = returnMethods();
+    const method = methods.find((m) => m.key === String(body.method || "")) || methods[0];
 
     let created = null;
     if (config.aftershipApiKey) {
@@ -67,6 +77,7 @@ export const action = async ({ request }) => {
         order,
         items,
         reasonLabel: aftershipReasonName(reason.key),
+        methodType: method.type,
         comment: exchange ? `${comment ? `${comment} — ` : ""}Exchanging for another size (ordered in chat)` : comment,
       });
       if (!created.ok) console.error(`[returns] AfterShip create failed shop=${shop} order=${card.number}: ${created.error}`);
@@ -83,7 +94,7 @@ export const action = async ({ request }) => {
       });
     }
     recordHealth({ shop, route: "returns", ok: true });
-    console.log(`[returns] created shop=${shop} order=${card.number} items=${items.length} reason=${reason.key} exchange=${exchange} rma=${created.rma || "-"}`);
+    console.log(`[returns] created shop=${shop} order=${card.number} items=${items.length} reason=${reason.key} exchange=${exchange} method=${method.key} rma=${created.rma || "-"}`);
 
     let exchangeCards = [];
     if (exchange) {
@@ -99,6 +110,7 @@ export const action = async ({ request }) => {
       returnsUrl: fallbackUrl,
       items: items.map((i) => ({ title: i.title, image: i.image, options: i.options, quantity: i.quantity })),
       refundTo: "original_payment",
+      method: { key: method.key, label: method.label, findUrl: method.findUrl },
       exchangeCards,
     });
   } catch (e) {

@@ -2127,6 +2127,9 @@ var RET_REASONS=[
   {key:'not_as_described',label:'Not as described'},
   {key:'other',label:'Other'}
 ];
+/* How it goes back (Happy Returns, mail…), as the store offers them. */
+var RET_METHODS=[];
+function retMethod(st){for(var i=0;i<RET_METHODS.length;i++)if(RET_METHODS[i].key===st.method)return RET_METHODS[i];return null}
 var ORD_STEPS=['Ordered','Shipped','Out for delivery','Delivered'];
 function fmtDay(d){if(!d)return'';try{var p=String(d).split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch(e){return d}}
 function optLine(o){var v=[];for(var k in (o||{}))if(Object.prototype.hasOwnProperty.call(o,k))v.push(o[k]);return v.join(' · ')}
@@ -2242,11 +2245,21 @@ function renderReturn(card,step){
     h+='<div class="ai-ret__title">Why are you returning it?</div><div class="ai-ret__reasons">';
     for(var r=0;r<RET_REASONS.length;r++)h+='<button type="button" class="ai-ret__reason'+(st.reason===RET_REASONS[r].key?' is-on':'')+'" data-ret-reason="'+RET_REASONS[r].key+'">'+esc(RET_REASONS[r].label)+'</button>';
     h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="items">Back</button></div>';
+  }else if(step==='method'){
+    h+='<div class="ai-ret__title">How would you like to send it back?</div><div class="ai-ret__methods">';
+    for(var m=0;m<RET_METHODS.length;m++){var rm=RET_METHODS[m],mon=st.method===rm.key;
+      h+='<button type="button" class="ai-ret__method'+(mon?' is-on':'')+'" role="radio" aria-checked="'+mon+'" data-ret-method="'+esc(rm.key)+'">'+
+        '<span class="ai-ret__mtop"><span class="ai-ret__mlabel">'+esc(rm.label)+'</span>'+(rm.fee?'<span class="ai-ret__mfee">'+esc(rm.fee)+'</span>':'')+'</span>'+
+        (rm.detail?'<span class="ai-ret__mdetail">'+esc(rm.detail)+'</span>':'')+'</button>';}
+    h+='</div>';
+    var cur=retMethod(st);
+    if(cur&&safeUrl(cur.findUrl))h+='<a class="ai-ret__find" href="'+safeUrl(cur.findUrl)+'" target="_blank" rel="noopener">Find a drop-off location near you</a>';
+    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="reason">Back</button><button type="button" class="ai-ord__btn is-primary" data-ret-next="confirm"'+(cur?'':' disabled')+'>Next</button></div>';
   }else if(step==='confirm'){
     var rs=null;for(var k=0;k<RET_REASONS.length;k++)if(RET_REASONS[k].key===st.reason)rs=RET_REASONS[k];
     var picked=o.items.filter(function(i){return st.items[i.lineId]});
     h+='<div class="ai-ret__title">'+(rs&&rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
-    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs?rs.label:'')+'</div></div>';
+    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs?rs.label:'')+'</div>'+(RET_METHODS.length>1&&retMethod(st)?'<div class="ai-ret__why">Send back: '+esc(retMethod(st).label)+(retMethod(st).fee?' · '+esc(retMethod(st).fee):'')+'</div>':'')+'</div>';
     if(rs&&rs.change){
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="exchange">Exchange for '+esc(rs.change)+'</button>'+
         '<button type="button" class="ai-ord__btn" data-ret-submit="return">Continue return</button></div>'+
@@ -2254,7 +2267,7 @@ function renderReturn(card,step){
     }else{
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="return">Start return</button></div>';
     }
-    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="reason">Back</button></div>';
+    h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="'+(RET_METHODS.length>1?'method':'reason')+'">Back</button></div>';
   }else if(step==='sending'){
     h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>Starting your return…</div>';
   }
@@ -2274,15 +2287,18 @@ function submitReturn(card,mode){
   var st=retState(card);
   var items=[];for(var id in st.items)if(st.items[id])items.push({lineId:id,quantity:1});
   renderReturn(card,'sending');
-  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,exchange:mode==='exchange'})})
+  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,method:st.method||'',exchange:mode==='exchange'})})
   .then(function(r){return r.json().catch(function(){return{}})})
   .then(function(d){
     var box=card.querySelector('.ai-ret');
     if(d&&d.ok){
       card.classList.add('is-returned');
+      var dm=d.method||{},find=safeUrl(dm.findUrl);
+      var how=find?'We’ve emailed your drop-off code and steps — no box or label needed.':d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.';
       box.innerHTML='<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div><div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
-        '<div class="ai-ret__note">'+(d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.')+' Refund to your original payment once it’s back with us.</div>'+
-        '<div class="ai-ret__choices">'+(safeUrl(d.labelUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.labelUrl)+'" target="_blank" rel="noopener">Get return label</a>':'')+(safeUrl(d.returnsUrl)?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
+        (RET_METHODS.length>1&&dm.label?'<div class="ai-ret__why">'+esc(dm.label)+'</div>':'')+
+        '<div class="ai-ret__note">'+how+' Refund to your original payment once it’s back with us.</div>'+
+        '<div class="ai-ret__choices">'+(safeUrl(d.labelUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.labelUrl)+'" target="_blank" rel="noopener">Get return label</a>':'')+(find?'<a class="ai-ord__btn'+(safeUrl(d.labelUrl)?'':' is-primary')+'" href="'+find+'" target="_blank" rel="noopener">Find a drop-off location</a>':'')+(safeUrl(d.returnsUrl)?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
       var act=card.querySelector('[data-ord-return]');if(act)act.remove();
       if(mode==='exchange'&&d.exchangeCards&&d.exchangeCards.length){
         var ex=d.exchangeCards[0],to=ex.exchange_to?' in '+ex.exchange_to:'';
@@ -2300,7 +2316,7 @@ function submitReturn(card,mode){
   .catch(function(){var box=card.querySelector('.ai-ret');if(box){box.innerHTML='<div class="ai-ret__err" role="alert">Connection problem — please try again.</div><div class="ai-ret__choices"><button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';keepInView(box)}});
 }
 panel.addEventListener('click',function(e){
-  var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-submit],[data-ret-cancel]');
+  var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-method],[data-ret-submit],[data-ret-cancel]');
   if(!t||!panel.contains(t))return;
   if(t.hasAttribute('data-ord-login')){e.preventDefault();startSignIn(t.getAttribute('data-ord-login'));return}
   var card=t.closest('.ai-ord');if(!card)return;
@@ -2309,7 +2325,8 @@ panel.addEventListener('click',function(e){
   if(t.hasAttribute('data-ret-cancel')){var b=card.querySelector('.ai-ret');if(b)b.remove();card.classList.remove('is-returning');card.__ret=null;return}
   if(t.hasAttribute('data-ret-item')){var id=t.getAttribute('data-ret-item');st.items[id]=st.items[id]?0:1;if(!st.items[id])delete st.items[id];renderReturn(card,'items');return}
   if(t.hasAttribute('data-ret-next')){renderReturn(card,t.getAttribute('data-ret-next'));return}
-  if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');renderReturn(card,'confirm');return}
+  if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');if(RET_METHODS.length>1){if(!st.method)st.method=RET_METHODS[0].key;renderReturn(card,'method')}else renderReturn(card,'confirm');return}
+  if(t.hasAttribute('data-ret-method')){st.method=t.getAttribute('data-ret-method');renderReturn(card,'method');return}
   if(t.hasAttribute('data-ret-submit')){submitReturn(card,t.getAttribute('data-ret-submit'));return}
 });
 
@@ -2593,7 +2610,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
   fitResult=String(p.key);
 }
-if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders}
+if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods}
 if(p.type==='login_prompt'){pendingLogin=p.intent||'track'}
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};

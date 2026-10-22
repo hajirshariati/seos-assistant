@@ -92,8 +92,22 @@ const RETURN_LABEL = {
   RETURN_FAILED: "Return issue",
 };
 
+// Days after the order is placed that a return can be started in the chat.
+export const returnWindowDays = () => Math.max(1, parseInt(process.env.RETURN_WINDOW_DAYS, 10) || 30);
+
+// Why the chat won't start a return ("" when it will): only delivered orders,
+// only within the return window counted from the day the order was placed.
+export function returnBlock(o, stage, items, now = Date.now()) {
+  if (o.cancelledAt) return "cancelled";
+  if (!items.some((i) => i.returnable > 0)) return "nothing_left";
+  if (stage !== "delivered") return "not_delivered";
+  const placed = Date.parse(o.createdAt || "");
+  if (Number.isFinite(placed) && now - placed > returnWindowDays() * 864e5) return "window_closed";
+  return "";
+}
+
 // The card for one order: no addresses, no payment details, no email.
-export function toOrderCard(o, { trackingBase = "", email = "" } = {}) {
+export function toOrderCard(o, { trackingBase = "", email = "", now = Date.now() } = {}) {
   const stage = orderStage(o);
   const fulfillments = o.fulfillments || [];
   const latest = [...fulfillments].reverse().find((f) => (f.trackingInfo || []).length) || fulfillments[fulfillments.length - 1] || null;
@@ -117,6 +131,7 @@ export function toOrderCard(o, { trackingBase = "", email = "" } = {}) {
     };
   });
   const returnStatus = RETURN_LABEL[o.returnStatus] || "";
+  const blocked = returnBlock(o, stage, items, now);
   return {
     id: numericId(o.id),
     number,
@@ -130,9 +145,9 @@ export function toOrderCard(o, { trackingBase = "", email = "" } = {}) {
     carrier: tracking?.company || "",
     trackUrl,
     returnStatus,
-    // Returns can start once it has shipped; AfterShip applies the store's
-    // own return policy (window, final sale) when the return is created.
-    canReturn: !o.cancelledAt && stage !== "ordered" && items.some((i) => i.returnable > 0),
+    // AfterShip still applies the store's own policy (final sale…) on top.
+    canReturn: !blocked,
+    returnBlocked: blocked,
     items,
   };
 }

@@ -85,7 +85,32 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
 
-export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, comment = "" }) {
+// How the shopper sends it back, as the chat offers it. AFTERSHIP_RETURN_METHODS
+// lists the store's options in order, e.g.
+// [{"key":"happy_returns","type":"<AfterShip return_method type>","label":"Drop off at a Happy Returns location",
+//   "detail":"No box or label needed.","fee":"$5.95","findUrl":"https://…"}]
+// Without it there is one option, AFTERSHIP_RETURN_METHOD, and no picker.
+const httpsUrl = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(String(u || "")) ? String(u) : "");
+export function returnMethods(env = process.env.AFTERSHIP_RETURN_METHODS) {
+  let list = [];
+  try { list = env ? JSON.parse(env) : []; } catch { list = []; }
+  const out = [];
+  for (const m of Array.isArray(list) ? list : []) {
+    const key = String(m?.key || "").trim().slice(0, 40);
+    const type = String(m?.type || "").trim().slice(0, 60);
+    const label = String(m?.label || "").trim().slice(0, 80);
+    if (!key || !type || !label || out.some((x) => x.key === key)) continue;
+    out.push({
+      key, type, label,
+      detail: String(m.detail || "").trim().slice(0, 160),
+      fee: String(m.fee || "").trim().slice(0, 20),
+      findUrl: httpsUrl(m.findUrl),
+    });
+  }
+  return out.length ? out.slice(0, 4) : [{ key: "default", type: AS_METHOD, label: "Mail it back", detail: "", fee: "", findUrl: "" }];
+}
+
+export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, comment = "", methodType = AS_METHOD }) {
   const returnItems = items.map((it) => ({
     external_order_item_id: String(it.lineId),
     intended_return_quantity: Math.max(1, parseInt(it.quantity, 10) || 1),
@@ -100,24 +125,24 @@ export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, co
   const body = (store) => ({
     order: { external_id: orderId, ...(store ? { store: { platform: "shopify", external_id: store } } : {}) },
     return_items: returnItems,
-    return_method: { type: AS_METHOD },
+    return_method: { type: methodType || AS_METHOD },
     refund_destination: "original_payment",
   });
   return storeIds.length ? storeIds.map(body) : [body(null)];
 }
 
-export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", fetchImpl = fetch }) {
-  const r = await postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, fetchImpl });
+export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", methodType = AS_METHOD, fetchImpl = fetch }) {
+  const r = await postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, methodType, fetchImpl });
   // Reasons without "comments" switched on in AfterShip refuse any comment;
   // the return still goes through without it.
   if (!r.ok && comment && /comments are not allowed/i.test(r.error || "")) {
-    return postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment: "", fetchImpl });
+    return postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment: "", methodType, fetchImpl });
   }
   return r;
 }
 
-async function postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, fetchImpl }) {
-  const bodies = aftershipReturnBodies({ shop, order, items, reasonLabel, comment });
+async function postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, methodType, fetchImpl }) {
+  const bodies = aftershipReturnBodies({ shop, order, items, reasonLabel, comment, methodType });
   const errors = [];
   let last = null;
   for (const body of bodies) {

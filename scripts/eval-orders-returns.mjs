@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
 const { toOrderCard, orderStage, getOwnedOrder } = await import("../app/lib/orders.server.js");
-const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName } = await import("../app/lib/returns.server.js");
+const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 
 let passed = 0, failed = 0;
@@ -39,11 +39,40 @@ await test("card: the store's tracking page, prefilled, when set", () => {
   const c = toOrderCard(order(), { trackingBase: "https://aetrex.aftership.com/", email: "jo@x.com" });
   assert.equal(c.trackUrl, "https://aetrex.aftership.com?order-number=1171674&email=jo%40x.com");
 });
-await test("returns: only once shipped, not cancelled, with items left to return", () => {
-  assert.equal(toOrderCard(order()).canReturn, true);
-  assert.equal(toOrderCard(order({ fulfillments: [], displayFulfillmentStatus: "UNFULFILLED" })).canReturn, false);
-  assert.equal(toOrderCard(order({ cancelledAt: "2026-10-14T11:00:00Z" })).canReturn, false);
-  assert.equal(toOrderCard(order({ lineItems: { nodes: [{ ...order().lineItems.nodes[0], refundableQuantity: 0 }] } })).canReturn, false);
+const delivered = (over = {}) => order({ fulfillments: [{ ...order().fulfillments[0], deliveredAt: "2026-10-17T10:00:00Z" }], ...over });
+const NOW = Date.parse("2026-10-22T12:00:00Z");
+await test("returns: only delivered orders, within 30 days of ordering, with items left", () => {
+  assert.equal(toOrderCard(delivered(), { now: NOW }).canReturn, true);
+  assert.equal(toOrderCard(order(), { now: NOW }).canReturn, false, "on its way");
+  assert.equal(toOrderCard(order(), { now: NOW }).returnBlocked, "not_delivered");
+  assert.equal(toOrderCard(order({ fulfillments: [], displayFulfillmentStatus: "UNFULFILLED" }), { now: NOW }).canReturn, false);
+  assert.equal(toOrderCard(delivered({ cancelledAt: "2026-10-14T11:00:00Z" }), { now: NOW }).canReturn, false);
+  assert.equal(toOrderCard(delivered({ lineItems: { nodes: [{ ...order().lineItems.nodes[0], refundableQuantity: 0 }] } }), { now: NOW }).canReturn, false);
+  // Placed Oct 14: day 30 still open, day 31 closed.
+  assert.equal(toOrderCard(delivered(), { now: Date.parse("2026-11-13T09:00:00Z") }).canReturn, true);
+  const late = toOrderCard(delivered(), { now: Date.parse("2026-11-14T11:00:00Z") });
+  assert.equal(late.canReturn, false); assert.equal(late.returnBlocked, "window_closed");
+});
+await test("return window: RETURN_WINDOW_DAYS changes it", () => {
+  process.env.RETURN_WINDOW_DAYS = "7";
+  try { assert.equal(toOrderCard(delivered(), { now: Date.parse("2026-10-20T12:00:00Z") }).canReturn, true); assert.equal(toOrderCard(delivered(), { now: NOW }).canReturn, false, "8 days > 7"); }
+  finally { delete process.env.RETURN_WINDOW_DAYS; }
+});
+await test("return methods: the store's list, cleaned; one default without it", () => {
+  const env = JSON.stringify([
+    { key: "happy_returns", type: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.happyreturns.com/" },
+    { key: "usps", type: "retailer_label", label: "USPS drop-off", fee: "$5.95", findUrl: "javascript:alert(1)" },
+    { key: "usps", type: "x", label: "dupe" }, { key: "bad" },
+  ]);
+  const m = returnMethods(env);
+  assert.deepEqual(m.map((x) => x.key), ["happy_returns", "usps"]);
+  assert.equal(m[0].findUrl, "https://locations.happyreturns.com/"); assert.equal(m[1].findUrl, "", "only https links");
+  assert.equal(returnMethods("nope").length, 1); assert.equal(returnMethods(undefined)[0].type, "retailer_label");
+});
+await test("AfterShip: the chosen method's type is sent", async () => {
+  let b = null;
+  await createAftershipReturn({ apiKey: "k", shop: "a.myshopify.com", order: { id: "1" }, items: [{ lineId: "2", quantity: 1 }], reasonLabel: "Other", methodType: "happy_returns", fetchImpl: async (u, i) => { b = JSON.parse(i.body); return new Response("{}", { status: 201 }); } });
+  assert.deepEqual(b.return_method, { type: "happy_returns" });
 });
 await test("a return only works on the shopper's own order", async () => {
   const realFetch = globalThis.fetch;
@@ -141,7 +170,7 @@ await test("chat tool: signed out → a sign-in button, no order data", async ()
 });
 await test("chat tool: signed in → order cards for the widget, a short summary for the model", async () => {
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [order()] } } } }), { status: 200 });
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [order({ createdAt: new Date(Date.now() - 5 * 864e5).toISOString(), fulfillments: [{ ...order().fulfillments[0], deliveredAt: new Date().toISOString() }] })] } } } }), { status: 200 });
   try {
     const r = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77" }).run({ intent: "return" });
     assert.equal(r.signed_in, true);
@@ -150,6 +179,8 @@ await test("chat tool: signed in → order cards for the widget, a short summary
     assert.equal(r.orders[0].can_return, true);
     assert.ok(!JSON.stringify(r.orders).includes("@"), "no email to the model");
     assert.match(r.note, /Return an item/);
+    assert.ok(Array.isArray(r._events[0].returnMethods) && r._events[0].returnMethods.length >= 1);
+    assert.ok(!("type" in r._events[0].returnMethods[0]), "AfterShip method types stay server-side");
   } finally { globalThis.fetch = realFetch; }
 });
 
