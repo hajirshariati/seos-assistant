@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-21 orders-returns');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-22 returns-fixes');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -2201,7 +2201,7 @@ window.addEventListener('message',function(e){
 if(CUST_LOGGED_IN){try{if(sessionStorage.getItem(RESUME_KEY))setTimeout(resumeAfterSignIn,600)}catch(e){}}
 
 /* The return walkthrough, inside the order card. */
-function retState(card){return card.__ret||(card.__ret={items:{},reason:'',refundTo:'original_payment'})}
+function retState(card){return card.__ret||(card.__ret={items:{},reason:''})}
 function renderReturn(card,step){
   var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
   var st=retState(card);
@@ -2227,9 +2227,6 @@ function renderReturn(card,step){
     var picked=o.items.filter(function(i){return st.items[i.lineId]});
     h+='<div class="ai-ret__title">'+(rs&&rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
     h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs?rs.label:'')+'</div></div>';
-    h+='<div class="ai-ret__refund" role="radiogroup" aria-label="Refund to"><span>Refund to</span>'+
-      '<button type="button" role="radio" aria-checked="'+(st.refundTo==='original_payment')+'" class="'+(st.refundTo==='original_payment'?'is-on':'')+'" data-ret-refund="original_payment">Original payment</button>'+
-      '<button type="button" role="radio" aria-checked="'+(st.refundTo==='store_credit')+'" class="'+(st.refundTo==='store_credit'?'is-on':'')+'" data-ret-refund="store_credit">Store credit</button></div>';
     if(rs&&rs.change){
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="exchange">Exchange for '+esc(rs.change)+'</button>'+
         '<button type="button" class="ai-ord__btn" data-ret-submit="return">Continue return</button></div>'+
@@ -2242,21 +2239,29 @@ function renderReturn(card,step){
     h+='<div class="ai-ret__sending" role="status"><span class="ai-ret__spinner"></span>Starting your return…</div>';
   }
   box.innerHTML=h;
-  scrollBottom();
+  keepInView(box);
 }
+/* Keep the return steps on screen without jumping to the end of the chat:
+   scroll only as far as needed to show the box, never past its top. */
+function keepInView(el){requestAnimationFrame(function(){
+  if(!el||!msgsEl||!el.isConnected)return;
+  var m=msgsEl.getBoundingClientRect(),r=el.getBoundingClientRect(),pad=12;
+  if(r.bottom>m.bottom-pad)msgsEl.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
+  else if(r.top<m.top+pad)msgsEl.scrollTop-=m.top+pad-r.top;
+})}
 function submitReturn(card,mode){
   var o=ordersById[card.getAttribute('data-ord')];if(!o)return;
   var st=retState(card);
   var items=[];for(var id in st.items)if(st.items[id])items.push({lineId:id,quantity:1});
   renderReturn(card,'sending');
-  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,refundTo:st.refundTo,exchange:mode==='exchange'})})
+  fetch(RETURNS_URL,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({orderId:o.id,items:items,reason:st.reason,exchange:mode==='exchange'})})
   .then(function(r){return r.json().catch(function(){return{}})})
   .then(function(d){
     var box=card.querySelector('.ai-ret');
     if(d&&d.ok){
       card.classList.add('is-returned');
       box.innerHTML='<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div><div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
-        '<div class="ai-ret__note">'+(d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.')+' Refund to '+(d.refundTo==='store_credit'?'store credit':'your original payment')+' once it’s back with us.</div>'+
+        '<div class="ai-ret__note">'+(d.labelUrl?'Your return label is ready.':'We’ve emailed your return label and drop-off steps.')+' Refund to your original payment once it’s back with us.</div>'+
         '<div class="ai-ret__choices">'+(safeUrl(d.labelUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.labelUrl)+'" target="_blank" rel="noopener">Get return label</a>':'')+(safeUrl(d.returnsUrl)?'<a class="ai-ord__btn" href="'+safeUrl(d.returnsUrl)+'" target="_blank" rel="noopener">View return</a>':'')+'</div></div></div>';
       var act=card.querySelector('[data-ord-return]');if(act)act.remove();
       if(mode==='exchange'&&d.exchangeCards&&d.exchangeCards.length){
@@ -2270,12 +2275,12 @@ function submitReturn(card,mode){
       box.innerHTML='<div class="ai-ret__err" role="alert">'+esc((d&&d.message)||'Something went wrong — please try again.')+'</div>'+
         '<div class="ai-ret__choices">'+(safeUrl(d&&d.fallbackUrl)?'<a class="ai-ord__btn is-primary" href="'+safeUrl(d.fallbackUrl)+'" target="_blank" rel="noopener">Finish on our returns page</a>':'')+'<button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';
     }
-    scrollBottom();
+    keepInView(box);
   })
-  .catch(function(){var box=card.querySelector('.ai-ret');if(box)box.innerHTML='<div class="ai-ret__err" role="alert">Connection problem — please try again.</div><div class="ai-ret__choices"><button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>'});
+  .catch(function(){var box=card.querySelector('.ai-ret');if(box){box.innerHTML='<div class="ai-ret__err" role="alert">Connection problem — please try again.</div><div class="ai-ret__choices"><button type="button" class="ai-ord__btn" data-ret-next="confirm">Try again</button></div>';keepInView(box)}});
 }
 panel.addEventListener('click',function(e){
-  var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-refund],[data-ret-submit],[data-ret-cancel]');
+  var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-submit],[data-ret-cancel]');
   if(!t||!panel.contains(t))return;
   if(t.hasAttribute('data-ord-login')){e.preventDefault();startSignIn(t.getAttribute('data-ord-login'));return}
   var card=t.closest('.ai-ord');if(!card)return;
@@ -2285,7 +2290,6 @@ panel.addEventListener('click',function(e){
   if(t.hasAttribute('data-ret-item')){var id=t.getAttribute('data-ret-item');st.items[id]=st.items[id]?0:1;if(!st.items[id])delete st.items[id];renderReturn(card,'items');return}
   if(t.hasAttribute('data-ret-next')){renderReturn(card,t.getAttribute('data-ret-next'));return}
   if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');renderReturn(card,'confirm');return}
-  if(t.hasAttribute('data-ret-refund')){st.refundTo=t.getAttribute('data-ret-refund');renderReturn(card,'confirm');return}
   if(t.hasAttribute('data-ret-submit')){submitReturn(card,t.getAttribute('data-ret-submit'));return}
 });
 

@@ -4507,19 +4507,6 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-ret__summary { font-size: 13.5px; line-height: 1.4; padding: 10px 12px; border-radius: 12px; background: var(--seos-surface); }
 .ai-chat-panel .ai-ret__summary span, .ai-chat-panel .ai-ret__why { color: var(--seos-text-2); }
 .ai-chat-panel .ai-ret__why { margin-top: 4px; font-size: 12.5px; }
-.ai-chat-panel .ai-ret__refund { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--seos-text-2); }
-.ai-chat-panel .ai-ret__refund span { margin-right: 4px; }
-.ai-chat-panel .ai-ret__refund button {
-  padding: 6px 12px;
-  border: 1px solid var(--seos-line-strong);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--seos-text);
-  font: 500 13px/1.2 var(--seos-font);
-  cursor: pointer;
-}
-.ai-chat-panel .ai-ret__refund button.is-on { background: var(--seos-ink); border-color: var(--seos-ink); color: #fff; }
-.ai-chat-panel[data-theme="dark"] .ai-ret__refund button.is-on { color: #0d0d12; }
 .ai-chat-panel .ai-ret__choices { flex-direction: column; }
 .ai-chat-panel .ai-ret__note { font-size: 12.5px; line-height: 1.4; color: var(--seos-text-2); }
 .ai-chat-panel .ai-ret__nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -4535,5 +4522,5 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-ret__doneicon svg { width: 15px; height: 15px; }
 .ai-chat-panel .ai-ret__err { font-size: 13.5px; line-height: 1.4; color: var(--seos-text); }
 .ai-chat-panel .ai-ord__btn:focus-visible, .ai-chat-panel .ai-ret__item:focus-visible, .ai-chat-panel .ai-ret__reason:focus-visible,
-.ai-chat-panel .ai-ret__refund button:focus-visible, .ai-chat-panel .ai-ret__link:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-ret__link:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-ret__spinner { animation-duration: 2s; } .ai-chat-panel .ai-ord__btn { transition: none; } }

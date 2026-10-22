@@ -63,11 +63,11 @@ export const action = async ({ request }) => {
     if (config.aftershipApiKey) {
       created = await createAftershipReturn({
         apiKey: config.aftershipApiKey,
+        shop,
         order,
         items,
         reasonLabel: reason.label,
         comment: exchange ? `${comment ? `${comment} — ` : ""}Exchanging for another size (ordered in chat)` : comment,
-        refundTo: body.refundTo,
       });
       if (!created.ok) console.error(`[returns] AfterShip create failed shop=${shop} order=${card.number}: ${created.error}`);
     }
@@ -98,7 +98,7 @@ export const action = async ({ request }) => {
       labelUrl: created.labelUrl,
       returnsUrl: fallbackUrl,
       items: items.map((i) => ({ title: i.title, image: i.image, options: i.options, quantity: i.quantity })),
-      refundTo: body.refundTo === "store_credit" ? "store_credit" : "original_payment",
+      refundTo: "original_payment",
       exchangeCards,
     });
   } catch (e) {

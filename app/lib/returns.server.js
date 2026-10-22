@@ -66,43 +66,60 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 }
 
 // AfterShip Returns: create a refund return for these order items.
+// Field names follow AfterShip's Create Return reference: each item carries
+// its own intended_return_quantity, reason, resolution, return method and
+// refund destination. Refunds go to the original payment (no store credit).
+// AfterShip's docs aren't reachable from every network, so if it rejects
+// the documented shape (422) we try once with the store named too; the full
+// error body is returned so the log says exactly which field it wants.
 const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
-export async function createAftershipReturn({ apiKey, order, items, reasonLabel, comment = "", refundTo = "original_payment", fetchImpl = fetch }) {
-  const body = {
-    order: { external_id: String(order.id).replace(/\D/g, "") },
-    return_items: items.map((it) => ({
-      external_order_item_id: String(it.lineId),
-      quantity: it.quantity,
-      return_reason: reasonLabel,
-      ...(comment ? { return_reason_comment: comment.slice(0, 500) } : {}),
-      resolution: "refund",
-    })),
+
+export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, comment = "" }) {
+  const returnItems = items.map((it) => ({
+    external_order_item_id: String(it.lineId),
+    intended_return_quantity: Math.max(1, parseInt(it.quantity, 10) || 1),
+    return_reason: reasonLabel,
+    ...(comment ? { return_reason_comment: comment.slice(0, 500) } : {}),
+    resolution: "refund",
     return_method: { type: AS_METHOD },
-    refund_destination: refundTo === "store_credit" ? "store_credit" : "original_payment",
-  };
-  let res, json = null;
-  try {
-    res = await fetchImpl(`https://api.aftership.com/returns/${AS_VERSION}/returns`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", accept: "application/json", "as-api-key": apiKey },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(12000),
-    });
-    json = await res.json().catch(() => null);
-  } catch (err) {
-    return { ok: false, error: `AfterShip unreachable: ${err?.message || err}` };
-  }
-  if (!res.ok) {
+    refund_destination: "original_payment",
+  }));
+  const base = { order: { external_id: String(order.id).replace(/\D/g, "") }, return_items: returnItems };
+  const key = String(shop).replace(/\.myshopify\.com$/i, "");
+  return key ? [base, { ...base, store: { platform: "shopify", key, external_id: key } }] : [base];
+}
+
+export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", fetchImpl = fetch }) {
+  const bodies = aftershipReturnBodies({ shop, order, items, reasonLabel, comment });
+  let last = null;
+  for (const body of bodies) {
+    let res, json = null, text = "";
+    try {
+      res = await fetchImpl(`https://api.aftership.com/returns/${AS_VERSION}/returns`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", accept: "application/json", "as-api-key": apiKey },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(12000),
+      });
+      text = await res.text().catch(() => "");
+      try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+    } catch (err) {
+      return { ok: false, error: `AfterShip unreachable: ${err?.message || err}` };
+    }
+    if (res.ok) {
+      const r = json?.data?.return || json?.data || {};
+      return {
+        ok: true,
+        rma: r.rma_number || r.rma || "",
+        returnId: r.id || "",
+        labelUrl: r.return_method?.label_url || r.shipping_label?.url || r.label?.url || r.shipments?.[0]?.label?.url || "",
+      };
+    }
+    // The whole error body (order/line ids and field names only, no PII).
     const msg = json?.meta?.message || json?.message || `HTTP ${res.status}`;
-    const details = JSON.stringify(json?.meta?.details || json?.errors || "").slice(0, 400);
-    return { ok: false, status: res.status, error: `${msg} ${details}`.trim() };
+    last = { ok: false, status: res.status, error: `${msg} ${String(text).slice(0, 800)}`.trim() };
+    if (res.status !== 422) break;
   }
-  const r = json?.data?.return || json?.data || {};
-  return {
-    ok: true,
-    rma: r.rma_number || r.rma || "",
-    returnId: r.id || "",
-    labelUrl: r.return_method?.label_url || r.shipping_label?.url || r.label?.url || r.shipments?.[0]?.label?.url || "",
-  };
+  return last;
 }

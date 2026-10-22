@@ -384,16 +384,22 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.click('.ai-ord[data-ord="5001"] [data-ord-return]');
   const next = '.ai-ord[data-ord="5001"] [data-ret-next="reason"]';
   check("return: Next waits until an item is picked", await page.$eval(next, (b) => b.disabled));
+  // Tapping inside the return must not jump the chat to the bottom.
+  const before = await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); const c = document.querySelector('.ai-ord[data-ord="5001"]'); m.scrollTo({ top: m.scrollTop + c.getBoundingClientRect().top - m.getBoundingClientRect().top, behavior: "instant" }); return { top: m.scrollTop, room: m.scrollHeight - m.clientHeight - m.scrollTop }; });
   await page.click('[data-ret-item="9001"]');
+  await page.waitForTimeout(700);
+  const after = await page.evaluate(() => document.querySelector(".ai-chat-messages").scrollTop);
+  check("return: tapping an item keeps the chat where it is (no jump to the bottom)", before.room > 60 && after < before.top + before.room - 40, JSON.stringify({ before, after }));
   await page.click(next);
   await page.click('[data-ret-reason="too_small"]');
   const choices = await page.$$eval('.ai-ord[data-ord="5001"] [data-ret-submit]', (bs) => bs.map((b) => b.textContent));
   check("return: too small offers Exchange for a bigger size or Continue return", choices.join("|") === "Exchange for a bigger size|Continue return", choices.join("|"));
+  check("return: no store credit option (refunds go to the original payment)", !/store credit/i.test(await page.textContent('.ai-ord[data-ord="5001"] .ai-ret')));
   await page.screenshot({ path: out("orders-return-choice") });
   await page.click('[data-ret-submit="exchange"]');
   await page.waitForSelector(".ai-ret__done", { timeout: 6000 });
   const sent = returnBodies.at(-1);
-  check("return: the return is sent for that item, reason and exchange", sent?.orderId === "5001" && sent.items?.length === 1 && sent.items[0].lineId === "9001" && sent.reason === "too_small" && sent.exchange === true && sent.refundTo === "original_payment", JSON.stringify(sent));
+  check("return: the return is sent for that item, reason and exchange", sent?.orderId === "5001" && sent.items?.length === 1 && sent.items[0].lineId === "9001" && sent.reason === "too_small" && sent.exchange === true && sent.refundTo === undefined, JSON.stringify(sent));
   check("return: confirmation shows the return number", /Return started · #R1001/.test(await page.textContent(".ai-ret__done")));
   await page.waitForFunction(() => [...document.querySelectorAll(".ai-chat-product-card")].some((c) => /8\.5 US/.test(c.getAttribute("data-preselect") || "")), null, { timeout: 4000 }).catch(() => {});
   const ex = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-product-card")].at(-1); return { handle: c?.getAttribute("data-handle"), pre: c?.getAttribute("data-preselect") || "", msg: c?.closest(".ai-chat-msg")?.querySelector("p")?.textContent || "" }; });
