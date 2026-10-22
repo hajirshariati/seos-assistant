@@ -446,7 +446,10 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   const state = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const r = l.getBoundingClientRect(); return { tucked: l.classList.contains("is-tucked"), bubble: l.classList.contains("is-bubble"), w: Math.round(r.width), ghosts: document.querySelectorAll(".ai-chat-morph").length, op: getComputedStyle(l).opacity }; });
   // Each frame: the real launcher's and the stand-in's opacity. A frame where
   // both are part-way (a cross-fade) lets the page show through — a flash.
-  await page.evaluate(() => { window.__frames = []; window.__seams = 0; let last = performance.now(); const f = (t) => { window.__frames.push(t - last); last = t; const g = document.querySelector(".ai-chat-morph"); if (g) { const lo = +getComputedStyle(document.querySelector(".ai-chat-launcher")).opacity, go = +getComputedStyle(g).opacity; if (lo > 0.02 && lo < 0.98 && go < 0.98) window.__seams++; } requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  // The stand-in's orb must already be lit when it first appears (a fresh
+  // canvas is blank until the next glow frame — a dark blink).
+  await page.evaluate(() => { window.__blankOrb = 0; window.__orbSeen = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains("ai-chat-morph")) { const c = n.querySelector("canvas"); if (!c) continue; window.__orbSeen++; const d = c.getContext("2d").getImageData(c.width / 2, c.height / 2, 1, 1).data; if (!d[3]) window.__blankOrb++; } }).observe(document.body, { childList: true }); });
+  await page.evaluate(() => { window.__frames = []; window.__seams = 0; let last = performance.now(); const f = (t) => { window.__frames.push(t - last); last = t; const g = document.querySelector(".ai-chat-morph"); if (g) { const lo = +getComputedStyle(document.querySelector(".ai-chat-launcher")).opacity, go = +getComputedStyle(g).opacity; if (lo > 0.02 && lo < 0.98 && go < 0.98) window.__seams++; const dark = Math.max(0, ...[...getComputedStyle(g).boxShadow.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)/g)].map((x) => +x[1])); window.__minShadow = Math.min(window.__minShadow ?? 1, dark); } requestAnimationFrame(f); }; requestAnimationFrame(f); });
   await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
   await page.waitForTimeout(150);
   check(`end of page (${label}): the bar stays while scrolling the middle of the page`, !(await state()).tucked);
@@ -465,6 +468,10 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`end of page (${label}): smooth — no dropped frames during the morphs`, slow === 0, `slow frames: ${slow}`);
   const seams = await page.evaluate(() => window.__seams);
   check(`end of page (${label}): no flash at the hand-over (never both half-faded)`, seams === 0, `frames: ${seams}`);
+  const minShadow = await page.evaluate(() => window.__minShadow);
+  check(`end of page (${label}): the shadow stays steady through the morph (no blink)`, minShadow >= 0.45, `darkest shadow alpha low point: ${minShadow}`);
+  const orb = await page.evaluate(() => ({ seen: window.__orbSeen, blank: window.__blankOrb }));
+  check(`end of page (${label}): the moving orb is lit from its first frame`, orb.seen >= 2 && orb.blank === 0, JSON.stringify(orb));
   await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
   await page.waitForTimeout(900);
   await page.click(".ai-chat-launcher");

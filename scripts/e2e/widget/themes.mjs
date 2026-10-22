@@ -143,6 +143,9 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   if (steps.includes("slowchat")) await p.route("**/apps/hajirai/chat**", async () => { await new Promise((res) => setTimeout(res, 20000)); });
   if (steps.includes("e429")) await p.route("**/apps/hajirai/chat**", (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfter: 5 }) }));
   for (const [k, ms, body] of [["vizslow", 30000, { ok: true, imageDataUrl: img }], ["vizok", 300, { ok: true, imageDataUrl: img }], ["vizbad", 300, { ok: false, message: "Could not create the preview right now." }]]) if (steps.includes(k)) await p.route("**/apps/hajirai/visualize**", async (r) => { await new Promise((res) => setTimeout(res, ms)); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }); });
+  // The return steps run on this file's own sample order: the status check
+  // answers "nothing new", so the card keeps the order it was given.
+  if (steps.includes("ret")) await p.route("**/apps/hajirai/returns**", (r) => (r.request().method() === "GET" ? r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false }) }) : r.fallback()));
   if (steps.includes("retok")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, rma: "R1001", labelUrl: "https://label.example/1", returnsUrl: "https://returns.example/", refundTo: "original_payment", exchangeCards: [{ ...JIL, preselect: { Size: "9.5 US" }, exchange_to: "9.5 US" }] }) }));
   if (steps.includes("retbad")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, message: "I couldn't start this return here — you can finish it on our returns page.", fallbackUrl: "https://returns.example/" }) }));
   const urlStep = steps.find((x) => x.startsWith("url:"));
@@ -168,9 +171,9 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
     if (st === "vizgo") { await p.click(".ai-chat-viz-btn"); await p.waitForTimeout(1300); }
     if (st === "wait3") { await p.waitForTimeout(1500); }
     if (st === "talk") { await p.click(".ai-chat-mic"); await p.waitForTimeout(700); }
-    if (st === "ret") { await p.click('[data-ord-return="5001"]'); await p.waitForTimeout(300); }
+    if (st === "ret") { await p.click('.ai-ord[data-ord="5001"] [data-ord-return]'); await p.waitForTimeout(300); }
     if (st === "retitem") { await p.click('[data-ret-item="9001"]'); await p.waitForTimeout(200); }
-    if (st === "retnext") { await p.click('[data-ret-next="reason"]'); await p.waitForTimeout(200); }
+    if (st === "retnext") { await p.click('.ai-ord[data-ord="5001"] [data-ret-next="reason"]'); await p.waitForTimeout(200); }
     if (st === "retsmall") { await p.click('[data-ret-reason="too_small"]'); await p.waitForTimeout(300); }
     if (st === "retgo") { await p.click('[data-ret-submit="exchange"]'); await p.waitForTimeout(1200); }
     if (st === "typed") { await p.fill(".ai-chat-input", "red sandals"); await p.waitForTimeout(400); }

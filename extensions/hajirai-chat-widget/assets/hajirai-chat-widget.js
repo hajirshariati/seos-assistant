@@ -576,6 +576,39 @@ function launcherLook(){
     text:tr&&tr.width?{x:tr.left-r.left,y:tr.top-r.top,h:tr.height,label:tx.textContent,color:tcs.color,font:tcs.font,pad:tcs.paddingLeft}:null};
 }
 function glowFilter(ic){var c=$('.ai-chat-glow',ic),f=c?getComputedStyle(c).filter:'';return f&&f!=='none'?f:'drop-shadow(0 0 0 rgba(0,0,0,0))'}
+/* Shadows blend layer by layer in list order, and the bar and the bubble
+   list theirs differently (drop shadow first vs. hairline ring first), so a
+   plain blend turns one into the other mid-way: the shadow seems to blink.
+   Pair the layers by kind instead (ring, drop shadow, glow), with a clear
+   copy standing in for a layer one end doesn't have. */
+function shadowLayers(v){
+  var out=[];if(!v||v==='none')return out;
+  var parts=[],depth=0,cur='';
+  for(var i=0;i<v.length;i++){var ch=v[i];if(ch==='(')depth++;else if(ch===')')depth--;if(ch===','&&!depth){parts.push(cur);cur=''}else cur+=ch}
+  parts.push(cur);
+  for(var j=0;j<parts.length;j++){
+    var p=parts[j].trim(),col=(p.match(/rgba?\([^)]*\)/)||['rgba(0, 0, 0, 0)'])[0],n=p.replace(col,'').replace('inset','').trim().split(/\s+/).map(parseFloat);
+    var L={inset:/\binset\b/.test(p),color:col,x:n[0]||0,y:n[1]||0,blur:n[2]||0,spread:n[3]||0};
+    L.kind=L.inset?'inset':!L.blur?'ring':(L.y?'drop':'glow');
+    out.push(L);
+  }
+  return out;
+}
+function pairShadows(a,b){
+  var A=shadowLayers(a),B=shadowLayers(b),fa=[],fb=[];
+  /* In the end look's order, so the hand-over is exact. */
+  var kinds=[];B.concat(A).forEach(function(L){if(kinds.indexOf(L.kind)<0)kinds.push(L.kind)});
+  var css=function(L){return (L.inset?'inset ':'')+L.x+'px '+L.y+'px '+L.blur+'px '+L.spread+'px '+L.color};
+  var clear=function(L){var c=L.color.replace(/rgba?\(([^,]+),([^,]+),([^,)]+)(,[^)]*)?\)/,'rgba($1,$2,$3, 0)');return {inset:L.inset,color:c,x:L.x,y:L.y,blur:L.blur,spread:L.spread}};
+  kinds.forEach(function(k){
+    var la=A.filter(function(L){return L.kind===k}),lb=B.filter(function(L){return L.kind===k});
+    for(var i=0;i<Math.max(la.length,lb.length);i++){
+      var x=la[i]||clear(lb[i]),y=lb[i]||clear(la[i]);
+      fa.push(css(x));fb.push(css(y));
+    }
+  });
+  return fa.length?[fa.join(', '),fb.join(', ')]:['none','none'];
+}
 function cancelMorph(){if(morphAnim){var m=morphAnim;morphAnim=null;m.stop()}}
 function morphLauncher(apply,done){
   cancelMorph();
@@ -590,11 +623,11 @@ function morphLauncher(apply,done){
   if(!B.r.width||(Math.abs(A.r.left-B.r.left)<1&&Math.abs(A.r.width-B.r.width)<1&&Math.abs(A.r.top-B.r.top)<1)){['transition','opacity','pointer-events'].forEach(function(k){launcher.style.removeProperty(k)});if(done)done();return}
   var g=document.createElement('div');g.className='ai-chat-morph';g.setAttribute('aria-hidden','true');
   g.style.cssText='position:fixed;left:0;top:0;margin:0;padding:0;overflow:hidden;box-sizing:border-box;pointer-events:none;contain:layout paint;will-change:transform,width,height;z-index:'+((parseInt(B.z,10)||999)+1);
-  var anims=[],o={duration:MORPH_MS,easing:MORPH_EASE,fill:'both'};
+  var anims=[],o={duration:MORPH_MS,easing:MORPH_EASE,fill:'both'},sh=pairShadows(A.shadow,B.shadow);
   var at=function(L){return 'translate3d('+L.r.left+'px,'+L.r.top+'px,0)'};
   anims.push(g.animate([
-    {transform:at(A),width:A.r.width+'px',height:A.r.height+'px',borderRadius:A.radius+'px',backgroundColor:A.bg,boxShadow:A.shadow},
-    {transform:at(B),width:B.r.width+'px',height:B.r.height+'px',borderRadius:B.radius+'px',backgroundColor:B.bg,boxShadow:B.shadow}],o));
+    {transform:at(A),width:A.r.width+'px',height:A.r.height+'px',borderRadius:A.radius+'px',backgroundColor:A.bg,boxShadow:sh[0]},
+    {transform:at(B),width:B.r.width+'px',height:B.r.height+'px',borderRadius:B.radius+'px',backgroundColor:B.bg,boxShadow:sh[1]}],o));
   /* Its hairline edge, drawn inside so nothing in it shifts. */
   var edge=document.createElement('span');edge.style.cssText='position:absolute;left:0;top:0;right:0;bottom:0;border-style:solid;border-radius:inherit;box-sizing:border-box;pointer-events:none';
   g.appendChild(edge);
@@ -603,6 +636,10 @@ function morphLauncher(apply,done){
   if(A.icon&&B.icon){
     var ob=document.createElement('span');ob.style.cssText='position:absolute;left:0;top:0;border-radius:50%;overflow:hidden;display:block';
     var gl=makeGlow(Math.max(A.icon.s,B.icon.s),true);gl.style.width='100%';gl.style.height='100%';gl.style.display='block';ob.appendChild(gl);g.appendChild(ob);
+    /* A new canvas is blank until the next glow frame: start it with the
+       live orb's picture so the first frame isn't a dark blink. */
+    var src=$('.ai-chat-glow',launcher);
+    if(src)try{gl.getContext('2d').drawImage(src,0,0,gl.width,gl.height)}catch(e){}
     anims.push(gl.animate([{filter:A.icon.filter},{filter:B.icon.filter}],o));
     var ip=function(L){return 'translate3d('+L.icon.x+'px,'+L.icon.y+'px,0)'};
     anims.push(ob.animate([{transform:ip(A),width:A.icon.s+'px',height:A.icon.s+'px',backgroundColor:A.icon.bg},{transform:ip(B),width:B.icon.s+'px',height:B.icon.s+'px',backgroundColor:B.icon.bg}],o));
@@ -626,24 +663,21 @@ function morphLauncher(apply,done){
   }
   document.body.appendChild(g);
   var finished=false,timer=0;
-  var end=function(handover){
+  var end=function(){
     if(finished)return;finished=true;clearTimeout(timer);
     launcher.style.removeProperty('opacity');launcher.style.removeProperty('pointer-events');
     void launcher.offsetWidth;launcher.style.removeProperty('transition');
-    if(handover&&launcher.animate){
-      /* Same look, same place: the real launcher is already fully there
-         underneath, and the stand-in on top fades off it. (Fading both at
-         once would let the page show through halfway — a flash.) */
-      var f=g.animate([{opacity:1},{opacity:0}],{duration:180,easing:'ease-out',fill:'forwards'});
-      f.onfinish=function(){g.remove()};
-    }else g.remove();
+    /* The stand-in ends exactly as the launcher looks, so they swap in one
+       frame. Any fade between them would show through (or double the
+       shadow) for a moment: a flash. */
+    g.remove();
     if(morphAnim===me)morphAnim=null;
     if(done)done();
   };
-  var me={stop:function(){for(var i=0;i<anims.length;i++)anims[i].cancel();end(false)}};
+  var me={stop:function(){for(var i=0;i<anims.length;i++)anims[i].cancel();end()}};
   morphAnim=me;
-  anims[0].onfinish=function(){end(true)};
-  timer=setTimeout(function(){end(true)},MORPH_MS+400);
+  anims[0].onfinish=function(){end()};
+  timer=setTimeout(end,MORPH_MS+400);
 }
 /* At the very end of the page the bar folds into the bubble, out of the way
    of the footer; the moment the shopper scrolls back up it opens out again.
