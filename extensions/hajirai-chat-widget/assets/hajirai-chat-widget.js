@@ -541,13 +541,127 @@ function launcherA11y(){
   if(launcher.classList.contains('is-bubble')){launcher.setAttribute('role','button');launcher.setAttribute('tabindex','0');launcher.setAttribute('aria-label','Open the AI shopping assistant')}
   else{launcher.removeAttribute('role');launcher.removeAttribute('tabindex');launcher.removeAttribute('aria-label')}
 }
-function setLauncherBubble(on){
+function setLauncherBubble(on,animate){
   try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
-  launcher.classList.toggle('is-bubble',!!on);
-  launcherA11y();
-  if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
-  placeLauncher();
+  var apply=function(){
+    launcher.classList.toggle('is-bubble',!!on);
+    launcher.classList.remove('is-tucked');tucked=false;tuckWant=false;
+    launcherA11y();
+    if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
+    placeLauncher();
+  };
+  if(animate)morphLauncher(apply);else{cancelMorph();apply()}
 }
+/* The bar ⇄ bubble morph. The launcher's two looks are set by CSS, so the
+   change itself is instant; to make it fluid, a stand-in measured at both
+   ends carries the shape (position, size, corners, colour) from one to the
+   other while the live orb glides to its new spot and the words fade, then
+   hands over to the real launcher, already in place, without a seam. */
+var morphAnim=null;
+var MORPH_MS=620,MORPH_EASE='cubic-bezier(0.32, 0.72, 0, 1)';
+function launcherShown(){
+  if(launcher.classList.contains('hidden'))return false;
+  var r=launcher.getBoundingClientRect(),cs=getComputedStyle(launcher);
+  return r.width>0&&r.height>0&&cs.visibility!=='hidden'&&cs.display!=='none'&&parseFloat(cs.opacity)>0.05;
+}
+function launcherLook(){
+  var r=launcher.getBoundingClientRect(),cs=getComputedStyle(launcher),bubble=launcher.classList.contains('is-bubble');
+  var ic=bubble?$('.ai-chat-launcher__orb',launcher):$('.ai-chat-launcher__icon',launcher),ir=ic?ic.getBoundingClientRect():null;
+  var tx=bubble?null:$('.ai-chat-launcher__text',launcher),tr=tx?tx.getBoundingClientRect():null,tcs=tx?getComputedStyle(tx):null;
+  return {r:r,bg:cs.backgroundColor,shadow:cs.boxShadow,radius:Math.min(parseFloat(cs.borderTopLeftRadius)||0,r.height/2),z:cs.zIndex,
+    icon:ir&&ir.width?{x:ir.left-r.left,y:ir.top-r.top,s:ir.width,bg:getComputedStyle(ic).backgroundColor}:null,
+    text:tr&&tr.width?{x:tr.left-r.left,y:tr.top-r.top,h:tr.height,label:tx.textContent,color:tcs.color,font:tcs.font,pad:tcs.paddingLeft}:null};
+}
+function cancelMorph(){if(morphAnim){var m=morphAnim;morphAnim=null;m.stop()}}
+function morphLauncher(apply,done){
+  cancelMorph();
+  var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce||!launcher.animate||!launcherShown()){apply();if(done)done();return}
+  var A=launcherLook();
+  /* The real launcher waits, invisible and untouchable, in its new place —
+     with its own CSS transitions off, which would otherwise fade it in. */
+  launcher.style.setProperty('transition','none','important');
+  launcher.style.setProperty('opacity','0','important');launcher.style.setProperty('pointer-events','none','important');
+  apply();var B=launcherLook();
+  if(!B.r.width||(Math.abs(A.r.left-B.r.left)<1&&Math.abs(A.r.width-B.r.width)<1&&Math.abs(A.r.top-B.r.top)<1)){['transition','opacity','pointer-events'].forEach(function(k){launcher.style.removeProperty(k)});if(done)done();return}
+  var g=document.createElement('div');g.className='ai-chat-morph';g.setAttribute('aria-hidden','true');
+  g.style.cssText='position:fixed;left:0;top:0;margin:0;padding:0;overflow:hidden;box-sizing:border-box;pointer-events:none;contain:layout paint;will-change:transform,width,height;z-index:'+(B.z&&B.z!=='auto'?B.z:999);
+  var anims=[],o={duration:MORPH_MS,easing:MORPH_EASE,fill:'both'};
+  var at=function(L){return 'translate3d('+L.r.left+'px,'+L.r.top+'px,0)'};
+  anims.push(g.animate([
+    {transform:at(A),width:A.r.width+'px',height:A.r.height+'px',borderRadius:A.radius+'px',backgroundColor:A.bg,boxShadow:A.shadow},
+    {transform:at(B),width:B.r.width+'px',height:B.r.height+'px',borderRadius:B.radius+'px',backgroundColor:B.bg,boxShadow:B.shadow}],o));
+  /* The orb: the live glow, gliding from its spot in one look to the other. */
+  if(A.icon&&B.icon){
+    var ob=document.createElement('span');ob.style.cssText='position:absolute;left:0;top:0;border-radius:50%;overflow:hidden;display:block';
+    var gl=makeGlow(Math.max(A.icon.s,B.icon.s),true);gl.style.width='100%';gl.style.height='100%';gl.style.display='block';ob.appendChild(gl);g.appendChild(ob);
+    var ip=function(L){return 'translate3d('+L.icon.x+'px,'+L.icon.y+'px,0)'};
+    anims.push(ob.animate([{transform:ip(A),width:A.icon.s+'px',height:A.icon.s+'px',backgroundColor:A.icon.bg},{transform:ip(B),width:B.icon.s+'px',height:B.icon.s+'px',backgroundColor:B.icon.bg}],o));
+  }
+  /* The words: fade out early when folding up, in late when opening out. */
+  var T=A.text||B.text;
+  if(T){
+    var tx=document.createElement('span');tx.textContent=T.label;
+    tx.style.cssText='position:absolute;left:'+T.x+'px;top:'+T.y+'px;height:'+T.h+'px;display:flex;align-items:center;white-space:nowrap;padding-left:'+T.pad+';font:'+T.font+';color:'+T.color;
+    g.appendChild(tx);
+    anims.push(tx.animate(A.text?[{opacity:1},{opacity:0,offset:0.3},{opacity:0}]:[{opacity:0},{opacity:0,offset:0.6},{opacity:1}],{duration:MORPH_MS,easing:'ease-out',fill:'both'}));
+  }
+  document.body.appendChild(g);
+  var finished=false,timer=0;
+  var end=function(handover){
+    if(finished)return;finished=true;clearTimeout(timer);
+    launcher.style.removeProperty('opacity');launcher.style.removeProperty('pointer-events');
+    void launcher.offsetWidth;launcher.style.removeProperty('transition');
+    if(handover&&launcher.animate){
+      /* Same look, same place: a short cross-fade hides the hand-over. */
+      launcher.animate([{opacity:0},{opacity:1}],{duration:160,easing:'ease-out'});
+      var f=g.animate([{opacity:1},{opacity:0}],{duration:160,easing:'ease-out',fill:'forwards'});
+      f.onfinish=function(){g.remove()};
+    }else g.remove();
+    if(morphAnim===me)morphAnim=null;
+    if(done)done();
+  };
+  var me={stop:function(){for(var i=0;i<anims.length;i++)anims[i].cancel();end(false)}};
+  morphAnim=me;
+  anims[0].onfinish=function(){end(true)};
+  timer=setTimeout(function(){end(true)},MORPH_MS+400);
+}
+/* At the very end of the page the bar folds into the bubble, out of the way
+   of the footer; the moment the shopper scrolls back up it opens out again.
+   Only when the shopper hasn't folded it themselves, the chat is closed and
+   the page is long enough to scroll. */
+var tucked=false,tuckBusy=false,tuckWant=false;
+function setTucked(on){
+  tuckWant=on;
+  if(tuckBusy||on===tucked)return;
+  tuckBusy=true;tucked=on;
+  morphLauncher(function(){
+    launcher.classList.toggle('is-bubble',on);launcher.classList.toggle('is-tucked',on);
+    launcherA11y();
+    if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
+    placeLauncher();
+  },function(){tuckBusy=false;if(tuckWant!==tucked)setTucked(tuckWant)});
+}
+(function(){
+  var lastY=window.scrollY||0,upBy=0,ticking=false;
+  function check(){
+    ticking=false;
+    var y=window.scrollY||window.pageYOffset||0,dy=y-lastY;lastY=y;
+    var max=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)-window.innerHeight;
+    if(isOpen||launcher.classList.contains('hidden'))return;
+    if(launcher.classList.contains('is-bubble')&&!launcher.classList.contains('is-tucked'))return;/* folded by the shopper */
+    if(max<240){if(tucked)setTucked(false);return}/* nothing to scroll */
+    var atEnd=y>=max-24;
+    if(dy>0){upBy=0;if(atEnd)setTucked(true)}
+    else if(dy<0){
+      /* iOS's bounce at the bottom scrolls "up" without the shopper doing it. */
+      if(y>=max-2)return;
+      upBy-=dy;
+      if(upBy>=12)setTucked(false);
+    }
+  }
+  window.addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(check)}},{passive:true});
+})();
 function floatingAt(x,y){
   var found=[];
   var list=document.elementsFromPoint?document.elementsFromPoint(x,y):[];
@@ -2987,7 +3101,7 @@ sendBtn.disabled=false;
 
 /* Events */
 launcher.addEventListener('click',function(e){
-if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true);return}
+if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true,true);return}
 if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
 toggle(true);
 });

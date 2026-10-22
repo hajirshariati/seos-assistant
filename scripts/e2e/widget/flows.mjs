@@ -433,6 +433,62 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("orders & returns: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// End of the page: the bar folds into the bubble; scrolling back up opens it
+// out again. Smoothly (a measured stand-in morphs between the two, at 60fps)
+// and without leftovers; opening the chat from the bubble works as usual.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(700);
+  const state = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const r = l.getBoundingClientRect(); return { tucked: l.classList.contains("is-tucked"), bubble: l.classList.contains("is-bubble"), w: Math.round(r.width), ghosts: document.querySelectorAll(".ai-chat-morph").length, op: getComputedStyle(l).opacity }; });
+  await page.evaluate(() => { window.__frames = []; let last = performance.now(); const f = (t) => { window.__frames.push(t - last); last = t; requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
+  await page.waitForTimeout(150);
+  check(`end of page (${label}): the bar stays while scrolling the middle of the page`, !(await state()).tucked);
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+  await page.waitForTimeout(120);
+  const mid = await state();
+  check(`end of page (${label}): mid-morph, one stand-in and the real launcher hidden (no double)`, mid.ghosts === 1 && mid.op === "0", JSON.stringify(mid));
+  await page.waitForTimeout(900);
+  const down = await state();
+  check(`end of page (${label}): folds into the bubble, nothing left behind`, down.tucked && down.bubble && down.w === 48 && down.ghosts === 0 && down.op === "1", JSON.stringify(down));
+  await page.evaluate(() => window.scrollBy(0, -80));
+  await page.waitForTimeout(900);
+  const up = await state();
+  check(`end of page (${label}): scrolling back up opens the bar again`, !up.tucked && !up.bubble && up.w > 300 && up.ghosts === 0, JSON.stringify(up));
+  const slow = await page.evaluate(() => window.__frames.slice(5).filter((f) => f > 34).length);
+  check(`end of page (${label}): smooth — no dropped frames during the morphs`, slow === 0, `slow frames: ${slow}`);
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+  await page.waitForTimeout(900);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(500);
+  check(`end of page (${label}): tapping the bubble opens the chat`, await page.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open") && !document.querySelector(".ai-chat-launcher").classList.contains("is-tucked")));
+  check(`end of page (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// The × on the bar folds it into the bubble with the same morph.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(700);
+  await page.click(".ai-chat-launcher__close");
+  await page.waitForTimeout(100);
+  const mid = await page.evaluate(() => document.querySelectorAll(".ai-chat-morph").length);
+  await page.waitForTimeout(900);
+  const end = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); return { bubble: l.classList.contains("is-bubble"), tucked: l.classList.contains("is-tucked"), ghosts: document.querySelectorAll(".ai-chat-morph").length }; });
+  check("× morphs the bar into the bubble (and it stays folded, not scroll-tucked)", mid === 1 && end.bubble && !end.tucked && end.ghosts === 0, JSON.stringify({ mid, end }));
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollBy(0, -200));
+  await page.waitForTimeout(900);
+  check("a bubble the shopper chose isn't opened out by scrolling", await page.evaluate(() => document.querySelector(".ai-chat-launcher").classList.contains("is-bubble")));
+  await ctx.close();
+}
 // Returns hold up whatever the shopper does: reload half-way, lose the
 // connection at the worst moment, double-tap, get signed out, come back later.
 {
