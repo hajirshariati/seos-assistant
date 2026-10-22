@@ -58,6 +58,8 @@ export const loader = async ({ request }) => {
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
     returnsInChat: config.returnsInChat !== false,
+    returnWindowDays: Number.isFinite(config.returnWindowDays) ? config.returnWindowDays : 30,
+    returnsDeliveredOnly: config.returnsDeliveredOnly !== false,
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -188,6 +190,14 @@ export const action = async ({ request }) => {
   if (returnsPageUrl !== null) data.returnsPageUrl = returnsPageUrl.trim();
   const returnsInChat = formData.get("returnsInChat");
   if (returnsInChat !== null) data.returnsInChat = returnsInChat === "true";
+  const windowDays = formData.get("returnWindowDays");
+  if (windowDays !== null) {
+    const n = Number.parseInt(String(windowDays).trim(), 10);
+    if (!Number.isFinite(n) || n < 0 || n > 365) return { error: "Return window must be a number of days from 0 to 365 (0 = no limit)." };
+    data.returnWindowDays = n;
+  }
+  const deliveredOnly = formData.get("returnsDeliveredOnly");
+  if (deliveredOnly !== null) data.returnsDeliveredOnly = deliveredOnly === "true";
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -495,7 +505,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -515,6 +525,8 @@ export default function ApiKeys() {
   const [trackingPageUrl, setTrackingPageUrl] = useState(initTrackingPageUrl);
   const [returnsPageUrl, setReturnsPageUrl] = useState(initReturnsPageUrl);
   const [returnsInChat, setReturnsInChat] = useState(initReturnsInChat);
+  const [returnWindowDays, setReturnWindowDays] = useState(String(initReturnWindowDays));
+  const [returnsDeliveredOnly, setReturnsDeliveredOnly] = useState(initReturnsDeliveredOnly);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -544,6 +556,8 @@ export default function ApiKeys() {
     trackingPageUrl: initTrackingPageUrl,
     returnsPageUrl: initReturnsPageUrl,
     returnsInChat: initReturnsInChat,
+    returnWindowDays: String(initReturnWindowDays),
+    returnsDeliveredOnly: initReturnsDeliveredOnly,
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -572,6 +586,7 @@ export default function ApiKeys() {
       setVoyageKey("");
       setOpenaiKey("");
     }
+    if (actionData?.error && typeof window !== "undefined" && window.shopify?.toast) window.shopify.toast.show(actionData.error, { isError: true });
   }, [actionData]);
 
   const discardChanges = () => {
@@ -587,6 +602,8 @@ export default function ApiKeys() {
     setTrackingPageUrl(s.trackingPageUrl);
     setReturnsPageUrl(s.returnsPageUrl);
     setReturnsInChat(s.returnsInChat);
+    setReturnWindowDays(s.returnWindowDays);
+    setReturnsDeliveredOnly(s.returnsDeliveredOnly);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -767,6 +784,25 @@ export default function ApiKeys() {
                     helpText={returnsInChat
                       ? "On: signed-in shoppers start returns and exchanges right in the chat (uses the AfterShip API key). Turn off to send them to the returns page instead."
                       : "Off: order cards show “Start a return”, which opens the returns page above with the order filled in. Order tracking is unaffected."}
+                  />
+                  <TextField
+                    label="Return window (days)"
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={returnWindowDays}
+                    onChange={setReturnWindowDays}
+                    autoComplete="off"
+                    suffix="days after the order is placed"
+                    helpText="Orders older than this don't get a return button, and the assistant explains why. 0 = no limit. Match your return policy."
+                  />
+                  <Checkbox
+                    label="Only after the order is delivered"
+                    checked={returnsDeliveredOnly}
+                    onChange={setReturnsDeliveredOnly}
+                    helpText={returnsDeliveredOnly
+                      ? "On: the return button appears once the order shows as delivered."
+                      : "Off: the return button appears as soon as the order has shipped."}
                   />
                   <TextField
                     label="Search results page"
@@ -1212,6 +1248,8 @@ export default function ApiKeys() {
           <input type="hidden" name="trackingPageUrl" value={trackingPageUrl} />
           <input type="hidden" name="returnsPageUrl" value={returnsPageUrl} />
           <input type="hidden" name="returnsInChat" value={String(returnsInChat)} />
+          <input type="hidden" name="returnWindowDays" value={returnWindowDays} />
+          <input type="hidden" name="returnsDeliveredOnly" value={String(returnsDeliveredOnly)} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />

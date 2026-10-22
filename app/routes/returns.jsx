@@ -13,7 +13,7 @@
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
-import { getOwnedOrder, toOrderCard, chatReturnView } from "../lib/orders.server.js";
+import { getOwnedOrder, toOrderCard, chatReturnView, returnPolicy } from "../lib/orders.server.js";
 import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName, returnMethods, publicReturnMethods, blockedMessage, priorReturn } from "../lib/returns.server.js";
 import { findChatReturns, saveChatReturn } from "../models/ChatReturn.server";
 import { recordHealth } from "../models/ChatHealth.server";
@@ -88,13 +88,14 @@ export const loader = async ({ request }) => {
     const order = await getOwnedOrder({ shop, accessToken: session.accessToken, customerId, orderId });
     if (!order) return Response.json({ error: "order_not_found", message: "We couldn't find that order on your account." }, { status: 404 });
     const config = await getShopConfig(shop);
-    const card = toOrderCard(order, { chatReturns: await findChatReturns(shop, [orderId]) });
+    const policy = returnPolicy(config);
+    const card = toOrderCard(order, { chatReturns: await findChatReturns(shop, [orderId]), policy });
     if (config.returnsInChat === false) return Response.json(returnsOff(config, card, order));
     return Response.json({
       ok: true,
       order: card,
       methods: publicReturnMethods(),
-      message: card.canReturn ? "" : blockedMessage(card.returnBlocked),
+      message: card.canReturn ? "" : blockedMessage(card.returnBlocked, policy),
       returnsUrl: returnsPage(config, card.number, order.email || ""),
     });
   } catch (e) {
@@ -123,7 +124,8 @@ export const action = async ({ request }) => {
       const order = await getOwnedOrder({ shop, accessToken: session.accessToken, customerId, orderId });
       if (!order) return Response.json({ error: "order_not_found", message: "We couldn't find that order on your account." }, { status: 404 });
       const started = await findChatReturns(shop, [orderId]);
-      const card = toOrderCard(order, { chatReturns: started });
+      const policy = returnPolicy(config);
+      const card = toOrderCard(order, { chatReturns: started, policy });
       const fallbackUrl = returnsPage(config, card.number, order.email || "");
       if (config.returnsInChat === false) return Response.json(returnsOff(config, card, order), { status: 409 });
 
@@ -132,7 +134,7 @@ export const action = async ({ request }) => {
       const prior = priorReturn(started, picks.map((p) => String(p?.lineId || "")));
       if (prior) return Response.json(startedPayload(prior, fallbackUrl, { already: true }));
 
-      if (!card.canReturn) return Response.json({ error: "not_returnable", message: blockedMessage(card.returnBlocked), order: card }, { status: 409 });
+      if (!card.canReturn) return Response.json({ error: "not_returnable", message: blockedMessage(card.returnBlocked, policy), order: card }, { status: 409 });
 
       // Only this order's items, never more than can still be returned.
       const items = [];

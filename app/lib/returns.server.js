@@ -6,7 +6,7 @@
 
 import { toCard } from "./lean/engine.js";
 import { loadLeanCatalog } from "./lean/catalog.server.js";
-import { returnWindowDays } from "./orders.server.js";
+import { returnPolicy } from "./orders.server.js";
 
 // Reasons the chat offers. `change` says how an exchange moves the size.
 export const RETURN_REASONS = [
@@ -185,9 +185,10 @@ async function postAftershipReturn({ apiKey, shop, order, items, reasonLabel, co
 }
 
 // What the shopper is told when an order can't be returned in the chat.
-export function blockedMessage(blocked) {
-  if (blocked === "window_closed") return `Returns can be started within ${returnWindowDays()} days of placing the order, and this one is past that window.`;
+export function blockedMessage(blocked, policy = returnPolicy()) {
+  if (blocked === "window_closed") return `Returns can be started within ${policy.windowDays} days of placing the order, and this one is past that window.`;
   if (blocked === "not_delivered") return "You can start a return once the order has been delivered.";
+  if (blocked === "not_shipped") return "You can start a return once the order has shipped.";
   if (blocked === "nothing_left") return "Everything in this order is already being returned.";
   if (blocked === "cancelled") return "This order was cancelled, so there's nothing to return.";
   return "This order can't be returned.";

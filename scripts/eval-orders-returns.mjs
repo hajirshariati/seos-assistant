@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
-const { toOrderCard, orderStage, getOwnedOrder, getOrderCards } = await import("../app/lib/orders.server.js");
+const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 
@@ -57,6 +57,23 @@ await test("return window: RETURN_WINDOW_DAYS changes it", () => {
   process.env.RETURN_WINDOW_DAYS = "7";
   try { assert.equal(toOrderCard(delivered(), { now: Date.parse("2026-10-20T12:00:00Z") }).canReturn, true); assert.equal(toOrderCard(delivered(), { now: NOW }).canReturn, false, "8 days > 7"); }
   finally { delete process.env.RETURN_WINDOW_DAYS; }
+});
+await test("store settings: return window days and delivered-only", () => {
+  assert.deepEqual(returnPolicy({}), { windowDays: 30, deliveredOnly: true }, "defaults");
+  assert.deepEqual(returnPolicy({ returnWindowDays: 45, returnsDeliveredOnly: false }), { windowDays: 45, deliveredOnly: false });
+  assert.equal(returnPolicy({ returnWindowDays: 900 }).windowDays, 365, "capped");
+  const late = Date.parse("2026-12-30T12:00:00Z");
+  assert.equal(toOrderCard(delivered(), { now: late, policy: returnPolicy({ returnWindowDays: 30 }) }).returnBlocked, "window_closed");
+  assert.equal(toOrderCard(delivered(), { now: late, policy: returnPolicy({ returnWindowDays: 90 }) }).canReturn, true);
+  assert.equal(toOrderCard(delivered(), { now: late, policy: returnPolicy({ returnWindowDays: 0 }) }).canReturn, true, "0 = no limit");
+  // Delivered-only off: shipped is enough, still not before it ships.
+  const shippedOnly = returnPolicy({ returnsDeliveredOnly: false });
+  assert.equal(toOrderCard(order(), { now: NOW }).returnBlocked, "not_delivered");
+  assert.equal(toOrderCard(order(), { now: NOW, policy: shippedOnly }).canReturn, true);
+  const unshipped = toOrderCard(order({ fulfillments: [], displayFulfillmentStatus: "UNFULFILLED" }), { now: NOW, policy: shippedOnly });
+  assert.equal(unshipped.returnBlocked, "not_shipped");
+  assert.match(blockedMessage("not_shipped"), /once the order has shipped/);
+  assert.match(blockedMessage("window_closed", returnPolicy({ returnWindowDays: 45 })), /within 45 days/);
 });
 await test("return methods: the store's list, cleaned; one default without it", () => {
   const env = JSON.stringify([

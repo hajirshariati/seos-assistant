@@ -94,17 +94,24 @@ const RETURN_LABEL = {
   RETURN_FAILED: "Return issue",
 };
 
-// Days after the order is placed that a return can be started in the chat.
-export const returnWindowDays = () => Math.max(1, parseInt(process.env.RETURN_WINDOW_DAYS, 10) || 30);
+// The store's return rules for the chat (Settings → Returns): how many days
+// after the order is placed a return can start (0 = no limit), and whether
+// it has to be delivered first (otherwise shipped is enough).
+export function returnPolicy(config = {}) {
+  const set = Number.parseInt(config?.returnWindowDays, 10);
+  const env = Number.parseInt(process.env.RETURN_WINDOW_DAYS, 10);
+  const days = Number.isFinite(set) ? set : Number.isFinite(env) ? env : 30;
+  return { windowDays: Math.min(Math.max(days, 0), 365), deliveredOnly: config?.returnsDeliveredOnly !== false };
+}
 
-// Why the chat won't start a return ("" when it will): only delivered orders,
-// only within the return window counted from the day the order was placed.
-export function returnBlock(o, stage, items, now = Date.now()) {
+// Why the chat won't start a return ("" when it will).
+export function returnBlock(o, stage, items, now = Date.now(), policy = returnPolicy()) {
   if (o.cancelledAt) return "cancelled";
   if (!items.some((i) => i.returnable > 0)) return "nothing_left";
-  if (stage !== "delivered") return "not_delivered";
+  if (policy.deliveredOnly && stage !== "delivered") return "not_delivered";
+  if (stage === "ordered") return "not_shipped";
   const placed = Date.parse(o.createdAt || "");
-  if (Number.isFinite(placed) && now - placed > returnWindowDays() * 864e5) return "window_closed";
+  if (policy.windowDays > 0 && Number.isFinite(placed) && now - placed > policy.windowDays * 864e5) return "window_closed";
   return "";
 }
 
@@ -131,7 +138,7 @@ export function returnsPageLink(base, number, email) {
   return number && email ? `${b}?order-number=${encodeURIComponent(number)}&email=${encodeURIComponent(email)}` : b;
 }
 
-export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = "", now = Date.now(), chatReturns = [] } = {}) {
+export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = "", now = Date.now(), chatReturns = [], policy = returnPolicy() } = {}) {
   const stage = orderStage(o);
   const fulfillments = o.fulfillments || [];
   const latest = [...fulfillments].reverse().find((f) => (f.trackingInfo || []).length) || fulfillments[fulfillments.length - 1] || null;
@@ -159,7 +166,7 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
     };
   });
   const returnStatus = RETURN_LABEL[o.returnStatus] || "";
-  const blocked = returnBlock(o, stage, items, now);
+  const blocked = returnBlock(o, stage, items, now, policy);
   return {
     id: numericId(o.id),
     number,
@@ -184,7 +191,7 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
 
 // The signed-in customer's recent orders as cards (and their email, kept
 // server-side for prefilled tracking/return links).
-export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", returnsBase = "", lookupReturns = findChatReturns }) {
+export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", returnsBase = "", policy = returnPolicy(), lookupReturns = findChatReturns }) {
   const data = await adminGraphql({
     shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
     variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 10) },
@@ -197,7 +204,7 @@ export async function getOrderCards({ shop, accessToken, customerId, first = 5, 
   if (want) nodes = nodes.filter((o) => String(o.name || "").replace(/[^0-9a-z]/gi, "").toLowerCase().endsWith(want));
   const started = await lookupReturns(shop, nodes.map((o) => numericId(o.id)));
   const forOrder = (o) => started.filter((r) => r.orderId === numericId(o.id));
-  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o) })) };
+  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o), policy })) };
 }
 
 // One order, only if it belongs to this customer (for starting a return).

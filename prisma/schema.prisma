@@ -177,6 +177,10 @@ model ShopConfig {
   // Returns and exchanges run inside the chat (AfterShip). Off: the order
   // cards send shoppers to the returns page instead.
   returnsInChat       Boolean  @default(true)
+  // Which orders the chat offers a return on: placed within this many days
+  // (0 = no limit), and only once delivered (off: once shipped).
+  returnWindowDays     Int      @default(30)
+  returnsDeliveredOnly Boolean  @default(true)
   referralPageUrl     String   @default("")
 
   vipModeEnabled      Boolean  @default(false)

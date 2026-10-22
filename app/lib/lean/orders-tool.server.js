@@ -5,7 +5,7 @@
 // the chat continues once they're signed in. Order details never go to
 // anyone Shopify hasn't signed in as that customer.
 
-import { getOrderCards, returnWindowDays } from "../orders.server.js";
+import { getOrderCards, returnPolicy } from "../orders.server.js";
 import { publicReturnMethods } from "../returns.server.js";
 
 const IN_CHAT_RETURNS =
@@ -34,7 +34,9 @@ export const ORDERS_TOOL = {
   },
 };
 
-export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true }) {
+export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true, policy = returnPolicy() }) {
+  // Which orders get the return button, in words, for the model.
+  const rule = [policy.deliveredOnly ? "delivered" : "shipped", policy.windowDays > 0 ? `within ${policy.windowDays} days of ordering` : ""].filter(Boolean).join(", ");
   return {
     definition: returnsInChat ? ORDERS_TOOL : { ...ORDERS_TOOL, description: ORDERS_TOOL.description.replace(IN_CHAT_RETURNS, PAGE_RETURNS) },
     run: async (input = {}) => {
@@ -47,7 +49,7 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         };
       }
       if (!accessToken) return { error: "Orders aren't available right now." };
-      const { orders } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl });
+      const { orders } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl, policy });
       // Returns in the chat turned off: the card's button opens the returns page.
       if (!returnsInChat) for (const o of orders) o.returnMode = "page";
       if (!orders.length) {
@@ -58,7 +60,7 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         number: o.number, date: o.date, status: o.stageLabel, eta: o.eta || undefined, delivered: o.deliveredAt || undefined,
         return_status: o.returnStatus || undefined, can_return: o.canReturn,
         return_started_in_chat: o.returns?.length ? o.returns.map((r) => ({ rma: r.rma || undefined, on: r.date, how: r.method?.label || undefined, exchange: r.exchange || undefined })) : undefined,
-        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", window_closed: `past the ${returnWindowDays()}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
+        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", not_shipped: "not shipped yet — returns open once it ships", window_closed: `past the ${policy.windowDays}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
         has_returns_page: returnsInChat ? undefined : Boolean(o.returnsUrl),
         items: o.items.map((i) => i.title).slice(0, 4),
       }));
@@ -66,9 +68,9 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         signed_in: true,
         orders: summary,
         note: intent === "return" && !returnsInChat
-          ? `The order cards are shown with a "Start a return" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering) that opens the returns page with the order filled in. Tell them to tap it; if none can be returned, say why in one sentence (why_no_return).`
+          ? `The order cards are shown with a "Start a return" button on returnable orders (${rule}) that opens the returns page with the order filled in. Tell them to tap it; if none can be returned, say why in one sentence (why_no_return).`
           : intent === "return"
-          ? `The order cards are shown with a "Return an item" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
+          ? `The order cards are shown with a "Return an item" button on returnable orders (${rule}). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
           : "The order cards are shown under your reply.",
         _events: [{ type: "order_cards", intent, orders, returnMethods: returnsInChat ? publicReturnMethods() : [] }],
       };

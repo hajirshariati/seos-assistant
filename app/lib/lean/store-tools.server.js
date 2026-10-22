@@ -4,6 +4,7 @@
 // This file only decides which tools this store and this customer get; it
 // adds no routing of its own — Claude decides when to call them.
 
+import { returnPolicy } from "../orders.server.js";
 import {
   FIT_PREDICTOR_TOOL,
   REVIEWS_TOOL,
@@ -110,6 +111,7 @@ export async function buildLeanStoreExtras({
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
     returnsInChat: config.returnsInChat !== false,
+    returnPolicy: returnPolicy(config),
   };
 
   const [rulesRes, campaignsRes, customerRes, recRes] = await Promise.allSettled([
@@ -143,7 +145,7 @@ export async function buildLeanStoreExtras({
 
   // Orders and returns for every shopper: signed in → their order cards;
   // signed out → a sign-in button (no VIP mode needed — it's their own data).
-  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat });
+  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat, policy: ctx.returnPolicy });
   wrap(orders.definition, orders.run);
 
   if (config.fitPredictorEnabled === true) {
