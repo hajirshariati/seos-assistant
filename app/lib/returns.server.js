@@ -66,12 +66,12 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 }
 
 // AfterShip Returns: create a refund return for these order items.
-// Field names follow AfterShip's Create Return reference: each item carries
-// its own intended_return_quantity, reason, resolution, return method and
-// refund destination. Refunds go to the original payment (no store credit).
-// AfterShip's docs aren't reachable from every network, so if it rejects
-// the documented shape (422) we try once with the store named too; the full
-// error body is returned so the log says exactly which field it wants.
+// AfterShip's 422 response names the required fields: order.store,
+// a top-level return_method and a top-level refund_destination. Refunds go
+// to the original payment (no store credit). The store's external_id format
+// isn't documented anywhere we can reach, so on a 422 we try the full
+// myshopify domain after the short store key; the full error body is
+// returned so the log says exactly which field it wants.
 const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
 
@@ -82,12 +82,18 @@ export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, co
     return_reason: reasonLabel,
     ...(comment ? { return_reason_comment: comment.slice(0, 500) } : {}),
     resolution: "refund",
+  }));
+  const orderId = String(order.id).replace(/\D/g, "");
+  const domain = String(shop).trim().toLowerCase();
+  const key = domain.replace(/\.myshopify\.com$/i, "");
+  const storeIds = [...new Set([key, domain].filter(Boolean))];
+  const body = (store) => ({
+    order: { external_id: orderId, ...(store ? { store: { platform: "shopify", external_id: store } } : {}) },
+    return_items: returnItems,
     return_method: { type: AS_METHOD },
     refund_destination: "original_payment",
-  }));
-  const base = { order: { external_id: String(order.id).replace(/\D/g, "") }, return_items: returnItems };
-  const key = String(shop).replace(/\.myshopify\.com$/i, "");
-  return key ? [base, { ...base, store: { platform: "shopify", key, external_id: key } }] : [base];
+  });
+  return storeIds.length ? storeIds.map(body) : [body(null)];
 }
 
 export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", fetchImpl = fetch }) {

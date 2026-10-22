@@ -72,22 +72,26 @@ await test("AfterShip: a refund return for the order's items, keyed by the store
   assert.match(sent.url, /^https:\/\/api\.aftership\.com\/returns\/[\d-]+\/returns$/);
   assert.equal(sent.init.headers["as-api-key"], "k");
   assert.equal(b.order.external_id, "5001");
-  assert.deepEqual(b.return_items[0], { external_order_item_id: "9001", intended_return_quantity: 1, return_reason: "Too small", resolution: "refund", return_method: { type: "retailer_label" }, refund_destination: "original_payment" });
+  // AfterShip's 422 named these: order.store, top-level return_method and refund_destination.
+  assert.deepEqual(b.order.store, { platform: "shopify", external_id: "aetrex" });
+  assert.deepEqual(b.return_method, { type: "retailer_label" });
+  assert.equal(b.refund_destination, "original_payment");
+  assert.deepEqual(b.return_items[0], { external_order_item_id: "9001", intended_return_quantity: 1, return_reason: "Too small", resolution: "refund" });
   assert.ok(r.ok && r.rma === "RMA77");
 });
-await test("AfterShip 422 on the documented shape: retried once naming the store; full error kept", async () => {
+await test("AfterShip 422: retried once with the full store domain; full error kept", async () => {
   const bodies = [];
   const fetchImpl = async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ meta: { code: 42201, message: "Unprocessable entity", details: [{ path: "store", info: "is required" }] } }), { status: 422 }); };
   const r = await createAftershipReturn({ apiKey: "k", shop: "aetrex.myshopify.com", order: { id: "5001" }, items: [{ lineId: "9001", quantity: 1 }], reasonLabel: "Other", fetchImpl });
   assert.equal(bodies.length, 2);
-  assert.equal(bodies[0].store, undefined);
-  assert.deepEqual(bodies[1].store, { platform: "shopify", key: "aetrex", external_id: "aetrex" });
+  assert.deepEqual(bodies[0].order.store, { platform: "shopify", external_id: "aetrex" });
+  assert.deepEqual(bodies[1].order.store, { platform: "shopify", external_id: "aetrex.myshopify.com" });
   assert.equal(r.ok, false); assert.match(r.error, /store/); assert.match(r.error, /is required/);
 });
 await test("AfterShip: never asks for store credit", async () => {
   let b = null;
   await createAftershipReturn({ apiKey: "k", order: { id: "1" }, items: [{ lineId: "2", quantity: 1 }], reasonLabel: "Other", refundTo: "store_credit", fetchImpl: async (u, i) => { b = JSON.parse(i.body); return new Response("{}", { status: 201 }); } });
-  assert.ok(b.return_items.every((i) => i.refund_destination === "original_payment"));
+  assert.equal(b.refund_destination, "original_payment");
 });
 await test("AfterShip refusal is reported, not thrown (the chat offers the returns page)", async () => {
   const fetchImpl = async () => new Response(JSON.stringify({ meta: { code: 42200, message: "Return window has expired" } }), { status: 422 });
