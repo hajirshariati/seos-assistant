@@ -107,6 +107,16 @@ export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, co
 }
 
 export async function createAftershipReturn({ apiKey, shop = "", order, items, reasonLabel, comment = "", fetchImpl = fetch }) {
+  const r = await postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, fetchImpl });
+  // Reasons without "comments" switched on in AfterShip refuse any comment;
+  // the return still goes through without it.
+  if (!r.ok && comment && /comments are not allowed/i.test(r.error || "")) {
+    return postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment: "", fetchImpl });
+  }
+  return r;
+}
+
+async function postAftershipReturn({ apiKey, shop, order, items, reasonLabel, comment, fetchImpl }) {
   const bodies = aftershipReturnBodies({ shop, order, items, reasonLabel, comment });
   const errors = [];
   let last = null;

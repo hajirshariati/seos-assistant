@@ -87,6 +87,16 @@ await test("AfterShip 422 (e.g. unknown reason): not retried; AfterShip's messag
   assert.deepEqual(bodies[0].order.store, { platform: "shopify", external_id: "aetrex" });
   assert.equal(r.status, 422); assert.match(r.error, /return reason is not found/);
 });
+await test("AfterShip refuses comments for this reason → sent again without the comment", async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => { const b = JSON.parse(init.body); bodies.push(b); return b.return_items[0].return_reason_comment
+    ? new Response(JSON.stringify({ meta: { code: 42200, message: "comments are not allowed in the return reason" } }), { status: 422 })
+    : new Response(JSON.stringify({ data: { return: { id: "r5", rma_number: "RMA5" } } }), { status: 201 }); };
+  const r = await createAftershipReturn({ apiKey: "k", shop: "aetrex.myshopify.com", order: { id: "5001" }, items: [{ lineId: "9001", quantity: 1 }], reasonLabel: "Too Small", comment: "Exchanging for another size", fetchImpl });
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].return_items[0].return_reason_comment, undefined);
+  assert.ok(r.ok && r.rma === "RMA5");
+});
 await test("reason names: the store's own AfterShip names when mapped, our label otherwise", () => {
   const env = JSON.stringify({ too_small: "Too Small - Need a bigger size", other: "  " });
   assert.equal(aftershipReasonName("too_small", env), "Too Small - Need a bigger size");
