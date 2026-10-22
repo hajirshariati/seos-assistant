@@ -67,7 +67,9 @@ export function buildStoreContextBlock({ rules = [], campaigns = [], customer = 
       campaigns.map((c) => `- ${c.name} (${fmtDate(c.startsAt)} – ${fmtDate(c.endsAt)}): ${String(c.content || "").trim()}`).join("\n"),
     );
   } else {
-    parts.push("ACTIVE PROMOTIONS\nNone are running right now.");
+    // Codes and store-wide offers only — marked-down products are found with
+    // the product search (on_sale), so "none" here never means "nothing on sale".
+    parts.push("ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now. Marked-down products may still be on sale — find them with the product search (on_sale: true).");
   }
   if (customer?.firstName) {
     const lines = [`The customer is logged in. First name: ${customer.firstName} (use it at most once, naturally).`];

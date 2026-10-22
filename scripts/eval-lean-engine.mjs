@@ -734,12 +734,29 @@ await test("store context (rules, promotions, customer) is a separate, uncached 
   assert.match(block, /INSTRUCTIONS FROM THE STORE TEAM \(apply them to what the customer means in this conversation\)\nNever recommend kids/);
   assert.match(block, /Fall Sale .*FALL25/);
   assert.match(block, /First name: Dana/);
-  assert.match(buildStoreContextBlock({}), /None are running/);
+  // No promotions doesn't mean nothing is on sale: the model is pointed at the
+  // marked-down products (the live bot said "no sales" while items were 50% off).
+  const none = buildStoreContextBlock({});
+  assert.match(none, /No discount codes or store-wide offers right now/);
+  assert.match(none, /Marked-down products may still be on sale — find them with the product search \(on_sale: true\)/);
+  assert.doesNotMatch(none, /None are running/);
   const s = scripted([{ stop_reason: "end_turn", content: [txt("Yes — 25% off sneakers with code FALL25, and free shipping over $75.")] }]);
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any sales?" }], latestUserMessage: "any sales?", extraSystem: block, callModel: s.callModel, log: quiet });
   assert.equal(s.requests[0].system.length, 2);
   assert.ok(s.requests[0].system[0].cache_control && !s.requests[0].system[1].cache_control);
   assert.deepEqual(r.issues, [], "$75 comes from the promotion");
+});
+await test("sales questions: the prompt sends the model to on_sale, and on_sale alone lists every markdown", async () => {
+  const prompt = JSON.stringify(buildLeanSystemPrompt({ shopName: "Aetrex", vocab: catalog.vocab }));
+  assert.match(prompt, /asks about sales, deals, discounts, markdowns, clearance or what's on sale, search products with on_sale: true/);
+  assert.match(prompt, /Only say nothing is on sale if that search comes back empty/);
+  const tool = buildLeanTools(catalog.vocab).find((t) => t.input_schema?.properties?.on_sale);
+  assert.match(tool.input_schema.properties.on_sale.description, /sales, deals, discounts/);
+  const onSale = catalog.products.filter((p) => p.onSale);
+  assert.ok(onSale.length > 0, "fixture has markdowns");
+  const r = leanSearch(catalog, { query: "", on_sale: true, limit: 10 });
+  const got = (r.products || []).map((p) => p.handle);
+  assert.ok(got.length > 0 && got.every((h) => onSale.some((p) => p.handle === h)), JSON.stringify(got));
 });
 await test("long conversations are trimmed to the recent turns", async () => {
   const long = Array.from({ length: 60 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `message ${i}` }));

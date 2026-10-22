@@ -27,7 +27,7 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   if (activities) props.activities = activities;
   const conditions = arrayEnum(vocab.conditions || [], "Foot conditions the product is designed to help with.");
   if (conditions) props.conditions = conditions;
-  props.on_sale = { type: "boolean", description: "Only discounted products." };
+  props.on_sale = { type: "boolean", description: "Only marked-down products (sale price below the original price). Use for sales, deals, discounts, markdowns or clearance — on its own to show everything on sale, or with other filters." };
   props.max_price = { type: "number", description: "Maximum price in dollars." };
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };
   props.limit = { type: "integer", description: "How many styles to return (default 6, max 10)." };
