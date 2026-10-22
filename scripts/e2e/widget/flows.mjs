@@ -423,6 +423,29 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("orders & returns: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Shopify's sign-in cuts the pop-up's link back to the chat (COOP).
+for (const coop of ["1", "2"]) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:4789/full?coop=${coop}`);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "where is my order?");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-ord-login]", { timeout: 6000 });
+  const [popup] = await Promise.all([page.waitForEvent("popup"), page.click("[data-ord-login]")]);
+  if (coop === "2") {
+    await popup.waitForURL(/\/account$/, { timeout: 6000 }).catch(() => {});
+    await popup.close();
+    await page.bringToFront();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  }
+  const ok = await page.waitForSelector(".ai-ord[data-ord]", { timeout: 8000 }).then(() => true).catch(() => false);
+  check(coop === "1"
+    ? "sign-in: the chat continues even when Shopify cuts the pop-up's link back (no refresh)"
+    : "sign-in: the chat continues when the shopper closes the sign-in window and comes back (no refresh)", ok && page.url().includes("/full"), page.url());
+  await ctx.close();
+}
 // Pop-ups blocked: sign-in runs in the same tab and the chat resumes on return.
 {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

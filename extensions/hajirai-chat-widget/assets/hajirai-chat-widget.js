@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-22 returns-fixes');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-22 signin-resume');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -2114,6 +2114,7 @@ function leaveHome(fromRect){
    exchange (the return plus the same shoe in the next size, ready to add). */
 var RETURNS_URL='/apps/hajirai/returns';
 var RESUME_KEY='hajirai_resume';
+var SIGNED_IN_URL='/apps/hajirai/signed-in';
 var pendingOrders=null,pendingLogin=null;
 var ordersById={};
 var RET_REASONS=[
@@ -2183,8 +2184,10 @@ function startSignIn(intent){
 }
 var lastAskedOrders='';
 function resumeAfterSignIn(){
+  if(resumeAfterSignIn.busy)return;
   var r=null;try{r=JSON.parse(sessionStorage.getItem(RESUME_KEY)||'null');sessionStorage.removeItem(RESUME_KEY)}catch(e){}
   if(!r||Date.now()-(r.at||0)>15*60*1000)return;
+  resumeAfterSignIn.busy=true;setTimeout(function(){resumeAfterSignIn.busy=false},3000);
   CUST_LOGGED_IN=true;
   var pill=panel.querySelector('.ai-chat-header__login-pill');if(pill)pill.remove();
   /* The sign-in cards above have done their job. */
@@ -2197,6 +2200,23 @@ window.addEventListener('message',function(e){
   if(e.origin!==location.origin||!e.data||e.data.type!=='hajirai-signed-in')return;
   resumeAfterSignIn();
 });
+/* Shopify's sign-in pages cut the pop-up's link back to this tab, so the
+   "signed in" note also arrives on a BroadcastChannel / localStorage, and
+   when the shopper comes back to this tab the chat asks the store itself. */
+try{var signBc=new BroadcastChannel('hajirai');signBc.onmessage=function(e){if(e.data&&e.data.type==='hajirai-signed-in')resumeAfterSignIn()}}catch(e){}
+window.addEventListener('storage',function(e){if(e.key==='hajirai_signed_in'&&e.newValue)resumeAfterSignIn()});
+var signCheckBusy=false;
+function checkSignedIn(){
+  if(CUST_LOGGED_IN||signCheckBusy)return;
+  var pending=null;try{pending=sessionStorage.getItem(RESUME_KEY)}catch(e){}
+  if(!pending)return;
+  signCheckBusy=true;
+  fetch(SIGNED_IN_URL+'?check=1',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+  .then(function(r){return r.json()}).then(function(d){if(d&&d.signedIn)resumeAfterSignIn()})
+  .catch(function(){}).then(function(){signCheckBusy=false});
+}
+window.addEventListener('focus',checkSignedIn);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')checkSignedIn()});
 /* Came back from a same-tab sign-in. */
 if(CUST_LOGGED_IN){try{if(sessionStorage.getItem(RESUME_KEY))setTimeout(resumeAfterSignIn,600)}catch(e){}}
 
