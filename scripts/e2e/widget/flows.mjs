@@ -444,7 +444,9 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   await page.goto("http://localhost:4789/full");
   await page.waitForTimeout(700);
   const state = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const r = l.getBoundingClientRect(); return { tucked: l.classList.contains("is-tucked"), bubble: l.classList.contains("is-bubble"), w: Math.round(r.width), ghosts: document.querySelectorAll(".ai-chat-morph").length, op: getComputedStyle(l).opacity }; });
-  await page.evaluate(() => { window.__frames = []; let last = performance.now(); const f = (t) => { window.__frames.push(t - last); last = t; requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  // Each frame: the real launcher's and the stand-in's opacity. A frame where
+  // both are part-way (a cross-fade) lets the page show through — a flash.
+  await page.evaluate(() => { window.__frames = []; window.__seams = 0; let last = performance.now(); const f = (t) => { window.__frames.push(t - last); last = t; const g = document.querySelector(".ai-chat-morph"); if (g) { const lo = +getComputedStyle(document.querySelector(".ai-chat-launcher")).opacity, go = +getComputedStyle(g).opacity; if (lo > 0.02 && lo < 0.98 && go < 0.98) window.__seams++; } requestAnimationFrame(f); }; requestAnimationFrame(f); });
   await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
   await page.waitForTimeout(150);
   check(`end of page (${label}): the bar stays while scrolling the middle of the page`, !(await state()).tucked);
@@ -461,6 +463,8 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`end of page (${label}): scrolling back up opens the bar again`, !up.tucked && !up.bubble && up.w > 300 && up.ghosts === 0, JSON.stringify(up));
   const slow = await page.evaluate(() => window.__frames.slice(5).filter((f) => f > 34).length);
   check(`end of page (${label}): smooth — no dropped frames during the morphs`, slow === 0, `slow frames: ${slow}`);
+  const seams = await page.evaluate(() => window.__seams);
+  check(`end of page (${label}): no flash at the hand-over (never both half-faded)`, seams === 0, `frames: ${seams}`);
   await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
   await page.waitForTimeout(900);
   await page.click(".ai-chat-launcher");

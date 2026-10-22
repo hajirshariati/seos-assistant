@@ -568,10 +568,14 @@ function launcherLook(){
   var r=launcher.getBoundingClientRect(),cs=getComputedStyle(launcher),bubble=launcher.classList.contains('is-bubble');
   var ic=bubble?$('.ai-chat-launcher__orb',launcher):$('.ai-chat-launcher__icon',launcher),ir=ic?ic.getBoundingClientRect():null;
   var tx=bubble?null:$('.ai-chat-launcher__text',launcher),tr=tx?tx.getBoundingClientRect():null,tcs=tx?getComputedStyle(tx):null;
+  var xs=bubble?null:$('.ai-chat-launcher__close svg',launcher),xr=xs?xs.getBoundingClientRect():null;
   return {r:r,bg:cs.backgroundColor,shadow:cs.boxShadow,radius:Math.min(parseFloat(cs.borderTopLeftRadius)||0,r.height/2),z:cs.zIndex,
-    icon:ir&&ir.width?{x:ir.left-r.left,y:ir.top-r.top,s:ir.width,bg:getComputedStyle(ic).backgroundColor}:null,
+    bw:cs.borderTopStyle==='none'?'0px':cs.borderTopWidth,bc:cs.borderTopColor,
+    close:xr&&xr.width?{x:xr.left-r.left,y:xr.top-r.top,w:xr.width,h:xr.height,svg:xs.outerHTML,color:getComputedStyle(xs).color}:null,
+    icon:ir&&ir.width?{x:ir.left-r.left,y:ir.top-r.top,s:ir.width,bg:getComputedStyle(ic).backgroundColor,filter:glowFilter(ic)}:null,
     text:tr&&tr.width?{x:tr.left-r.left,y:tr.top-r.top,h:tr.height,label:tx.textContent,color:tcs.color,font:tcs.font,pad:tcs.paddingLeft}:null};
 }
+function glowFilter(ic){var c=$('.ai-chat-glow',ic),f=c?getComputedStyle(c).filter:'';return f&&f!=='none'?f:'drop-shadow(0 0 0 rgba(0,0,0,0))'}
 function cancelMorph(){if(morphAnim){var m=morphAnim;morphAnim=null;m.stop()}}
 function morphLauncher(apply,done){
   cancelMorph();
@@ -585,16 +589,21 @@ function morphLauncher(apply,done){
   apply();var B=launcherLook();
   if(!B.r.width||(Math.abs(A.r.left-B.r.left)<1&&Math.abs(A.r.width-B.r.width)<1&&Math.abs(A.r.top-B.r.top)<1)){['transition','opacity','pointer-events'].forEach(function(k){launcher.style.removeProperty(k)});if(done)done();return}
   var g=document.createElement('div');g.className='ai-chat-morph';g.setAttribute('aria-hidden','true');
-  g.style.cssText='position:fixed;left:0;top:0;margin:0;padding:0;overflow:hidden;box-sizing:border-box;pointer-events:none;contain:layout paint;will-change:transform,width,height;z-index:'+(B.z&&B.z!=='auto'?B.z:999);
+  g.style.cssText='position:fixed;left:0;top:0;margin:0;padding:0;overflow:hidden;box-sizing:border-box;pointer-events:none;contain:layout paint;will-change:transform,width,height;z-index:'+((parseInt(B.z,10)||999)+1);
   var anims=[],o={duration:MORPH_MS,easing:MORPH_EASE,fill:'both'};
   var at=function(L){return 'translate3d('+L.r.left+'px,'+L.r.top+'px,0)'};
   anims.push(g.animate([
     {transform:at(A),width:A.r.width+'px',height:A.r.height+'px',borderRadius:A.radius+'px',backgroundColor:A.bg,boxShadow:A.shadow},
     {transform:at(B),width:B.r.width+'px',height:B.r.height+'px',borderRadius:B.radius+'px',backgroundColor:B.bg,boxShadow:B.shadow}],o));
+  /* Its hairline edge, drawn inside so nothing in it shifts. */
+  var edge=document.createElement('span');edge.style.cssText='position:absolute;left:0;top:0;right:0;bottom:0;border-style:solid;border-radius:inherit;box-sizing:border-box;pointer-events:none';
+  g.appendChild(edge);
+  anims.push(edge.animate([{borderWidth:A.bw,borderColor:A.bc},{borderWidth:B.bw,borderColor:B.bc}],o));
   /* The orb: the live glow, gliding from its spot in one look to the other. */
   if(A.icon&&B.icon){
     var ob=document.createElement('span');ob.style.cssText='position:absolute;left:0;top:0;border-radius:50%;overflow:hidden;display:block';
     var gl=makeGlow(Math.max(A.icon.s,B.icon.s),true);gl.style.width='100%';gl.style.height='100%';gl.style.display='block';ob.appendChild(gl);g.appendChild(ob);
+    anims.push(gl.animate([{filter:A.icon.filter},{filter:B.icon.filter}],o));
     var ip=function(L){return 'translate3d('+L.icon.x+'px,'+L.icon.y+'px,0)'};
     anims.push(ob.animate([{transform:ip(A),width:A.icon.s+'px',height:A.icon.s+'px',backgroundColor:A.icon.bg},{transform:ip(B),width:B.icon.s+'px',height:B.icon.s+'px',backgroundColor:B.icon.bg}],o));
   }
@@ -606,6 +615,15 @@ function morphLauncher(apply,done){
     g.appendChild(tx);
     anims.push(tx.animate(A.text?[{opacity:1},{opacity:0,offset:0.3},{opacity:0}]:[{opacity:0},{opacity:0,offset:0.6},{opacity:1}],{duration:MORPH_MS,easing:'ease-out',fill:'both'}));
   }
+  /* The bar's × goes with the words. */
+  var X=A.close||B.close;
+  if(X){
+    var xb=document.createElement('span');xb.innerHTML=X.svg;
+    xb.style.cssText='position:absolute;left:'+X.x+'px;top:'+X.y+'px;width:'+X.w+'px;height:'+X.h+'px;display:block;line-height:0;color:'+X.color;
+    var sv=xb.firstChild;if(sv&&sv.style){sv.style.width='100%';sv.style.height='100%';sv.style.display='block'}
+    g.appendChild(xb);
+    anims.push(xb.animate(A.close?[{opacity:1},{opacity:0,offset:0.3},{opacity:0}]:[{opacity:0},{opacity:0,offset:0.6},{opacity:1}],{duration:MORPH_MS,easing:'ease-out',fill:'both'}));
+  }
   document.body.appendChild(g);
   var finished=false,timer=0;
   var end=function(handover){
@@ -613,9 +631,10 @@ function morphLauncher(apply,done){
     launcher.style.removeProperty('opacity');launcher.style.removeProperty('pointer-events');
     void launcher.offsetWidth;launcher.style.removeProperty('transition');
     if(handover&&launcher.animate){
-      /* Same look, same place: a short cross-fade hides the hand-over. */
-      launcher.animate([{opacity:0},{opacity:1}],{duration:160,easing:'ease-out'});
-      var f=g.animate([{opacity:1},{opacity:0}],{duration:160,easing:'ease-out',fill:'forwards'});
+      /* Same look, same place: the real launcher is already fully there
+         underneath, and the stand-in on top fades off it. (Fading both at
+         once would let the page show through halfway — a flash.) */
+      var f=g.animate([{opacity:1},{opacity:0}],{duration:180,easing:'ease-out',fill:'forwards'});
       f.onfinish=function(){g.remove()};
     }else g.remove();
     if(morphAnim===me)morphAnim=null;
