@@ -3131,7 +3131,7 @@ else for(var i=0;i<messages.length;i++){
   var _os=messages[i].orders;
   if(Array.isArray(_os)&&_os.length&&_md){
     if(Array.isArray(messages[i].returnMethods)&&messages[i].returnMethods.length)RET_METHODS=messages[i].returnMethods;
-    var _ob=$('.ai-chat-msg-bubble',_md);if(_ob)_ob.insertAdjacentHTML('beforeend',ordersHtml(_os));
+    var _ordB=$('.ai-chat-msg-bubble',_md);if(_ordB)_ordB.insertAdjacentHTML('beforeend',ordersHtml(_os));
   }
 }
 if(messages.length)resumeReturns();

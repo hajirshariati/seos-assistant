@@ -111,6 +111,10 @@ export function returnMethods(env = process.env.AFTERSHIP_RETURN_METHODS) {
   return out.length ? out.slice(0, 4) : [{ key: "default", type: AS_METHOD, label: "Mail it back", detail: "", fee: "", findUrl: "" }];
 }
 
+// The methods as the chat shows them (AfterShip's own type stays server-side).
+export const publicReturnMethods = () =>
+  returnMethods().map((m) => ({ key: m.key, label: m.label, detail: m.detail, fee: m.fee, findUrl: m.findUrl }));
+
 export function aftershipReturnBodies({ shop = "", order, items, reasonLabel, comment = "", methodType = AS_METHOD }) {
   const returnItems = items.map((it) => ({
     external_order_item_id: String(it.lineId),

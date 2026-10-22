@@ -6,7 +6,7 @@
 // anyone Shopify hasn't signed in as that customer.
 
 import { getOrderCards, returnWindowDays } from "../orders.server.js";
-import { returnMethods } from "../returns.server.js";
+import { publicReturnMethods } from "../returns.server.js";
 
 const IN_CHAT_RETURNS =
     "For returns and exchanges, tell them to tap \"Return an item\" on the order — the chat walks them through it (items, reason, how to send it back, refund or a different size). " +
@@ -70,7 +70,7 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
           : intent === "return"
           ? `The order cards are shown with a "Return an item" button on returnable orders (delivered, within ${returnWindowDays()} days of ordering). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
           : "The order cards are shown under your reply.",
-        _events: [{ type: "order_cards", intent, orders, returnMethods: returnsInChat ? returnMethods().map(({ type, ...m }) => m) : [] }],
+        _events: [{ type: "order_cards", intent, orders, returnMethods: returnsInChat ? publicReturnMethods() : [] }],
       };
     },
   };

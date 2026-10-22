@@ -14,7 +14,7 @@ import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { getOwnedOrder, toOrderCard, chatReturnView } from "../lib/orders.server.js";
-import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName, returnMethods, blockedMessage, priorReturn } from "../lib/returns.server.js";
+import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName, returnMethods, publicReturnMethods, blockedMessage, priorReturn } from "../lib/returns.server.js";
 import { findChatReturns, saveChatReturn } from "../models/ChatReturn.server";
 import { recordHealth } from "../models/ChatHealth.server";
 
@@ -39,8 +39,6 @@ function returnsOff(config, card, order) {
   };
 }
 
-// The methods as the chat shows them (AfterShip's own type stays here).
-const publicMethods = () => returnMethods().map(({ type, ...m }) => m);
 
 // One return at a time per order, so two taps can't both reach AfterShip.
 const inFlight = new Map();
@@ -95,7 +93,7 @@ export const loader = async ({ request }) => {
     return Response.json({
       ok: true,
       order: card,
-      methods: publicMethods(),
+      methods: publicReturnMethods(),
       message: card.canReturn ? "" : blockedMessage(card.returnBlocked),
       returnsUrl: returnsPage(config, card.number, order.email || ""),
     });
