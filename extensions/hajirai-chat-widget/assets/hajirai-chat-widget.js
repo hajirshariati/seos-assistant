@@ -45,6 +45,12 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
   if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
+  if(d.feedbackSurvey&&typeof d.feedbackSurvey==='object'){
+    var hb={fb:d.feedbackSurvey,hideChat:d.hideLiveChatButton===true},was=FB_ON+'|'+FB_FORM+'|'+FB_LABEL;
+    try{localStorage.setItem(HOST_KEY,JSON.stringify(hb))}catch(e){}
+    applyHostButtons(hb);
+    if(was!==FB_ON+'|'+FB_FORM+'|'+FB_LABEL&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
+  }
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -104,6 +110,29 @@ var LWIDTH=C.launcherWidth||'500';
 var CWIDTH=C.chatWidth||LWIDTH;
 var HIDE_MOBILE=C.hideOnMobile===true;
 var SUPPORT_URL=C.supportUrl||'';
+/* Settings → Feedback survey and live chat. The store's Typeform survey as
+   Start here button 4, opening inside the chat; and hiding the separate
+   live chat button (live chat itself still opens from the assistant, see
+   openSupportChat). Remembered from the last visit so a page shows the
+   right buttons straight away; the config call keeps it current. */
+var HOST_KEY='hajirai_host_buttons';
+var FB_ON=false,FB_FORM='',FB_LABEL='Share feedback',HIDE_LIVECHAT=false;
+function applyHostButtons(cfg){
+  cfg=cfg||{};var fb=cfg.fb||{};
+  FB_FORM=/^[A-Za-z0-9]{4,32}$/.test(String(fb.form||''))?String(fb.form):'';
+  FB_ON=fb.on===true&&!!FB_FORM;
+  FB_LABEL=String(fb.label||'').trim().slice(0,40)||'Share feedback';
+  HIDE_LIVECHAT=cfg.hideChat===true;
+  /* The store's own buttons this replaces: its floating Feedback button
+     (when the survey lives in the chat) and, if asked, live chat's. */
+  var css='';
+  if(FB_ON)css+='.aetrex-tf-cta,.tf-v1-sidetab,.tf-v1-popover{display:none!important}';
+  if(HIDE_LIVECHAT)css+='iframe#launcher,iframe[title="Button to launch messaging window"]{display:none!important}';
+  var st=document.getElementById('ai-chat-host-buttons');
+  if(!st&&css){st=document.createElement('style');st.id='ai-chat-host-buttons';(document.head||document.documentElement).appendChild(st)}
+  if(st)st.textContent=css;
+}
+try{applyHostButtons(JSON.parse(localStorage.getItem(HOST_KEY)||'null'))}catch(e){applyHostButtons(null)}
 /* The button's text comes from the app's Settings → Support link (widget-config). */
 var SUPPORT_LABEL='Chat with Aetrex Support';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
@@ -995,6 +1024,7 @@ var WI={
   insole:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="translate(12.7 2.55)"><path d="M3.6.3C6 0 7.8 1.8 7.9 4.4 8 6.8 7.2 8.6 7.1 10.6 7 12.6 7.6 14.4 7.3 16.2 7 18 5.8 18.9 4.4 18.9 2.9 18.9 1.8 18 1.7 16.4 1.6 14.8 2.6 13.4 2.6 11.8 2.6 10.3 1.2 9.2.6 7.2 0 5 .9.7 3.6.3z"/><path d="M.9 8.2C2 9.6 2.7 10.6 2.6 11.8c0 1.6-1 3-.9 4.4.9-.8 2.2-2.2 2.3-4.2.1-1.6-1.4-3-3.1-3.8z" fill="currentColor" stroke="none" opacity=".16"/></g><g transform="translate(11.3 2.55) scale(-1 1)"><path d="M3.6.3C6 0 7.8 1.8 7.9 4.4 8 6.8 7.2 8.6 7.1 10.6 7 12.6 7.6 14.4 7.3 16.2 7 18 5.8 18.9 4.4 18.9 2.9 18.9 1.8 18 1.7 16.4 1.6 14.8 2.6 13.4 2.6 11.8 2.6 10.3 1.2 9.2.6 7.2 0 5 .9.7 3.6.3z"/><path d="M.9 8.2C2 9.6 2.7 10.6 2.6 11.8c0 1.6-1 3-.9 4.4.9-.8 2.2-2.2 2.3-4.2.1-1.6-1.4-3-3.1-3.8z" fill="currentColor" stroke="none" opacity=".16"/></g></svg>',
   box:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
   tag:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+  feedback:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 15a2 2 0 01-2 2H8l-4 3.5V6a2 2 0 012-2h12a2 2 0 012 2z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01" stroke-width="2.4"/></svg>',
   ret:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>',
   search:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
   target:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
@@ -1026,6 +1056,30 @@ function ctaIcon(label,pick){
   if(/find|product|search|shop|browse/.test(l))return WI.search;
   return WI.spark;
 }
+function ctaTileHtml(c){
+  return '<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(c.m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(c.l,c.i)+'</span><span class="ai-chat-welcome__cta-label">'+esc(c.l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
+}
+function fbTileHtml(){
+  return '<button type="button" class="ai-chat-welcome__cta-btn is-feedback" data-feedback="1" aria-haspopup="dialog"><span class="ai-chat-welcome__cta-icon">'+WI.feedback+'</span><span class="ai-chat-welcome__cta-label">'+esc(FB_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
+}
+function welcomeCtas(){
+  var ctas=[];
+  if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M,i:CTA1I});
+  if(CTA2L&&CTA2M)ctas.push({l:CTA2L,m:CTA2M,i:CTA2I});
+  if(CTA3L&&CTA3M)ctas.push({l:CTA3L,m:CTA3M,i:CTA3I});
+  if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M,i:CTA4I});
+  /* Feedback takes the fourth place, until this shopper has sent it. */
+  if(fbShown())ctas.splice(3,1,{fb:true});
+  return ctas;
+}
+function welcomeCtasHtml(ctas){
+  var h='';for(var i=0;i<ctas.length;i++)h+=ctas[i].fb?fbTileHtml():ctaTileHtml(ctas[i]);return h;
+}
+/* The settings arrived after the welcome was drawn: redraw just the buttons. */
+function refreshWelcomeCtas(){
+  var box=$('.ai-chat-welcome__ctas',panel);
+  if(box)box.innerHTML=welcomeCtasHtml(welcomeCtas());
+}
 function buildWelcome(){
 var hasBanner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
 var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+'">';
@@ -1041,16 +1095,9 @@ var welcomeAv=safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<svg vie
 h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar-wrap" aria-hidden="true"><i class="ai-chat-avatar-glow"></i><div class="ai-chat-welcome__avatar'+(safeUrl(AVATAR)?'':' is-placeholder')+'">'+welcomeAv+'</div></div><div class="ai-chat-welcome__intro-text"><h2 class="ai-chat-welcome__title">'+esc(welcomeGreeting||('Hi, I\'m '+NAME))+'</h2>'+
    (GREETCTA?'<p class="ai-chat-welcome__greeting-cta">'+esc(GREETCTA)+'</p>':'')+'</div></div>';
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
-var ctas=[];
-if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M,i:CTA1I});
-if(CTA2L&&CTA2M)ctas.push({l:CTA2L,m:CTA2M,i:CTA2I});
-if(CTA3L&&CTA3M)ctas.push({l:CTA3L,m:CTA3M,i:CTA3I});
-if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M,i:CTA4I});
+var ctas=welcomeCtas();
 if(ctas.length){
-  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Start here</div><div class="ai-chat-welcome__ctas">';
-  for(var i=0;i<ctas.length;i++){
-    h+='<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(ctas[i].m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(ctas[i].l,ctas[i].i)+'</span><span class="ai-chat-welcome__cta-label">'+esc(ctas[i].l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
-  }
+  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Start here</div><div class="ai-chat-welcome__ctas">'+welcomeCtasHtml(ctas);
   h+='</div></div>';
 }
 var qps=[];
@@ -1886,6 +1933,108 @@ function vizError(host,cta,msg,card){
 function ctaHtml(linkCTA){
 return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:14px 16px;background:var(--ai-chat-primary,#2d6b4f);color:#fff;border-radius:10px;text-decoration:none;text-align:center;font-size:14px;font-weight:600;line-height:1.3" href="'+esc(safeUrl(linkCTA.url)||'#')+'" target="_blank" rel="noopener">'+esc(linkCTA.label||'Visit Support Hub')+' &rarr;</a>';
 }
+/* Feedback: the store's Typeform survey, inside the chat. It slides up over
+   the conversation (which stays as it was underneath) and is embedded with
+   Typeform's own SDK, so answers land in the same form, with the same
+   settings, as the site's Feedback button. Once sent, the button gives its
+   place back to Start here button 4 (and the site's button stays hidden
+   for this shopper, as it does after sending it there). If the survey
+   can't load here, it opens in a new tab instead. */
+function fbDoneKey(){return 'hajirai_fb_done_'+FB_FORM}
+var fbSheet=null,fbSdk=null,fbOpener=null,fbSent=false;
+function fbShown(){
+  if(!FB_ON||fbSent)return false;
+  try{return !((parseInt(localStorage.getItem(fbDoneKey()),10)||0)>Date.now())}catch(e){return true}
+}
+function fbUrl(){return 'https://form.typeform.com/to/'+FB_FORM+location.search}
+function fbTrack(action){if(window.dataLayer)try{window.dataLayer.push({event:'typeform_cta_'+action,typeform_form_id:FB_FORM,typeform_source:'chat'})}catch(e){}}
+function fbLoadSdk(){
+  if(fbSdk)return fbSdk;
+  fbSdk=new Promise(function(res,rej){
+    var ready=function(){return window.tf&&typeof window.tf.createWidget==='function'};
+    if(!document.querySelector('link[href*="embed.typeform.com/next/css/widget.css"]')){
+      var l=document.createElement('link');l.rel='stylesheet';l.href='https://embed.typeform.com/next/css/widget.css';document.head.appendChild(l);
+    }
+    if(ready())return res(window.tf);
+    if(!document.querySelector('script[src*="embed.typeform.com/next/embed.js"]')){
+      var sc=document.createElement('script');sc.src='https://embed.typeform.com/next/embed.js';sc.async=true;document.head.appendChild(sc);
+    }
+    var t0=Date.now();
+    (function wait(){if(ready())return res(window.tf);if(Date.now()-t0>10000)return rej(new Error('Typeform did not load'));setTimeout(wait,120)})();
+  });
+  fbSdk.catch(function(){fbSdk=null});
+  return fbSdk;
+}
+function fbSheetEl(){
+  if(fbSheet)return fbSheet;
+  fbSheet=el('div','ai-chat-fbsheet');
+  fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
+  fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title">'+esc(FB_LABEL)+'</div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
+    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div></div>';
+  fbSheet.addEventListener('click',function(e){if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback()}});
+  panel.appendChild(fbSheet);
+  return fbSheet;
+}
+function fbBehind(on){
+  /* The conversation under the sheet: out of reach while it's up. */
+  for(var c=panel.firstElementChild;c;c=c.nextElementSibling)if(c!==fbSheet&&c!==menu){if(on){c.inert=true;c.setAttribute('data-fb-inert','')}else if(c.hasAttribute('data-fb-inert')){c.inert=false;c.removeAttribute('data-fb-inert')}}
+}
+function openFeedback(opener){
+  if(!FB_ON)return;
+  fbOpener=opener||null;
+  var sh=fbSheetEl(),box=$('.ai-chat-fbsheet__form',sh);
+  menu.style.display='none';
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fbBehind(true);
+  setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
+  fbTrack('open');
+  if(box.firstChild)return;/* already loaded: pick up where they left off */
+  sh.classList.remove('is-ready','is-failed');
+  fbLoadSdk().then(function(tf){
+    tf.createWidget(FB_FORM,{
+      container:box,
+      inlineOnMobile:true,
+      transitiveSearchParams:true,
+      opacity:100,
+      iframeProps:{title:FB_LABEL},
+      onReady:function(){sh.classList.add('is-ready')},
+      onSubmit:function(){
+        fbSent=true;
+        var year=Date.now()+365*864e5;
+        try{localStorage.setItem(fbDoneKey(),String(year));
+          /* The site's own button reads this, so it stays away too. */
+          var k='tf_cta_hidden_until_'+FB_FORM;if((parseInt(localStorage.getItem(k),10)||0)<year)localStorage.setItem(k,String(year))}catch(e){}
+        fbTrack('submit');
+      }
+    });
+    /* Ready even if Typeform's own signal never comes. */
+    setTimeout(function(){sh.classList.add('is-ready')},4000);
+  },function(){
+    sh.classList.add('is-failed');
+    $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__msg">The survey couldn’t open here.</span><a class="ai-chat-fbsheet__alt" href="'+esc(fbUrl())+'" target="_blank" rel="noopener">Open it in a new tab</a>';
+  });
+}
+function closeFeedback(){
+  if(!fbSheet||fbSheet.hidden)return;
+  var sh=fbSheet;
+  sh.classList.remove('is-open');fbBehind(false);
+  var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)gone();else setTimeout(gone,420);
+  /* Sent: the button makes way for Start here button 4. */
+  if(fbSent){
+    var t=$('[data-feedback]',panel);
+    if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}
+    if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML=''}
+    fbOpener=null;
+  }
+  var back=fbOpener&&document.body.contains(fbOpener)?fbOpener:inputEl;
+  try{back.focus({preventScroll:true})}catch(e){}
+}
+/* Escape steps back out of the survey first, then closes the chat. */
+panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&fbSheet&&!fbSheet.hidden){e.preventDefault();e.stopPropagation();closeFeedback()}},true);
+/* Start fetching Typeform the moment the button is pointed at. */
+panel.addEventListener('pointerover',function(e){if(FB_ON&&e.target.closest&&e.target.closest('[data-feedback]'))fbLoadSdk().catch(function(){})});
+panel.addEventListener('focusin',function(e){if(FB_ON&&e.target.closest&&e.target.closest('[data-feedback]'))fbLoadSdk().catch(function(){})});
 // Central support-chat opener. Prefer a live-chat provider (Zendesk, Intercom,
 // Gorgias) and only fall back to the Support Hub URL when none is present.
 // Every support path — the dead-end button and the handoff support_cta — calls
@@ -3271,6 +3420,8 @@ var helperBtn=e.target.closest('[data-helper]');
 if(helperBtn){e.preventDefault();if(!isStreaming)startHelper(helperBtn.getAttribute('data-helper'));return;}
 var tfBtn=e.target.closest('[data-truefit]');
 if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
+var fbBtn=e.target.closest('[data-feedback]');
+if(fbBtn){e.preventDefault();openFeedback(fbBtn);return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');
 if(supportCtaBtn){e.preventDefault();openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
 var deadEnd=e.target.closest('[data-dead-end]');

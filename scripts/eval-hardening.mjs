@@ -9,6 +9,7 @@ import fs from "node:fs";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
+import { typeformId, feedbackSurveyConfig } from "../app/lib/feedback-survey.js";
 
 let pass = 0;
 let fail = 0;
@@ -78,6 +79,21 @@ test("the chat block's settings stay within Shopify's limits", () => {
   const ids = schema.settings.filter((s) => s.id).map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length, "setting ids are unique");
   for (const id of ids) assert.match(liquid, new RegExp(`block\\.settings\\.${id}\\b`), `setting "${id}" is used`);
+});
+
+console.log("\nfeedback survey setting");
+test("takes a Typeform ID or any of its links, and nothing else", () => {
+  assert.equal(typeformId("jdXBrXMa"), "jdXBrXMa");
+  assert.equal(typeformId(" https://form.typeform.com/to/jdXBrXMa?utm=x "), "jdXBrXMa");
+  assert.equal(typeformId("https://aetrex.typeform.com/to/jdXBrXMa#a=1"), "jdXBrXMa");
+  for (const bad of ["", "x", "jdX BrXMa", "javascript:alert(1)", "https://evil.example/to/abc", "<b>"]) assert.equal(typeformId(bad), "", bad);
+});
+test("the widget gets the button only when it's on and has a survey", () => {
+  assert.deepEqual(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "https://form.typeform.com/to/jdXBrXMa", feedbackSurveyLabel: "" }), { on: true, form: "jdXBrXMa", label: "Share feedback" });
+  assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "" }).on, false);
+  assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: false, feedbackSurvey: "jdXBrXMa" }).on, false);
+  assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "jdXBrXMa", feedbackSurveyLabel: "x".repeat(90) }).label.length, 40);
+  assert.deepEqual(feedbackSurveyConfig(), { on: false, form: "", label: "Share feedback" });
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -1,3 +1,4 @@
+import { typeformId } from "../lib/feedback-survey.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useRef, useEffect } from "react";
@@ -60,6 +61,10 @@ export const loader = async ({ request }) => {
     returnsInChat: config.returnsInChat !== false,
     returnWindowDays: Number.isFinite(config.returnWindowDays) ? config.returnWindowDays : 30,
     returnsDeliveredOnly: config.returnsDeliveredOnly !== false,
+    feedbackSurveyOn: config.feedbackSurveyOn === true,
+    feedbackSurvey: config.feedbackSurvey || "",
+    feedbackSurveyLabel: config.feedbackSurveyLabel || "Share feedback",
+    hideLiveChatButton: config.hideLiveChatButton === true,
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -198,6 +203,22 @@ export const action = async ({ request }) => {
   }
   const deliveredOnly = formData.get("returnsDeliveredOnly");
   if (deliveredOnly !== null) data.returnsDeliveredOnly = deliveredOnly === "true";
+
+  const surveyOn = formData.get("feedbackSurveyOn");
+  const survey = formData.get("feedbackSurvey");
+  if (survey !== null) {
+    const raw = String(survey).trim();
+    if (raw && !typeformId(raw)) return { error: "The feedback survey should be a Typeform form ID (like jdXBrXMa) or its link." };
+    data.feedbackSurvey = raw;
+  }
+  if (surveyOn !== null) {
+    data.feedbackSurveyOn = surveyOn === "true";
+    if (data.feedbackSurveyOn && !typeformId(survey ?? "")) return { error: "Add your Typeform survey (its ID or link) to show the feedback button." };
+  }
+  const surveyLabel = formData.get("feedbackSurveyLabel");
+  if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
+  const hideLiveChat = formData.get("hideLiveChatButton");
+  if (hideLiveChat !== null) data.hideLiveChatButton = hideLiveChat === "true";
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -505,7 +526,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -527,6 +548,10 @@ export default function ApiKeys() {
   const [returnsInChat, setReturnsInChat] = useState(initReturnsInChat);
   const [returnWindowDays, setReturnWindowDays] = useState(String(initReturnWindowDays));
   const [returnsDeliveredOnly, setReturnsDeliveredOnly] = useState(initReturnsDeliveredOnly);
+  const [surveyOn, setSurveyOn] = useState(initSurveyOn);
+  const [survey, setSurvey] = useState(initSurvey);
+  const [surveyLabel, setSurveyLabel] = useState(initSurveyLabel);
+  const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -558,6 +583,10 @@ export default function ApiKeys() {
     returnsInChat: initReturnsInChat,
     returnWindowDays: String(initReturnWindowDays),
     returnsDeliveredOnly: initReturnsDeliveredOnly,
+    surveyOn: initSurveyOn,
+    survey: initSurvey,
+    surveyLabel: initSurveyLabel,
+    hideLiveChat: initHideLiveChat,
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -604,6 +633,10 @@ export default function ApiKeys() {
     setReturnsInChat(s.returnsInChat);
     setReturnWindowDays(s.returnWindowDays);
     setReturnsDeliveredOnly(s.returnsDeliveredOnly);
+    setSurveyOn(s.surveyOn);
+    setSurvey(s.survey);
+    setSurveyLabel(s.surveyLabel);
+    setHideLiveChat(s.hideLiveChat);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -819,6 +852,47 @@ export default function ApiKeys() {
                     placeholder="https://yourstore.com/pages/refer"
                     autoComplete="off"
                     helpText="Your Give-$X-Get-$X / referral landing page. When a customer asks how to refer friends, the AI links them here so they can get their personal referral link and share options. Used as a fallback when the customer's personal link isn't available from Yotpo."
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Feedback survey and live chat"
+              description="Put your feedback survey in the chat, in place of the fourth Start here button, and tidy the corner of the page."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <Checkbox
+                    label="Feedback button in the chat"
+                    checked={surveyOn}
+                    onChange={setSurveyOn}
+                    helpText={surveyOn
+                      ? "On: the fourth Start here button becomes your feedback button, and the survey opens right inside the chat. The site's own floating Feedback button is hidden. Once a shopper sends it, their usual fourth button comes back."
+                      : "Off: the fourth Start here button is the one set in the theme editor."}
+                  />
+                  <TextField
+                    label="Typeform survey"
+                    value={survey}
+                    onChange={setSurvey}
+                    placeholder="jdXBrXMa or https://form.typeform.com/to/jdXBrXMa"
+                    autoComplete="off"
+                    disabled={!surveyOn}
+                    helpText="The form's ID or its link. Answers land in the same Typeform form as always."
+                  />
+                  <TextField
+                    label="Button text"
+                    value={surveyLabel}
+                    onChange={setSurveyLabel}
+                    maxLength={40}
+                    autoComplete="off"
+                    disabled={!surveyOn}
+                  />
+                  <Checkbox
+                    label="Hide the live chat button (Zendesk)"
+                    checked={hideLiveChat}
+                    onChange={setHideLiveChat}
+                    helpText="Removes the separate chat button from the corner of the page. Live chat still opens from the assistant whenever a shopper asks for a person."
                   />
                 </BlockStack>
               </Card>
@@ -1250,6 +1324,10 @@ export default function ApiKeys() {
           <input type="hidden" name="returnsInChat" value={String(returnsInChat)} />
           <input type="hidden" name="returnWindowDays" value={returnWindowDays} />
           <input type="hidden" name="returnsDeliveredOnly" value={String(returnsDeliveredOnly)} />
+          <input type="hidden" name="feedbackSurveyOn" value={String(surveyOn)} />
+          <input type="hidden" name="feedbackSurvey" value={survey} />
+          <input type="hidden" name="feedbackSurveyLabel" value={surveyLabel} />
+          <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />

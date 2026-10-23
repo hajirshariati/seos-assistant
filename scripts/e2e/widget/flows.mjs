@@ -500,6 +500,82 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check("a bubble the shopper chose isn't opened out by scrolling", await page.evaluate(() => document.querySelector(".ai-chat-launcher").classList.contains("is-bubble")));
   await ctx.close();
 }
+// Feedback in the chat: Start here button 4 opens the store's Typeform survey
+// inside the chat (Typeform's SDK stubbed here), the site's own Feedback and
+// live chat buttons are hidden, and once sent the button gives its place back.
+const TF_STUB = `window.tf={createWidget:function(id,o){window.__tf={id:id,o:o};var w=document.createElement("div");w.className="tf-v1-widget";var f=document.createElement("iframe");f.srcdoc="<p>survey</p>";w.appendChild(f);o.container.appendChild(w);setTimeout(function(){o.onReady&&o.onReady()},60);return {unmount:function(){}}}};`;
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let sdkLoads = 0;
+  await page.route("https://embed.typeform.com/**", (r) => { if (r.request().url().endsWith(".js")) sdkLoads++; return r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".js") ? TF_STUB : "" }); });
+  await page.goto("http://localhost:4789/full?fb=2");
+  await page.evaluate(() => { document.body.insertAdjacentHTML("beforeend", '<div class="aetrex-tf-cta" style="position:fixed;right:90px;bottom:20px;width:120px;height:40px;background:#0b6a80"></div><iframe id="launcher" style="position:fixed;right:20px;bottom:20px;width:60px;height:40px"></iframe>'); });
+  const hidden = await page.evaluate(() => ["div.aetrex-tf-cta", "iframe#launcher"].map((q) => getComputedStyle(document.querySelector(q)).display));
+  check(`feedback (${label}): the site's own Feedback and live chat buttons are hidden`, hidden.every((d) => d === "none"), hidden.join(","));
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  const tiles = await page.$$eval(".ai-chat-welcome__cta-btn", (bs) => bs.map((b) => b.textContent.trim() + (b.classList.contains("is-feedback") ? "*" : "")));
+  check(`feedback (${label}): it takes the place of button 4`, tiles.length === 4 && tiles[3] === "Share feedback*" && !tiles.includes("About Aetrex"), tiles.join(" | "));
+  const tint = await page.$eval(".ai-chat-welcome__cta-btn.is-feedback", (b) => getComputedStyle(b).backgroundColor);
+  const plain = await page.$eval(".ai-chat-welcome__cta-btn:not(.is-feedback)", (b) => getComputedStyle(b).backgroundColor);
+  check(`feedback (${label}): a subtly different look from the other buttons`, tint !== plain, `${tint} vs ${plain}`);
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(700);
+  const open = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"); const r = s.getBoundingClientRect(), pr = p.getBoundingClientRect(); return { open: s.classList.contains("is-open") && s.classList.contains("is-ready"), inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2, form: window.__tf && window.__tf.id, inline: window.__tf && window.__tf.o.inlineOnMobile, iframe: !!s.querySelector(".ai-chat-fbsheet__form iframe"), focus: document.activeElement && document.activeElement.className, behindInert: document.querySelector(".ai-chat-messages").inert }; });
+  check(`feedback (${label}): the survey opens inside the chat window`, open.open && open.inside && open.form === "jdXBrXMa" && open.inline === true && open.iframe && open.behindInert, JSON.stringify(open));
+  check(`feedback (${label}): focus moves to the sheet's back button`, /ai-chat-fbsheet__back/.test(open.focus || ""), open.focus);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  const esc = await page.evaluate(() => ({ sheet: !document.querySelector(".ai-chat-fbsheet").hidden, chatOpen: document.querySelector(".ai-chat-panel").classList.contains("open"), inert: document.querySelector(".ai-chat-messages").inert }));
+  check(`feedback (${label}): Escape steps back to the chat (the chat stays open)`, !esc.sheet && esc.chatOpen && !esc.inert, JSON.stringify(esc));
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(600);
+  check(`feedback (${label}): reopening keeps the same survey (no reload)`, sdkLoads === 1 && (await page.$$eval(".ai-chat-fbsheet__form iframe", (f) => f.length)) === 1, `sdk loads ${sdkLoads}`);
+  await page.evaluate(() => window.__tf.o.onSubmit({ responseId: "r1" }));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(600);
+  const after = await page.evaluate(() => ({ tiles: [...document.querySelectorAll(".ai-chat-welcome__cta-btn")].map((b) => b.textContent.trim()), mine: +localStorage.getItem("hajirai_fb_done_jdXBrXMa") > Date.now() + 300 * 864e5, site: +localStorage.getItem("tf_cta_hidden_until_jdXBrXMa") > Date.now() + 300 * 864e5 }));
+  check(`feedback (${label}): once sent, button 4 comes back (and the site's button stays away)`, after.tiles[3] === "About Aetrex" && !after.tiles.includes("Share feedback") && after.mine && after.site, JSON.stringify(after));
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  check(`feedback (${label}): stays sent after a reload`, !(await page.$("[data-feedback]")), "");
+  // Switched off in Settings: the next page drops the button and gives the
+  // site's own buttons back, even though the last settings were remembered.
+  if (label === "desktop") {
+    await page.route("**/apps/hajirai/widget-config**", async (r) => { const res = await r.fetch(); const j = await res.json(); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...j, feedbackSurvey: { on: false, form: "", label: "Share feedback" }, hideLiveChatButton: false }) }); });
+    await page.evaluate(() => localStorage.removeItem("hajirai_fb_done_jdXBrXMa"));
+    await page.reload();
+    await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div class="aetrex-tf-cta" style="width:10px;height:10px"></div><iframe id="launcher" style="width:10px;height:10px"></iframe>'));
+    await page.waitForTimeout(600);
+    await page.click(".ai-chat-launcher__text");
+    await page.waitForTimeout(600);
+    const off = await page.evaluate(() => ({ tile: !!document.querySelector("[data-feedback]"), four: document.querySelectorAll(".ai-chat-welcome__cta-btn")[3]?.textContent.trim(), tf: getComputedStyle(document.querySelector("div.aetrex-tf-cta")).display, zd: getComputedStyle(document.querySelector("iframe#launcher")).display }));
+    check("feedback: turned off in Settings, everything goes back as it was", !off.tile && off.four === "About Aetrex" && off.tf !== "none" && off.zd !== "none", JSON.stringify(off));
+  }
+  check(`feedback (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Typeform can't load: the sheet says so and offers the survey in a new tab.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  await page.route("https://embed.typeform.com/**", (r) => r.abort());
+  await page.goto("http://localhost:4789/full?fb=1");
+  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<iframe id="launcher" style="position:fixed;right:20px;bottom:20px;width:60px;height:40px"></iframe>'));
+  check("feedback: the live chat button stays when that switch is off", await page.evaluate(() => getComputedStyle(document.querySelector("iframe#launcher")).display !== "none"));
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(11000);
+  const alt = await page.evaluate(() => { const a = document.querySelector(".ai-chat-fbsheet__alt"); return a && { href: a.getAttribute("href"), target: a.target }; });
+  check("feedback: if Typeform can't load, it offers the survey in a new tab", alt && /^https:\/\/form\.typeform\.com\/to\/jdXBrXMa/.test(alt.href) && alt.target === "_blank", JSON.stringify(alt));
+  await ctx.close();
+}
 // Returns hold up whatever the shopper does: reload half-way, lose the
 // connection at the worst moment, double-tap, get signed out, come back later.
 {

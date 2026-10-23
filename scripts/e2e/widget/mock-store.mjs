@@ -126,7 +126,7 @@ export function start(port) {
         const send = (code, type, data) => { resp.writeHead(code, { "Content-Type": type }); resp.end(data); };
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
-        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : ""));
+        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "")));
         if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
         if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
         // Sign-in: sets the session cookie and goes back where it was told
@@ -180,7 +180,7 @@ export function start(port) {
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
-        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }] }));
+        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }], ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
         if (u.pathname === "/apps/hajirai/chat") {

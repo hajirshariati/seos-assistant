@@ -1,3 +1,4 @@
+import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
@@ -69,6 +70,9 @@ export const loader = async ({ request }) => {
         supportUrl: String(config.supportUrl || "").trim(),
         supportLabel: String(config.supportLabel || "").trim(),
         showFeedback: config.showFeedback !== false,
+        // Settings → Feedback survey and live chat.
+        feedbackSurvey: feedbackSurveyConfig(config),
+        hideLiveChatButton: config.hideLiveChatButton === true,
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,

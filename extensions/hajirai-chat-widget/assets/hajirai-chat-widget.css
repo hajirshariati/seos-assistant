@@ -4545,3 +4545,134 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-ret__method:focus-visible, .ai-chat-panel .ai-ret__find:focus-visible,
 .ai-chat-panel .ai-ret__link:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-ret__spinner { animation-duration: 2s; } .ai-chat-panel .ai-ord__btn { transition: none; } }
+
+/* ── Feedback ─────────────────────────────────────────────────────────────
+   The Start here button: the same quiet row, with a faint teal wash and a
+   teal icon, so it reads as its own thing without shouting. */
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback { background: rgba(11, 106, 128, 0.07); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback .ai-chat-welcome__cta-icon { color: #0b6a80; }
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback:hover { background: rgba(11, 106, 128, 0.12); }
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback { background: rgba(94, 190, 212, 0.11); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback .ai-chat-welcome__cta-icon { color: #7ccadc; }
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback:hover { background: rgba(94, 190, 212, 0.17) !important; }
+}
+
+/* The survey: a sheet that slides up over the conversation, inside the
+   chat window, with a slim bar to step back to the chat. */
+.ai-chat-panel .ai-chat-fbsheet {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--seos-bg, #fff);
+  color: var(--seos-text);
+  transform: translateY(100%);
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.42s;
+  visibility: hidden;
+  will-change: transform;
+}
+.ai-chat-panel .ai-chat-fbsheet[hidden] { display: none; }
+.ai-chat-panel .ai-chat-fbsheet.is-open {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
+}
+.ai-chat-panel .ai-chat-fbsheet__bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--seos-line);
+}
+.ai-chat-panel .ai-chat-fbsheet__back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--seos-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-fbsheet__back:hover { background: var(--seos-surface); }
+}
+.ai-chat-panel .ai-chat-fbsheet__back:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-chat-fbsheet__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chat-panel .ai-chat-fbsheet__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.ai-chat-panel .ai-chat-fbsheet__form {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.ai-chat-panel .ai-chat-fbsheet.is-ready .ai-chat-fbsheet__form { opacity: 1; }
+.ai-chat-panel .ai-chat-fbsheet__form > *,
+.ai-chat-panel .ai-chat-fbsheet__form iframe { width: 100% !important; height: 100% !important; border: 0; }
+.ai-chat-panel .ai-chat-fbsheet__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--seos-text-2);
+  font-size: 13.5px;
+  text-align: center;
+  transition: opacity 0.2s ease;
+}
+.ai-chat-panel .ai-chat-fbsheet.is-ready .ai-chat-fbsheet__state { opacity: 0; pointer-events: none; }
+.ai-chat-panel .ai-chat-fbsheet__spin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--seos-line-strong);
+  border-top-color: var(--seos-text);
+  animation: aiChatFbSpin 0.8s linear infinite;
+}
+.ai-chat-panel .ai-chat-fbsheet.is-failed .ai-chat-fbsheet__spin { display: none; }
+.ai-chat-panel .ai-chat-fbsheet__alt {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--seos-ink);
+  color: var(--seos-bg, #fff);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+@keyframes aiChatFbSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-fbsheet,
+  .ai-chat-panel .ai-chat-fbsheet.is-open { transform: none; transition: opacity 0.15s ease, visibility 0s; }
+  .ai-chat-panel .ai-chat-fbsheet:not(.is-open) { opacity: 0; }
+  .ai-chat-panel .ai-chat-fbsheet__spin { animation-duration: 1.6s; }
+}
