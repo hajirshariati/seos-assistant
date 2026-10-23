@@ -120,7 +120,7 @@ export async function buildLeanStoreExtras({
     getKnowledgeFilesWithContent(shop),
     getActiveCampaigns(shop),
     vip ? fetchCustomerContext({ shop, accessToken, customerId: loggedInCustomerId, orderLimit: 5 }) : Promise.resolve(null),
-    buildRecommenderTools(shop, { decisionTreeEnabled: config.decisionTreeEnabled === true, fitfinder }),
+    buildRecommenderTools(shop, { decisionTreeEnabled: config.decisionTreeEnabled === true, fitfinder, shopperText: `${conversationText} ${latestUserMessage || ""}` }),
   ]);
   for (const [label, r] of [["rules", rulesRes], ["campaigns", campaignsRes], ["customer", customerRes], ["recommenders", recRes]]) {
     if (r.status === "rejected") log(`[lean] store extras: ${label} unavailable — ${r.reason?.message || r.reason}`);
@@ -194,7 +194,7 @@ export async function buildLeanStoreExtras({
       input: input || {},
       shop,
       trees: rec.trees || [],
-      conversationText,
+      conversationText: `${conversationText} ${latestUserMessage || ""}`,
       latestUserText: latestUserMessage,
       fitfinder,
     }));

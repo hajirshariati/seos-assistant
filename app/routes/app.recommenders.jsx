@@ -34,6 +34,7 @@ import {
   diffMasterIndex,
 } from "../lib/mapping-csv.server";
 import { adminGraphql, syncOrthoticFinder } from "../lib/orthotic-finder.server";
+import { cleanLineRules, lineRulesOf } from "../lib/orthotic-finder.js";
 import BrandHeader from "../components/BrandHeader";
 import { getShopPlan } from "../lib/billing.server";
 import { safeExternalUrl } from "../lib/external-url.js";
@@ -98,6 +99,10 @@ export const action = async ({ request }) => {
     let definition;
     try { definition = JSON.parse(definitionRaw); }
     catch { return { error: "Definition must be valid JSON." }; }
+    // The finder's line rules, as the form sent them: only real lines and modes.
+    if (definition?.kind === "catalog_finder" && definition.rules !== undefined) {
+      definition.rules = cleanLineRules(definition.rules, definition.finder?.lines || []);
+    }
     const v = validateDecisionTree(definition);
     if (!v.ok) return { error: "Tree validation failed: " + v.errors.slice(0, 4).join("; ") };
     const phrases = triggerPhrasesRaw
@@ -625,7 +630,10 @@ function DecisionTreesCard({ enabled, trees }) {
                 />
               </FormLayout>
               {editing.definition?.kind === "catalog_finder" ? (
-                <FinderLines definition={editing.definition} />
+                <FinderLines
+                  definition={editing.definition}
+                  onChange={(definition) => setEditing((p) => ({ ...p, definition }))}
+                />
               ) : (
                 <RecommenderTables
                   definition={editing.definition || {}}
@@ -690,29 +698,85 @@ function DecisionTreesCard({ enabled, trees }) {
   );
 }
 
-// The orthotic finder's lines, as read from the catalog. Read-only: change
-// the products in Shopify and sync again.
-function FinderLines({ definition }) {
+// The orthotic finder's lines, as read from the catalog (change the products
+// in Shopify and sync). The store team chooses per line how the assistant
+// recommends it: as usual, lead with it, only when the shopper mentions
+// certain conditions, or never. Saved with the recommender.
+const RULE_OPTIONS = [
+  { label: "As usual", value: "normal" },
+  { label: "Lead with this", value: "lead" },
+  { label: "Only when they mention…", value: "only_when" },
+  { label: "Never recommend", value: "never" },
+];
+function FinderLines({ definition, onChange }) {
   const lines = definition?.finder?.lines || [];
   const synced = definition?.syncedAt ? new Date(definition.syncedAt).toLocaleString() : "never";
+  const rules = lineRulesOf(definition);
+  // Typing "diabetes, neuropathy" keeps the text as typed until saved.
+  const [whenText, setWhenText] = useState(() => Object.fromEntries(Object.entries(rules).filter(([, r]) => r.mode === "only_when").map(([id, r]) => [id, r.when.join(", ")])));
+  const setRule = (id, rule) => {
+    const next = { ...rules };
+    if (!rule || rule.mode === "normal") delete next[id];
+    else next[id] = rule;
+    onChange({ ...definition, rules: next });
+  };
   const versions = (l) => [
     l.archVersions.length === 2 ? "Medium-high & flat-low arch" : l.archVersions[0] === "flat_low" ? "Flat-low arch" : l.archVersions[0] === "medium_high" ? "Medium-high arch" : "One version",
     l.hasMetVersion && l.hasNoMetVersion ? "± met pad" : l.hasMetVersion ? "met pad" : "",
   ].filter(Boolean).join(", ");
+  const recommendCell = (l) => {
+    const r = rules[l.id] || { mode: "normal" };
+    return (
+      <BlockStack key={`r-${l.id}`} gap="100">
+        <Select
+          label={`How to recommend ${l.name}`}
+          labelHidden
+          options={RULE_OPTIONS}
+          value={r.mode}
+          onChange={(mode) => {
+            if (mode === "only_when") {
+              const text = whenText[l.id] || "";
+              setRule(l.id, { mode, when: text.split(",").map((w) => w.trim()).filter(Boolean) });
+            } else setRule(l.id, { mode });
+          }}
+        />
+        {r.mode === "only_when" && (
+          <TextField
+            label={`Conditions for ${l.name}`}
+            labelHidden
+            placeholder="e.g. diabetes, neuropathy"
+            value={whenText[l.id] ?? (r.when || []).join(", ")}
+            onChange={(text) => {
+              setWhenText((p) => ({ ...p, [l.id]: text }));
+              setRule(l.id, { mode: "only_when", when: text.split(",").map((w) => w.trim()).filter(Boolean) });
+            }}
+            error={(r.when || []).length ? undefined : "Add at least one condition"}
+            autoComplete="off"
+          />
+        )}
+      </BlockStack>
+    );
+  };
   return (
     <BlockStack gap="200">
       <Text as="p" tone="subdued" variant="bodySm">
         {lines.length} lines from your catalog · last synced {synced}. To change one, edit the products in Shopify, then sync.
       </Text>
+      <Text as="p" tone="subdued" variant="bodySm">
+        <strong>Recommend</strong> sets how the assistant uses each line: <em>Lead with this</em> is its first choice when more than one line suits the shopper;
+        <em> Only when they mention…</em> is offered only after the shopper brings up one of those conditions; <em>Never recommend</em> is never offered.
+        Save to apply. Rules stay through syncs.
+      </Text>
       <DataTable
-        columnContentTypes={["text", "text", "text", "text", "numeric"]}
-        headings={["Line", "For", "Best for", "Versions", "Products"]}
+        columnContentTypes={["text", "text", "text", "text", "numeric", "text"]}
+        headings={["Line", "For", "Best for", "Versions", "Products", "Recommend"]}
         rows={lines.map((l) => [
           <Text key={l.id} as="span" fontWeight="semibold">{l.name}</Text>,
           l.genders.join(", "),
           l.bestFor || l.activity.join(", ") || "—",
           versions(l),
           l.count,
+          recommendCell(l),
         ])}
       />
     </BlockStack>

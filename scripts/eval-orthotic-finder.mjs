@@ -9,8 +9,8 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder } from "../app/lib/orthotic-finder.js";
-import { finderToolDef } from "../app/lib/orthotic-finder.server.js";
+import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder, defaultLineRules, cleanLineRules, lineRulesOf, lineAllowed, catalogForConversation } from "../app/lib/orthotic-finder.js";
+import { finderToolDef, runFinderTool } from "../app/lib/orthotic-finder.server.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/aetrex-orthotics.json", import.meta.url), "utf8"));
 const catalog = buildOrthoticCatalog(fixture.products.map(productFromNode));
@@ -185,6 +185,50 @@ test("Claude's tool knows the FITs, the store's questions and the saved FIT", ()
   assert.deepEqual(def.input_schema.properties.fit.enum, ["A", "B", "C", "D"]);
   const plain = finderToolDef(tree);
   assert.ok(!/FIT D/.test(plain.description) && !plain.input_schema.properties.fit, "no FIT talk without FITFinder");
+});
+
+console.log("\nthe store team's line rules (Active never, Conform only for diabetes/neuropathy, Premium Memory Foam leads)");
+const ruled = { intent: "orthotic", definition: { kind: "catalog_finder", finder: catalog } };
+const lineIds = (def) => def.input_schema.properties.line.enum;
+test("until rules are saved, Aetrex's own apply", () => {
+  const r = lineRulesOf(ruled.definition);
+  assert.deepEqual(r.active, { mode: "never" });
+  assert.deepEqual(r.conform, { mode: "only_when", when: ["diabetes", "neuropathy"] });
+  assert.deepEqual(r["premium-memory-foam"], { mode: "lead" });
+  assert.deepEqual(defaultLineRules(catalog.lines), r);
+});
+test("Active is never offered; Conform only once diabetes or neuropathy comes up", () => {
+  const athletic = finderToolDef(ruled, { shopperText: "men's orthotics for athletic shoes, I have forefoot pain" });
+  assert.ok(!lineIds(athletic).includes("active") && !/\bactive: Active\b/.test(athletic.description), "Active never listed");
+  assert.ok(!lineIds(athletic).includes("conform"), "Conform not offered without diabetes/neuropathy");
+  for (const said of ["I'm diabetic", "I have neuropathy in my feet", "Diabetes runs in my family and I have it"]) {
+    const d = finderToolDef(ruled, { shopperText: said });
+    assert.ok(lineIds(d).includes("conform"), said);
+    assert.match(d.description, /ONLY for customers who've said they have diabetes or neuropathy/);
+  }
+});
+test("Premium Memory Foam is the first choice, and says so", () => {
+  const d = finderToolDef(ruled, { shopperText: "just want comfort" });
+  assert.match(d.description, /leads with Premium Memory Foam/);
+  assert.match(d.description, /premium-memory-foam: .*FIRST CHOICE/);
+  assert.ok(lineIds(d).includes("memory-foam"), "the other memory foam line is still there, second");
+});
+test("the server refuses a blocked line even if asked for it, and never falls back to one", async () => {
+  const a = await runFinderTool({ tree: ruled, shop: "s", input: { line: "active", gender: "men", arch: "not_sure", ball_of_foot_pain: "yes" }, shopperText: "athletic" });
+  assert.match(a.error, /doesn't recommend that line/);
+  assert.ok(!/\bactive\b/.test(a.error.split("from:")[1]), "not suggested back");
+  const c = await runFinderTool({ tree: ruled, shop: "s", input: { line: "conform", gender: "women", arch: "not_sure", ball_of_foot_pain: "no" }, shopperText: "heel pain" });
+  assert.match(c.error, /only for customers who've said they have diabetes or neuropathy/);
+  const visible = catalogForConversation(catalog, lineRulesOf(ruled.definition), "athletic");
+  assert.ok(!visible.items.some((i) => i.line === "active" || i.line === "conform"), "no product from a blocked line can be picked");
+});
+test("the merchant's own rules replace the defaults; bad input is dropped", () => {
+  const mine = cleanLineRules({ active: { mode: "normal" }, conform: { mode: "only_when", when: "Diabetes, <b>Neuropathy</b>" }, speed: { mode: "never" }, nope: { mode: "never" }, train: { mode: "bogus" }, edge: { mode: "only_when", when: "" } }, catalog.lines);
+  assert.deepEqual(mine, { conform: { mode: "only_when", when: ["diabetes", "neuropathy"] }, speed: { mode: "never" } });
+  const d = finderToolDef({ intent: "orthotic", definition: { kind: "catalog_finder", finder: catalog, rules: { speed: { mode: "never" } } } }, { shopperText: "" });
+  assert.ok(lineIds(d).includes("active") && lineIds(d).includes("conform") && !lineIds(d).includes("speed"), "saved rules (even empty ones) mean no defaults");
+  assert.equal(lineAllowed({ mode: "only_when", when: ["diabetes"] }, "DIABETIC feet"), true);
+  assert.equal(lineAllowed({ mode: "only_when", when: ["diabetes"] }, "flat feet"), false);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -266,7 +266,7 @@ export function recommenderToToolDef(tree) {
 // recommenders that are disabled at the row level. Skips entirely
 // when ShopConfig.decisionTreeEnabled is false. Hot path — called
 // once per chat turn.
-export async function buildRecommenderTools(shop, { decisionTreeEnabled, fitfinder = null }) {
+export async function buildRecommenderTools(shop, { decisionTreeEnabled, fitfinder = null, shopperText = "" }) {
   if (!shop || decisionTreeEnabled !== true) return { tools: [], trees: [] };
   const prisma = await getPrisma();
   let rows;
@@ -291,7 +291,7 @@ export async function buildRecommenderTools(shop, { decisionTreeEnabled, fitfind
   const tools = [];
   const trees = [];
   for (const r of rows) {
-    const td = finder.isFinderTree(r) ? finder.finderToolDef(r, { fitfinder }) : recommenderToToolDef(r);
+    const td = finder.isFinderTree(r) ? finder.finderToolDef(r, { fitfinder, shopperText }) : recommenderToToolDef(r);
     if (td) {
       tools.push(td);
       trees.push(r);
@@ -407,7 +407,7 @@ export async function executeRecommenderTool({ toolName, input, shop, trees, con
     return { error: `Recommender for intent="${intent}" is not enabled on this shop.` };
   }
   const finder = await import("./orthotic-finder.server.js");
-  if (finder.isFinderTree(tree)) return finder.runFinderTool({ tree, shop, input, fitfinder });
+  if (finder.isFinderTree(tree)) return finder.runFinderTool({ tree, shop, input, fitfinder, shopperText: conversationText || latestUserText || "" });
   if (!tree.definition?.resolver) {
     return { error: "Recommender has no resolver configured." };
   }

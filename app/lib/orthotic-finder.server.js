@@ -4,7 +4,7 @@
 // the real catalog in scripts/fixtures/aetrex-orthotics.json).
 
 import prisma from "../db.server.js";
-import { buildOrthoticCatalog, describeLine, pickOrthotic, productFromNode } from "./orthotic-finder.js";
+import { buildOrthoticCatalog, catalogForConversation, describeLine, lineAllowed, lineRulesOf, pickOrthotic, productFromNode, ruleNote } from "./orthotic-finder.js";
 import { getDecisionTreeByIntent, incrementCompletedCount, saveDecisionTree } from "../models/DecisionTree.server.js";
 
 export const FINDER_KIND = "catalog_finder";
@@ -65,7 +65,13 @@ export async function syncOrthoticFinder({ shop, graphql }) {
     intent: "orthotic",
     triggerPhrases: existing?.triggerPhrases || JSON.stringify(["orthotic", "orthotics", "insole", "insoles", "arch support"]),
     triggerCategoryGroup: existing?.triggerCategoryGroup || "Orthotics",
-    definition: { kind: FINDER_KIND, syncedAt: new Date().toISOString(), finder: catalog },
+    // The store team's line rules (lead / only when / never) survive a sync.
+    definition: {
+      kind: FINDER_KIND,
+      syncedAt: new Date().toISOString(),
+      finder: catalog,
+      ...(existing?.definition?.kind === FINDER_KIND && existing.definition.rules ? { rules: existing.definition.rules } : {}),
+    },
     // Switched on when first built; after that the merchant's on/off stays.
     enabled: existing?.definition?.kind === FINDER_KIND ? existing.enabled : true,
   });
@@ -117,8 +123,12 @@ function fitSection(fitfinder) {
   return parts.join("\n");
 }
 
-export function finderToolDef(tree, { fitfinder = null } = {}) {
-  const lines = tree.definition.finder.lines;
+// shopperText: what the shopper has said in this chat — a line that's only
+// for certain conditions is offered once they've brought one up.
+export function finderToolDef(tree, { fitfinder = null, shopperText = "" } = {}) {
+  const rules = lineRulesOf(tree.definition);
+  const lines = tree.definition.finder.lines.filter((l) => lineAllowed(rules[l.id], shopperText));
+  const leads = lines.filter((l) => rules[l.id]?.mode === "lead").map((l) => l.name);
   const fits = fitfinder?.fits || [];
   return {
     name: `recommend_${tree.intent}`,
@@ -140,7 +150,8 @@ export function finderToolDef(tree, { fitfinder = null } = {}) {
       "Plantar fasciitis or heel pain doesn't change the line — answer the four questions as usual. " +
       "Orthotic inserts can't be worn in sandals or other open shoes. Never suggest, offer or pair an orthotic with sandals; when the customer asks for one, say so kindly and offer sandals with built-in arch support instead. When you're showing sandals, don't bring up orthotics at all." +
       fitSection(fitfinder) +
-      "\n\nLines in this store:\n" + lines.map((l) => `- ${describeLine(l)}`).join("\n"),
+      (leads.length ? `\n\nThe store team leads with ${leads.join(" and ")}: when it suits the customer as well as another line, recommend it first.` : "") +
+      "\n\nLines in this store (only these may be recommended):\n" + lines.map((l) => `- ${describeLine(l)}${ruleNote(rules[l.id])}`).join("\n"),
     input_schema: {
       type: "object",
       properties: {
@@ -164,8 +175,20 @@ async function availableHandles(shop, handles) {
   return new Set(rows.filter((r) => !/^(draft|archived)$/i.test(r.status || "")).map((r) => r.handle));
 }
 
-export async function runFinderTool({ tree, shop, input, fitfinder = null }) {
-  const catalog = tree.definition.finder;
+export async function runFinderTool({ tree, shop, input, fitfinder = null, shopperText = "" }) {
+  // Lines the store team doesn't want offered here are left out, so neither
+  // the pick nor the "closest other line" can land on one.
+  const rules = lineRulesOf(tree.definition);
+  const catalog = catalogForConversation(tree.definition.finder, rules, shopperText);
+  const asked = String(input?.line || "");
+  if (asked && !catalog.lines.some((l) => l.id === asked) && tree.definition.finder.lines.some((l) => l.id === asked)) {
+    const r = rules[asked];
+    return {
+      error: r?.mode === "only_when"
+        ? `That line is only for customers who've said they have ${r.when.join(" or ")}. Choose the line that fits their shoes from: ${catalog.lines.map((l) => l.id).join(", ")}.`
+        : `The store doesn't recommend that line. Choose the line that fits their shoes from: ${catalog.lines.map((l) => l.id).join(", ")}.`,
+    };
+  }
   const forSale = await availableHandles(shop, catalog.items.map((i) => i.handle));
   const result = pickOrthotic(catalog, input || {}, { available: (h) => forSale.has(h), fits: fitfinder?.fits || null });
   if (result.pick) await incrementCompletedCount(shop, tree.id);

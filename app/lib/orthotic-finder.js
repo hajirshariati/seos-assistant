@@ -404,3 +404,83 @@ export function pickOrthotic(catalog, answers = {}, { available = () => true, fi
     instruction: "Show the pick with show_products. Explain in one or two sentences why it fits (their shoes, arch, ball-of-foot). Mention another version only if a note asks you to.",
   };
 }
+
+// ── Which lines to recommend (Smart Recommenders → the finder's lines) ──────
+// The store team decides, per line: recommend as usual, lead with it (first
+// choice when more than one line suits), only when the shopper brings up
+// certain conditions, or never. Enforced in two places: the tool lists only
+// the lines that may be offered (with the rule in words), and the server
+// refuses a line the rules don't allow for this conversation.
+export const LINE_RULE_MODES = ["normal", "lead", "only_when", "never"];
+
+// Aetrex's store-team rules, used until the merchant saves their own: Active
+// isn't advertised, Conform is only for diabetes or neuropathy, and Premium
+// Memory Foam leads.
+export function defaultLineRules(lines = []) {
+  const rules = {};
+  for (const l of lines) {
+    const n = String(l.name || "").trim().toLowerCase();
+    if (n === "active") rules[l.id] = { mode: "never" };
+    else if (n === "conform") rules[l.id] = { mode: "only_when", when: ["diabetes", "neuropathy"] };
+    else if (n === "premium memory foam") rules[l.id] = { mode: "lead" };
+  }
+  return rules;
+}
+
+// Saved rules, cleaned (they come from a form): known lines, known modes,
+// "only when" with at least one condition (else it would mean never).
+export function cleanLineRules(raw, lines = []) {
+  const ids = new Set(lines.map((l) => l.id));
+  const out = {};
+  for (const [id, r] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+    if (!ids.has(id) || !LINE_RULE_MODES.includes(r?.mode) || r.mode === "normal") continue;
+    if (r.mode === "only_when") {
+      const when = (Array.isArray(r.when) ? r.when : String(r.when || "").split(","))
+        .map((w) => String(w).replace(/<[^>]*>/g, " ").replace(/[^\p{L}\p{N}' -]/gu, "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 40))
+        .filter(Boolean)
+        .slice(0, 8);
+      if (when.length) out[id] = { mode: "only_when", when };
+      continue;
+    }
+    out[id] = { mode: r.mode };
+  }
+  return out;
+}
+
+export function lineRulesOf(definition) {
+  const lines = definition?.finder?.lines || [];
+  return definition?.rules && typeof definition.rules === "object" ? cleanLineRules(definition.rules, lines) : defaultLineRules(lines);
+}
+
+// "diabetes" also matches "diabetic", "neuropathy" "neuropathic".
+function mentions(text, term) {
+  const t = String(term || "").toLowerCase().trim();
+  if (!t) return false;
+  const stem = t.length > 6 ? t.slice(0, Math.max(5, t.length - 3)) : t;
+  return String(text || "").toLowerCase().includes(stem);
+}
+
+// May this line be offered in this conversation (what the shopper said)?
+export function lineAllowed(rule, shopperText) {
+  if (!rule || rule.mode === "normal" || rule.mode === "lead") return true;
+  if (rule.mode === "never") return false;
+  return (rule.when || []).some((w) => mentions(shopperText, w));
+}
+
+// The finder as this conversation may use it: lines (and their products)
+// the rules don't allow are left out entirely.
+export function catalogForConversation(finder, rules, shopperText) {
+  const keep = new Set((finder?.lines || []).filter((l) => lineAllowed(rules[l.id], shopperText)).map((l) => l.id));
+  return {
+    ...finder,
+    lines: (finder?.lines || []).filter((l) => keep.has(l.id)),
+    items: (finder?.items || []).filter((i) => keep.has(i.line)),
+  };
+}
+
+// The rule in words, for the line list Claude reads.
+export function ruleNote(rule) {
+  if (rule?.mode === "lead") return " FIRST CHOICE: when more than one line suits them, recommend this one.";
+  if (rule?.mode === "only_when") return ` ONLY for customers who've said they have ${rule.when.join(" or ")} — never offer it otherwise.`;
+  return "";
+}
