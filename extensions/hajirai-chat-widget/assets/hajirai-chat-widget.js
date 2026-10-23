@@ -509,7 +509,6 @@ panel.setAttribute('aria-modal','true');
 // Falls back to <html lang> or 'en' if neither is set.
 panel.setAttribute('lang',(document.documentElement.getAttribute('lang')||navigator.language||'en').split('-')[0]);
 
-var headerAv=safeUrl(AVATAR)?'<div class="ai-chat-header__avatar"><img src="'+safeUrl(AVATAR)+'" alt="'+esc(NAME)+'"></div>':'<div class="ai-chat-header__avatar ai-chat-header__avatar--placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>';
 
 var loginPillHtml='';
 if(CUST_LOGGED_IN&&CUST_NAME){
@@ -519,7 +518,7 @@ if(CUST_LOGGED_IN&&CUST_NAME){
 }
 
 panel.innerHTML=
-'<div class="ai-chat-header">'+headerAv+'<div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div><div class="ai-chat-rec-note" role="note" hidden><span class="ai-chat-rec-dot" aria-hidden="true"></span><span class="ai-chat-rec-text">Test recording on \u2014 this chat is saved for review</span></div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
+'<div class="ai-chat-header"><div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div><div class="ai-chat-rec-note" role="note" hidden><span class="ai-chat-rec-dot" aria-hidden="true"></span><span class="ai-chat-rec-text">Test recording on \u2014 this chat is saved for review</span></div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-chat-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea><button type="button" class="ai-chat-voice-cancel" aria-label="Cancel voice input" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button><span class="ai-chat-voice-status" aria-live="polite"></span>'+
@@ -902,6 +901,9 @@ document.addEventListener('click',function(e){
 
 /* Cache refs */
 var msgsEl=$('.ai-chat-messages',panel);
+/* The panel never scrolls; only its message list does. Focus or a stray
+   scrollIntoView can still shift it and hide the header, so undo that. */
+panel.addEventListener('scroll',function(){if(panel.scrollTop||panel.scrollLeft){panel.scrollTop=0;panel.scrollLeft=0}});
 var typingEl=$('.ai-chat-typing',panel);
 var typingTextEl=$('.ai-chat-typing-text',panel);
 var inputEl=$('.ai-chat-input',panel);
@@ -1752,7 +1754,7 @@ function runVisualize(cta,card){
   // This is the main guard against stacked fetches and the runaway repaint loop
   // that froze the page.
   if(card._aiVizHost||card.dataset.vizState==='loading'||card.dataset.vizState==='ready'){
-    if(card._aiVizHost){try{card._aiVizHost.scrollIntoView({behavior:'smooth',block:'nearest'})}catch(e){scrollBottom()}}
+    if(card._aiVizHost)keepInView(card._aiVizHost);
     return;
   }
   card.dataset.vizState='loading';
@@ -2205,8 +2207,13 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-23 compare'}catch(e){}
+try{window.__hajiraiWidget='2026-10-23 compare-2'}catch(e){}
 var CMP_MAX=3;
+/* Phones show two columns at most: you pick two, and a three-way comparison
+   shows the first product against one of the others at a time. */
+function cmpIsPhone(){return !!(PHONE_BAR&&PHONE_BAR.matches)}
+function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
+function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/><path d="M6 9h2M6 12h2M16 9h2M16 12h2"/></svg>';
 var CMP_STAR='<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>';
@@ -2216,13 +2223,13 @@ function cmpCards(products){return (products||[]).filter(function(p){return p&&p
 function compareCtaHtml(products){
   var list=cmpCards(products);
   if(list.length<2)return '';
-  var direct=list.length<=CMP_MAX;
+  var direct=list.length<=cmpMax();
   var thumbs='';
   for(var i=0;i<Math.min(list.length,3);i++){var im=list[i].image||list[i].featured_image||'';thumbs+='<span class="ai-cmp-cta__thumb">'+(im?'<img src="'+esc(im)+'" alt="" loading="lazy">':'')+'</span>'}
   var label=direct?(list.length===2?'Compare these two':'Compare all three'):'Compare';
-  var hint=direct?'Side by side':'Pick 2 or 3';
+  var hint=direct?'Side by side':cmpPickHint();
   return '<div class="ai-cmp-cta"><button type="button" class="ai-cmp-cta__btn" data-cmp-start aria-label="'+esc(label+' — '+hint.toLowerCase())+'"><span class="ai-cmp-cta__icon">'+CMP_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__thumbs" aria-hidden="true">'+thumbs+'</span><span class="ai-cmp-cta__go" aria-hidden="true">'+WI.arrow+'</span></button>'+
-    '<div class="ai-cmp-bar" hidden><span class="ai-cmp-bar__msg" aria-live="polite">Pick 2 or 3</span><button type="button" class="ai-cmp-bar__cancel" data-cmp-cancel>Cancel</button><button type="button" class="ai-cmp-bar__go" data-cmp-go disabled>Compare</button></div>'+
+    '<div class="ai-cmp-bar" hidden><span class="ai-cmp-bar__msg" aria-live="polite">'+cmpPickHint()+'</span><button type="button" class="ai-cmp-bar__cancel" data-cmp-cancel>Cancel</button><button type="button" class="ai-cmp-bar__go" data-cmp-go disabled>Compare</button></div>'+
     '<div class="ai-cmp-cta__err" role="alert" hidden></div></div>';
 }
 function cmpBubbleCards(bubble){return Array.prototype.slice.call(bubble.querySelectorAll('.ai-chat-products .ai-chat-product-card[data-handle]'))}
@@ -2241,14 +2248,14 @@ function cmpPickMode(bubble,on){
 }
 function cmpPickUpdate(bubble){
   var n=cmpPicked(bubble).length,cta=$('.ai-cmp-cta',bubble);if(!cta)return;
-  $('.ai-cmp-bar__msg',cta).textContent=n===0?'Pick 2 or 3':n===1?'Pick 1 more':'';
+  $('.ai-cmp-bar__msg',cta).textContent=n===0?cmpPickHint():n===1?'Pick 1 more':'';
   var go=$('.ai-cmp-bar__go',cta);go.disabled=n<2;go.textContent=n>=2?'Compare '+n:'Compare';
-  cmpBubbleCards(bubble).forEach(function(c){var b=$('.ai-cmp-pick',c);if(b)b.setAttribute('aria-pressed',c.classList.contains('is-cmp-picked')?'true':'false');c.classList.toggle('is-cmp-full',n>=CMP_MAX&&!c.classList.contains('is-cmp-picked'))});
+  cmpBubbleCards(bubble).forEach(function(c){var b=$('.ai-cmp-pick',c);if(b)b.setAttribute('aria-pressed',c.classList.contains('is-cmp-picked')?'true':'false');c.classList.toggle('is-cmp-full',n>=cmpMax()&&!c.classList.contains('is-cmp-picked'))});
 }
 function cmpToggle(card){
   var bubble=card.closest('.ai-chat-msg-bubble');if(!bubble)return;
-  if(!card.classList.contains('is-cmp-picked')&&cmpPicked(bubble).length>=CMP_MAX){
-    var m=$('.ai-cmp-bar__msg',bubble);if(m){m.textContent='3 at most';m.classList.remove('is-nudge');void m.offsetWidth;m.classList.add('is-nudge')}
+  if(!card.classList.contains('is-cmp-picked')&&cmpPicked(bubble).length>=cmpMax()){
+    var m=$('.ai-cmp-bar__msg',bubble);if(m){m.textContent=cmpMax()+' at most';m.classList.remove('is-nudge');void m.offsetWidth;m.classList.add('is-nudge')}
     return;
   }
   card.classList.toggle('is-cmp-picked');cmpPickUpdate(bubble);
@@ -2260,13 +2267,13 @@ function cmpErr(bubble,msg){
 function startCompare(bubble){
   var cards=cmpBubbleCards(bubble);
   if(cards.length<2)return;
-  if(cards.length<=CMP_MAX){runCompare(bubble,cards);return}
+  if(cards.length<=cmpMax()){runCompare(bubble,cards);return}
   cmpPickMode(bubble,true);
   var first=$('.ai-cmp-pick',cards[0]);if(first)try{first.focus({preventScroll:true})}catch(e){}
 }
 function runCompare(bubble,cards){
   if(isStreaming)return;
-  var handles=cards.map(function(c){return c.getAttribute('data-handle')}).slice(0,CMP_MAX);
+  var handles=cards.map(function(c){return c.getAttribute('data-handle')}).slice(0,cmpMax());
   var cta=$('.ai-cmp-cta',bubble),btn=cta&&(cta.querySelector('.ai-cmp-bar:not([hidden]) .ai-cmp-bar__go')||$('.ai-cmp-cta__btn',cta));
   cmpErr(bubble,'');
   if(btn){btn.disabled=true;btn.classList.add('is-busy');btn.setAttribute('aria-busy','true')}
@@ -2284,8 +2291,10 @@ function runCompare(bubble,cards){
       messages.push({role:'user',content:ask});
       messages.push({role:'assistant',content:intro,comparison:cmp,compared:cmpCompared(cmp)});
       saveH(messages);
-      /* Show the table from its top, not the bottom of the chat. */
-      setTimeout(function(){try{md2.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){md2.scrollIntoView(true)}},60);
+      /* Show the table from its top, not the bottom of the chat. Scroll the
+         message list only: scrollIntoView also scrolls the panel itself and
+         pushes its header out of view. */
+      scrollMsgTop(md2);
     })
     .catch(function(err){done();cmpErr(bubble,(err&&err.message)||'The comparison couldn’t load. Please try again.')});
 }
@@ -2294,9 +2303,30 @@ function cmpListHtml(items){
   if(!items||!items.length)return '';
   var h='<ul class="ai-cmp__list">';for(var i=0;i<items.length;i++)h+='<li>'+esc(items[i])+'</li>';return h+'</ul>';
 }
-var CMP_NA='<span class="ai-cmp__na">Not listed</span>';
+/* A value the store doesn't list: a quiet dash (read out as "Not listed"). */
+var CMP_NA='<span class="ai-cmp__na ai-cmp__dash"><span aria-hidden="true">\u2014</span><span class="ai-sr">Not listed</span></span>';
+/* Three products on a phone: the first stays, a "Compare with" switch picks
+   the second column. Each pair is the server's own two-way comparison. */
+var cmpSets=[];
 function compareHtml(cmp){
   if(!cmp||!Array.isArray(cmp.products)||cmp.products.length<2||!Array.isArray(cmp.rows))return '';
+  var pairs=Array.isArray(cmp.pairs)?cmp.pairs.filter(function(x){return x&&Array.isArray(x.products)&&x.products.length===2&&Array.isArray(x.rows)}):[];
+  if(!cmpIsPhone()||cmp.products.length<3||pairs.length!==cmp.products.length-1)return cmpTableHtml(cmp);
+  var id=cmpSets.push(pairs)-1,P=cmp.products;
+  var h='<div class="ai-cmp-set" data-cmp-set="'+id+'"><div class="ai-cmp-with" role="radiogroup" aria-label="'+esc('Compare '+P[0].name+' with')+'"><span class="ai-cmp-with__label" aria-hidden="true">'+esc(P[0].name)+' vs</span><span class="ai-cmp-with__opts">';
+  for(var i=1;i<P.length;i++)h+='<button type="button" role="radio" class="ai-cmp-with__btn" data-cmp-with="'+(i-1)+'" aria-checked="'+(i===1)+'">'+esc(P[i].name)+'</button>';
+  return h+'</span></div><div class="ai-cmp-set__table">'+cmpTableHtml(pairs[0])+'</div></div>';
+}
+function cmpWith(btn){
+  var set=btn.closest('.ai-cmp-set'),pairs=set&&cmpSets[+set.getAttribute('data-cmp-set')];
+  var k=+btn.getAttribute('data-cmp-with');if(!pairs||!pairs[k]||btn.getAttribute('aria-checked')==='true')return;
+  Array.prototype.forEach.call(set.querySelectorAll('[data-cmp-with]'),function(b){b.setAttribute('aria-checked',String(b===btn))});
+  var box=$('.ai-cmp-set__table',set),old=$('.ai-cmp',box),showAll=!!(old&&old.classList.contains('is-all')&&$('[data-cmp-mode]',old));
+  box.innerHTML=cmpTableHtml(pairs[k]);
+  /* Keep "All details" if that's what they were reading. */
+  var all=showAll&&$('[data-cmp-mode=all]',box);if(all)cmpMode(all);
+}
+function cmpTableHtml(cmp){
   var P=cmp.products,n=P.length;
   var byKey={};cmp.rows.forEach(function(r){byKey[r.key]=r});
   var priceRow=byKey.price,ratingRow=byKey.rating;
@@ -2352,13 +2382,20 @@ function compareHtml(cmp){
     h+='</div>';
   });
   h+='</div>';
-  /* One Add to cart per column: sizes and stock are read live at the tap. */
+  /* One buy button per column, pinned to the bottom of the chat while the
+     table scrolls (each names its product, since the photos scroll away).
+     "Select size" until there's nothing left to choose, like the cards;
+     sizes and stock are read live at the tap. */
   h+='<div class="ai-cmp__grid ai-cmp__foot">';
   P.forEach(function(p){
     var u=url(p),t=esc(p.title||p.name);
+    var choose=Array.isArray(p.choose)?p.choose:['Size'];
+    var first=choose.filter(function(n){return /size/i.test(n)})[0]||choose[0];
+    var label=choose.length?'Select '+String(first).toLowerCase():'Add to cart';
     h+='<div class="ai-cmp__col ai-cmp__buy" data-handle="'+esc(p.handle)+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(p.image||'')+'">'+
-      (p.inStock===false?'<span class="ai-cmp__na">Sold out</span>':'<button type="button" class="ai-cmp__atc" data-atc aria-label="Add '+t+' to cart">Add to cart</button>')+
-      '<a class="ai-cmp__view" href="'+esc(u)+'">View<span class="ai-sr"> '+t+'</span></a></div>';
+      '<div class="ai-cmp__mini"><a class="ai-cmp__mininame" href="'+esc(u)+'">'+esc(p.name)+'<span class="ai-sr"> \u2014 view product</span></a>'+(p.priceLabel?'<span class="ai-cmp__miniprice">'+esc(p.priceLabel)+'</span>':'')+'</div>'+
+      (p.inStock===false?'<span class="ai-cmp__na">Sold out</span>':'<button type="button" class="ai-cmp__atc" data-atc aria-label="'+(choose.length?esc(label)+' for '+t:'Add '+t+' to cart')+'">'+esc(label)+'</button>')+
+      '</div>';
   });
   h+='</div></div>';
   return h;
@@ -2564,42 +2601,14 @@ function openAtcPanel(card,product,m,sel,state){
   });
   panel.addEventListener('keydown',function(e){if(e.key==='Escape'){e.stopPropagation();closeAtcPanel(panel);var b=card.querySelector('[data-atc]');if(b)b.focus()}});
   render(state);
-  try{panel.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(_){panel.scrollIntoView(false)}
+  keepInView(panel);
   var first=panel.querySelector('.ai-chat-atc-val:not(.is-out),.ai-chat-atc-primary,.ai-chat-atc-add:not([disabled])');
   if(first&&first.focus)try{first.focus({preventScroll:true})}catch(_){first.focus()}
 }
 
-/* Home → chat: the avatar beside the greeting flies up into the header
-   while the name slides over to make room for it. The header avatar's final
-   spot is measured with the layout already settled, then both move together.
-   No flight for reduced motion, a closed chat, or an avatar off screen. */
-function leaveHome(fromRect){
-  if(!panel.classList.contains('is-home'))return;
-  var hdr=$('.ai-chat-header__avatar',panel);
-  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(!hdr||!fromRect||!fromRect.width||reduce){panel.classList.remove('is-home');return}
-  panel.classList.add('is-measuring');
-  panel.classList.remove('is-home');
-  var to=hdr.getBoundingClientRect();
-  panel.classList.add('is-home');
-  void panel.offsetWidth;
-  panel.classList.remove('is-measuring');
-  panel.classList.add('is-avatar-flying');
-  panel.classList.remove('is-home');
-  var ghost=el('div','ai-chat-avatar-ghost'+(hdr.classList.contains('ai-chat-header__avatar--placeholder')?' is-placeholder':''),hdr.innerHTML);
-  ghost.style.cssText='left:'+fromRect.left+'px;top:'+fromRect.top+'px;width:'+fromRect.width+'px;height:'+fromRect.height+'px';
-  document.body.appendChild(ghost);
-  var dx=to.left-fromRect.left,dy=to.top-fromRect.top,sc=to.width/fromRect.width;
-  var done=function(){if(ghost.parentNode)ghost.parentNode.removeChild(ghost);panel.classList.remove('is-avatar-flying')};
-  if(ghost.animate){
-    var a=ghost.animate([
-      {transform:'translate(0,0) scale(1)'},
-      {transform:'translate('+dx+'px,'+dy+'px) scale('+sc+')'}
-    ],{duration:520,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
-    a.onfinish=done;
-    setTimeout(done,900);
-  }else done();
-}
+/* Home → chat. The header shows the assistant's name only: no avatar once
+   the conversation starts. */
+function leaveHome(){panel.classList.remove('is-home')}
 /* ── Orders & returns in the chat ──
    "Where's my order?": signed-in shoppers see their orders as cards
    (status, progress, items, tracking). Signed out, a sign-in card opens
@@ -2973,11 +2982,9 @@ function sendMessage(){
 var text=inputEl.value.trim();
 if(!text||isStreaming)return;
 var w=$('.ai-chat-welcome',msgsEl);
-var homeAv=w&&isOpen?$('.ai-chat-welcome__avatar',w):null;
-var fromRect=homeAv?homeAv.getBoundingClientRect():null;
 if(w)w.remove();
 msgsEl.classList.remove('is-welcome');
-leaveHome(fromRect);
+leaveHome();
 /* Deactivate any prior choice/suggestion chip rows so chips from
    earlier turns can no longer be tapped — the visible history stays
    readable, but only the latest assistant turn's chips are live. */
@@ -3180,7 +3187,7 @@ function streamResponse(msg){
 if(abortCtrl)abortCtrl.abort();
 abortCtrl=new AbortController();
 armWatchdog();
-var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,history:historyFor(msg).map(function(m){var out={role:m.role,content:m.content};if(m.role==='assistant'&&m.products&&m.products.length){out.products=m.products.slice(0,10).map(function(p){return{handle:p.handle||'',title:p.title||'',url:p.url||'',image:p.image||'',price:p.price||'',price_formatted:p.price_formatted||'',compare_at_price:p.compare_at_price||'',category:p.category||p._category||'',gender:p.gender||p._gender||''}})}return out})};
+var body={message:msg,session_id:getSess(),shop_domain:SHOP,assistant_name:NAME,history:historyFor(msg).map(function(m){var out={role:m.role,content:m.content};if(m.role==='assistant'&&Array.isArray(m.compared)&&m.compared.length)out.compared=m.compared.slice(0,3).map(function(c){return{title:String(c&&c.title||''),price:String(c&&c.price||'')}});if(m.role==='assistant'&&m.products&&m.products.length){out.products=m.products.slice(0,10).map(function(p){return{handle:p.handle||'',title:p.title||'',url:p.url||'',image:p.image||'',price:p.price||'',price_formatted:p.price_formatted||'',compare_at_price:p.compare_at_price||'',category:p.category||p._category||'',gender:p.gender||p._gender||''}})}return out})};
 if(SUPPORT_URL)body.support_url=SUPPORT_URL;
 if(SUPPORT_LABEL)body.support_label=SUPPORT_LABEL;
 var ffData=ffPayload();
@@ -3598,11 +3605,12 @@ if(retryBtn){
   inputEl.value=lastUserMessage;sendMessage();
   return;
 }
-var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode]');
+var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode],[data-cmp-with]');
 if(cmpBtn){
   e.preventDefault();
   var cbub=cmpBtn.closest('.ai-chat-msg-bubble');
   if(cmpBtn.hasAttribute('data-cmp-mode')){cmpMode(cmpBtn);return}
+  if(cmpBtn.hasAttribute('data-cmp-with')){cmpWith(cmpBtn);return}
   if(!cbub)return;
   if(cmpBtn.hasAttribute('data-cmp-start'))startCompare(cbub);
   else if(cmpBtn.hasAttribute('data-cmp-go'))runCompare(cbub,cmpPicked(cbub));

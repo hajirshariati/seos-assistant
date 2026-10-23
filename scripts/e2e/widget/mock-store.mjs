@@ -297,7 +297,7 @@ export function start(port) {
             const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
             w({ type: "text", text: "The Savannah has a little more cushioning; the Jillian is lighter on price." });
             w({ type: "products", products: [] });
-            w({ type: "comparison", comparison: buildComparison(CMP_CATALOG, ["savannah-red", "jillian-black"]) });
+            w({ type: "comparison", comparison: buildComparison(CMP_CATALOG, ["savannah-red", "jillian-black", ...(/carly/i.test(parsed.message) ? ["carly-white"] : [])]) });
             w({ type: "done" });
             return resp.end();
           }

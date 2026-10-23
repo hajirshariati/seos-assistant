@@ -50,7 +50,7 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   check("chatWidth 700", Math.round(pw.width) === 700, pw.width);
   check("position bottom-right (panel on the right)", pw.right > 1200, JSON.stringify(pw));
   check("assistantName in header", (await p.textContent(".ai-chat-header__name")).trim() === "NAME-X");
-  check("avatar in header + welcome", await p.evaluate(() => /avatar\.png/.test(document.querySelector(".ai-chat-header__avatar img")?.src || "") && /avatar\.png/.test(document.querySelector(".ai-chat-welcome__avatar img")?.src || "")));
+  check("avatar on the welcome (not in the header)", await p.evaluate(() => !document.querySelector(".ai-chat-header img") && /avatar\.png/.test(document.querySelector(".ai-chat-welcome__avatar img")?.src || "")));
   check("banner shown", await p.evaluate(() => /banner\.png/.test(document.querySelector(".ai-chat-welcome__banner img")?.src || "")));
   check("greeting", (await p.textContent(".ai-chat-welcome__title")).trim() === "GREETING-X");
   check("greetingCta", (await p.textContent(".ai-chat-welcome__greeting-cta")).trim() === "CTA-LINE-X");

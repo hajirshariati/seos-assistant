@@ -263,7 +263,7 @@ test("runVisualize is SINGLE-FLIGHT — a repeat CTA tap never builds a second h
   const run = fnBody("runVisualize");
   // Guard checks an existing host / loading|ready state and bails early.
   assert.match(run, /card\._aiVizHost\|\|card\.dataset\.vizState==='loading'\|\|card\.dataset\.vizState==='ready'/, "early-return guard on existing host / state");
-  assert.match(run, /scrollIntoView/, "a repeat tap scrolls to the existing preview instead of refetching");
+  assert.match(run, /keepInView\(card._aiVizHost\)/, "a repeat tap scrolls (the message list only) to the existing preview instead of refetching");
   assert.match(run, /card\.dataset\.vizState='loading'/, "marks the card loading before building the host");
   assert.match(run, /card\._aiVizHost=host/, "remembers the host on the card for re-entry");
 });

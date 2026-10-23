@@ -107,6 +107,9 @@ function facts(p, catalog) {
     onSale: Boolean(p.onSale),
     inStock: Boolean(p.inStock),
     rating: rating(p),
+    // Options the shopper still has to pick (Size, Width…), so the table's
+    // button reads "Select size" like the product cards do.
+    choose: Object.entries(p.options || {}).filter(([, vals]) => Array.isArray(vals) && vals.length > 1).map(([name]) => name),
     kind: displayCase(p.subcategory || p.category || p.productType),
     gender: p.gender.map(displayCase).join(", "),
     activities: p.activities.map(displayCase),
@@ -147,6 +150,18 @@ export function buildComparison(catalog, handles = []) {
   if (picked.length < 2) {
     return { error: picked.length ? "Pick at least two different products to compare." : "Those products weren't found. Search first.", missing };
   }
+  return {
+    ...compareProducts(picked, catalog),
+    // Phones show two columns at a time: the first product against each of
+    // the others, each pair compared on its own (which is lower priced,
+    // what both share) rather than cut from the three-way table.
+    ...(picked.length > 2 ? { pairs: picked.slice(1).map((p) => compareProducts([picked[0], p], catalog)) } : {}),
+    ...(missing.length ? { missing } : {}),
+    ...(wanted.length > COMPARE_MAX ? { note: `Only ${COMPARE_MAX} products can be compared at once; the first ${COMPARE_MAX} are shown.` } : {}),
+  };
+}
+
+function compareProducts(picked, catalog) {
   const f = picked.map((p) => facts(p, catalog));
   const rows = [];
   const add = (r) => { if (r) rows.push(r); };
@@ -197,12 +212,10 @@ export function buildComparison(catalog, handles = []) {
 
   const sameStyle = new Set(picked.map((p) => p.style.toLowerCase())).size === 1;
   return {
-    products: f.map(({ handle, title, name, color, url, image, priceLabel, compareAtLabel, onSale, inStock, rating: r }) => ({ handle, title, name, color, url, image, priceLabel, compareAtLabel, onSale, inStock, rating: r })),
+    products: f.map(({ handle, title, name, color, url, image, priceLabel, compareAtLabel, onSale, inStock, rating: r, choose }) => ({ handle, title, name, color, url, image, priceLabel, compareAtLabel, onSale, inStock, rating: r, choose })),
     rows,
     sameStyle,
     differences: rows.filter((r) => r.differ).length,
-    ...(missing.length ? { missing } : {}),
-    ...(wanted.length > COMPARE_MAX ? { note: `Only ${COMPARE_MAX} products can be compared at once; the first ${COMPARE_MAX} are shown.` } : {}),
   };
 }
 
