@@ -161,9 +161,9 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
 });
 wcNow = {};
 // Test recordings: the tester link marks the browser (two weeks), testers'
-// chats carry their name and page and they see the "Test recording on" note;
-// ordinary shoppers send neither and see nothing unless the store records
-// everyone; ?hajirai_tester=off clears it.
+// chats carry their name and page; ordinary shoppers send neither unless the
+// store records everyone; ?hajirai_tester=off clears it. No recording note is
+// shown in the header (the footer already says chats may be kept).
 async function recRun(path, wc, fn) {
   wcNow = wc; cfgNow = base;
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -175,10 +175,10 @@ async function recRun(path, wc, fn) {
   await ctx.close(); wcNow = {};
 }
 const ask = async (p) => { const n = bodies.length; await p.fill(".ai-chat-input-area textarea", "hello"); await p.keyboard.press("Enter"); await p.waitForTimeout(700); return bodies.length > n ? bodies.at(-1) : null; };
-const noteShown = (p) => p.evaluate(() => { const n = document.querySelector(".ai-chat-rec-note"); return !!n && !n.hidden && getComputedStyle(n).display !== "none"; });
+const noteShown = (p) => p.evaluate(() => !!document.querySelector(".ai-chat-rec-note, .ai-chat-rec-dot") || /recording/i.test(document.querySelector(".ai-chat-header").textContent));
 await recRun("/?hajirai_tester=Ann%20QA", { recording: { on: true, scope: "testers" } }, async (p) => {
   check("recording: tester link remembered on this browser", await p.evaluate(() => JSON.parse(localStorage.getItem("hajirai_tester") || "{}").name === "Ann QA"));
-  check("recording: the tester sees the note", await noteShown(p));
+  check("recording: no recording note in the header, even for a tester", !(await noteShown(p)));
   const b = await ask(p);
   check("recording: the tester's chat carries their name and page", b?.tester === "Ann QA" && b?.page === "/", JSON.stringify({ t: b?.tester, p: b?.page }));
 });
@@ -188,13 +188,45 @@ await recRun("/", { recording: { on: true, scope: "testers" } }, async (p) => {
   check("recording: an ordinary shopper sends no tester name or page", b && !("tester" in b) && !("page" in b), JSON.stringify(b && { t: b.tester, p: b.page }));
 });
 await recRun("/", { recording: { on: true, scope: "everyone" } }, async (p) => {
-  check("recording everyone: every shopper sees the note", await noteShown(p));
+  check("recording everyone: still no note in the header", !(await noteShown(p)));
 });
 await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" } }, async (p) => {
   check("recording off: no note even for a tester", !(await noteShown(p)));
   await p.goto("http://localhost:4795/?hajirai_tester=off"); await p.waitForTimeout(400);
   check("recording: ?hajirai_tester=off clears it", await p.evaluate(() => localStorage.getItem("hajirai_tester") === null));
 });
+// Showing the chat after a delay (Settings → Showing the chat). Off: as soon
+// as the store answers. On: hidden and untouchable until the delay passes;
+// the setting is remembered, so the next page waits from its first moment.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  const state = () => p.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const cs = getComputedStyle(l); return { waiting: l.classList.contains("is-waiting"), seen: cs.visibility !== "hidden" && +cs.opacity > 0, inert: l.inert }; });
+  wcNow = { appearDelay: { on: false, sec: 3 } }; cfgNow = base;
+  await p.goto("http://localhost:4795/"); await p.waitForTimeout(700);
+  const off = await state();
+  check("delay off: the chat shows right away", !off.waiting && off.seen && !off.inert, JSON.stringify(off));
+  wcNow = { appearDelay: { on: true, sec: 2 } };
+  // The page that first learns of the delay doesn't hide a chat already shown.
+  await p.reload(); await p.waitForTimeout(700);
+  check("delay just switched on: a chat already showing isn't pulled away", !(await state()).waiting);
+  await p.reload(); await p.waitForTimeout(600);
+  const early = await state();
+  check("delay on: not there yet (and can't be tapped)", early.waiting && !early.seen && early.inert, JSON.stringify(early));
+  await p.waitForTimeout(1900);
+  const late = await state();
+  check("delay on: appears once the delay has passed", !late.waiting && late.seen && !late.inert, JSON.stringify(late));
+  await p.reload(); await p.waitForTimeout(80);
+  check("delay on: the next page waits from its very first moment", (await state()).waiting);
+  await p.waitForTimeout(2400);
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(600);
+  check("delay on: it opens normally after", await p.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open")));
+  wcNow = { appearDelay: { on: false, sec: 2 } };
+  await p.reload(); await p.waitForTimeout(700);
+  check("delay switched off: shows right away again", !(await state()).waiting);
+  if (errs.length) check("delay: no JS errors", false, errs.join("|"));
+  await ctx.close(); wcNow = {};
+}
 console.log(out.join("\n"));
 const failed = out.filter((l) => l.startsWith("FAIL")).length;
 console.log(`\n${out.length - failed} passed, ${failed} failed`);

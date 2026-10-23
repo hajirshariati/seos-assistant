@@ -189,6 +189,8 @@ model ShopConfig {
   feedbackSurvey      String   @default("")
   feedbackSurveyLabel String   @default("Share feedback")
   hideLiveChatButton  Boolean  @default(false)
+  appearDelayOn       Boolean  @default(false)
+  appearDelaySec      Int      @default(3)
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)

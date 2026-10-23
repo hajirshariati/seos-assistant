@@ -10,6 +10,7 @@ import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TU
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
 import { typeformId, feedbackSurveyConfig } from "../app/lib/feedback-survey.js";
+import { appearDelayConfig, clampDelay } from "../app/lib/appear-delay.js";
 
 let pass = 0;
 let fail = 0;
@@ -94,6 +95,16 @@ test("the widget gets the button only when it's on and has a survey", () => {
   assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: false, feedbackSurvey: "jdXBrXMa" }).on, false);
   assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "jdXBrXMa", feedbackSurveyLabel: "x".repeat(90) }).label.length, 40);
   assert.deepEqual(feedbackSurveyConfig(), { on: false, form: "", label: "Share feedback" });
+});
+
+console.log("\nshowing the chat after a delay");
+test("whole seconds from 1 to 60; off unless switched on", () => {
+  assert.deepEqual(appearDelayConfig(), { on: false, sec: 3 });
+  assert.deepEqual(appearDelayConfig({ appearDelayOn: true, appearDelaySec: 5 }), { on: true, sec: 5 });
+  assert.equal(clampDelay(0), 1);
+  assert.equal(clampDelay(999), 60);
+  assert.equal(clampDelay("7.9"), 7);
+  assert.equal(clampDelay("abc"), 3);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -40,7 +40,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
-  if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers';recordingNote()}
+  if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers'}
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
@@ -51,6 +51,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     applyHostButtons(hb);
     if(was!==FB_ON+'|'+FB_FORM+'|'+FB_LABEL&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
+  appearConfig(d.appearDelay);
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -163,9 +164,9 @@ var WELCOME_INTRO=true;
    one held the store-wide setting this replaces. */
 /* Test recordings. Opening the store with ?hajirai_tester=Name marks this
    browser as a tester for two weeks (?hajirai_tester=off clears it). While
-   the store records, testers' chats are saved for review — and they see a
-   note saying so. Ordinary shoppers are only recorded if the store chose
-   "everyone", and then they see the same note. */
+   the store records, testers' chats are saved for review. Ordinary shoppers
+   are only recorded if the store chose "everyone". (The chat's footer
+   already says chats may be kept, so there's no separate note.) */
 var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
 (function(){
   try{
@@ -179,10 +180,6 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
     if(t&&t.name&&t.until>Date.now())TESTER=String(t.name).slice(0,40);else if(t)localStorage.removeItem(TESTER_KEY);
   }catch(e){}
 })();
-function recordingNote(){
-  var n=panel&&panel.querySelector('.ai-chat-rec-note');if(!n)return;
-  n.hidden=!(REC_ON&&(REC_SCOPE==='everyone'||TESTER));
-}
 var THEME_KEY='hajirai_theme_pick',THEME='dark';
 try{if(localStorage.getItem(THEME_KEY)==='light')THEME='light'}catch(e){}
 function applyTheme(next,save){
@@ -520,7 +517,7 @@ if(CUST_LOGGED_IN&&CUST_NAME){
 }
 
 panel.innerHTML=
-'<div class="ai-chat-header"><div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div><div class="ai-chat-rec-note" role="note" hidden><span class="ai-chat-rec-dot" aria-hidden="true"></span><span class="ai-chat-rec-text">Test recording on \u2014 this chat is saved for review</span></div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
+'<div class="ai-chat-header"><div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-chat-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea><button type="button" class="ai-chat-voice-cancel" aria-label="Cancel voice input" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button><span class="ai-chat-voice-status" aria-live="polite"></span>'+
@@ -557,6 +554,40 @@ document.body.appendChild(overlay);
 document.body.appendChild(panel);
 document.body.appendChild(launcher);
 applyTheme(THEME);orbCssVars();
+
+/* Settings → Showing the chat: the store can have the chat appear a few
+   seconds after each page loads. The setting is remembered on this device,
+   so the wait starts the moment the page does; on a first visit the chat
+   waits (briefly) for the store's answer before it shows. Opening the chat
+   any other way (a link, a resumed return) ends the wait. */
+var APPEAR_KEY='hajirai_appear',APPEAR_T0=Date.now(),appearTimer=null;
+function launcherWait(ms){
+  clearTimeout(appearTimer);
+  launcher.classList.add('is-waiting');launcher.inert=true;launcher.setAttribute('aria-hidden','true');
+  appearTimer=setTimeout(revealLauncher,Math.max(0,ms));
+}
+function revealLauncher(){
+  clearTimeout(appearTimer);appearTimer=null;
+  if(!launcher.classList.contains('is-waiting'))return;
+  launcher.classList.remove('is-waiting');
+  if(!isOpen){
+    launcher.inert=false;launcher.removeAttribute('aria-hidden');
+    launcher.classList.add('is-arriving');
+    setTimeout(function(){launcher.classList.remove('is-arriving')},600);
+  }
+}
+function appearConfig(a){
+  var ap={on:!!(a&&a.on===true),sec:Math.min(60,Math.max(1,parseInt(a&&a.sec,10)||3))};
+  try{localStorage.setItem(APPEAR_KEY,JSON.stringify(ap))}catch(e){}
+  if(typeof launcher==='undefined'||!launcher.classList.contains('is-waiting'))return;
+  var left=ap.on?ap.sec*1000-(Date.now()-APPEAR_T0):0;
+  if(left>0)launcherWait(left);else revealLauncher();
+}
+(function(){
+  var ap=null;try{ap=JSON.parse(localStorage.getItem(APPEAR_KEY)||'null')}catch(e){}
+  if(ap&&ap.on)launcherWait(Math.min(60,Math.max(1,parseInt(ap.sec,10)||3))*1000);
+  else if(!ap)launcherWait(1500);
+})();
 
 /* Bubble mode: the × folds the bar into a bubble for the rest of this
    visit. Tapping the bubble opens the chat and brings the bar back; a new
@@ -1380,6 +1411,7 @@ var want=typeof force==='boolean'?force:!isOpen;
 if(want&&HIDDEN_BY_URL)return;
 isOpen=want;
 if(isOpen){
+  revealLauncher();
   focusBeforeOpen=document.activeElement;
   loadFitfinder().then(renderHelpers);
   launcher.classList.add('hidden');

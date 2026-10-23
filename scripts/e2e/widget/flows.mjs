@@ -467,6 +467,8 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("http://localhost:4789/full");
+  // Measure the scroll morphs only: wait until the launcher has arrived.
+  await page.waitForFunction(() => { const l = document.querySelector(".ai-chat-launcher"); return l && !l.classList.contains("is-waiting") && !l.classList.contains("is-arriving"); });
   await page.waitForTimeout(700);
   const state = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const r = l.getBoundingClientRect(); return { tucked: l.classList.contains("is-tucked"), bubble: l.classList.contains("is-bubble"), w: Math.round(r.width), ghosts: document.querySelectorAll(".ai-chat-morph").length, op: getComputedStyle(l).opacity }; });
   // Each frame: the real launcher's and the stand-in's opacity. A frame where

@@ -33,6 +33,7 @@ import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards"
 import { TestRecordingCard } from "../components/TestRecordingCard";
 import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
+import { clampDelay, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -65,6 +66,8 @@ export const loader = async ({ request }) => {
     feedbackSurvey: config.feedbackSurvey || "",
     feedbackSurveyLabel: config.feedbackSurveyLabel || "Share feedback",
     hideLiveChatButton: config.hideLiveChatButton === true,
+    appearDelayOn: config.appearDelayOn === true,
+    appearDelaySec: clampDelay(config.appearDelaySec),
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -219,6 +222,14 @@ export const action = async ({ request }) => {
   if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
   const hideLiveChat = formData.get("hideLiveChatButton");
   if (hideLiveChat !== null) data.hideLiveChatButton = hideLiveChat === "true";
+  const delayOn = formData.get("appearDelayOn");
+  if (delayOn !== null) data.appearDelayOn = delayOn === "true";
+  const delaySec = formData.get("appearDelaySec");
+  if (delaySec !== null) {
+    const n = Number.parseInt(String(delaySec).trim(), 10);
+    if (data.appearDelayOn && (!Number.isFinite(n) || n < APPEAR_DELAY_MIN || n > APPEAR_DELAY_MAX)) return { error: `The delay should be a whole number of seconds from ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX}.` };
+    data.appearDelaySec = clampDelay(n);
+  }
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -526,7 +537,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -552,6 +563,8 @@ export default function ApiKeys() {
   const [survey, setSurvey] = useState(initSurvey);
   const [surveyLabel, setSurveyLabel] = useState(initSurveyLabel);
   const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
+  const [delayOn, setDelayOn] = useState(initDelayOn);
+  const [delaySec, setDelaySec] = useState(String(initDelaySec));
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -587,6 +600,8 @@ export default function ApiKeys() {
     survey: initSurvey,
     surveyLabel: initSurveyLabel,
     hideLiveChat: initHideLiveChat,
+    delayOn: initDelayOn,
+    delaySec: String(initDelaySec),
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -637,6 +652,8 @@ export default function ApiKeys() {
     setSurvey(s.survey);
     setSurveyLabel(s.surveyLabel);
     setHideLiveChat(s.hideLiveChat);
+    setDelayOn(s.delayOn);
+    setDelaySec(s.delaySec);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -893,6 +910,35 @@ export default function ApiKeys() {
                     checked={hideLiveChat}
                     onChange={setHideLiveChat}
                     helpText="Removes the separate chat button from the corner of the page. Live chat still opens from the assistant whenever a shopper asks for a person."
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Showing the chat"
+              description="When the chat appears on your store's pages."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <Checkbox
+                    label="Wait before showing the chat"
+                    checked={delayOn}
+                    onChange={setDelayOn}
+                    helpText={delayOn
+                      ? "On: the chat appears on each page after the delay below, so shoppers see your page first."
+                      : "Off: the chat shows as soon as the page loads."}
+                  />
+                  <TextField
+                    label="Delay (seconds)"
+                    type="number"
+                    min={APPEAR_DELAY_MIN}
+                    max={APPEAR_DELAY_MAX}
+                    value={delaySec}
+                    onChange={setDelaySec}
+                    autoComplete="off"
+                    disabled={!delayOn}
+                    helpText={`From ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX} seconds.`}
                   />
                 </BlockStack>
               </Card>
@@ -1328,6 +1374,8 @@ export default function ApiKeys() {
           <input type="hidden" name="feedbackSurvey" value={survey} />
           <input type="hidden" name="feedbackSurveyLabel" value={surveyLabel} />
           <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
+          <input type="hidden" name="appearDelayOn" value={String(delayOn)} />
+          <input type="hidden" name="appearDelaySec" value={delaySec} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />
