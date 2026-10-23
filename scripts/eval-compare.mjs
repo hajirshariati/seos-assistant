@@ -114,15 +114,6 @@ test("needs two real products; three at most; unknown handles reported", () => {
   assert.ok(c.note);
   assert.ok(buildComparison(catalog, ["maui-black-l3000m", "maui-black-l3000m"]).error, "the same product twice isn't a comparison");
 });
-test("three products also come as pairs (first vs each other), each compared on its own", () => {
-  const c = buildComparison(catalog, ["maui-black-l3000m", "bondi-white-l5003m", "maui-army-l3400m"]);
-  assert.equal(c.pairs.length, 2);
-  assert.deepEqual(c.pairs.map((x) => x.products.map((p) => p.handle)), [["maui-black-l3000m", "bondi-white-l5003m"], ["maui-black-l3000m", "maui-army-l3400m"]]);
-  assert.equal(rowOf(c.pairs[0], "price").best, 0, "Maui is the lower price against Bondi");
-  assert.equal(rowOf(c.pairs[1], "price").best, null, "same price as the Army: neither is marked");
-  assert.equal(c.pairs[1].sameStyle, true);
-  assert.ok(!c.pairs[0].pairs && !cmp.pairs, "pairs only for three, and not nested");
-});
 test("same style in two colors: said plainly, nothing but color differs", () => {
   const c = buildComparison(catalog, ["maui-black-l3000m", "maui-army-l3400m"]);
   assert.equal(c.sameStyle, true);

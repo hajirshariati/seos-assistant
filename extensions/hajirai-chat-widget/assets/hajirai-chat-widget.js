@@ -2207,10 +2207,10 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-23 compare-2'}catch(e){}
+try{window.__hajiraiWidget='2026-10-23 compare-3'}catch(e){}
 var CMP_MAX=3;
-/* Phones show two columns at most: you pick two, and a three-way comparison
-   shows the first product against one of the others at a time. */
+/* On a phone you pick two; a three-way comparison (when the shopper names
+   three) scrolls sideways there. */
 function cmpIsPhone(){return !!(PHONE_BAR&&PHONE_BAR.matches)}
 function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
 function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
@@ -2305,28 +2305,9 @@ function cmpListHtml(items){
 }
 /* A value the store doesn't list: a quiet dash (read out as "Not listed"). */
 var CMP_NA='<span class="ai-cmp__na ai-cmp__dash"><span aria-hidden="true">\u2014</span><span class="ai-sr">Not listed</span></span>';
-/* Three products on a phone: the first stays, a "Compare with" switch picks
-   the second column. Each pair is the server's own two-way comparison. */
-var cmpSets=[];
+/* Nothing beyond what they all share (that's in the "Both" box above). */
+var CMP_SAME='<span class="ai-cmp__na ai-cmp__dash"><span aria-hidden="true">\u2014</span><span class="ai-sr">Only what they share</span></span>';
 function compareHtml(cmp){
-  if(!cmp||!Array.isArray(cmp.products)||cmp.products.length<2||!Array.isArray(cmp.rows))return '';
-  var pairs=Array.isArray(cmp.pairs)?cmp.pairs.filter(function(x){return x&&Array.isArray(x.products)&&x.products.length===2&&Array.isArray(x.rows)}):[];
-  if(!cmpIsPhone()||cmp.products.length<3||pairs.length!==cmp.products.length-1)return cmpTableHtml(cmp);
-  var id=cmpSets.push(pairs)-1,P=cmp.products;
-  var h='<div class="ai-cmp-set" data-cmp-set="'+id+'"><div class="ai-cmp-with" role="radiogroup" aria-label="'+esc('Compare '+P[0].name+' with')+'"><span class="ai-cmp-with__label" aria-hidden="true">'+esc(P[0].name)+' vs</span><span class="ai-cmp-with__opts">';
-  for(var i=1;i<P.length;i++)h+='<button type="button" role="radio" class="ai-cmp-with__btn" data-cmp-with="'+(i-1)+'" aria-checked="'+(i===1)+'">'+esc(P[i].name)+'</button>';
-  return h+'</span></div><div class="ai-cmp-set__table">'+cmpTableHtml(pairs[0])+'</div></div>';
-}
-function cmpWith(btn){
-  var set=btn.closest('.ai-cmp-set'),pairs=set&&cmpSets[+set.getAttribute('data-cmp-set')];
-  var k=+btn.getAttribute('data-cmp-with');if(!pairs||!pairs[k]||btn.getAttribute('aria-checked')==='true')return;
-  Array.prototype.forEach.call(set.querySelectorAll('[data-cmp-with]'),function(b){b.setAttribute('aria-checked',String(b===btn))});
-  var box=$('.ai-cmp-set__table',set),old=$('.ai-cmp',box),showAll=!!(old&&old.classList.contains('is-all')&&$('[data-cmp-mode]',old));
-  box.innerHTML=cmpTableHtml(pairs[k]);
-  /* Keep "All details" if that's what they were reading. */
-  var all=showAll&&$('[data-cmp-mode=all]',box);if(all)cmpMode(all);
-}
-function cmpTableHtml(cmp){
   var P=cmp.products,n=P.length;
   var byKey={};cmp.rows.forEach(function(r){byKey[r.key]=r});
   var priceRow=byKey.price,ratingRow=byKey.rating;
@@ -2337,7 +2318,10 @@ function cmpTableHtml(cmp){
   var sr=function(i){return '<span class="ai-sr">'+esc(P[i].name)+': </span>'};
   var url=function(p){return safeUrl(p.url)||(SHOP_ROOT+'products/'+encodeURIComponent(p.handle))};
   var allNames=P.map(function(p){return p.name}).join(n===2?' and ':', ');
-  var h='<div class="ai-cmp is-'+mode+'" style="--n:'+n+'" role="region" aria-label="'+esc('Comparison: '+allNames)+'">';
+  var h='<div class="ai-cmp is-'+mode+(n>2?' is-wide':'')+'" style="--n:'+n+'" role="region" aria-label="'+esc('Comparison: '+allNames)+'">';
+  /* Three on a phone: the table scrolls sideways (CSS), with this cue. */
+  if(n>2)h+='<div class="ai-cmp__swipe" aria-hidden="true"><span>Swipe to see all '+n+'</span><span class="ai-cmp__dots">'+P.map(function(_,i){return '<i'+(i<2?' class="is-on"':'')+'></i>'}).join('')+'</span></div>';
+  h+='<div class="ai-cmp__pane"><div class="ai-cmp__scroll">';
   /* Columns: photo, name, color, price, rating. */
   h+='<div class="ai-cmp__grid ai-cmp__heads">';
   P.forEach(function(p,i){
@@ -2363,30 +2347,31 @@ function cmpTableHtml(cmp){
   }
   h+='<div class="ai-cmp__rows">';
   rows.forEach(function(r){
-    h+='<div class="ai-cmp__row'+(r.differ?' is-diff':'')+'" role="group" aria-label="'+esc(r.label)+'"><div class="ai-cmp__label">'+esc(r.label)+'</div><div class="ai-cmp__grid">';
+    h+='<div class="ai-cmp__row'+(r.differ?' is-diff':'')+'" role="group" aria-label="'+esc(r.label)+'"><div class="ai-cmp__label">'+esc(r.label)+'</div>';
+    /* What they all share comes first, right under the row's title. */
+    if(r.type==='list'&&r.differ&&r.shared&&r.shared.length){
+      h+='<div class="ai-cmp__both"><span class="ai-cmp__bothlabel">'+(n===2?'Both':'All '+n)+'</span>'+esc(r.shared.join(' · '))+'</div>';
+    }
+    h+='<div class="ai-cmp__grid">';
     for(var i=0;i<n;i++){
       var cell;
       if(r.type==='list'){
         var all=r.values[i]||[],uni=(r.unique&&r.unique[i])||[];
         cell='<div class="ai-cmp__a">'+(all.length?cmpListHtml(all):CMP_NA)+'</div>'+
-          '<div class="ai-cmp__u">'+(uni.length?cmpListHtml(uni):(all.length?'<span class="ai-cmp__na">Shared only</span>':CMP_NA))+'</div>';
+          '<div class="ai-cmp__u">'+(uni.length?cmpListHtml(uni):(all.length?CMP_SAME:CMP_NA))+'</div>';
       }else{
         cell=r.values[i]?esc(String(r.values[i])):CMP_NA;
       }
       h+='<div class="ai-cmp__cell">'+sr(i)+cell+'</div>';
     }
-    h+='</div>';
-    if(r.type==='list'&&r.differ&&r.shared&&r.shared.length){
-      h+='<div class="ai-cmp__both"><span class="ai-cmp__bothlabel">'+(n===2?'Both':'All '+n)+'</span>'+esc(r.shared.join(' · '))+'</div>';
-    }
-    h+='</div>';
+    h+='</div></div>';
   });
-  h+='</div>';
+  h+='</div></div><span class="ai-cmp__fade is-l" aria-hidden="true"></span><span class="ai-cmp__fade" aria-hidden="true"></span></div>';
   /* One buy button per column, pinned to the bottom of the chat while the
      table scrolls (each names its product, since the photos scroll away).
      "Select size" until there's nothing left to choose, like the cards;
      sizes and stock are read live at the tap. */
-  h+='<div class="ai-cmp__grid ai-cmp__foot">';
+  h+='<div class="ai-cmp__foot"><div class="ai-cmp__grid">';
   P.forEach(function(p){
     var u=url(p),t=esc(p.title||p.name);
     var choose=Array.isArray(p.choose)?p.choose:['Size'];
@@ -2397,9 +2382,33 @@ function cmpTableHtml(cmp){
       (p.inStock===false?'<span class="ai-cmp__na">Sold out</span>':'<button type="button" class="ai-cmp__atc" data-atc aria-label="'+(choose.length?esc(label)+' for '+t:'Add '+t+' to cart')+'">'+esc(label)+'</button>')+
       '</div>';
   });
-  h+='</div></div>';
+  h+='</div></div></div>';
   return h;
 }
+/* Sideways scrolling (three on a phone): the table and its pinned buy row
+   move as one. The one being touched leads; the other follows, so momentum
+   never fights. The swipe dots and edge fade follow the position. */
+var cmpLead=null;
+function cmpScrollSetup(){
+  var lead=function(e){var t=e.target&&e.target.closest&&e.target.closest('.ai-cmp__scroll,.ai-cmp__foot');if(t)cmpLead=t};
+  ['touchstart','pointerdown','wheel','keydown','focusin'].forEach(function(ev){msgsEl.addEventListener(ev,lead,{passive:true,capture:true})});
+  msgsEl.addEventListener('scroll',function(e){
+    var t=e.target;if(!t||!t.classList||!(t.classList.contains('ai-cmp__scroll')||t.classList.contains('ai-cmp__foot')))return;
+    var c=t.closest('.ai-cmp');if(!c)return;
+    if(cmpLead&&cmpLead!==t&&c.contains(cmpLead))return;
+    var other=$(t.classList.contains('ai-cmp__scroll')?'.ai-cmp__foot':'.ai-cmp__scroll',c);
+    if(other&&Math.abs(other.scrollLeft-t.scrollLeft)>0.5)other.scrollLeft=t.scrollLeft;
+    var x=t.scrollLeft,w=t.clientWidth,max=t.scrollWidth-w;
+    c.classList.toggle('is-end',x>=max-2);c.classList.toggle('is-moved',x>2);
+    var dots=c.querySelectorAll('.ai-cmp__dots i'),cols=c.querySelectorAll('.ai-cmp__heads > .ai-cmp__col');
+    for(var i=0;i<dots.length&&i<cols.length;i++){var l=cols[i].offsetLeft,r=l+cols[i].offsetWidth;dots[i].classList.toggle('is-on',Math.min(r,x+w)-Math.max(l,x)>(r-l)/2)}
+  },true);
+  /* The buy row pins to the very bottom of the chat, not short of it by the
+     list's bottom padding (which would leave a see-through gap). */
+  var pad=function(){try{msgsEl.style.setProperty('--msgs-pad-b',getComputedStyle(msgsEl).paddingBottom)}catch(e){}};
+  pad();window.addEventListener('resize',pad);
+}
+cmpScrollSetup();
 function cmpMode(btn){
   var root=btn.closest('.ai-cmp');if(!root)return;
   var m=btn.getAttribute('data-cmp-mode');
@@ -3605,12 +3614,11 @@ if(retryBtn){
   inputEl.value=lastUserMessage;sendMessage();
   return;
 }
-var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode],[data-cmp-with]');
+var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode]');
 if(cmpBtn){
   e.preventDefault();
   var cbub=cmpBtn.closest('.ai-chat-msg-bubble');
   if(cmpBtn.hasAttribute('data-cmp-mode')){cmpMode(cmpBtn);return}
-  if(cmpBtn.hasAttribute('data-cmp-with')){cmpWith(cmpBtn);return}
   if(!cbub)return;
   if(cmpBtn.hasAttribute('data-cmp-start'))startCompare(cbub);
   else if(cmpBtn.hasAttribute('data-cmp-go'))runCompare(cbub,cmpPicked(cbub));

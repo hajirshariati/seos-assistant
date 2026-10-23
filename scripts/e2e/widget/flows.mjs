@@ -538,7 +538,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`compare (${label}): your ask and the table appear in the chat`, /^Compare the Savannah/.test(t.msgs[0]) && /^Here's the Savannah/.test(t.msgs[1]), JSON.stringify(t.msgs));
   check(`compare (${label}): columns carry the store's names, prices, ratings`, t.n === 2 && t.names[0] === "Savannah Adjustable Quarter Strap Sandal" && t.prices.join("|") === "$129.95|$119.95", JSON.stringify(t));
   check(`compare (${label}): lower price and higher rating are marked on the right product`, t.tags[0] === "Higher rated" && t.tags[1] === "Lower price", JSON.stringify(t.tags));
-  check(`compare (${label}): values exactly as listed, shared ones once`, t.heel.join("|") === '1.25"|1.5"' && t.helps[0] === "Bunions" && t.helps[1] === "Shared only" && /Both\s*Plantar Fasciitis · Flat Feet/.test(t.both), JSON.stringify(t));
+  check(`compare (${label}): values exactly as listed, shared ones once`, t.heel.join("|") === '1.25"|1.5"' && t.helps[0] === "Bunions" && t.helps[1] === "\u2014Only what they share" && /Both\s*Plantar Fasciitis · Flat Feet/.test(t.both), JSON.stringify(t));
   check(`compare (${label}): differences first, identical rows tucked away`, /^Differences\s*\d+$/.test(t.seg) && t.sameMaterialsHidden, t.seg);
   check(`compare (${label}): fits the width (no sideways scroll)`, t.overflow <= 1, String(t.overflow));
   check(`compare (${label}): opens at its top, not scrolled past`, t.top > -40 && t.top < 200, String(t.top));
@@ -550,11 +550,12 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     const c = [...document.querySelectorAll(".ai-cmp")].pop(), m = document.querySelector(".ai-chat-messages");
     m.scrollTop = c.offsetTop + 240;
     const f = c.querySelector(".ai-cmp__foot").getBoundingClientRect(), mr = m.getBoundingClientRect();
-    return { gap: Math.round(mr.bottom - f.bottom), labels: [...c.querySelectorAll(".ai-cmp__atc")].map((x) => x.textContent), names: [...c.querySelectorAll(".ai-cmp__mininame")].map((x) => x.firstChild.textContent), dash: [...c.querySelectorAll(".ai-cmp__dash")].every((d) => d.textContent === "\u2014Not listed") && c.querySelectorAll(".ai-cmp__dash").length > 0 };
+    return { gap: Math.round(mr.bottom - f.bottom), labels: [...c.querySelectorAll(".ai-cmp__atc")].map((x) => x.textContent), names: [...c.querySelectorAll(".ai-cmp__mininame")].map((x) => x.firstChild.textContent), dash: [...c.querySelectorAll(".ai-cmp__dash")].every((d) => /^\u2014(Not listed|Only what they share)$/.test(d.textContent)) && [...c.querySelectorAll(".ai-cmp__dash")].some((d) => d.textContent === "\u2014Not listed") };
   });
-  check(`compare (${label}): the buy row stays in reach while the table scrolls`, pin.gap >= 0 && pin.gap <= 20, JSON.stringify(pin));
+  check(`compare (${label}): the buy row stays in reach while the table scrolls, flush with the bottom (no see-through gap)`, Math.abs(pin.gap) <= 1, JSON.stringify(pin));
+  check(`compare (${label}): what both share sits at the top of its row, under the title`, await page.evaluate(() => { const r = [...[...document.querySelectorAll(".ai-cmp")].pop().querySelectorAll(".ai-cmp__row")].find((x) => x.querySelector(".ai-cmp__both")); return !!r && r.querySelector(".ai-cmp__label").nextElementSibling.classList.contains("ai-cmp__both"); }));
   check(`compare (${label}): "Select size" when there's a size to pick, each named`, pin.labels.join("|") === "Select size|Select size" && pin.names[1] === "Jillian Braided Quarter Strap Sandal", JSON.stringify(pin));
-  check(`compare (${label}): gaps show a dash, read out as "Not listed"`, pin.dash, "");
+  check(`compare (${label}): gaps show a dash, read out as "Not listed" (or "Only what they share")`, pin.dash, "");
   // Add to cart from a column: the size picker opens under the table.
   await page.click(".ai-cmp .ai-cmp__buy[data-handle=jillian-black] [data-atc]");
   await page.waitForTimeout(800);
@@ -637,21 +638,24 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`compare (${label}): what was compared goes back with the chat (for follow-ups)`, sentBack?.[0]?.title === "Savannah Adjustable Quarter Strap Sandal - Red" && sentBack.length === 2, JSON.stringify(sentBack));
   const heads = () => page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return [...m.querySelectorAll(".ai-cmp__head .ai-cmp__name")].map((x) => x.textContent.split(" ")[0]); });
   if (phone) {
-    const sw = await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(), g = m.querySelector(".ai-cmp-with"); return g && { label: g.getAttribute("aria-label"), opts: [...g.querySelectorAll("[data-cmp-with]")].map((b) => b.textContent + ":" + b.getAttribute("aria-checked")) }; });
-    check(`compare (${label}): three named → two columns, with a switch for the second`, JSON.stringify(await heads()) === '["Savannah","Jillian"]' && sw?.opts.join("|") === "Jillian Braided Quarter Strap Sandal:true|Carly Arch Support Sneaker:false" && /^Compare Savannah/.test(sw.label), JSON.stringify({ h: await heads(), sw }));
-    await page.click(".ai-chat-msg:last-child .ai-cmp__segbtn[data-cmp-mode=all]").catch(() => {});
-    await page.click(".ai-chat-msg:last-child [data-cmp-with='1']");
-    await page.waitForTimeout(200);
-    const after = await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(), c = m.querySelector(".ai-cmp"); return { tags: [...c.querySelectorAll(".ai-cmp__head")].map((h) => h.querySelector(".ai-cmp__tags")?.textContent || ""), buy: [...c.querySelectorAll(".ai-cmp__buy")].map((b) => b.dataset.handle), on: m.querySelector("[data-cmp-with='1']").getAttribute("aria-checked"), overflow: c.scrollWidth - c.clientWidth }; });
-    check(`compare (${label}): switching shows the other product, compared as a pair`, JSON.stringify(await heads()) === '["Savannah","Carly"]' && after.buy.join() === "savannah-red,carly-white" && after.on === "true" && after.overflow <= 1, JSON.stringify(after));
+    // Three named on a phone: the table scrolls sideways, buy row in step.
+    const w0 = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-msg")].pop().querySelector(".ai-cmp"), sc = c.querySelector(".ai-cmp__scroll"), f = c.querySelector(".ai-cmp__foot"); const cue = c.querySelector(".ai-cmp__swipe"); return { wide: c.classList.contains("is-wide"), canScroll: sc.scrollWidth - sc.clientWidth, footScroll: f.scrollWidth - f.clientWidth, cue: cue && getComputedStyle(cue).display !== "none" ? cue.textContent : "", fade: getComputedStyle(c.querySelector(".ai-cmp__fade:not(.is-l)")).opacity, page: document.documentElement.scrollWidth - innerWidth, peek: (() => { const h = c.querySelectorAll(".ai-cmp__heads > .ai-cmp__col")[2].getBoundingClientRect(), r = sc.getBoundingClientRect(); return Math.round(r.right - h.left); })() }; });
+    check(`compare (${label}): three named → scrolls sideways, the third peeking in, with a swipe cue`, w0.wide && w0.canScroll > 40 && Math.abs(w0.canScroll - w0.footScroll) <= 1 && w0.cue === "Swipe to see all 3" && w0.fade === "1" && w0.page === 0 && w0.peek > 20, JSON.stringify(w0));
+    const sc = await page.$(".ai-chat-msg:last-child .ai-cmp__scroll");
+    const bb = await sc.boundingBox();
+    await page.mouse.move(bb.x + bb.width * 0.8, bb.y + 200);
+    await page.mouse.wheel(400, 0);
+    await page.waitForTimeout(500);
+    const w1 = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-msg")].pop().querySelector(".ai-cmp"), sc = c.querySelector(".ai-cmp__scroll"), f = c.querySelector(".ai-cmp__foot"); const lbl = c.querySelector(".ai-cmp__label").getBoundingClientRect().left - sc.getBoundingClientRect().left; return { x: sc.scrollLeft, fx: f.scrollLeft, end: c.classList.contains("is-end"), dots: [...c.querySelectorAll(".ai-cmp__dots i")].map((d) => d.classList.contains("is-on") ? 1 : 0).join(""), lbl: Math.round(lbl), carlyBuy: (() => { const b = c.querySelector(".ai-cmp__buy[data-handle=carly-white]").getBoundingClientRect(), r = f.getBoundingClientRect(); return b.right <= r.right + 1; })() }; });
+    check(`compare (${label}): swiping moves the table and its buy row together; titles stay put`, w1.x > 40 && Math.abs(w1.x - w1.fx) <= 1 && w1.end && w1.dots === "011" && w1.lbl === 0 && w1.carlyBuy, JSON.stringify(w1));
   } else {
-    check(`compare (${label}): three named → three columns, no switch`, (await heads()).length === 3 && !(await page.$(".ai-chat-msg:last-child .ai-cmp-with")), JSON.stringify(await heads()));
+    check(`compare (${label}): three named → three columns side by side, no sideways scroll`, (await heads()).length === 3 && (await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-msg")].pop().querySelector(".ai-cmp"), sc = c.querySelector(".ai-cmp__scroll"); return sc.scrollWidth - sc.clientWidth <= 1 && getComputedStyle(c.querySelector(".ai-cmp__swipe")).display === "none"; })), JSON.stringify(await heads()));
   }
   await page.reload();
   await page.waitForTimeout(700);
   await page.click(".ai-chat-launcher__text");
   await page.waitForTimeout(700);
-  check(`compare (${label}): tables come back after a reload`, (await page.$$eval(".ai-cmp", (c) => c.length)) === 4 && (await page.$$(".ai-cmp-with")).length === (phone ? 1 : 0));
+  check(`compare (${label}): tables come back after a reload`, (await page.$$eval(".ai-cmp", (c) => c.length)) === 4 && (await page.$$(".ai-cmp.is-wide")).length === (phone ? 1 : 2));
   check(`compare (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }

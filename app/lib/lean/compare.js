@@ -152,10 +152,6 @@ export function buildComparison(catalog, handles = []) {
   }
   return {
     ...compareProducts(picked, catalog),
-    // Phones show two columns at a time: the first product against each of
-    // the others, each pair compared on its own (which is lower priced,
-    // what both share) rather than cut from the three-way table.
-    ...(picked.length > 2 ? { pairs: picked.slice(1).map((p) => compareProducts([picked[0], p], catalog)) } : {}),
     ...(missing.length ? { missing } : {}),
     ...(wanted.length > COMPARE_MAX ? { note: `Only ${COMPARE_MAX} products can be compared at once; the first ${COMPARE_MAX} are shown.` } : {}),
   };

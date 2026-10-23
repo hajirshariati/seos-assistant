@@ -4826,7 +4826,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-cmp.is-all .ai-cmp__u { display: none; }
 .ai-chat-panel .ai-cmp.is-all .ai-cmp__both { display: none; }
 .ai-chat-panel .ai-cmp__both {
-  margin-top: 8px; padding: 7px 10px; border-radius: 9px;
+  margin: 2px 0 8px; padding: 7px 10px; border-radius: 9px;
   background: var(--seos-surface); font-size: 12.5px; color: var(--seos-text-2); line-height: 1.4;
 }
 .ai-chat-panel .ai-cmp__bothlabel { margin-right: 6px; font-weight: 600; color: var(--seos-text); }
@@ -4850,12 +4850,9 @@ button.ai-chat-launcher__text {
   color: var(--seos-text-2) !important; font-size: 12.5px; text-decoration: underline !important; text-underline-offset: 3px;
 }
 
-/* Narrow (phones, three columns): a little tighter */
+/* Narrow phones: a little tighter */
 @media (max-width: 480px) {
   .ai-chat-panel .ai-cmp { padding: 12px 10px 10px; --cmp-gap: 8px; }
-  .ai-chat-panel .ai-cmp[style*="--n:3"] .ai-cmp__name { font-size: 13px; }
-  .ai-chat-panel .ai-cmp[style*="--n:3"] .ai-cmp__cell { font-size: 12.5px; }
-  .ai-chat-panel .ai-cmp[style*="--n:3"] .ai-cmp__atc { font-size: 12px; padding: 0 6px; }
   .ai-chat-panel .ai-cmp-cta__thumbs { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -4880,7 +4877,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-cmp { --cmp-pad-x: 14px; --cmp-pad-b: 12px; }
 .ai-chat-panel .ai-cmp__foot {
   position: sticky;
-  bottom: 0;
+  /* Flush with the bottom of the chat (past the list's bottom padding). */
+  bottom: calc(-1 * var(--msgs-pad-b, 0px));
   z-index: 2;
   margin: 12px calc(-1 * var(--cmp-pad-x)) calc(-1 * var(--cmp-pad-b));
   padding: 10px var(--cmp-pad-x) var(--cmp-pad-b);
@@ -4895,7 +4893,6 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-cmp__miniprice { flex: none; color: var(--seos-text-2); font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) {
   .ai-chat-panel .ai-cmp { --cmp-pad-x: 10px; --cmp-pad-b: 10px; }
-  .ai-chat-panel .ai-cmp[style*="--n:3"] .ai-cmp__miniprice { display: none; }
 }
 .ai-chat-panel a.ai-cmp__mininame { color: var(--seos-text) !important; text-decoration: none !important; border-radius: 4px !important; }
 @media (hover: hover) { .ai-chat-panel a.ai-cmp__mininame:hover { text-decoration: underline !important; text-underline-offset: 3px; } }
@@ -4905,30 +4902,69 @@ button.ai-chat-launcher__text {
 /* Keeps its screen-reader text inside (it would widen the table). */
 .ai-chat-panel .ai-cmp__mininame { position: relative; }
 
-/* Phones, three products: "Savannah vs [Jillian | Carly]" above a two-column
-   table. The same segmented control as Differences / All details. */
-.ai-chat-panel .ai-cmp-set { margin-top: 12px; }
-.ai-chat-panel .ai-cmp-set .ai-cmp { margin-top: 8px; }
-.ai-chat-panel .ai-cmp-with { display: flex; flex-direction: column; gap: 6px; }
-.ai-chat-panel .ai-cmp-with__label {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 12.5px; font-weight: 600; color: var(--seos-text-2);
+/* ---------- Three products on a phone: the table scrolls sideways ----------
+   Columns keep a readable width and the third one peeks in at the edge, with
+   a soft fade and a "Swipe to see all 3" cue. Row titles, the shared box and
+   Differences / All details stay put while the values move; the pinned buy
+   row scrolls with the table (kept in step by the widget). */
+.ai-chat-panel .ai-cmp__pane { position: relative; }
+.ai-chat-panel .ai-cmp__swipe, .ai-chat-panel .ai-cmp__fade { display: none; }
+@media (max-width: 600px) {
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__scroll,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__foot {
+    overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  /* Column widths come from the visible width (100cqw). The table's box is
+     the container, not the scroller, so its titles can sit above the fades. */
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__pane,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__foot { container-type: inline-size; }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__scroll::-webkit-scrollbar,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__foot::-webkit-scrollbar { display: none; }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__grid {
+    grid-template-columns: repeat(var(--n, 3), calc((100cqw - 2 * var(--cmp-gap)) / 2.3));
+    width: max-content;
+  }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__heads,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__rows { width: max-content; min-width: 100%; }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__label,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__both,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__seg,
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__note {
+    position: sticky; left: 0; z-index: 2; box-sizing: border-box; width: 100cqw;
+  }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__swipe {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin: -2px 0 10px; font-size: 12.5px; font-weight: 500; color: var(--seos-text-2);
+  }
+  .ai-chat-panel .ai-cmp__swipe > span:first-child::after {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 7px; vertical-align: 1px;
+    border-top: 1.6px solid currentColor; border-right: 1.6px solid currentColor; transform: rotate(45deg);
+    animation: aiCmpNudge 1.6s ease-in-out 0.4s 3;
+  }
+  .ai-chat-panel .ai-cmp__dots { display: inline-flex; gap: 5px; }
+  .ai-chat-panel .ai-cmp__dots i {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--seos-line-strong, rgba(127, 127, 127, 0.35));
+    transition: width 0.25s ease, background 0.25s ease;
+  }
+  .ai-chat-panel .ai-cmp__dots i.is-on { width: 14px; background: var(--seos-text-2); }
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade {
+    display: block; position: absolute; top: 0; right: calc(-1 * var(--cmp-pad-x)); bottom: 0; width: 28px;
+    pointer-events: none; z-index: 1;
+    background: linear-gradient(to right, transparent, var(--seos-bg-raised, #fff));
+    transition: opacity 0.25s ease;
+  }
+  .ai-chat-panel .ai-cmp.is-wide.is-end .ai-cmp__fade:not(.is-l) { opacity: 0; }
+  /* Left edge: only once the table has moved. */
+  .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade.is-l {
+    left: calc(-1 * var(--cmp-pad-x)); right: auto; width: calc(var(--cmp-pad-x) + 26px); opacity: 0;
+    background: linear-gradient(to left, transparent, var(--seos-bg-raised, #fff));
+  }
+  .ai-chat-panel .ai-cmp.is-wide.is-moved .ai-cmp__fade.is-l { opacity: 1; }
 }
-.ai-chat-panel .ai-cmp-with__opts {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px;
-  padding: 2px; border-radius: 10px; background: var(--seos-surface);
+@keyframes aiCmpNudge { 0%, 100% { transform: translateX(0) rotate(45deg); } 50% { transform: translateX(4px) rotate(45deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-cmp__swipe > span:first-child::after { animation: none; }
+  .ai-chat-panel .ai-cmp__dots i, .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade { transition: none; }
 }
-.ai-chat-panel .ai-cmp-with__btn {
-  min-width: 0; min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px;
-  background: transparent; color: var(--seos-text-2);
-  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-.ai-chat-panel .ai-cmp-with__btn[aria-checked="true"] {
-  background: var(--seos-bg-raised, #fff); color: var(--seos-text); font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
-}
-.ai-chat-panel[data-theme="dark"] .ai-cmp-with__btn[aria-checked="true"] { background: #3a3a42; }
-.ai-chat-panel .ai-cmp-with__btn:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-cmp-with__btn { transition: none; } }
