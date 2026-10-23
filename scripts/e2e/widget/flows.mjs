@@ -303,6 +303,31 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("known/menu: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Phones: Safari's bar above the keyboard is see-through and shows the page's
+// own background. While the chat is open the page takes the chat's color
+// (and Safari's theme color), following a theme switch; on close it's all
+// exactly as it was.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.goto("http://localhost:4789/full");
+  await page.evaluate(() => { document.body.style.backgroundColor = "rgb(250, 250, 250)"; const m = document.createElement("meta"); m.name = "theme-color"; m.content = "#ffffff"; document.head.appendChild(m); });
+  const look = () => page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { panel: getComputedStyle(p).backgroundColor, html: getComputedStyle(document.documentElement).backgroundColor, body: getComputedStyle(document.body).backgroundColor, meta: [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => m.content).join("|"), bodyInline: document.body.style.backgroundColor, htmlInline: document.documentElement.style.backgroundColor }; });
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  const open = await look();
+  check("phone keyboard bar: the page behind takes the chat's color while open", open.html === open.panel && open.body === open.panel && open.meta === open.panel, JSON.stringify(open));
+  await page.click(".ai-chat-theme-btn");
+  await page.waitForTimeout(700);
+  const flipped = await look();
+  check("phone keyboard bar: it follows a switch to the other theme", flipped.panel !== open.panel && flipped.html === flipped.panel && flipped.meta === flipped.panel, JSON.stringify(flipped));
+  await page.click(".ai-chat-theme-btn");
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(600);
+  const closed = await look();
+  check("phone keyboard bar: closing puts the page's own colors back", closed.bodyInline === "rgb(250, 250, 250)" && closed.htmlInline === "" && closed.meta === "#ffffff", JSON.stringify(closed));
+  await ctx.close();
+}
 // The page behind the open chat can't be reached (on iPhone the keyboard
 // bar's arrows would jump to the site's search box), and a store can pick
 // each Start-here icon.

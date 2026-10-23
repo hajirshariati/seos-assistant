@@ -193,6 +193,8 @@ function applyTheme(next,save){
   if(glowGL&&glowGL.dLoc)glowGL.gl.uniform1f(glowGL.dLoc,THEME==='dark'?1:0);
   var tb=panel&&panel.querySelector('.ai-chat-theme-btn');
   if(tb){var lbl=THEME==='dark'?'Switch to light mode':'Switch to dark mode';tb.setAttribute('aria-label',lbl);tb.setAttribute('title',lbl)}
+  /* The page behind a phone's keyboard bar follows the chat's new color. */
+  if(typeof paintPageBg==='function'){paintPageBg();setTimeout(paintPageBg,400)}
 }
 var SK='hajirai_chat_session';
 var HK='hajirai_chat_history';
@@ -1344,15 +1346,34 @@ function lockPage(on){
   if(on){
     if(pageLock||!KB_MQ||!KB_MQ.matches)return;
     var y=window.pageYOffset||html.scrollTop||0;
-    pageLock={y:y,pos:b.position,top:b.top,left:b.left,right:b.right,width:b.width,ov:html.style.overflow};
+    pageLock={y:y,pos:b.position,top:b.top,left:b.left,right:b.right,width:b.width,ov:html.style.overflow,
+      bg:[html,document.body].map(function(el){return [el.style.getPropertyValue('background-color'),el.style.getPropertyPriority('background-color')]}),
+      metas:Array.prototype.map.call(document.querySelectorAll('meta[name="theme-color"]'),function(m){return [m,m.getAttribute('content')]}),ownMeta:null};
     b.position='fixed';b.top=(-y)+'px';b.left='0';b.right='0';b.width='100%';html.style.overflow='hidden';
+    paintPageBg();
   }else if(pageLock){
     var l=pageLock;pageLock=null;
     b.position=l.pos;b.top=l.top;b.left=l.left;b.right=l.right;b.width=l.width;html.style.overflow=l.ov;
+    [html,document.body].forEach(function(el,i){var v=l.bg[i];if(v[0])el.style.setProperty('background-color',v[0],v[1]);else el.style.removeProperty('background-color')});
+    l.metas.forEach(function(m){if(m[1]==null)m[0].removeAttribute('content');else m[0].setAttribute('content',m[1])});
+    if(l.ownMeta&&l.ownMeta.parentNode)l.ownMeta.parentNode.removeChild(l.ownMeta);
     var sb=html.style.scrollBehavior;html.style.scrollBehavior='auto';
     window.scrollTo(0,l.y);
     html.style.scrollBehavior=sb;
   }
+}
+/* Phones: Safari's bar above the keyboard (address pill, form arrows) and
+   its toolbars are see-through, and show the page's own background, not the
+   chat. While the chat covers the screen, the page takes the chat's color
+   (and Safari's theme color); both go back exactly as they were on close. */
+function paintPageBg(){
+  if(!pageLock)return;
+  var bg=getComputedStyle(panel).backgroundColor;
+  if(!bg||/rgba\(0, 0, 0, 0\)|transparent/.test(bg))return;
+  document.documentElement.style.setProperty('background-color',bg,'important');
+  document.body.style.setProperty('background-color',bg,'important');
+  if(pageLock.metas.length)pageLock.metas.forEach(function(m){m[0].setAttribute('content',bg)});
+  else{if(!pageLock.ownMeta){pageLock.ownMeta=document.createElement('meta');pageLock.ownMeta.name='theme-color';(document.head||document.documentElement).appendChild(pageLock.ownMeta)}pageLock.ownMeta.setAttribute('content',bg)}
 }
 function toggle(force){
 var want=typeof force==='boolean'?force:!isOpen;
