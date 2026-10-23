@@ -2389,7 +2389,8 @@ function compareHtml(cmp){
   });
   h+='</div></div><span class="ai-cmp__fade is-l" aria-hidden="true"></span><span class="ai-cmp__fade" aria-hidden="true"></span></div>';
   /* One buy button per column, pinned to the bottom of the chat while the
-     table scrolls (each names its product, since the photos scroll away).
+     table scrolls (each names its product, since the photos scroll away;
+     prices are in the columns above).
      "Select size" until there's nothing left to choose, like the cards;
      sizes and stock are read live at the tap. */
   h+='<div class="ai-cmp__foot"><div class="ai-cmp__grid">';
@@ -2399,7 +2400,7 @@ function compareHtml(cmp){
     var first=choose.filter(function(n){return /size/i.test(n)})[0]||choose[0];
     var label=choose.length?'Select '+String(first).toLowerCase():'Add to cart';
     h+='<div class="ai-cmp__col ai-cmp__buy" data-handle="'+esc(p.handle)+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(p.image||'')+'">'+
-      '<div class="ai-cmp__mini"><a class="ai-cmp__mininame" href="'+esc(u)+'">'+esc(p.name)+'<span class="ai-sr"> \u2014 view product</span></a>'+(p.priceLabel?'<span class="ai-cmp__miniprice">'+esc(p.priceLabel)+'</span>':'')+'</div>'+
+      '<div class="ai-cmp__mini"><a class="ai-cmp__mininame" href="'+esc(u)+'">'+esc(p.name)+'<span class="ai-sr"> \u2014 view product</span></a></div>'+
       (p.inStock===false?'<span class="ai-cmp__na">Sold out</span>':'<button type="button" class="ai-cmp__atc" data-atc aria-label="'+(choose.length?esc(label)+' for '+t:'Add '+t+' to cart')+'">'+esc(label)+'</button>')+
       '</div>';
   });

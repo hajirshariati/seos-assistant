@@ -585,6 +585,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.click(".ai-cmp .ai-cmp__buy[data-handle=jillian-black] [data-atc]");
   await page.waitForTimeout(800);
   check(`compare (${label}): Add to cart works from the table (picker under it)`, await page.evaluate(() => { const p = document.querySelector(".ai-chat-atc-panel"); return !!p && p.previousElementSibling?.classList.contains("ai-cmp") && /Jillian/.test(p.textContent); }));
+  check(`compare (${label}): the buy row names products without prices; the picker shows the full name (wrapping, not cut)`, await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-cmp")].pop(), t = document.querySelector(".ai-chat-atc-panel .ai-chat-atc-title"); return !c.querySelector(".ai-cmp__foot").textContent.includes("$") && /^Jillian Braided Quarter Strap Sandal/.test(t.textContent) && t.scrollWidth <= t.clientWidth + 1 && getComputedStyle(t).whiteSpace !== "nowrap"; }));
   // More than three cards: pick 2 or 3.
   await page.fill(".ai-chat-input", "many");
   await page.keyboard.press("Enter");
