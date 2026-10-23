@@ -117,7 +117,8 @@ function facts(p, catalog) {
     widths: p.widths.map((w) => w.toUpperCase().length <= 3 ? w.toUpperCase() : displayCase(w)),
     sizes: sizeRange(p.sizes),
     colorways,
-    badge: p.badge,
+    // Store text arrives lower-cased from the sync ("aetrex.com exclusive").
+    badge: displayCase(p.badge),
   };
 }
 

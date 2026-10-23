@@ -2204,6 +2204,8 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    details" shows everything. Values the store doesn't list say so — nothing
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
+/* Which widget build the store is serving (console: window.__hajiraiWidget). */
+try{window.__hajiraiWidget='2026-10-23 compare'}catch(e){}
 var CMP_MAX=3;
 var pendingCompare=null;
 var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/><path d="M6 9h2M6 12h2M16 9h2M16 12h2"/></svg>';
