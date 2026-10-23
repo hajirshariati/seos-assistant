@@ -4949,7 +4949,7 @@ button.ai-chat-launcher__text {
   }
   .ai-chat-panel .ai-cmp__dots i.is-on { width: 14px; background: var(--seos-text-2); }
   .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade {
-    display: block; position: absolute; top: 0; right: calc(-1 * var(--cmp-pad-x)); bottom: 0; width: 28px;
+    display: block; position: absolute; top: 0; right: calc(1px - var(--cmp-pad-x)); bottom: 0; width: 28px;
     pointer-events: none; z-index: 1;
     background: linear-gradient(to right, transparent, var(--seos-bg-raised, #fff));
     transition: opacity 0.25s ease;
@@ -4957,7 +4957,7 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-cmp.is-wide.is-end .ai-cmp__fade:not(.is-l) { opacity: 0; }
   /* Left edge: only once the table has moved. */
   .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade.is-l {
-    left: calc(-1 * var(--cmp-pad-x)); right: auto; width: calc(var(--cmp-pad-x) + 26px); opacity: 0;
+    left: calc(1px - var(--cmp-pad-x)); right: auto; width: calc(var(--cmp-pad-x) + 25px); opacity: 0;
     background: linear-gradient(to left, transparent, var(--seos-bg-raised, #fff));
   }
   .ai-chat-panel .ai-cmp.is-wide.is-moved .ai-cmp__fade.is-l { opacity: 1; }
@@ -4966,4 +4966,19 @@ button.ai-chat-launcher__text {
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-panel .ai-cmp__swipe > span:first-child::after { animation: none; }
   .ai-chat-panel .ai-cmp__dots i, .ai-chat-panel .ai-cmp.is-wide .ai-cmp__fade { transition: none; }
+}
+
+/* ---------- The pinned buy row, cleanly edged ----------
+   It pins a little past the bottom of the chat (the extra padding is hidden
+   there), so no sliver of the table shows under it. It sits 1px inside the
+   table's sides, square, so the table's outline runs straight past it while
+   pinned; at the table's end the table's own rounded corners trim it. */
+@supports (overflow: clip) {
+  .ai-chat-panel .ai-cmp { overflow: clip; }
+  .ai-chat-panel .ai-cmp__foot {
+    bottom: calc(-1 * var(--msgs-pad-b, 0px) - 6px);
+    margin: 12px calc(1px - var(--cmp-pad-x)) calc(-1 * var(--cmp-pad-b) - 6px);
+    padding: 10px calc(var(--cmp-pad-x) - 1px) calc(var(--cmp-pad-b) + 6px);
+    border-radius: 0;
+  }
 }
