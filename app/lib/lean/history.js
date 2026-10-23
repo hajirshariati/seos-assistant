@@ -31,6 +31,18 @@ export function sanitizeHistory(history) {
         .filter(Boolean);
       if (shown.length > 0) content += `\n\n[Product cards displayed with this reply: ${shown.join("; ")}]`;
     }
+    if (turn.role === "assistant" && Array.isArray(turn.compared) && turn.compared.length > 0) {
+      const compared = turn.compared
+        .slice(0, 3)
+        .map((p) => {
+          const title = String(p?.title || "").replace(/[[\];]/g, "").trim().slice(0, 120);
+          if (!title) return null;
+          const price = String(p?.price || "").replace(/[[\];]/g, "").trim().slice(0, 30);
+          return `${title}${price ? ` (${price})` : ""}`;
+        })
+        .filter(Boolean);
+      if (compared.length > 0) content += `\n\n[Products compared side by side with this reply: ${compared.join("; ")}]`;
+    }
     out.push({ role: turn.role, content });
   }
   let total = out.reduce((n, t) => n + t.content.length, 0);

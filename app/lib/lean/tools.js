@@ -72,6 +72,18 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
       },
     },
     {
+      name: "compare_products",
+      description:
+        "Show a side-by-side comparison table (price, rating, what each helps with, comfort features, materials, measurements, stock) built from the store's data. Use when the customer wants to compare products, asks the difference between them, or which of two or three is better. Find the products first; only handles returned by a tool in this conversation. The table is shown under your reply — don't call show_products for the same products.",
+      input_schema: {
+        type: "object",
+        properties: {
+          handles: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 3, description: "2 or 3 product handles, in the order the customer named them." },
+        },
+        required: ["handles"],
+      },
+    },
+    {
       name: "contact_support",
       description:
         "Show the customer a button to reach the store's customer service team. Use when they need a person: order problems you can't solve, returns/exchanges to start, account issues, complaints, or anything you can't answer.",

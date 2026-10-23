@@ -168,6 +168,16 @@ export const AUTO_METAFIELD_CANDIDATES = [
   { attribute: "activity", namespace: "custom", key: "activity" },
   { attribute: "activity", namespace: "custom", key: "attr_activity_shoe_type_for_filter" },
   { attribute: "badge", namespace: "custom", key: "badge" },
+  // What a side-by-side comparison shows (and answers draw on): review score
+  // and count, comfort features, materials, measurements. Store wording is
+  // kept as written (UltraSKY™, not ultrasky™).
+  { attribute: "rating", namespace: "yotpo", key: "reviews_average" },
+  { attribute: "rating", namespace: "reviews", key: "rating", keepCase: true },
+  { attribute: "review_count", namespace: "yotpo", key: "reviews_count" },
+  { attribute: "review_count", namespace: "reviews", key: "rating_count" },
+  { attribute: "comfort", namespace: "custom", key: "comfort_details", keepCase: true },
+  { attribute: "materials", namespace: "custom", key: "materials_details", keepCase: true },
+  { attribute: "measurements", namespace: "custom", key: "measurements_details", keepCase: true },
 ];
 
 export function autoMetafieldCandidates(mappings = []) {
@@ -185,7 +195,9 @@ export function resolveAutoAttributes(node, mappings = []) {
   const attrs = {};
   autoMetafieldCandidates(mappings).forEach((c, i) => {
     if (attrs[c.attribute] != null) return;
-    const val = resolveMetafieldValue(node?.[`auto_${i}`]);
+    const mf = node?.[`auto_${i}`];
+    const raw = typeof mf?.value === "string" ? mf.value.trim() : "";
+    const val = c.keepCase && raw && !raw.startsWith("[") && !raw.startsWith("gid://") ? raw : resolveMetafieldValue(mf);
     if (val != null && val !== "" && !(Array.isArray(val) && val.length === 0)) attrs[c.attribute] = val;
   });
   return Object.keys(attrs).length > 0 ? attrs : null;

@@ -54,12 +54,14 @@ const SCENES = {
   signin: ["signin"], orders: ["orders"], phoneOrders: ["phone", "orders"],
   retItems: ["orders", "ret"], retReason: ["orders", "ret", "retitem", "retnext"], retConfirm: ["orders", "ret", "retitem", "retnext", "retsmall"],
   retDone: ["retok", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"], retErr: ["retbad", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"],
+  compare: ["cmpask"], compareAll: ["cmpask", "cmpall"], phoneCompare: ["phone", "cmpask"], phoneCompareAll: ["phone", "cmpask", "cmpall"],
+  comparePick: ["many", "cmppick"], compareFromCards: ["many", "cmppick", "cmpgo"], compareCtaFocus: ["many", "cmpfocus"],
   vizGen: ["vizslow", "viz", "vizgo"], vizDone: ["vizok", "viz", "vizgo", "wait3"], vizErr: ["vizbad", "viz", "vizgo", "wait3"],
 };
 const probe = () => {
   const theme = document.querySelector(".ai-chat-panel").getAttribute("data-theme");
   const lum = (c) => { const m = c && c.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return { L: 0.2126 * r + 0.7152 * g + 0.0722 * b, a: m[3] === undefined ? 1 : Number(m[3]) }; };
-  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-header__avatar, .ai-chat-welcome__avatar, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow, .ai-ord__btn.is-primary, .ai-ord__steps, .ai-ret__item.is-on .ai-ret__check";
+  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-header__avatar, .ai-chat-welcome__avatar, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow, .ai-ord__btn.is-primary, .ai-ord__steps, .ai-ret__item.is-on .ai-ret__check, .ai-cmp__atc, .ai-cmp-bar__go:not([disabled]), .ai-cmp__segbtn[aria-checked=true] .ai-cmp__segn, .ai-cmp-pick[aria-pressed=true]";
   const PHOTO = ".ai-chat-product-img, .ai-chat-product-img *, .ai-chat-atc-thumb, .ai-chat-atc-thumb *, img, .ai-chat-viz-result-imgwrap, canvas, .ai-chat-glow";
   const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const cs = getComputedStyle(e); const l = lum(cs.backgroundColor); if (l && l.a > 0.5) return { l: l.L, el: e }; } return { l: theme === "dark" ? 0 : 1, el: document.body }; };
   const nm = (e) => (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : e.tagName.toLowerCase());
@@ -176,6 +178,15 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
     if (st === "retnext") { await p.click('.ai-ord[data-ord="5001"] [data-ret-next="reason"]'); await p.waitForTimeout(200); }
     if (st === "retsmall") { await p.click('[data-ret-reason="too_small"]'); await p.waitForTimeout(300); }
     if (st === "retgo") { await p.click('[data-ret-submit="exchange"]'); await p.waitForTimeout(1200); }
+    if (st === "cmpask") { await p.fill(".ai-chat-input", "compare a and b"); await p.keyboard.press("Enter"); await p.waitForTimeout(1200); }
+    if (st === "cmpall") { await p.click(".ai-cmp [data-cmp-mode=all]"); await p.waitForTimeout(200); }
+    if (st === "cmppick") {
+      await p.click(".ai-chat-msg:last-child [data-cmp-start]"); await p.waitForTimeout(200);
+      if (await p.$(".ai-chat-msg:last-child .ai-cmp-bar:not([hidden])")) for (const c of (await p.$$(".ai-chat-msg:last-child .ai-chat-product-card")).slice(0, 2)) await c.click();
+      await p.waitForTimeout(200);
+    }
+    if (st === "cmpgo") { const g = await p.$(".ai-chat-msg:last-child .ai-cmp-bar:not([hidden]) [data-cmp-go]"); if (g) await g.click(); await p.waitForTimeout(1000); }
+    if (st === "cmpfocus") { await p.focus(".ai-chat-msg:last-child [data-cmp-start]"); }
     if (st === "typed") { await p.fill(".ai-chat-input", "red sandals"); await p.waitForTimeout(400); }
   }
   await p.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); if (m) m.scrollTop = m.scrollHeight; });

@@ -207,6 +207,25 @@ await test("dress-shoe turn: search params reach the catalog untouched; cards = 
   assert.equal(r.cards[0].price_formatted, "$139.95");
   assert.deepEqual(r.shopAllSearch, search, "the View-all link repeats the search that found the cards");
 });
+await test("compare: the table comes from the catalog, the reply isn't asked for cards, and nothing unseen is compared", async () => {
+  const a = H["Ashley Arch Support Wedge - Navy"], j = H["Joanne Mary Jane - Brushed Silver"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t0", "compare_products", { handles: [a, j] })] },
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "dressy", categories: ["wedges/heels", "mary janes"], gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "compare_products", { handles: [a, j] }), tu("t3", "show_products", { handles: [a] })] },
+    { stop_reason: "end_turn", content: [txt("The Ashley wedge is the dressier of the two; the Joanne Mary Jane is the flatter, easier walk.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "compare the ashley and the joanne" }], latestUserMessage: "compare the ashley and the joanne", callModel: s.callModel, log: quiet });
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /search for each product first/, "handles the model hasn't found can't be compared");
+  const ev = r.events.filter((e) => e.type === "comparison");
+  assert.equal(ev.length, 1, "one table per reply");
+  assert.deepEqual(ev[0].comparison.products.map((p) => p.title), ["Ashley Arch Support Wedge - Navy", "Joanne Mary Jane - Brushed Silver"]);
+  assert.equal(ev[0].comparison.rows.find((x) => x.key === "price").values[0].label, catalog.products.find((p) => p.handle === a).priceLabel);
+  assert.deepEqual(r.cards, [], "compared products aren't repeated as cards");
+  assert.deepEqual(r.issues, [], "naming compared products doesn't trip the cards check");
+  assert.equal(r.retried, false);
+  assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Price \(differs\)|Price \(same\)/, "the model gets the table's facts");
+});
 await test("View-all link: built from the search filters, store pattern honored, vague searches get none", () => {
   assert.deepEqual(
     buildShopAllLink({ query: "x", gender: "women", colors: ["Pink"], categories: ["sandals"] }),

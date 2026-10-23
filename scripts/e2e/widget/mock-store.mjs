@@ -12,7 +12,8 @@ export const returnBodies = [];
 export const startedReturns = {};
 // Test switches: drop the connection after the next return is created (the
 // shopper never hears back), or make the next request slow.
-export const mockCtl = { dropNextPost: false, slowPostMs: 0 };
+export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false };
+export const compareLog = [];
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
   { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
@@ -53,11 +54,32 @@ const PRODUCTS = {
   "orthotic-one": { id: 9, handle: "orthotic-one", title: "Women's Casual Orthotics", price: 6995, options: [{ name: "Title", values: ["Default Title"] }], variants: [{ id: 5555, title: "Default Title", options: ["Default Title"], available: true, price: 6995 }] },
 };
 const img = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#f1ede6"/><path d="M30 130 Q100 60 170 120 L170 140 L30 140Z" fill="#8a2b2b"/></svg>');
+// The same products as the store's synced catalog sees them, for the
+// comparison table (built by the real app/lib/lean/compare.js).
+const { normalizeProduct } = await import("../../../app/lib/lean/catalog.js");
+const { buildComparison, comparisonIntro } = await import("../../../app/lib/lean/compare.js");
+const cv = (size, width, price, qty = 4) => ({ price: String(price), compareAtPrice: null, inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: width }]) });
+const CMP_CATALOG = { products: [
+  { handle: "savannah-red", title: "Savannah Adjustable Quarter Strap Sandal - Red", productType: "Footwear", featuredImageUrl: "IMG", tags: [], description: "",
+    attributesJson: { category_for_filter: "sandals", gender: "women", color: "red", helps_with: ["plantar fasciitis", "flat feet", "bunions"], activity: ["everyday comfort", "travel"], rating: "4.6", review_count: "212", comfort: "<ul><li>Built-in arch support</li><li>Memory foam cushioning</li></ul>", materials: "<ul><li>Leather upper</li></ul>", measurements: "<ul><li>Heel Height: 1.25\"</li></ul>" },
+    variants: [cv("7 US", "Medium", 129.95), cv("10 US", "Wide", 129.95)] },
+  { handle: "jillian-black", title: "Jillian Braided Quarter Strap Sandal - Black", productType: "Footwear", featuredImageUrl: "IMG", tags: [], description: "",
+    attributesJson: { category_for_filter: "sandals", gender: "women", color: "black", helps_with: ["plantar fasciitis", "flat feet"], activity: ["everyday comfort", "social"], rating: "4.3", review_count: "88", badge: "New", comfort: "<ul><li>Built-in arch support</li><li>Adjustable straps</li></ul>", materials: "<ul><li>Leather upper</li></ul>", measurements: "<ul><li>Heel Height: 1.5\"</li></ul>" },
+    variants: [cv("7 US", "Medium", 119.95), cv("9 US", "Medium", 119.95)] },
+  { handle: "orthotic-one", title: "Women's Casual Orthotics", productType: "Orthotics", featuredImageUrl: "IMG", tags: [], description: "",
+    attributesJson: { category_for_filter: "orthotics", gender: "women", helps_with: ["plantar fasciitis", "arch pain"], rating: "4.5", review_count: "1203" },
+    variants: [{ price: "69.95", compareAtPrice: null, inventoryQty: 9, optionsJson: "[]" }] },
+  { handle: "carly-white", title: "Carly Arch Support Sneaker - White", productType: "Footwear", featuredImageUrl: "IMG", tags: [], description: "",
+    attributesJson: { category_for_filter: "sneakers", gender: "women", color: "white", helps_with: ["plantar fasciitis"], activity: ["walking"], rating: "4.7", review_count: "540" },
+    variants: [cv("8 US", "Medium", 139.95)] },
+].map((r) => normalizeProduct(r, { shop: "aetrex.myshopify.com" })) };
 const cards = [
   { title: PRODUCTS["savannah-red"].title, handle: "savannah-red", url: "/products/savannah-red", image: img, price: "129.95", price_formatted: "$129.95", preselect: { Size: "8 US", Width: "Medium" }, choose: ["Size", "Width"], kind: "footwear" },
   { title: PRODUCTS["jillian-black"].title, handle: "jillian-black", url: "/products/jillian-black", image: img, price: "119.95", price_formatted: "$119.95", choose: ["Size", "Width"], kind: "footwear" },
   { title: PRODUCTS["orthotic-one"].title, handle: "orthotic-one", url: "/products/orthotic-one", image: img, price: "69.95", price_formatted: "$69.95", kind: "orthotic" },
 ];
+const carly = { title: "Carly Arch Support Sneaker - White", handle: "carly-white", url: "/products/carly-white", image: img, price: "139.95", price_formatted: "$139.95", choose: ["Size", "Width"], kind: "footwear" };
+for (const p of CMP_CATALOG.products) p.image = img;
 const page = (style) => `<!doctype html><script>setTimeout(function(){var d=document.createElement("div");d.id="floater";d.style.cssText="position:fixed;right:16px;bottom:16px;width:48px;height:48px;z-index:999999;pointer-events:none";var f=document.createElement("iframe");f.style.cssText="width:48px;height:48px;border:0;border-radius:50%;background:#333;pointer-events:auto";d.appendChild(f);document.body.appendChild(d)},6000)</script><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
 <script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"The Fit Concierge",greeting:"Hi!",position:"right"};try{localStorage.setItem("hajirai_product_card_style","${style}")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Store page <span class="cart-count">0</span></div><script src="/w.js"></script></body></html>`;
@@ -180,6 +202,12 @@ export function start(port) {
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
+        if (u.pathname === "/apps/hajirai/compare") {
+          compareLog.push(u.searchParams.get("handles"));
+          if (mockCtl.compareFail) return send(500, "application/json", JSON.stringify({ error: "failed", message: "The comparison couldn't load right now." }));
+          const c = buildComparison(CMP_CATALOG, String(u.searchParams.get("handles") || "").split(","));
+          return setTimeout(() => send(c.error ? 404 : 200, "application/json", JSON.stringify(c.error ? { error: "not_found" } : { ok: true, intro: comparisonIntro(c), comparison: c })), 120);
+        }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }], ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
@@ -263,6 +291,23 @@ export function start(port) {
               resp.end();
             }, /slow/i.test(parsed.message) ? 4000 : 50);
             return;
+          }
+          if (/^compare /i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "The Savannah has a little more cushioning; the Jillian is lighter on price." });
+            w({ type: "products", products: [] });
+            w({ type: "comparison", comparison: buildComparison(CMP_CATALOG, ["savannah-red", "jillian-black"]) });
+            w({ type: "done" });
+            return resp.end();
+          }
+          if (/^many/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "Four to consider." });
+            w({ type: "products", products: [...cards, carly] });
+            w({ type: "done" });
+            return resp.end();
           }
           if (/jillian/i.test(parsed.message || "")) {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });

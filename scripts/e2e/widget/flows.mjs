@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -498,6 +498,100 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   await page.evaluate(() => window.scrollBy(0, -200));
   await page.waitForTimeout(900);
   check("a bubble the shopper chose isn't opened out by scrolling", await page.evaluate(() => document.querySelector(".ai-chat-launcher").classList.contains("is-bubble")));
+  await ctx.close();
+}
+// Compare: under 2+ cards, one tap (2-3 cards) or pick 2-3 (more), and the
+// table — the store's own data, differences first, Add to cart per column —
+// also when the assistant compares on request. Kept with the chat.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  await page.fill(".ai-chat-input", "show 2");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1200);
+  check(`compare (${label}): two cards get "Compare these two"`, /Compare these two/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-cta__btn")));
+  const before = compareLog.length;
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  await page.waitForTimeout(900);
+  const t = await page.evaluate(() => {
+    const c = [...document.querySelectorAll(".ai-cmp")].pop();
+    const cols = [...c.querySelectorAll(".ai-cmp__head")];
+    const row = (lbl) => [...c.querySelectorAll(".ai-cmp__row")].find((r) => r.querySelector(".ai-cmp__label").textContent === lbl);
+    // What's on screen: for lists, the part the current view shows.
+    const cells = (lbl) => [...row(lbl).querySelectorAll(".ai-cmp__cell")].map((x) => ((x.querySelector(".ai-cmp__u") || x).textContent).replace(/^[^:]+: /, "").trim());
+    const vis = (lbl) => getComputedStyle(row(lbl)).display !== "none";
+    const msgs = [...document.querySelectorAll(".ai-chat-msg")].slice(-2).map((m) => m.textContent.trim().slice(0, 60));
+    return {
+      n: cols.length, names: cols.map((x) => x.querySelector(".ai-cmp__name").textContent), prices: cols.map((x) => x.querySelector(".ai-cmp__price").textContent),
+      tags: cols.map((x) => x.querySelector(".ai-cmp__tags")?.textContent || ""), heel: cells("Heel Height"), helps: cells("Helps with"),
+      both: row("Helps with").querySelector(".ai-cmp__both")?.textContent, seg: c.querySelector("[data-cmp-mode=diffs]")?.textContent, sameMaterialsHidden: !vis("Materials"), msgs,
+      overflow: c.scrollWidth - c.clientWidth, top: Math.round(c.closest(".ai-chat-msg").getBoundingClientRect().top - document.querySelector(".ai-chat-messages").getBoundingClientRect().top),
+    };
+  });
+  check(`compare (${label}): asks the server once, for exactly those two`, compareLog.length === before + 1 && compareLog.at(-1) === "savannah-red,jillian-black", compareLog.at(-1));
+  check(`compare (${label}): your ask and the table appear in the chat`, /^Compare the Savannah/.test(t.msgs[0]) && /^Here's the Savannah/.test(t.msgs[1]), JSON.stringify(t.msgs));
+  check(`compare (${label}): columns carry the store's names, prices, ratings`, t.n === 2 && t.names[0] === "Savannah Adjustable Quarter Strap Sandal" && t.prices.join("|") === "$129.95|$119.95", JSON.stringify(t));
+  check(`compare (${label}): lower price and higher rating are marked on the right product`, t.tags[0] === "Higher rated" && t.tags[1] === "Lower price", JSON.stringify(t.tags));
+  check(`compare (${label}): values exactly as listed, shared ones once`, t.heel.join("|") === '1.25"|1.5"' && t.helps[0] === "Bunions" && t.helps[1] === "Shared only" && /Both\s*Plantar Fasciitis · Flat Feet/.test(t.both), JSON.stringify(t));
+  check(`compare (${label}): differences first, identical rows tucked away`, /^Differences\s*\d+$/.test(t.seg) && t.sameMaterialsHidden, t.seg);
+  check(`compare (${label}): fits the width (no sideways scroll)`, t.overflow <= 1, String(t.overflow));
+  check(`compare (${label}): opens at its top, not scrolled past`, t.top > -40 && t.top < 200, String(t.top));
+  await page.click(".ai-cmp:last-of-type [data-cmp-mode=all]");
+  check(`compare (${label}): "All details" shows every row`, await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-cmp")].pop(); return [...c.querySelectorAll(".ai-cmp__row")].every((r) => getComputedStyle(r).display !== "none") && c.querySelector("[data-cmp-mode=all]").getAttribute("aria-checked") === "true"; }));
+  // Add to cart from a column: the size picker opens under the table.
+  await page.click(".ai-cmp .ai-cmp__buy[data-handle=jillian-black] [data-atc]");
+  await page.waitForTimeout(800);
+  check(`compare (${label}): Add to cart works from the table (picker under it)`, await page.evaluate(() => { const p = document.querySelector(".ai-chat-atc-panel"); return !!p && p.previousElementSibling?.classList.contains("ai-cmp") && /Jillian/.test(p.textContent); }));
+  // More than three cards: pick 2 or 3.
+  await page.fill(".ai-chat-input", "many");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1200);
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  const cards4 = await page.$$(".ai-chat-msg:last-child .ai-chat-product-card");
+  const go = ".ai-chat-msg:last-child [data-cmp-go]";
+  await cards4[0].click();
+  check(`compare (${label}): 4 cards → pick; one pick isn't enough`, (await page.$eval(go, (b) => b.disabled)) && /Pick 1 more/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-bar__msg")));
+  for (const i of [1, 3, 2]) await cards4[i].click();
+  const picked = await page.$$eval(".ai-chat-msg:last-child .ai-chat-product-card.is-cmp-picked", (c) => c.map((x) => x.dataset.handle));
+  check(`compare (${label}): three at most`, picked.length === 3 && !picked.includes("orthotic-one") && (await page.textContent(go)) === "Compare 3", JSON.stringify(picked));
+  await page.click(go);
+  await page.waitForTimeout(900);
+  check(`compare (${label}): three side by side`, compareLog.at(-1) === "savannah-red,jillian-black,carly-white" && (await page.$$eval(".ai-cmp:last-of-type .ai-cmp__head", (c) => c.length)) === 3 && (await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-cmp")].pop(); return c.scrollWidth - c.clientWidth; })) <= 1, compareLog.at(-1));
+  check(`compare (${label}): picking ends after comparing`, !(await page.$(".is-cmp-picking")));
+  // Cancel, and a failure, leave the chat as it was.
+  await page.fill(".ai-chat-input", "many");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1200);
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  await page.click(".ai-chat-msg:last-child [data-cmp-cancel]");
+  check(`compare (${label}): Cancel puts the row back`, await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return !m.querySelector(".is-cmp-picking") && !m.querySelector(".ai-cmp-cta__btn").hidden && !m.querySelector(".is-cmp-picked"); }));
+  mockCtl.compareFail = true;
+  const nMsgs = await page.$$eval(".ai-chat-msg", (m) => m.length);
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  for (const i of [0, 1]) await (await page.$$(".ai-chat-msg:last-child .ai-chat-product-card"))[i].click();
+  await page.click(".ai-chat-msg:last-child [data-cmp-go]");
+  await page.waitForTimeout(700);
+  mockCtl.compareFail = false;
+  check(`compare (${label}): a failure says so and adds nothing`, (await page.$$eval(".ai-chat-msg", (m) => m.length)) === nMsgs && /couldn't load/i.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-cta__err")), "");
+  // Asking the assistant: the table comes with its reply, not as cards.
+  await page.fill(".ai-chat-input", "compare savannah and jillian");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1200);
+  check(`compare (${label}): asking for it shows the table under the reply`, await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return /cushioning/.test(m.textContent) && m.querySelectorAll(".ai-cmp__head").length === 2 && !m.querySelector(".ai-chat-product-card"); }));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("hajirai_chat_history") || "null"));
+  const lastA = Array.isArray(saved) ? [...saved].reverse().find((m) => m.role === "assistant") : null;
+  check(`compare (${label}): the chat remembers what was compared`, !!lastA?.comparison && lastA.compared?.[0]?.title === "Savannah Adjustable Quarter Strap Sandal - Red", JSON.stringify(lastA?.compared));
+  await page.reload();
+  await page.waitForTimeout(700);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  check(`compare (${label}): tables come back after a reload`, (await page.$$eval(".ai-cmp", (c) => c.length)) === 3);
+  check(`compare (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // Feedback in the chat: Start here button 4 opens the store's Typeform survey

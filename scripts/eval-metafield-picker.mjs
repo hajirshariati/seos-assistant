@@ -60,7 +60,7 @@ test("useful filled-in fields are recommended with a friendly name", () => {
   assert.equal(width.group, "recommended");
 });
 
-test("noise is hidden or tucked away: empty, app, link and internal-ID fields; long text is recommended", () => {
+test("noise is hidden or tucked away: empty, app, link and internal-ID fields", () => {
   const rows = buildMetafieldChoices({ definitions: DEFS, mappings: [] });
   const by = (k) => rows.find((r) => r.key === k);
   assert.equal(by("attr_heel_height").group, "hidden", "empty everywhere");
@@ -68,8 +68,8 @@ test("noise is hidden or tucked away: empty, app, link and internal-ID fields; l
   assert.equal(by("related_products").group, "hidden");
   assert.equal(by("product_reference").group, "hidden", "links to other records");
   assert.equal(by("pimid").group, "other", "internal id");
-  assert.equal(by("materials_details").group, "recommended", "long text — only read for one product, so it costs no speed");
-  assert.equal(by("materials_details").attribute, "materials");
+  // Materials is now read automatically (the comparison table shows it).
+  assert.equal(by("materials_details").group, "in_use", "read automatically");
 });
 
 test("already-added fields show as added with their name; recommended list sorted by usage", () => {
@@ -127,10 +127,12 @@ test("Aetrex: 'Add all recommended' takes the customer-facing fields, never twin
   const rows = buildMetafieldChoices({ definitions: AETREX, mappings: [] });
   const rec = rows.filter((r) => r.group === "recommended").map((r) => r.key).sort();
   assert.deepEqual(rec, [
-    "attr_category", "care_instructions", "comfort_details", "details_icons", "features", "footbed",
-    "materials_details", "measurements_details", "rating", "rating_count", "short_description",
-  ].sort().filter((k) => k !== "attr_category"));
+    // Comfort, materials, measurements and the review score/count are read
+    // automatically now (the comparison table), so they aren't offered.
+    "care_instructions", "details_icons", "features", "footbed", "short_description",
+  ].sort());
   const by = (k) => rows.find((r) => r.key === k);
+  for (const k of ["comfort_details", "materials_details", "measurements_details", "rating", "rating_count"]) assert.equal(by(k).group, "in_use", k);
   assert.equal(by("attr_activity_shoe_type").group, "other", "twin of the _for_filter field read automatically");
   assert.match(by("attr_activity_shoe_type").why, /Same information/);
   assert.equal(by("attr_gender").group, "other", "twin of gender_text");

@@ -9,6 +9,7 @@
 // stubs.
 
 import { leanSearch, productDetails, similarProducts } from "./search.js";
+import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
@@ -53,7 +54,7 @@ export function extractPriorShownTitles(messages = []) {
   const out = [];
   for (const m of messages) {
     if (m?.role !== "assistant" || typeof m.content !== "string") continue;
-    for (const block of m.content.matchAll(/\[Product cards displayed with this reply: ([^\]]+)\]/g)) {
+    for (const block of m.content.matchAll(/\[(?:Product cards displayed|Products compared side by side) with this reply: ([^\]]+)\]/g)) {
       // Keep "Title ($99.95)" — the price stays usable by the fact check.
       for (const item of block[1].split(/;\s*/)) {
         const entry = item.trim().replace(/^\d+\.\s*/, "");
@@ -213,6 +214,7 @@ export async function runLeanTurn({
   let preselects = new Map();
   let followUps = [];
   let supportRequested = null;
+  let compared = []; // handles in this reply's comparison table
   let soldOut = []; // sizes the customer asked for that aren't in stock
   const events = [];
   // Facts the reply may quote: store info, promotions, order/recommender output.
@@ -304,6 +306,34 @@ export async function runLeanTurn({
         ...(rejected.length ? { rejected, note: "Rejected handles weren't returned by a tool in this conversation — search first." } : {}),
       };
     }
+    if (name === "compare_products") {
+      const handles = (Array.isArray(input.handles) ? input.handles : []).map(String);
+      const known = handles.filter((h) => seen.has(h));
+      const rejected = handles.filter((h) => !seen.has(h));
+      const cmp = buildComparison(catalog, known);
+      if (cmp.error) {
+        log(`[lean] compare ${JSON.stringify(handles)} → ${cmp.error}`);
+        return { error: rejected.length ? "Only handles returned by a tool in this conversation can be compared — search for each product first." : cmp.error };
+      }
+      // One table per reply: the last one asked for.
+      for (let i = events.length - 1; i >= 0; i--) if (events[i].type === "comparison") events.splice(i, 1);
+      events.push({ type: "comparison", comparison: cmp });
+      compared = cmp.products.map((p) => p.handle);
+      const factsText = comparisonFacts(cmp);
+      knowledgeText += `\nCOMPARISON\n${factsText}`;
+      for (const p of cmp.products) {
+        topic("compare", p.title);
+        mentions.push({ handle: p.handle, title: p.title, tool: "compare_products" });
+      }
+      log(`[lean] compare ${JSON.stringify(cmp.products.map((p) => p.handle))} differences=${cmp.differences}`);
+      return {
+        comparing: cmp.products.map((p) => p.title),
+        same_style: cmp.sameStyle || undefined,
+        facts: factsText,
+        note: "The comparison table is shown under your reply with all of these details. Reply in 1-2 sentences: the difference that matters most for this customer, or your pick and why, using only these facts.",
+        ...(cmp.note ? { limit: cmp.note } : {}),
+      };
+    }
     if (name === "search_store_info") {
       const r = await lookupStoreInfo(String(input.query || ""));
       if (r?.text) knowledgeText += `\n${r.text}`;
@@ -339,7 +369,7 @@ export async function runLeanTurn({
   // ("Let me check…") is not: new facts are on the way.
   let draft = "";
   let askedForText = false;
-  const PRESENTING = new Set(["show_products", "contact_support"]);
+  const PRESENTING = new Set(["show_products", "compare_products", "contact_support"]);
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     // Last hop, or running out of time: no more tools — answer with what we have.
@@ -404,7 +434,8 @@ export async function runLeanTurn({
     }
     issues.push(...verifyLeanAnswer({
       text,
-      shownHandles: shown,
+      // The comparison table presents its products, as cards would.
+      shownHandles: [...shown, ...compared],
       seenProducts: [...seen.values()],
       freshProducts: [...seenThisTurn.values()].filter((p) => !priorStyles.has(p.style.toLowerCase())),
       priorTitles,
@@ -450,7 +481,8 @@ export async function runLeanTurn({
     log("[lean] support button: the reply points to customer service");
   }
 
-  const cards = shown.map((h) => byHandle.get(h)).filter(Boolean).map((p) => toCard(p, preselects.get(p.handle) || null));
+  // Products in the comparison table aren't repeated as cards.
+  const cards = shown.filter((h) => !compared.includes(h)).map((h) => byHandle.get(h)).filter(Boolean).map((p) => toCard(p, preselects.get(p.handle) || null));
   // The search that found the shown cards — the "View all" link repeats it.
   const shopAllSearch = cards.length
     ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null

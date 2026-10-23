@@ -149,6 +149,8 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   const lit = await p.evaluate(() => ({ t: document.querySelector(".ai-chat-panel").getAttribute("data-theme") + "," + document.querySelector(".ai-chat-launcher").getAttribute("data-theme"), bg: getComputedStyle(document.querySelector(".ai-chat-panel")).backgroundColor, open: document.querySelector(".ai-chat-panel").classList.contains("open") || getComputedStyle(document.querySelector(".ai-chat-panel")).display !== "none", pick: localStorage.getItem("hajirai_theme_pick") }));
   check("switch: panel and bar turn light, chat stays open, choice saved", lit.t === "light,light" && lit.bg === "rgb(255, 255, 255)" && lit.open && lit.pick === "light", JSON.stringify(lit));
   check("switch: now offers dark mode", (await p.getAttribute(".ai-chat-theme-btn", "aria-label")) === "Switch to dark mode");
+  // Measured once the switch has finished fading (colors transition).
+  await p.waitForTimeout(500);
   const axeLight = await contrast(p);
   if (axeLight !== null) check("light: text contrast passes (axe color-contrast)", axeLight.length === 0, axeLight.join(" | "));
   await p.reload(); await p.waitForTimeout(500);
