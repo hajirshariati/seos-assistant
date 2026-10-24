@@ -304,6 +304,33 @@ await test("sales question with offers running: the turn says to list offers fir
   assert.ok(logs.some((l) => /rewrite: .*missing_offers/.test(l)));
   assert.match(r.text, /free gel insert/i);
 });
+// The live failure after that: the rewrite still listed no offer.
+await test("rewrite still without offers → the running offers are listed by code, first", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sale", on_sale: true })] },
+    { stop_reason: "end_turn", content: [txt("These are just a sample of the sale styles.")] },
+    { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
+    { stop_reason: "end_turn", content: [txt("- **Free Gel Insert** with any Aetrex orthotic, until Oct 24, 11:59 PM EST.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Show me current sales and promotions" }], latestUserMessage: "Show me current sales and promotions", extraSystem: PROMO_SYS, callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.equal(s.requests.length, 4);
+  assert.equal(s.requests[3].tools, undefined, "the list call has no tools");
+  assert.match(s.requests[3].messages[0].content, /Free Gel Insert/);
+  assert.ok(r.text.startsWith("Here's what's running right now:\n- **Free Gel Insert**"));
+  assert.match(r.text, /marked-down styles/);
+  assert.deepEqual(r.issues.map((i) => i.code), []);
+  assert.ok(logs.some((l) => l.includes("offers listed by code")));
+});
+await test("offers list says NONE → the reply stays as written", async () => {
+  const s = scripted([
+    { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
+    { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
+    { stop_reason: "end_turn", content: [txt("NONE")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: PROMO_SYS, callModel: s.callModel, log: quiet });
+  assert.equal(r.text, "Here are some marked-down styles.");
+});
 await test("offers check: only general sales questions, only when offers are running", async () => {
   assert.equal(asksAboutOffers("Show me current sales and promotions"), true);
   assert.equal(asksAboutOffers("any deals or coupon codes?"), true);

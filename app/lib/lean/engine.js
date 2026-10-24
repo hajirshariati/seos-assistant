@@ -151,6 +151,14 @@ export function mentionsOffer(text) {
 }
 const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each with how to get it, quoting its terms. Then the marked-down products: product search with on_sale: true.)";
 
+const OFFERS_LIST_PROMPT = [
+  "You read a store's own notes (store instructions, ACTIVE PROMOTIONS, the promotions page) and list the offers a shopper can get right now.",
+  "Use the \"Right now\" date and time in the notes: skip any offer whose end date and time have passed, or that the notes say has ended. If two lines disagree about an offer, skip it.",
+  "Write one markdown bullet per running offer (\"- \"), one short line each: what it is and how to get it, quoting its own terms (dates, limits, who qualifies). Put the offer's name in **bold**.",
+  "Don't add codes, amounts, products or conditions the notes don't state. Follow the store instructions (for example, if they say not to promise free shipping, leave that out).",
+  "Write only the bullets — no intro, no closing line. If nothing is running, write NONE.",
+].join("\n");
+
 export function toCard(p, preselect = null) {
   // Options the shopper has to pick before adding (e.g. Size, Width) — the
   // card's button reads "Select size" until they're chosen.
@@ -504,6 +512,28 @@ export async function runLeanTurn({
     }
     finalIssues = issues;
     break;
+  }
+
+  // Still no offer after the rewrite: a narrow call (no tools, no products)
+  // lists the running offers from the promotions text, and they go first.
+  if (offersAsked && text && finalIssues.some((i) => i.code === "missing_offers")) {
+    log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
+    try {
+      const resp = await call({
+        model, max_tokens: 500,
+        system: [{ type: "text", text: OFFERS_LIST_PROMPT }],
+        messages: [{ role: "user", content: String(extraSystem) }],
+      });
+      addUsage(usage, resp.usage);
+      const list = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+      if (list && !/^NONE\b/i.test(list) && mentionsOffer(list)) {
+        text = `Here's what's running right now:\n${list}\n\n${text}`;
+        finalIssues = finalIssues.filter((i) => i.code !== "missing_offers");
+        log("[lean] offers listed by code");
+      }
+    } catch (err) {
+      log(`[lean] offers list failed: ${String(err?.message || err).slice(0, 120)}`);
+    }
   }
 
   if (!text) {
