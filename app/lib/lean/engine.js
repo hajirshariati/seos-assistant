@@ -131,6 +131,26 @@ export function leftOrthoticChat({ lastAssistantText = "", latestUserMessage = "
   return shownProducts.length > 0 && shownProducts.every((p) => productKind(p) === "footwear");
 }
 
+// "Show me current sales and promotions": the running offers (free gifts,
+// codes, free shipping, referral) come first, then marked-down products.
+// Telling Claude in the prompt wasn't enough — it answered with sale cards
+// only — so the turn carries a note, and a reply with no offer is rewritten.
+const OFFER_QUESTION = /\b(sales|deals?|discounts?|promos?|promotions?|offers?|coupons?|specials|promo codes?|on sale)\b|\bsale\b/i;
+const ONE_PRODUCT = /\b(this|these|that|those|it)\b/i;
+export function asksAboutOffers(text) {
+  const t = String(text || "");
+  return OFFER_QUESTION.test(t) && !ONE_PRODUCT.test(t);
+}
+export function hasRunningOffers(extraSystem) {
+  const s = String(extraSystem || "");
+  return s.includes("PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE") || s.includes("ACTIVE PROMOTIONS (live right now");
+}
+const OFFER_WORDS = /\bfree\b|\d+\s*%\s*off|\$\d+(?:\.\d+)?\s+off|\b(codes?|referr\w*|refer a friend|price match\w*|gifts?|flash sale|bogo|buy one|rewards?|points)\b/i;
+export function mentionsOffer(text) {
+  return OFFER_WORDS.test(String(text || ""));
+}
+const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each with how to get it, quoting its terms. Then the marked-down products: product search with on_sale: true.)";
+
 export function toCard(p, preselect = null) {
   // Options the shopper has to pick before adding (e.g. Size, Width) — the
   // card's button reads "Select size" until they're chosen.
@@ -215,6 +235,12 @@ export async function runLeanTurn({
   if (viewing) system.push({ type: "text", text: viewingNote(viewing) });
 
   const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
+  const offersAsked = asksAboutOffers(latestUserMessage) && hasRunningOffers(extraSystem);
+  if (offersAsked) {
+    const last = conv[conv.length - 1];
+    const note = { type: "text", text: OFFERS_NOTE };
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+  }
   const priorTitles = extractPriorShownTitles(messages);
   const priorProducts = priorTitles
     .map((t) => byTitle.get(t.replace(/\s*\([^)]*\)\s*$/, "").trim().toLowerCase()))
@@ -447,6 +473,12 @@ export async function runLeanTurn({
       issues.push({
         code: "sold_out_size",
         detail: `The size you picked is sold out: ${soldOut.map((s) => `${s.title} in ${Object.values(s.wanted).join(" / ")}${s.in_stock.length ? ` (in stock: ${s.in_stock.join(", ")})` : ""}`).join("; ")}. Say so and offer what's in stock — the card can't add a sold-out size.`,
+      });
+    }
+    if (offersAsked && !mentionsOffer(text)) {
+      issues.push({
+        code: "missing_offers",
+        detail: "The customer asked about sales and promotions, and offers are running (ACTIVE PROMOTIONS / the store's promotions page), but your reply lists none. Start with every offer that's still running — check each end date against right now — one short line each with how to get it, quoting its terms. Then the marked-down products.",
       });
     }
     issues.push(...verifyLeanAnswer({

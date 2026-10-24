@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, mentionsOffer, hasRunningOffers } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -287,6 +287,37 @@ await test("a reply that repeats the tap suggestions is sent back and rewritten"
   assert.equal(r.text, "The Ashley wedge in navy has built-in arch support and a dressy look.");
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /repeated the suggested tap questions/);
   assert.deepEqual(r.followUps, followUps, "the suggestions still show as taps");
+});
+// The live failure: "Show me current sales and promotions" → sale cards only,
+// with the Free Gel Insert and the Mila Boots Flash Sale on the promotions page.
+const PROMO_SYS = "PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE (https://www.aetrex.com/pages/terms-conditions)\nRight now it's Sat, Oct 24, 2026.\n---\nFree Gel Insert With Any Aetrex Orthotics Purchase: Valid until October 24th, 2026 11:59 PM EST.\n---";
+await test("sales question with offers running: the turn says to list offers first; a sale-cards-only reply is rewritten", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sale", on_sale: true })] },
+    { stop_reason: "end_turn", content: [txt("These are just a sample — want me to filter the sale items by style?")] },
+    { stop_reason: "end_turn", content: [txt("Running now: a free gel insert with any Aetrex orthotic, through tonight 11:59 PM EST. Want me to pull up marked-down styles too?")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Show me current sales and promotions" }], latestUserMessage: "Show me current sales and promotions", extraSystem: PROMO_SYS, callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /Start your reply with every offer that's running/);
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*missing_offers/.test(l)));
+  assert.match(r.text, /free gel insert/i);
+});
+await test("offers check: only general sales questions, only when offers are running", async () => {
+  assert.equal(asksAboutOffers("Show me current sales and promotions"), true);
+  assert.equal(asksAboutOffers("any deals or coupon codes?"), true);
+  assert.equal(asksAboutOffers("is this on sale?"), false, "one product's price isn't a promotions question");
+  assert.equal(asksAboutOffers("sneakers for flat feet"), false);
+  assert.equal(hasRunningOffers(PROMO_SYS), true);
+  assert.equal(hasRunningOffers("ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now."), false);
+  assert.equal(mentionsOffer("These are just a sample — want me to filter the sale items?"), false);
+  assert.equal(mentionsOffer("Get a free gel insert with any orthotic."), true);
+  assert.equal(mentionsOffer("20% off boots with code MILA"), true);
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "what's on sale" }], latestUserMessage: "what's on sale", extraSystem: "ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now.", callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, false, "nothing running → no offers to list");
+  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /Start your reply with every offer/);
 });
 await test("echo check: only replies built from the suggestions, not ones that share a phrase", () => {
   const f = ["Do these come in wide?", "Show me the navy one"];
