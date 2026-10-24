@@ -195,6 +195,33 @@ await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" 
   await p.goto("http://localhost:4795/?hajirai_tester=off"); await p.waitForTimeout(400);
   check("recording: ?hajirai_tester=off clears it", await p.evaluate(() => localStorage.getItem("hajirai_tester") === null));
 });
+// International shoppers (Settings → Showing the chat): hidden when their
+// country (Global-e's cookie, else Shopify Markets') isn't a home country.
+{
+  const intl = async (cookieCountry, wc, fn, shopifyCountry) => {
+    wcNow = wc; cfgNow = base;
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    if (cookieCountry) await ctx.addCookies([{ name: "GlobalE_Data", value: encodeURIComponent(JSON.stringify({ countryISO: cookieCountry, currencyCode: "CAD", cultureCode: "en-CA" })), url: "http://localhost:4795/" }]);
+    // The page sets window.Shopify itself; keep the country on whatever it sets.
+    if (shopifyCountry) await ctx.addInitScript((c) => { let v = {}; Object.defineProperty(window, "Shopify", { configurable: true, get: () => v, set: (n) => { v = Object.assign(n || {}, { country: c }); } }); }, shopifyCountry);
+    const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto("http://localhost:4795/"); await p.waitForTimeout(900);
+    await fn(p);
+    if (errs.length) check("international: no JS errors", false, errs.join("|"));
+    await ctx.close(); wcNow = {};
+  };
+  const shown = (p) => p.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); return !!l && getComputedStyle(l).display !== "none"; });
+  await intl("CA", { international: { hide: true, home: ["US"] } }, async (p) => {
+    check("international: a Canadian shopper (Global-e) doesn't see the chat", !(await shown(p)));
+    await p.reload(); await p.waitForTimeout(500);
+    check("international: the next page skips the chat entirely", await p.evaluate(() => !document.querySelector(".ai-chat-launcher")));
+  });
+  await intl("US", { international: { hide: true, home: ["US"] } }, async (p) => check("international: a US shopper sees the chat", await shown(p)));
+  await intl("CA", { international: { hide: false, home: ["US"] } }, async (p) => check("international: switched off, everyone sees the chat", await shown(p)));
+  await intl("CA", { international: { hide: true, home: ["US", "CA"] } }, async (p) => check("international: a home country added (CA) sees the chat", await shown(p)));
+  await intl("", { international: { hide: true, home: ["US"] } }, async (p) => check("international: Shopify Markets' country is used without Global-e", !(await shown(p))), "GB");
+  await intl("", { international: { hide: true, home: ["US"] } }, async (p) => check("international: no country known, the chat shows", await shown(p)));
+}
 // The look the chat starts in (Settings → Showing the chat): the store's
 // choice until the shopper picks with the sun/moon, then theirs, remembered.
 {

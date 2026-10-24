@@ -192,6 +192,8 @@ model ShopConfig {
   appearDelayOn       Boolean  @default(false)
   appearDelaySec      Int      @default(3)
   startTheme          String   @default("dark")
+  hideInternational   Boolean  @default(true)
+  homeCountries       String   @default("US")
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)

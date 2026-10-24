@@ -10,7 +10,7 @@ import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TU
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
 import { typeformId, feedbackSurveyConfig } from "../app/lib/feedback-survey.js";
-import { appearDelayConfig, clampDelay, startTheme } from "../app/lib/appear-delay.js";
+import { appearDelayConfig, clampDelay, startTheme, parseCountries, internationalConfig } from "../app/lib/appear-delay.js";
 
 let pass = 0;
 let fail = 0;
@@ -105,6 +105,12 @@ test("whole seconds from 1 to 60; off unless switched on", () => {
   assert.equal(clampDelay(999), 60);
   assert.equal(clampDelay("7.9"), 7);
   assert.equal(clampDelay("abc"), 3);
+});
+test("international: hidden by default; home countries are clean two-letter codes", () => {
+  assert.deepEqual(internationalConfig(), { hide: true, home: ["US"] });
+  assert.deepEqual(internationalConfig({ hideInternational: false, homeCountries: "US" }), { hide: false, home: ["US"] });
+  assert.deepEqual(parseCountries(" us, pr ;ca,US, USA, x"), ["US", "PR", "CA"]);
+  assert.deepEqual(parseCountries(""), ["US"]);
 });
 test("the chat starts dark unless the store picks light", () => {
   assert.equal(startTheme("light"), "light");

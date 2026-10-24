@@ -29,11 +29,37 @@ function matchesHideRule(rules){
   return false;
 }
 
-/* Set when this page is one the store hides the assistant on. */
+/* Set when the assistant is hidden here: a page the store hides it on, or a
+   shopper outside the store's home countries. */
 var HIDDEN_BY_URL=false;
 var _cachedRules=null;
 try{_cachedRules=JSON.parse(sessionStorage.getItem(HRK))}catch(e){}
 if(_cachedRules&&matchesHideRule(_cachedRules))return;
+
+/* International shoppers (Settings → Showing the chat): the shopper's country
+   as Global-e sets it (its GlobalE_Data cookie), else Shopify Markets'. No
+   country known: treat as home. The store's choice is remembered, so later
+   pages skip the chat entirely. */
+var INTL_KEY='hajirai_intl';
+function shopperCountry(){
+  try{
+    var m=document.cookie.match(/(?:^|;\s*)GlobalE_Data=([^;]+)/);
+    if(m){var raw=decodeURIComponent(m[1]);if(raw.charAt(0)==='%')raw=decodeURIComponent(raw);var g=JSON.parse(raw);if(g&&/^[A-Za-z]{2}$/.test(g.countryISO||''))return g.countryISO.toUpperCase()}
+  }catch(e){}
+  try{var c=window.Shopify&&window.Shopify.country;if(c&&/^[A-Za-z]{2}$/.test(c))return String(c).toUpperCase()}catch(e){}
+  return '';
+}
+function isAbroad(cfg){
+  if(!cfg||cfg.hide!==true)return false;
+  var c=shopperCountry(),home=Array.isArray(cfg.home)&&cfg.home.length?cfg.home:['US'];
+  return !!c&&home.indexOf(c)<0;
+}
+try{if(isAbroad(JSON.parse(localStorage.getItem(INTL_KEY)||'null')))return}catch(e){}
+function hideAssistant(){
+  HIDDEN_BY_URL=true;
+  if(isOpen&&typeof toggle==='function')toggle(false);
+  ['.ai-chat-launcher','.ai-chat-panel','.ai-chat-overlay'].forEach(function(sel){var el=document.querySelector(sel);if(el)el.style.display='none'});
+}
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
@@ -77,15 +103,13 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   }
   var rules=d.hideOnUrls||[];
   try{sessionStorage.setItem(HRK,JSON.stringify(rules))}catch(e){}
-  if(matchesHideRule(rules)){
-    HIDDEN_BY_URL=true;
-    if(isOpen&&typeof toggle==='function')toggle(false);
-    var l=document.querySelector('.ai-chat-launcher');
-    var p=document.querySelector('.ai-chat-panel');
-    var o=document.querySelector('.ai-chat-overlay');
-    if(l)l.style.display='none';
-    if(p)p.style.display='none';
-    if(o)o.style.display='none';
+  if(matchesHideRule(rules))hideAssistant();
+  if(d.international&&typeof d.international==='object'){
+    var intl={hide:d.international.hide===true,home:Array.isArray(d.international.home)?d.international.home:['US']};
+    try{localStorage.setItem(INTL_KEY,JSON.stringify(intl))}catch(e){}
+    if(isAbroad(intl))hideAssistant();
+    /* Global-e may set its country a moment after the page loads. */
+    else if(intl.hide)setTimeout(function(){if(!HIDDEN_BY_URL&&isAbroad(intl))hideAssistant()},2500);
   }
 }).catch(function(){});
 var SHOP=C.shopDomain||'';
