@@ -785,6 +785,21 @@ await test("store context (rules, promotions, customer) is a separate, uncached 
   assert.ok(s.requests[0].system[0].cache_control && !s.requests[0].system[1].cache_control);
   assert.deepEqual(r.issues, [], "$75 comes from the promotion");
 });
+await test("promotions page: its offers are the live promotions (no 'none running'), dated, and quoting them passes the fact check", async () => {
+  const { buildStoreContextBlock } = await import("../app/lib/lean/store-tools.server.js");
+  const pagePromos = "Free Gel Insert With Any Aetrex Orthotics Purchase: Valid until October 24th, 2026 11:59 PM EST. Receive one free gel insert (50780) with qualifying purchases of an Aetrex orthotic.\nAetrex Referral Program: Give your friends $20 off their first order of $49.95+.";
+  const block = buildStoreContextBlock({ pagePromos, promoPageUrl: "https://www.aetrex.com/pages/terms-conditions", now: new Date("2026-10-24T15:00:00Z") });
+  assert.doesNotMatch(block, /No discount codes or store-wide offers right now/);
+  assert.match(block, /PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE/);
+  assert.match(block, /Right now it's Sat, Oct 24, 2026/);
+  assert.match(block, /Free Gel Insert/);
+  assert.match(block, /on_sale: true/, "markdowns are still pointed at");
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Yes! Through tonight you get a free gel insert with any Aetrex orthotic, and friends you refer get $20 off a first order of $49.95+.")] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: block, callModel: s.callModel, log: quiet });
+  assert.deepEqual(r.issues, [], "amounts come from the page");
+  const prompt = JSON.stringify(buildLeanSystemPrompt({ shopName: "Aetrex", vocab: catalog.vocab }));
+  assert.match(prompt, /ACTIVE PROMOTIONS or PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE/);
+});
 await test("sales questions: the prompt sends the model to on_sale, and on_sale alone lists every markdown", async () => {
   const prompt = JSON.stringify(buildLeanSystemPrompt({ shopName: "Aetrex", vocab: catalog.vocab }));
   assert.match(prompt, /asks about sales, deals, discounts, markdowns, clearance or what's on sale, search products with on_sale: true/);

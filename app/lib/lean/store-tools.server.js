@@ -15,6 +15,8 @@ import { buildRecommenderTools, executeRecommenderTool } from "../recommender-to
 import { fetchCustomerContext } from "../customer-context.server.js";
 import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
+import { getPagePromos } from "../promo-page.server.js";
+import { promoPageBlock } from "../promo-page.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
@@ -57,7 +59,7 @@ export function formatLoyalty(loyalty, config = {}) {
 }
 
 // Pure: the per-request system block. Exported for tests.
-export function buildStoreContextBlock({ rules = [], campaigns = [], customer = null, loyaltyText = "" } = {}) {
+export function buildStoreContextBlock({ rules = [], campaigns = [], customer = null, loyaltyText = "", pagePromos = "", promoPageUrl = "", now = new Date() } = {}) {
   const parts = [];
   const ruleText = rules.map((r) => String(r || "").trim()).filter(Boolean).join("\n\n").slice(0, MAX_RULES_CHARS);
   if (ruleText) parts.push(`INSTRUCTIONS FROM THE STORE TEAM (apply them to what the customer means in this conversation)\n${ruleText}`);
@@ -66,11 +68,14 @@ export function buildStoreContextBlock({ rules = [], campaigns = [], customer = 
       "ACTIVE PROMOTIONS (live right now — quote only these)\n" +
       campaigns.map((c) => `- ${c.name} (${fmtDate(c.startsAt)} – ${fmtDate(c.endsAt)}): ${String(c.content || "").trim()}`).join("\n"),
     );
-  } else {
+  } else if (!String(pagePromos || "").trim()) {
     // Codes and store-wide offers only — marked-down products are found with
     // the product search (on_sale), so "none" here never means "nothing on sale".
     parts.push("ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now. Marked-down products may still be on sale — find them with the product search (on_sale: true).");
   }
+  // The store's promotions page, read live (Settings → Promotions page).
+  const pageBlock = promoPageBlock({ text: pagePromos, url: promoPageUrl, now });
+  if (pageBlock) parts.push(`${pageBlock}\nMarked-down products may also be on sale — find them with the product search (on_sale: true).`);
   if (customer?.firstName) {
     const lines = [`The customer is logged in. First name: ${customer.firstName} (use it at most once, naturally).`];
     if (customer.numberOfOrders) lines.push(`They've placed ${customer.numberOfOrders} order(s) with us — welcome them back warmly.`);
@@ -116,18 +121,20 @@ export async function buildLeanStoreExtras({
     returnPolicy: returnPolicy(config),
   };
 
-  const [rulesRes, campaignsRes, customerRes, recRes] = await Promise.allSettled([
+  const [rulesRes, campaignsRes, customerRes, recRes, pagePromosRes] = await Promise.allSettled([
     getKnowledgeFilesWithContent(shop),
     getActiveCampaigns(shop),
     vip ? fetchCustomerContext({ shop, accessToken, customerId: loggedInCustomerId, orderLimit: 5 }) : Promise.resolve(null),
     buildRecommenderTools(shop, { decisionTreeEnabled: config.decisionTreeEnabled === true, fitfinder, shopperText: `${conversationText} ${latestUserMessage || ""}` }),
+    getPagePromos({ shop, accessToken, url: config.promoPageUrl, stopLine: config.promoPageStop }),
   ]);
-  for (const [label, r] of [["rules", rulesRes], ["campaigns", campaignsRes], ["customer", customerRes], ["recommenders", recRes]]) {
+  for (const [label, r] of [["rules", rulesRes], ["campaigns", campaignsRes], ["customer", customerRes], ["recommenders", recRes], ["promotions page", pagePromosRes]]) {
     if (r.status === "rejected") log(`[lean] store extras: ${label} unavailable — ${r.reason?.message || r.reason}`);
   }
 
   const rules = (rulesRes.value || []).filter((f) => f?.fileType === "rules").map((f) => f.content);
   const campaigns = campaignsRes.value || [];
+  const pagePromos = pagePromosRes.value || "";
   const customer = customerRes.value || null;
   let loyaltyText = "";
   if (customer?._email && config.yotpoLoyaltyApiKey) {
@@ -202,11 +209,11 @@ export async function buildLeanStoreExtras({
 
   log(
     `[lean] store extras: tools=[${tools.map((t) => t.definition.name).join(",") || "-"}] ` +
-    `rules=${rules.length} promos=${campaigns.length} customer=${customer?.firstName ? "yes" : "no"}`,
+    `rules=${rules.length} promos=${campaigns.length} pagePromos=${pagePromos ? pagePromos.length : 0} customer=${customer?.firstName ? "yes" : "no"}`,
   );
   return {
     tools,
     similarAttributes: Array.isArray(similarAttributes) ? similarAttributes.map(String).filter(Boolean) : [],
-    systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText }),
+    systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText, pagePromos, promoPageUrl: config.promoPageUrl || "" }),
   };
 }

@@ -34,6 +34,7 @@ import { TestRecordingCard } from "../components/TestRecordingCard";
 import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
+import { pageHandleFromUrl } from "../lib/promo-page.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -71,6 +72,8 @@ export const loader = async ({ request }) => {
     startTheme: startTheme(config.startTheme),
     hideInternational: config.hideInternational !== false,
     homeCountries: parseCountries(config.homeCountries).join(", "),
+    promoPageUrl: config.promoPageUrl || "",
+    promoPageStop: config.promoPageStop || "",
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -239,6 +242,15 @@ export const action = async ({ request }) => {
   if (hideIntl !== null) data.hideInternational = hideIntl === "true";
   const homeCountries = formData.get("homeCountries");
   if (homeCountries !== null) data.homeCountries = parseCountries(homeCountries).join(",");
+  const promoUrl = formData.get("promoPageUrl");
+  const promoStop = formData.get("promoPageStop");
+  if (promoUrl !== null) {
+    const u = String(promoUrl).trim();
+    if (u && !pageHandleFromUrl(u)) return { error: "The promotions page should be a page link, like https://yourstore.com/pages/terms-conditions." };
+    if (u && !String(promoStop || "").trim()) return { error: "Add the line where the promotions end on that page, so only the offers above it are used." };
+    data.promoPageUrl = u.slice(0, 500);
+  }
+  if (promoStop !== null) data.promoPageStop = String(promoStop).trim().slice(0, 200);
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -546,7 +558,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -577,6 +589,8 @@ export default function ApiKeys() {
   const [startLook, setStartLook] = useState(initStartTheme);
   const [hideIntl, setHideIntl] = useState(initHideIntl);
   const [homeCountries, setHomeCountries] = useState(initHomeCountries);
+  const [promoUrl, setPromoUrl] = useState(initPromoUrl);
+  const [promoStop, setPromoStop] = useState(initPromoStop);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -617,6 +631,8 @@ export default function ApiKeys() {
     startLook: initStartTheme,
     hideIntl: initHideIntl,
     homeCountries: initHomeCountries,
+    promoUrl: initPromoUrl,
+    promoStop: initPromoStop,
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -672,6 +688,8 @@ export default function ApiKeys() {
     setStartLook(s.startLook);
     setHideIntl(s.hideIntl);
     setHomeCountries(s.homeCountries);
+    setPromoUrl(s.promoUrl);
+    setPromoStop(s.promoStop);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -928,6 +946,33 @@ export default function ApiKeys() {
                     checked={hideLiveChat}
                     onChange={setHideLiveChat}
                     helpText="Removes the separate chat button from the corner of the page. Live chat still opens from the assistant whenever a shopper asks for a person."
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Promotions page"
+              description="A page on your site where you keep your current offers. The assistant reads it live (every 15 minutes), so when someone asks about deals it knows what's running."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <TextField
+                    label="Promotions page link"
+                    value={promoUrl}
+                    onChange={setPromoUrl}
+                    placeholder="https://www.aetrex.com/pages/terms-conditions"
+                    autoComplete="off"
+                    helpText="Leave blank to use only the promotions added on the Knowledge page."
+                  />
+                  <TextField
+                    label="Promotions end at this line"
+                    value={promoStop}
+                    onChange={setPromoStop}
+                    placeholder="STANDARD TERMS AND CONDITIONS OF SALE"
+                    autoComplete="off"
+                    disabled={!promoUrl.trim()}
+                    helpText="Everything above this line on the page counts as your current offers; nothing below it is used. If the line isn't found, the page isn't used. Offers whose end date has passed aren't mentioned as running."
                   />
                 </BlockStack>
               </Card>
@@ -1421,6 +1466,8 @@ export default function ApiKeys() {
           <input type="hidden" name="startTheme" value={startLook} />
           <input type="hidden" name="hideInternational" value={String(hideIntl)} />
           <input type="hidden" name="homeCountries" value={homeCountries} />
+          <input type="hidden" name="promoPageUrl" value={promoUrl} />
+          <input type="hidden" name="promoPageStop" value={promoStop} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />

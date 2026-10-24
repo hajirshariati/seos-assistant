@@ -194,6 +194,8 @@ model ShopConfig {
   startTheme          String   @default("dark")
   hideInternational   Boolean  @default(true)
   homeCountries       String   @default("US")
+  promoPageUrl        String   @default("")
+  promoPageStop       String   @default("")
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)

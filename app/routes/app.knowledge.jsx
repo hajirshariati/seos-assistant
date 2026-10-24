@@ -1146,7 +1146,7 @@ export default function Knowledge() {
         <BlockStack gap="400">
           <SectionHeading
             title="Promotions"
-            description="Add a sale with start and end dates. The assistant only mentions what's live right now; ended promotions disappear on their own."
+            description="Add a sale with start and end dates. The assistant only mentions what's live right now; ended promotions disappear on their own. It can also read your offers from a page on your site: Settings → Promotions page."
           />
           <CampaignsCard initial={data.campaigns} template={data.campaignTemplate} initialCheatCode={data.campaignCheatCode} />
         </BlockStack>
