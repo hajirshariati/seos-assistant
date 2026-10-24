@@ -81,6 +81,7 @@ export function leanChatResponse({
   supportLabel = "",
   fitfinder = null,
   sizeFinder = null,
+  viewingHandle = "",
   record = null,
 }) {
   const encoder = new TextEncoder();
@@ -149,6 +150,7 @@ export function leanChatResponse({
           extraSystem: extras.systemBlock,
           similarAttributes: extras.similarAttributes,
           liveStock: makeLiveStock({ shop, accessToken }),
+          viewingHandle,
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
             return withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal }));

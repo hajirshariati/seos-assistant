@@ -26,7 +26,7 @@ const page = (cfg) => `<!doctype html><html><head><meta name="viewport" content=
 let cfgNow = base; let wcNow = {}; const bodies = [];
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, "http://x"); let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => {
-    if (u.pathname === "/") { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); return res.end(page(cfgNow)); }
+    if (u.pathname === "/" || /\/products\//.test(u.pathname)) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); return res.end(page(cfgNow)); }
     if (u.pathname === "/w.js") { res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" }); return res.end(fs.readFileSync(W + "hajirai-chat-widget.js")); }
     if (u.pathname === "/w.css") { res.writeHead(200, { "Content-Type": "text/css" }); return res.end(fs.readFileSync(W + "hajirai-chat-widget.css")); }
     if (u.pathname.endsWith(".png")) { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(png); }
@@ -195,6 +195,27 @@ await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" 
   await p.goto("http://localhost:4795/?hajirai_tester=off"); await p.waitForTimeout(400);
   check("recording: ?hajirai_tester=off clears it", await p.evaluate(() => localStorage.getItem("hajirai_tester") === null));
 });
+// On a product page the chat sends which product it is (its handle), so
+// "these" / "this one" can be answered; elsewhere nothing is sent.
+{
+  wcNow = {}; cfgNow = base;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage();
+  const askOn = async (path) => {
+    await p.goto("http://localhost:4795" + path); await p.waitForTimeout(500);
+    await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(500);
+    const n = bodies.length;
+    await p.fill(".ai-chat-input-area textarea", "i have these but in size 8"); await p.keyboard.press("Enter"); await p.waitForTimeout(700);
+    return bodies.length > n ? bodies.at(-1) : null;
+  };
+  const onPdp = await askOn("/products/l605w-m?variant=123");
+  check("product page: the chat sends the page's product", onPdp?.viewing === "l605w-m", JSON.stringify(onPdp && onPdp.viewing));
+  const inCollection = await askOn("/collections/sandals/products/savannah-red");
+  check("product page under a collection: still found", inCollection?.viewing === "savannah-red", JSON.stringify(inCollection && inCollection.viewing));
+  const home = await askOn("/");
+  check("not on a product page: nothing sent", home && !("viewing" in home), JSON.stringify(home && home.viewing));
+  await ctx.close();
+}
 // International shoppers (Settings → Showing the chat): hidden when their
 // country (Global-e's cookie, else Shopify Markets') isn't a home country.
 {

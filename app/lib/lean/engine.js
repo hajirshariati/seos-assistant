@@ -159,6 +159,15 @@ export function pointsToSupport(text) {
   return SUPPORT_POINTER.test(String(text || ""));
 }
 
+// What the model is told about the product page the shopper is on: the
+// catalog's own facts, nothing more.
+export function viewingNote(p) {
+  const price = Number.isFinite(p.price) ? ` — $${p.price.toFixed(2)}${Number.isFinite(p.maxPrice) && p.maxPrice > p.price ? `–$${p.maxPrice.toFixed(2)}` : ""}` : "";
+  const sizeKey = Object.keys(p.options || {}).find((k) => /^size$/i.test(k));
+  const sizes = sizeKey && p.options[sizeKey].length ? ` Sizes listed: ${p.options[sizeKey].slice(0, 30).join(", ")}.` : "";
+  return `THE PAGE THE CUSTOMER IS ON\nThey're looking at this product's page right now: ${p.title} (handle: ${p.handle})${price}.${sizes} When they say "this", "these", "it" or "this shoe" without naming a product, they most likely mean this one. They can already see its page, so you don't need to show its card unless it helps; use get_product_details for anything more (stock by size, details). Don't assume they want it if they ask about something else.`;
+}
+
 export async function runLeanTurn({
   anthropic,
   model,
@@ -182,6 +191,8 @@ export async function runLeanTurn({
   callModel = null, // test seam: (request) => response
   // Live stock for one product: async (handle) → [{ Size, Width }] in stock, or null.
   liveStock = null,
+  // The product page the shopper is on, if any (handle from the page URL).
+  viewingHandle = "",
 }) {
   const started = Date.now();
   const products = catalog?.products || [];
@@ -199,6 +210,9 @@ export async function runLeanTurn({
     cache_control: { type: "ephemeral" },
   }];
   if (String(extraSystem || "").trim()) system.push({ type: "text", text: String(extraSystem).trim() });
+  // The product page the shopper is on: "this", "these", "it" usually mean it.
+  const viewing = viewingHandle ? byHandle.get(viewingHandle) || null : null;
+  if (viewing) system.push({ type: "text", text: viewingNote(viewing) });
 
   const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
   const priorTitles = extractPriorShownTitles(messages);
@@ -207,8 +221,11 @@ export async function runLeanTurn({
     .filter(Boolean);
 
   const seen = new Map(priorProducts.map((p) => [p.handle, p])); // handles Claude may show
+  // The product on the shopper's screen counts as already seen: it can be
+  // named and priced without showing its card again.
+  if (viewing) seen.set(viewing.handle, viewing);
   // Styles the customer already saw as cards (any colorway of them counts).
-  const priorStyles = new Set(priorProducts.map((p) => p.style.toLowerCase()));
+  const priorStyles = new Set([...priorProducts, ...(viewing ? [viewing] : [])].map((p) => p.style.toLowerCase()));
   const seenThisTurn = new Map();
   let shown = [];
   let preselects = new Map();

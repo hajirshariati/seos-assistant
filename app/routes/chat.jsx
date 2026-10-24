@@ -20,6 +20,13 @@ const MAX_MESSAGE_CHARS = 2000;
 // The whole request (message + history + FIT data) — far above a real chat.
 const MAX_BODY_BYTES = 96 * 1024;
 
+// A product handle from the shopper's page URL: lower-case letters, digits and
+// dashes only, or nothing.
+function cleanHandle(value) {
+  const h = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^[a-z0-9][a-z0-9-]{0,199}$/.test(h) ? h : "";
+}
+
 export const loader = async () => {
   return Response.json({ error: "Method not allowed. Use POST." }, { status: 405 });
 };
@@ -130,6 +137,8 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     supportLabel: typeof body.support_label === "string" ? body.support_label : "",
     fitfinder: sanitizeFitfinder(body.fitfinder),
     sizeFinder: sanitizeSizeFinder(body.size_finder),
+    // The product page the shopper is on (its handle, from the page URL).
+    viewingHandle: cleanHandle(body.viewing),
     // Test recordings: only while the store has it on, and (by default) only
     // for testers who opened the store with the tester link.
     record: shouldRecord(config, { tester: body.tester, internal })

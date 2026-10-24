@@ -2303,6 +2303,11 @@ var pendingCompare=null;
 var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/><path d="M6 9h2M6 12h2M16 9h2M16 12h2"/></svg>';
 var CMP_STAR='<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>';
 var CMP_CHECK='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+/* The product handle in this page's URL (/products/<handle>, also under a
+   collection or a locale prefix), or ''. */
+function pageProductHandle(){
+  try{var m=location.pathname.match(/\/products\/([^/?#]+)/);if(!m)return '';var h=decodeURIComponent(m[1]).toLowerCase();return /^[a-z0-9][a-z0-9-]{0,199}$/.test(h)?h:''}catch(e){return ''}
+}
 function cmpCards(products){return (products||[]).filter(function(p){return p&&p.handle})}
 /* Under a row of 2+ product cards: one quiet row, in the chat's own style. */
 function compareCtaHtml(products){
@@ -3290,6 +3295,8 @@ var tfData=tfPayload();
 if(tfData)body.size_finder=tfData;
 if(TESTER)body.tester=TESTER;
 if(REC_ON&&(REC_SCOPE==='everyone'||TESTER))body.page=location.pathname.slice(0,200);
+/* On a product page, the chat knows which product "this" is. */
+var viewingHandle=pageProductHandle();if(viewingHandle)body.viewing=viewingHandle;
 if(ffData)body.fitfinder=ffData;
 else loadFitfinder();
 fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'text/event-stream'},body:JSON.stringify(body),signal:abortCtrl.signal}).then(function(r){

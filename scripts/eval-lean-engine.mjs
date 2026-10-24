@@ -251,6 +251,26 @@ await test("invented product → fact check → Claude rewrites once", async () 
   assert.equal(r.text, "The Ashley wedge in navy is the dressiest match.");
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Automatic fact check/);
 });
+// The live failure: on a product page, "i have these but in size 8" — the
+// assistant didn't know which product "these" was. Now the page's product is
+// in the prompt, and naming it (and its price) needs no new card.
+await test("product page: the bot knows what 'these' is, and can name and price it without a card", async () => {
+  const p = catalog.products.find((x) => x.handle === H["Ashley Arch Support Wedge - Navy"]);
+  const s = scripted([
+    { stop_reason: "end_turn", content: [txt(`You have the ${p.style} in size 8 — are you after a different size, another color, or help with an exchange? It's $${p.price.toFixed(2)}.`)] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "i have these but in size 8" }], latestUserMessage: "i have these but in size 8", callModel: s.callModel, log: quiet, viewingHandle: p.handle });
+  const sys = s.requests[0].system.map((b) => b.text).join("\n");
+  assert.match(sys, /THE PAGE THE CUSTOMER IS ON/);
+  assert.ok(sys.includes(p.title) && sys.includes(p.handle), "the page's product is named");
+  assert.equal(r.retried, false, "no fact-check rewrite for naming the product on screen");
+  assert.equal(s.requests.length, 1);
+});
+await test("product page: an unknown handle adds nothing", async () => {
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Which shoes do you mean?")] }]);
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "these?" }], latestUserMessage: "these?", callModel: s.callModel, log: quiet, viewingHandle: "not-a-product" });
+  assert.ok(!s.requests[0].system.map((b) => b.text).join("\n").includes("THE PAGE THE CUSTOMER IS ON"));
+});
 // The live failure: "boots" mid-orthotic chat → the reply was the tap
 // suggestions ("Do these boots come in other colors? What sizes are
 // available?") written as if the assistant were asking them.
