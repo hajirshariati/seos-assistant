@@ -318,6 +318,8 @@ await test("rewrite still without offers → the running offers are listed by co
   assert.equal(s.requests[3].tools, undefined, "the list call has no tools");
   assert.match(s.requests[3].messages[0].content, /Free Gel Insert/);
   assert.ok(r.text.startsWith("Here's what's running right now:\n- **Free Gel Insert**"));
+  assert.match(r.text, /\[See full offer details\]\(https:\/\/www\.aetrex\.com\/pages\/terms-conditions\)/, "fine print stays behind the link");
+  assert.match(s.requests[3].system[0].text, /at most 15 words/);
   assert.match(r.text, /marked-down styles/);
   assert.deepEqual(r.issues.map((i) => i.code), []);
   assert.ok(logs.some((l) => l.includes("offers listed by code")));

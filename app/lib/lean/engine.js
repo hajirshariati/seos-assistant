@@ -149,12 +149,12 @@ const OFFER_WORDS = /\bfree\b|\d+\s*%\s*off|\$\d+(?:\.\d+)?\s+off|\b(codes?|refe
 export function mentionsOffer(text) {
   return OFFER_WORDS.test(String(text || ""));
 }
-const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each with how to get it, quoting its terms. Then the marked-down products: product search with on_sale: true.)";
+const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print). Then the marked-down products: product search with on_sale: true.)";
 
 const OFFERS_LIST_PROMPT = [
   "You read a store's own notes (store instructions, ACTIVE PROMOTIONS, the promotions page) and list the offers a shopper can get right now.",
   "Use the \"Right now\" date and time in the notes: skip any offer whose end date and time have passed, or that the notes say has ended. If two lines disagree about an offer, skip it.",
-  "Write one markdown bullet per running offer (\"- \"), one short line each: what it is and how to get it, quoting its own terms (dates, limits, who qualifies). Put the offer's name in **bold**.",
+  "Write one markdown bullet per running offer (\"- \"): a short **bold** name, then a few plain words on what the shopper gets and the end date if it has one — at most 15 words per bullet. Example: \"- **Free gel insert** with any orthotic — ends Oct 24\". Leave out the fine print (item numbers, limits, exclusions, how returns are processed): the shopper gets a link to the full terms.",
   "Don't add codes, amounts, products or conditions the notes don't state. Follow the store instructions (for example, if they say not to promise free shipping, leave that out).",
   "Write only the bullets — no intro, no closing line. If nothing is running, write NONE.",
 ].join("\n");
@@ -486,7 +486,7 @@ export async function runLeanTurn({
     if (offersAsked && !mentionsOffer(text)) {
       issues.push({
         code: "missing_offers",
-        detail: "The customer asked about sales and promotions, and offers are running (ACTIVE PROMOTIONS / the store's promotions page), but your reply lists none. Start with every offer that's still running — check each end date against right now — one short line each with how to get it, quoting its terms. Then the marked-down products.",
+        detail: "The customer asked about sales and promotions, and offers are running (ACTIVE PROMOTIONS / the store's promotions page), but your reply lists none. Start with every offer that's still running — check each end date against right now — one short line each (a bold name and a few words, no fine print). Then the marked-down products.",
       });
     }
     issues.push(...verifyLeanAnswer({
@@ -527,7 +527,8 @@ export async function runLeanTurn({
       addUsage(usage, resp.usage);
       const list = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
       if (list && !/^NONE\b/i.test(list) && mentionsOffer(list)) {
-        text = `Here's what's running right now:\n${list}\n\n${text}`;
+        const terms = String(extraSystem).match(/PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE \((https:\/\/[^)\s]+)\)/)?.[1];
+        text = `Here's what's running right now:\n${list}${terms ? `\n\n[See full offer details](${terms})` : ""}\n\n${text}`;
         finalIssues = finalIssues.filter((i) => i.code !== "missing_offers");
         log("[lean] offers listed by code");
       }
