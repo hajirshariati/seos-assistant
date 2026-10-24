@@ -34,6 +34,14 @@ export async function deleteAllRecordings(shop) {
   return count;
 }
 
+// One recorded chat (all its turns), only within this shop.
+export async function deleteRecordingSession(shop, sessionId) {
+  const id = String(sessionId || "").slice(0, 80);
+  if (!shop || !id) return 0;
+  const { count } = await prisma.chatRecording.deleteMany({ where: { shop, sessionId: id } });
+  return count;
+}
+
 export async function cleanupOldRecordings() {
   const cutoff = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
   const { count } = await prisma.chatRecording.deleteMany({ where: { createdAt: { lt: cutoff } } });

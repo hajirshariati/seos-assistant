@@ -1,13 +1,13 @@
 // Test recordings: the conversations saved while the store had recording on
 // (Settings → Testing). Newest chat first; each opens to its full transcript.
-// Kept 30 days; "Delete all" clears them now.
+// Kept 30 days; "Delete" clears one chat now, "Delete all" every chat.
 import { useCallback, useState } from "react";
 import { useLoaderData, useFetcher, Link } from "react-router";
 import { Page, Layout, Card, BlockStack, InlineStack, Text, Button, Banner, Badge, EmptyState } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
-import { listRecordings, deleteAllRecordings } from "../models/ChatRecording.server";
+import { listRecordings, deleteAllRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { recordingState, groupSessions, KEEP_DAYS } from "../lib/chat-recording.js";
 
 export const loader = async ({ request }) => {
@@ -28,6 +28,10 @@ export const action = async ({ request }) => {
   const form = await request.formData();
   if (form.get("intent") === "delete_all") {
     const count = await deleteAllRecordings(session.shop);
+    return { deleted: count };
+  }
+  if (form.get("intent") === "delete_session") {
+    const count = await deleteRecordingSession(session.shop, form.get("sessionId"));
     return { deleted: count };
   }
   return null;
@@ -58,7 +62,7 @@ function Transcript({ turns }) {
 }
 
 export default function Recordings() {
-  const { recording, sessions, total } = useLoaderData();
+  const { recording, sessions } = useLoaderData();
   const fetcher = useFetcher();
   const shopify = useAppBridge();
   const [open, setOpen] = useState(() => new Set(sessions.slice(0, 1).map((s) => s.sessionId)));
@@ -83,7 +87,15 @@ export default function Recordings() {
       setExporting(false);
     }
   }, [shopify]);
-  const deleting = fetcher.state !== "idle";
+  const deleting = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete_all";
+  // One chat at a time; it disappears as soon as Delete is confirmed.
+  const rowFetcher = useFetcher();
+  const removing = rowFetcher.state !== "idle" ? rowFetcher.formData?.get("sessionId") : null;
+  const shown = sessions.filter((s) => s.sessionId !== removing);
+  const removeChat = (s) => {
+    if (!window.confirm(`Delete this chat (${s.turns.length} ${s.turns.length === 1 ? "message" : "messages"})? This can't be undone.`)) return;
+    rowFetcher.submit({ intent: "delete_session", sessionId: s.sessionId }, { method: "post" });
+  };
   return (
     <Page title="Test recordings" subtitle={`Conversations saved while recording is on · kept ${KEEP_DAYS} days`}>
       <TitleBar title="Test recordings" />
@@ -95,7 +107,7 @@ export default function Recordings() {
                 ? <>Recording {recording.scope === "everyone" ? "every chat" : "testers' chats"} until {when(recording.until)}. Change it in <Link to="/app/api-keys">Settings → Testing</Link>.</>
                 : <>Recording is off. Turn it on in <Link to="/app/api-keys">Settings → Testing</Link> and share the tester link with your team.</>}
             </Banner>
-            {sessions.length === 0 ? (
+            {shown.length === 0 ? (
               <Card>
                 <EmptyState heading="No recorded chats yet" image="">
                   <p>Once recording is on, chats from people using the tester link appear here.</p>
@@ -104,15 +116,16 @@ export default function Recordings() {
             ) : (
               <>
                 <InlineStack align="space-between" blockAlign="center">
-                  <Text as="p" tone="subdued">{sessions.length} chats · {total} messages</Text>
+                  <Text as="p" tone="subdued">{shown.length} {shown.length === 1 ? "chat" : "chats"} · {shown.reduce((n, s) => n + s.turns.length, 0)} messages</Text>
                   <InlineStack gap="200">
                     <Button onClick={exportCsv} loading={exporting}>Export CSV</Button>
                     <Button tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? This can't be undone.")) fetcher.submit({ intent: "delete_all" }, { method: "post" }); }}>Delete all</Button>
                   </InlineStack>
                 </InlineStack>
-                {sessions.map((s) => (
+                {shown.map((s) => (
                   <Card key={s.sessionId}>
-                    <button type="button" onClick={() => toggle(s.sessionId)} aria-expanded={open.has(s.sessionId)} style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}>
+                    <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
+                    <button type="button" onClick={() => toggle(s.sessionId)} aria-expanded={open.has(s.sessionId)} style={{ all: "unset", cursor: "pointer", display: "block", flex: 1, minWidth: 0 }}>
                       <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
                         <BlockStack gap="050">
                           <InlineStack gap="200" blockAlign="center">
@@ -125,6 +138,8 @@ export default function Recordings() {
                         <Text as="span" tone="subdued">{open.has(s.sessionId) ? "Hide" : "Show"}</Text>
                       </InlineStack>
                     </button>
+                    <Button variant="tertiary" tone="critical" disabled={Boolean(removing)} onClick={() => removeChat(s)} accessibilityLabel={`Delete chat from ${s.tester || "shopper"}`}>Delete</Button>
+                    </InlineStack>
                     {open.has(s.sessionId) && <Transcript turns={s.turns} />}
                   </Card>
                 ))}
