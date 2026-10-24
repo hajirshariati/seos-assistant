@@ -89,6 +89,49 @@ await test("read through Shopify's Admin API, cut at the line", async () => {
   assert.doesNotMatch(text, /Agreement/);
   assert.equal(f.calls.length, 1);
 });
+// What Aetrex's theme editor saves: the offers live in a text block of the
+// page's template, and the page's own body is an older copy.
+const TEMPLATE_JSON = `/* auto-generated */\n${JSON.stringify({
+  sections: {
+    "main-page": { type: "main-page", disabled: true, settings: { heading_size: "title-sm" } },
+    rt: {
+      type: "rich-text",
+      settings: { heading: "" },
+      blocks: {
+        h: { type: "heading", settings: { heading: "Terms and Conditions" } },
+        t: { type: "text", settings: { text: "<p><strong>Mila Boots Flash Sale </strong>is valid October 25th, 2026.<br/><br/><strong>Free Gel Insert With Any Aetrex Orthotics Purchase:</strong> Valid until October 24th, 2026 11:59 PM EST.</p><p><strong>STANDARD TERMS AND CONDITIONS OF SALE</strong></p><p>Agreement. All sales.</p>" } },
+      },
+      block_order: ["h", "t"],
+    },
+  },
+  order: ["main-page", "rt"],
+})}`;
+const OLD_BODY = "<p>Free returns for new customers.</p><p><strong>STANDARD TERMS AND CONDITIONS OF SALE</strong></p><p>Agreement.</p>";
+await test("the page's theme template (what shoppers see) wins over the page's own body", async () => {
+  clearPromoPageCache();
+  const f = fakeFetch([["/admin/api/", (opts) => {
+    const body = JSON.parse(opts.body);
+    if (/PromoTemplate/.test(body.query)) {
+      assert.deepEqual(body.variables, { id: "gid://shopify/OnlineStoreTheme/1", filenames: ["templates/page.terms-and-conditions.json"] });
+      return { ok: true, json: async () => ({ data: { theme: { files: { nodes: [{ body: { content: TEMPLATE_JSON } }] } } } }) };
+    }
+    return { ok: true, json: async () => ({ data: { pages: { nodes: [{ handle: "terms-conditions", body: OLD_BODY, templateSuffix: "terms-and-conditions" }] }, themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/1" }] } } }) };
+  }]]);
+  const text = await getPagePromos({ shop: "s.myshopify.com", accessToken: "t", url: "https://www.aetrex.com/pages/terms-conditions", stopLine: STOP, fetchImpl: f, now: 0 });
+  assert.match(text, /Free Gel Insert With Any Aetrex Orthotics Purchase/);
+  assert.match(text, /Mila Boots Flash Sale/);
+  assert.doesNotMatch(text, /Free returns for new customers|Agreement/);
+  assert.equal(f.calls.length, 2);
+});
+await test("template without the line (it just shows the page body) → the page body is used", async () => {
+  clearPromoPageCache();
+  const bare = JSON.stringify({ sections: { "main-page": { type: "main-page", settings: {} } }, order: ["main-page"] });
+  const f = fakeFetch([["/admin/api/", (opts) => /PromoTemplate/.test(JSON.parse(opts.body).query)
+    ? { ok: true, json: async () => ({ data: { theme: { files: { nodes: [{ body: { content: bare } }] } } } }) }
+    : { ok: true, json: async () => ({ data: { pages: { nodes: [{ handle: "terms-conditions", body: PAGE_HTML, templateSuffix: "terms" }] }, themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/1" }] } } }) }]]);
+  const text = await getPagePromos({ shop: "s.myshopify.com", accessToken: "t", url: "https://www.aetrex.com/pages/terms-conditions", stopLine: STOP, fetchImpl: f, now: 0 });
+  assert.match(text, /Zoey Boot Flash Sale/);
+});
 await test("kept for 15 minutes, then read again", async () => {
   clearPromoPageCache();
   const f = fakeFetch([["/admin/api/", adminOk]]);
