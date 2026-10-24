@@ -33,7 +33,7 @@ import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards"
 import { TestRecordingCard } from "../components/TestRecordingCard";
 import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
-import { clampDelay, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
+import { clampDelay, startTheme, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -68,6 +68,7 @@ export const loader = async ({ request }) => {
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
+    startTheme: startTheme(config.startTheme),
     storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
     klaviyoFormId: config.klaviyoFormId || "",
@@ -230,6 +231,8 @@ export const action = async ({ request }) => {
     if (data.appearDelayOn && (!Number.isFinite(n) || n < APPEAR_DELAY_MIN || n > APPEAR_DELAY_MAX)) return { error: `The delay should be a whole number of seconds from ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX}.` };
     data.appearDelaySec = clampDelay(n);
   }
+  const startLook = formData.get("startTheme");
+  if (startLook !== null) data.startTheme = startTheme(String(startLook));
 
   const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
   if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
@@ -537,7 +540,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -565,6 +568,7 @@ export default function ApiKeys() {
   const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
   const [delayOn, setDelayOn] = useState(initDelayOn);
   const [delaySec, setDelaySec] = useState(String(initDelaySec));
+  const [startLook, setStartLook] = useState(initStartTheme);
   const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
   const [searchPattern, setSearchPattern] = useState(initSearchPattern);
   const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
@@ -602,6 +606,7 @@ export default function ApiKeys() {
     hideLiveChat: initHideLiveChat,
     delayOn: initDelayOn,
     delaySec: String(initDelaySec),
+    startLook: initStartTheme,
     referralPageUrl: initReferralPageUrl,
     searchPattern: initSearchPattern,
     klaviyoFormId: initKlaviyoFormId,
@@ -654,6 +659,7 @@ export default function ApiKeys() {
     setHideLiveChat(s.hideLiveChat);
     setDelayOn(s.delayOn);
     setDelaySec(s.delaySec);
+    setStartLook(s.startLook);
     setReferralPageUrl(s.referralPageUrl);
     setSearchPattern(s.searchPattern);
     setKlaviyoFormId(s.klaviyoFormId);
@@ -917,10 +923,17 @@ export default function ApiKeys() {
 
             <Layout.AnnotatedSection
               title="Showing the chat"
-              description="When the chat appears on your store's pages."
+              description="When the chat appears on your store's pages, and the look it starts in."
             >
               <Card>
                 <BlockStack gap="400">
+                  <Select
+                    label="Starts in"
+                    options={[{ label: "Dark mode", value: "dark" }, { label: "Light mode", value: "light" }]}
+                    value={startLook}
+                    onChange={setStartLook}
+                    helpText="The look shoppers see first. They can switch any time with the sun/moon button in the chat, and their choice is remembered on their device."
+                  />
                   <Checkbox
                     label="Wait before showing the chat"
                     checked={delayOn}
@@ -1376,6 +1389,7 @@ export default function ApiKeys() {
           <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
           <input type="hidden" name="appearDelayOn" value={String(delayOn)} />
           <input type="hidden" name="appearDelaySec" value={delaySec} />
+          <input type="hidden" name="startTheme" value={startLook} />
           <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
           <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
           <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />

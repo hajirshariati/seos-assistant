@@ -52,6 +52,10 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     if(was!==FB_ON+'|'+FB_FORM+'|'+FB_LABEL&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   appearConfig(d.appearDelay);
+  if(d.startTheme==='light'||d.startTheme==='dark'){
+    try{localStorage.setItem(THEME_START_KEY,d.startTheme)}catch(e){}
+    if(!THEME_PICKED&&THEME!==d.startTheme&&typeof applyTheme==='function')applyTheme(d.startTheme);
+  }
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
@@ -159,9 +163,6 @@ var KLAVIYO_LIST_ID='';
    Tuning fields control thickness, halo extent, animation speed,
    and the three timing phases (fade-in / hold / fade-out). */
 var WELCOME_INTRO=true;
-/* Light or dark is the shopper's choice (the sun/moon in the chat header),
-   remembered on this device. Dark until they pick light. A new key: the old
-   one held the store-wide setting this replaces. */
 /* Test recordings. Opening the store with ?hajirai_tester=Name marks this
    browser as a tester for two weeks (?hajirai_tester=off clears it). While
    the store records, testers' chats are saved for review. Ordinary shoppers
@@ -180,11 +181,18 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
     if(t&&t.name&&t.until>Date.now())TESTER=String(t.name).slice(0,40);else if(t)localStorage.removeItem(TESTER_KEY);
   }catch(e){}
 })();
-var THEME_KEY='hajirai_theme_pick',THEME='dark';
-try{if(localStorage.getItem(THEME_KEY)==='light')THEME='light'}catch(e){}
+/* The look the chat starts in: the shopper's own pick (sun/moon) if they've
+   made one, else the store's choice (Settings → Showing the chat, remembered
+   here so the next page starts in it), else dark. */
+var THEME_KEY='hajirai_theme_pick',THEME_START_KEY='hajirai_theme_start',THEME='dark',THEME_PICKED=false;
+try{
+  var _tp=localStorage.getItem(THEME_KEY);
+  if(_tp==='light'||_tp==='dark'){THEME=_tp;THEME_PICKED=true}
+  else if(localStorage.getItem(THEME_START_KEY)==='light')THEME='light';
+}catch(e){}
 function applyTheme(next,save){
   THEME=next==='light'?'light':'dark';
-  if(save){try{localStorage.setItem(THEME_KEY,THEME)}catch(e){}}
+  if(save){THEME_PICKED=true;try{localStorage.setItem(THEME_KEY,THEME)}catch(e){}}
   var els=[launcher,panel,overlay];
   for(var i=0;i<els.length;i++)if(els[i])els[i].setAttribute('data-theme',THEME);
   if(glowGL&&glowGL.dLoc)glowGL.gl.uniform1f(glowGL.dLoc,THEME==='dark'?1:0);

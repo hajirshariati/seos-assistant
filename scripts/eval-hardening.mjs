@@ -10,7 +10,7 @@ import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TU
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
 import { typeformId, feedbackSurveyConfig } from "../app/lib/feedback-survey.js";
-import { appearDelayConfig, clampDelay } from "../app/lib/appear-delay.js";
+import { appearDelayConfig, clampDelay, startTheme } from "../app/lib/appear-delay.js";
 
 let pass = 0;
 let fail = 0;
@@ -105,6 +105,10 @@ test("whole seconds from 1 to 60; off unless switched on", () => {
   assert.equal(clampDelay(999), 60);
   assert.equal(clampDelay("7.9"), 7);
   assert.equal(clampDelay("abc"), 3);
+});
+test("the chat starts dark unless the store picks light", () => {
+  assert.equal(startTheme("light"), "light");
+  for (const v of ["dark", "", undefined, "LIGHT", "blue"]) assert.equal(startTheme(v), "dark", String(v));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

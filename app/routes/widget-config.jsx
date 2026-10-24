@@ -1,5 +1,5 @@
 import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
-import { appearDelayConfig } from "../lib/appear-delay.js";
+import { appearDelayConfig, startTheme } from "../lib/appear-delay.js";
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
@@ -76,6 +76,8 @@ export const loader = async ({ request }) => {
         hideLiveChatButton: config.hideLiveChatButton === true,
         // Settings → Showing the chat: wait this long before it appears.
         appearDelay: appearDelayConfig(config),
+        // The look the chat starts in; a shopper's own pick wins.
+        startTheme: startTheme(config.startTheme),
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,

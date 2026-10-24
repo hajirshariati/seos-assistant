@@ -195,6 +195,29 @@ await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" 
   await p.goto("http://localhost:4795/?hajirai_tester=off"); await p.waitForTimeout(400);
   check("recording: ?hajirai_tester=off clears it", await p.evaluate(() => localStorage.getItem("hajirai_tester") === null));
 });
+// The look the chat starts in (Settings → Showing the chat): the store's
+// choice until the shopper picks with the sun/moon, then theirs, remembered.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  const look = () => p.evaluate(() => [".ai-chat-launcher", ".ai-chat-panel"].map((s) => document.querySelector(s).getAttribute("data-theme")).join(","));
+  wcNow = { startTheme: "light" }; cfgNow = base;
+  await p.goto("http://localhost:4795/"); await p.waitForTimeout(700);
+  check("start theme light: the chat starts light", (await look()) === "light,light", await look());
+  await p.reload(); await p.waitForTimeout(60);
+  check("start theme light: the next page starts light from its first moment", (await look()) === "light,light", await look());
+  await p.waitForTimeout(600);
+  await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(600);
+  await p.click(".ai-chat-theme-btn"); await p.waitForTimeout(300);
+  await p.reload(); await p.waitForTimeout(700);
+  check("start theme light: a shopper who picked dark keeps dark", (await look()) === "dark,dark", await look());
+  wcNow = { startTheme: "dark" };
+  await p.evaluate(() => localStorage.removeItem("hajirai_theme_pick"));
+  await p.reload(); await p.waitForTimeout(700);
+  check("start theme dark: back to dark for shoppers who haven't picked", (await look()) === "dark,dark", await look());
+  if (errs.length) check("start theme: no JS errors", false, errs.join("|"));
+  await ctx.close(); wcNow = {};
+}
 // Showing the chat after a delay (Settings → Showing the chat). Off: as soon
 // as the store answers. On: hidden and untouchable until the delay passes;
 // the setting is remembered, so the next page waits from its first moment.

@@ -191,6 +191,7 @@ model ShopConfig {
   hideLiveChatButton  Boolean  @default(false)
   appearDelayOn       Boolean  @default(false)
   appearDelaySec      Int      @default(3)
+  startTheme          String   @default("dark")
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)
