@@ -802,8 +802,10 @@ await test("promotions page: its offers are the live promotions (no 'none runnin
 });
 await test("sales questions: the prompt sends the model to on_sale, and on_sale alone lists every markdown", async () => {
   const prompt = JSON.stringify(buildLeanSystemPrompt({ shopName: "Aetrex", vocab: catalog.vocab }));
-  assert.match(prompt, /asks about sales, deals, discounts, markdowns, clearance or what's on sale, search products with on_sale: true/);
+  assert.match(prompt, /asks about sales, deals, discounts, promotions, offers, markdowns, clearance or what's on sale, search products with on_sale: true/);
   assert.match(prompt, /Only say nothing is on sale if that search comes back empty/);
+  assert.match(prompt, /your reply starts with every offer that's running/);
+  assert.match(prompt, /Never answer only with sale products when an offer is running/);
   const tool = buildLeanTools(catalog.vocab).find((t) => t.input_schema?.properties?.on_sale);
   assert.match(tool.input_schema.properties.on_sale.description, /sales, deals, discounts/);
   const onSale = catalog.products.filter((p) => p.onSale);

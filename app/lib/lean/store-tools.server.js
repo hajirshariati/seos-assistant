@@ -75,7 +75,7 @@ export function buildStoreContextBlock({ rules = [], campaigns = [], customer = 
   }
   // The store's promotions page, read live (Settings → Promotions page).
   const pageBlock = promoPageBlock({ text: pagePromos, url: promoPageUrl, now });
-  if (pageBlock) parts.push(`${pageBlock}\nMarked-down products may also be on sale — find them with the product search (on_sale: true).`);
+  if (pageBlock) parts.push(`${pageBlock}\nWhen the customer asks about sales, promotions or deals, list the running offers above first, then marked-down products (product search, on_sale: true).`);
   if (customer?.firstName) {
     const lines = [`The customer is logged in. First name: ${customer.firstName} (use it at most once, naturally).`];
     if (customer.numberOfOrders) lines.push(`They've placed ${customer.numberOfOrders} order(s) with us — welcome them back warmly.`);
