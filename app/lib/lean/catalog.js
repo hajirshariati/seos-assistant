@@ -116,6 +116,24 @@ function extraAttributes(attrs, known = []) {
   return out;
 }
 
+// The store's own product codes for a product, lowercased: each variant SKU
+// ("L820W07"), its style stems ("l820w", "l820"), and the code in the handle
+// ("l820w-m", "janey-sport-navy-l9505w"). Shoppers type these ("L820") and
+// they're never in a title, so search matches them exactly.
+const CODE = /^[a-z]{1,4}\d{2,}[a-z0-9]*$/;
+export function productCodes(handle, skus = []) {
+  const out = new Set();
+  const addStems = (code) => {
+    if (!CODE.test(code)) return;
+    out.add(code);
+    const m = code.match(/^([a-z]{1,4}\d{2,})([a-z]*)/);
+    if (m) { out.add(m[1]); if (m[2]) out.add(m[1] + m[2]); }
+  };
+  for (const sku of skus) addStems(String(sku || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  for (const part of String(handle || "").toLowerCase().split(/[^a-z0-9]+/)) addStems(part);
+  return [...out];
+}
+
 export function normalizeProduct(row, { shop = "" } = {}) {
   const attrs = parseJson(row.attributesJson) || {};
   const variants = Array.isArray(row.variants) ? row.variants : [];
@@ -156,6 +174,7 @@ export function normalizeProduct(row, { shop = "" } = {}) {
   const conditions = uniqLower(readCI(attrs, ["helps_with", "recommended_for", "condition"]));
   return {
     handle: row.handle,
+    codes: productCodes(row.handle, variants.map((v) => v?.sku)),
     title: row.title,
     style: styleName(row.title),
     url: productUrl(shop, row.handle),
@@ -241,5 +260,29 @@ export function buildLeanCatalog(rows = [], { shop = "" } = {}) {
       if (suffix && !p.colors.includes(suffix)) p.colors.push(suffix);
     }
   }
-  return { products, vocab: buildVocabulary(products) };
+  // Product code → the products carrying it (a style code covers every colorway).
+  const byCode = new Map();
+  for (const p of products) {
+    for (const c of p.codes) {
+      if (!byCode.has(c)) byCode.set(c, []);
+      byCode.get(c).push(p);
+    }
+  }
+  return { products, vocab: buildVocabulary(products), byCode };
+}
+
+// Product codes the customer typed ("L820", "#l2305w") that are this store's
+// → [{ code, products }]. Order numbers are digits, so they never match.
+export function codesInText(catalog, text) {
+  const byCode = catalog?.byCode;
+  if (!byCode || !byCode.size) return [];
+  const seen = new Set();
+  const out = [];
+  for (const w of String(text || "").toLowerCase().split(/[^a-z0-9]+/)) {
+    if (!w || seen.has(w) || !/[a-z]/.test(w) || !/\d/.test(w)) continue;
+    seen.add(w);
+    const products = byCode.get(w);
+    if (products?.length) out.push({ code: w, products });
+  }
+  return out;
 }

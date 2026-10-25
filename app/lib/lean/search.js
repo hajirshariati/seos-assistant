@@ -58,6 +58,8 @@ function scoreProduct(p, terms) {
   let matched = 0;
   for (const t of terms) {
     let hit = false;
+    // The store's own product code ("l820"): an exact match outranks any word.
+    if (p.codes?.includes(t)) { score += 10; hit = true; }
     for (const [field, w] of FIELD_WEIGHTS) {
       if (hasTerm(h[field], t)) { score += w; hit = true; }
     }

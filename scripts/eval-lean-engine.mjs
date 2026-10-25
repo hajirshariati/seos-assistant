@@ -21,12 +21,12 @@ register("data:text/javascript," + encodeURIComponent(HOOK));
 const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefined : noop), apply: async () => [] });
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
-const { buildLeanCatalog } = await import("../app/lib/lean/catalog.js");
+const { buildLeanCatalog, productCodes, codesInText } = await import("../app/lib/lean/catalog.js");
 const { leanSearch, productDetails, similarProducts } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, mentionsOffer, hasRunningOffers } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -347,6 +347,49 @@ await test("offers check: only general sales questions, only when offers are run
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "what's on sale" }], latestUserMessage: "what's on sale", extraSystem: "ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now.", callModel: s.callModel, log: quiet });
   assert.equal(r.retried, false, "nothing running → no offers to list");
   assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /Start your reply with every offer/);
+});
+// The live failure: "L820" was taken for an order number, "womens L820 insert"
+// started the orthotic quiz, and "is the L820 still available" was answered
+// with only the closing line ("And don't forget… gel insert").
+const L820 = { ...row("Women's Casual Comfort Posted Orthotics", { type: "Orthotics", cat: "Orthotics", price: "79.95" }), handle: "l820w-m" };
+L820.variants = L820.variants.map((v, i) => ({ ...v, sku: `L820W0${7 + i}` }));
+const codeCatalog = buildLeanCatalog([...ROWS, L820], { shop: "s.myshopify.com" });
+await test("product codes: SKUs and handles give the style code; order numbers never match", () => {
+  assert.deepEqual(productCodes("l820w-m", ["L820W07"]).sort(), ["l820", "l820w", "l820w07"]);
+  assert.ok(productCodes("janey-sport-navy-l9505w", []).includes("l9505"));
+  assert.equal(codesInText(codeCatalog, "looking for womens L820 insert")[0].products[0].title, "Women's Casual Comfort Posted Orthotics");
+  assert.deepEqual(codesInText(codeCatalog, "where is order #1171674"), [], "digits only = an order number");
+  assert.deepEqual(codesInText(codeCatalog, "size 8 sneakers"), []);
+});
+await test("search finds a product by the code the customer typed", () => {
+  const r = leanSearch(codeCatalog, { query: "l820" });
+  assert.equal(r.products[0].title, "Women's Casual Comfort Posted Orthotics");
+  assert.equal(leanSearch(codeCatalog, { query: "L820W insert" }).products[0].handle, "l820w-m");
+});
+await test("a typed code is flagged as a product, and get_my_orders refuses it", async () => {
+  let orderRuns = 0;
+  const orders = { definition: { name: "get_my_orders", description: "orders", input_schema: { type: "object", properties: {} } }, run: async () => { orderRuns++; return { signed_in: false }; } };
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "get_my_orders", { orderNumber: "L820" })] },
+    { stop_reason: "end_turn", content: [txt("That's our Women's Casual Comfort Posted Orthotics.")] },
+  ]);
+  await runLeanTurn({ catalog: codeCatalog, model: "m", messages: [{ role: "user", content: "L820" }], latestUserMessage: "L820", extraTools: [orders], callModel: s.callModel, log: quiet });
+  assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /product code for: Women's Casual Comfort Posted Orthotics/);
+  assert.equal(orderRuns, 0, "the order lookup never ran");
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /isn't an order number/);
+});
+await test("an answer written with a lookup isn't lost when the reply continues it", async () => {
+  assert.equal(joinContinuation("Yes, the L820 is in stock.", "And don't forget the free gel insert!"), "Yes, the L820 is in stock.\n\nAnd don't forget the free gel insert!");
+  assert.equal(joinContinuation("Let me check that for you.", "And it's in stock."), "And it's in stock.", "filler is still dropped");
+  assert.equal(joinContinuation("Yes, it's in stock.", "Here it is in size 8."), "Here it is in size 8.", "a fresh reply replaces the earlier text");
+  const p = codeCatalog.products.find((x) => x.handle === "l820w-m");
+  const s = scripted([
+    { stop_reason: "tool_use", content: [txt("Yes — the Women's Casual Comfort Posted Orthotics are in stock in sizes 7 and 8."), tu("t1", "get_product_details", { handle: p.handle })] },
+    { stop_reason: "end_turn", content: [txt("And don't forget the free gel insert offer!")] },
+  ]);
+  const r = await runLeanTurn({ catalog: codeCatalog, model: "m", messages: [{ role: "user", content: "is the L820 still available" }], latestUserMessage: "is the L820 still available", callModel: s.callModel, log: quiet });
+  assert.match(r.text, /^Yes — the Women's Casual Comfort Posted Orthotics are in stock/);
+  assert.match(r.text, /And don't forget/);
 });
 await test("echo check: only replies built from the suggestions, not ones that share a phrase", () => {
   const f = ["Do these come in wide?", "Show me the navy one"];

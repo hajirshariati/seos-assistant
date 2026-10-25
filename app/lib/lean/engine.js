@@ -14,7 +14,7 @@ import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
-import { productKind } from "./catalog.js";
+import { productKind, codesInText } from "./catalog.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
@@ -149,6 +149,26 @@ const OFFER_WORDS = /\bfree\b|\d+\s*%\s*off|\$\d+(?:\.\d+)?\s+off|\b(codes?|refe
 export function mentionsOffer(text) {
   return OFFER_WORDS.test(String(text || ""));
 }
+// Product codes the customer typed ("L820"), with the products they name — so
+// a code is searched as the product it is, never taken for an order number.
+export function codesNote(found) {
+  if (!found.length) return "";
+  const lines = found.slice(0, 3).map(({ code, products }) =>
+    `"${code.toUpperCase()}" is this store's product code for: ${[...new Set(products.map((p) => p.title))].slice(0, 4).join("; ")}`);
+  return `(${lines.join(". ")}. It's a product, not an order number — search it with product search, query "${found[0].code}".)`;
+}
+
+// Text written alongside a lookup is usually filler ("Let me check…"), but a
+// real answer followed by "And don't forget…" must not lose its first half.
+const FILLER = /^(let me|i'?ll|i will|one (moment|sec)|just a (moment|sec)|checking|give me|hang on|sure[,!.]? let me)/i;
+const CONTINUES = /^(and|also|plus|oh,? and|by the way|p\.?s\.?)\b/i;
+export function joinContinuation(earlier, said) {
+  const e = String(earlier || "").trim();
+  const t = String(said || "").trim();
+  if (!e || !t || FILLER.test(e) || !CONTINUES.test(t) || t.includes(e)) return t;
+  return `${e}\n\n${t}`;
+}
+
 const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print). Then the marked-down products: product search with on_sale: true.)";
 
 const OFFERS_LIST_PROMPT = [
@@ -248,6 +268,13 @@ export async function runLeanTurn({
     const last = conv[conv.length - 1];
     const note = { type: "text", text: OFFERS_NOTE };
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+  }
+  const typedCodes = codesInText(catalog, latestUserMessage);
+  if (typedCodes.length) {
+    const last = conv[conv.length - 1];
+    const note = { type: "text", text: codesNote(typedCodes) };
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+    log(`[lean] product codes typed: ${typedCodes.map((c) => c.code).join(",")}`);
   }
   const priorTitles = extractPriorShownTitles(messages);
   const priorProducts = priorTitles
@@ -399,6 +426,12 @@ export async function runLeanTurn({
       return { ok: true, note: "A button to reach customer service is shown under your reply. Tell the customer briefly." };
     }
     const ext = extraByName.get(name);
+    // "L820" is a product code here, not an order number: send Claude to the product.
+    const codeAsOrder = name === "get_my_orders" && input?.orderNumber ? codesInText(catalog, input.orderNumber) : [];
+    if (codeAsOrder.length) {
+      log(`[lean] get_my_orders refused: "${codeAsOrder[0].code}" is a product code`);
+      return { error: `"${input.orderNumber}" isn't an order number — it's this store's product code for ${codeAsOrder[0].products[0].title}. Search it with product search (query "${codeAsOrder[0].code}") and show it.` };
+    }
     if (ext) {
       const raw = await ext.run(input);
       const { _events, ...result } = raw && typeof raw === "object" ? raw : { result: raw };
@@ -419,6 +452,7 @@ export async function runLeanTurn({
   // more to say — that text is the reply. Text written alongside a lookup
   // ("Let me check…") is not: new facts are on the way.
   let draft = "";
+  let earlier = ""; // the last text written alongside a lookup (kept if the reply continues it)
   let askedForText = false;
   const PRESENTING = new Set(["show_products", "compare_products", "contact_support"]);
 
@@ -435,7 +469,7 @@ export async function runLeanTurn({
     conv.push({ role: "assistant", content });
     const said = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
     const toolUses = content.filter((b) => b.type === "tool_use");
-    if (toolUses.some((t) => !PRESENTING.has(t.name))) draft = "";
+    if (toolUses.some((t) => !PRESENTING.has(t.name))) { draft = ""; if (said) earlier = said; }
     else if (said) draft = said;
     if (toolUses.length > 0) {
       const results = [];
@@ -450,7 +484,7 @@ export async function runLeanTurn({
       if (resp.stop_reason === "tool_use" && !mustAnswer) continue;
     }
 
-    text = said || draft;
+    text = said ? joinContinuation(earlier, said) : draft;
     if (!text && !askedForText && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       // Ended without a word for the customer: ask once for the reply.
       askedForText = true;
@@ -503,6 +537,7 @@ export async function runLeanTurn({
     if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;
       draft = ""; // the rejected reply must not come back as the answer
+      earlier = "";
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
         role: "user",

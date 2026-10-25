@@ -19,7 +19,7 @@ async function load(shop) {
     select: {
       handle: true, title: true, productType: true, tags: true, description: true, status: true,
       featuredImageUrl: true, attributesJson: true,
-      variants: { select: { price: true, compareAtPrice: true, inventoryQty: true, optionsJson: true } },
+      variants: { select: { sku: true, price: true, compareAtPrice: true, inventoryQty: true, optionsJson: true } },
     },
     // Newest first, so a store past the limit loses its oldest products, not random ones.
     orderBy: { updatedAt: "desc" },

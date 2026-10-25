@@ -14,7 +14,7 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   const props = {
     query: {
       type: "string",
-      description: "Keywords for what the customer is after, in catalog terms (style, feature, occasion), e.g. \"arch support walking sneaker\" or \"dressy wedge\". Leave out words that are already covered by a filter.",
+      description: "Keywords for what the customer is after, in catalog terms (style, feature, occasion), e.g. \"arch support walking sneaker\" or \"dressy wedge\". A product code or SKU the customer typed (\"L820\", \"L2305W\") goes here as-is — it finds that exact product. Leave out words that are already covered by a filter.",
     },
   };
   const categories = arrayEnum(vocab.categories || [], "Only products in these categories / types.");
