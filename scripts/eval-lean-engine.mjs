@@ -710,6 +710,24 @@ await test("the check model decides the medical note: yes, no, couldn't tell", a
   await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "black sneakers" }], latestUserMessage: "black sneakers", callModel: s.callModel, askYesNo: async () => { calls++; return true; }, log: quiet });
   assert.equal(calls, 0, "no condition word → no check");
 });
+await test("the shared prompt reads the same for every shopper: page and time notes come after it", async () => {
+  const run = async (opts) => {
+    const s = scripted([{ stop_reason: "end_turn", content: [txt("Happy to help!")] }]);
+    await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "hi" }], latestUserMessage: "hi", callModel: s.callModel, log: quiet, ...opts });
+    return s.requests[0];
+  };
+  const a = await run({ pageSystem: "TRUE FIT: the customer is on the page for \"jillian-black\" right now.", turnNote: "(Right now it's Sat, Oct 24, 2026, 11:00 AM Eastern.)" });
+  const b = await run({});
+  assert.deepEqual(a.system[0], b.system[0], "cached system prompt identical");
+  assert.deepEqual(JSON.stringify(a.tools), JSON.stringify(b.tools), "tools identical");
+  assert.ok(a.system[0].cache_control);
+  assert.match(a.system.at(-1).text, /jillian-black/);
+  assert.ok(!a.system.at(-1).cache_control);
+  const last = a.messages.at(-1);
+  assert.equal(last.role, "user");
+  assert.match(JSON.stringify(last.content), /Right now it's Sat, Oct 24/);
+  assert.match(JSON.stringify(last.content), /"hi"/);
+});
 
 console.log("\nplumbing");
 await test("conversation normalization: starts with user, merges repeats", () => {
@@ -1060,10 +1078,10 @@ await test("store context (rules, promotions, customer) is a separate, uncached 
 await test("promotions page: its offers are the live promotions (no 'none running'), dated, and quoting them passes the fact check", async () => {
   const { buildStoreContextBlock } = await import("../app/lib/lean/store-tools.server.js");
   const pagePromos = "Free Gel Insert With Any Aetrex Orthotics Purchase: Valid until October 24th, 2026 11:59 PM EST. Receive one free gel insert (50780) with qualifying purchases of an Aetrex orthotic.\nAetrex Referral Program: Give your friends $20 off their first order of $49.95+.";
-  const block = buildStoreContextBlock({ pagePromos, promoPageUrl: "https://www.aetrex.com/pages/terms-conditions", now: new Date("2026-10-24T15:00:00Z") });
+  const block = buildStoreContextBlock({ pagePromos, promoPageUrl: "https://www.aetrex.com/pages/terms-conditions" });
   assert.doesNotMatch(block, /No discount codes or store-wide offers right now/);
   assert.match(block, /PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE/);
-  assert.match(block, /Right now it's Sat, Oct 24, 2026/);
+  assert.match(block, /current time is given with the customer's latest message/);
   assert.match(block, /Free Gel Insert/);
   assert.match(block, /on_sale: true/, "markdowns are still pointed at");
   const s = scripted([{ stop_reason: "end_turn", content: [txt("Yes! Through tonight you get a free gel insert with any Aetrex orthotic, and friends you refer get $20 off a first order of $49.95+.")] }]);

@@ -1264,7 +1264,7 @@ function buildSetupItems({
       title: "Connect the AI engine",
       description: "Paste your API key to power the AI assistant. Pay-as-you-go — you only pay for what you use.",
       actionLabel: hasApiKey ? "Manage" : "Add key",
-      actionUrl: "/app/api-keys",
+      actionUrl: "/app/api-keys#assistant",
     },
     {
       done: widgetEnabled,
@@ -1299,14 +1299,14 @@ function buildSetupItems({
       title: "Add your support link (recommended)",
       description: "Where the assistant sends customers who need a person — your contact or help page.",
       actionLabel: hasSupportLink ? "Manage" : "Add link",
-      actionUrl: "/app/api-keys",
+      actionUrl: "/app/api-keys#care",
     },
     {
       done: semanticEnabled,
       title: "Semantic search (optional)",
       description: "Sharper matching by meaning. Typically under $1/month, and everything works without it.",
       actionLabel: semanticEnabled ? `Manage (${semanticProvider === "voyage" ? "Voyage AI" : "OpenAI"})` : "Add provider",
-      actionUrl: "/app/api-keys",
+      actionUrl: "/app/api-keys#integrations",
     },
   ];
 }
@@ -1529,13 +1529,13 @@ export default function Home() {
     // Errors surface on the pip itself rather than a separate banner
     // above, per the "everything lives in the cluster" UX rule.
     if (!hasApiKey) {
-      items.push({ label: "AI Engine", value: "Missing key", tone: "critical", url: "/app/api-keys", tooltip: "Add your Anthropic API key to enable the chat." });
+      items.push({ label: "AI Engine", value: "Missing key", tone: "critical", url: "/app/api-keys#assistant", tooltip: "Add your Anthropic API key to enable the chat." });
     } else if (rateLimitHits >= 10) {
       items.push({ label: "AI Engine", value: `${rateLimitHits} rate-limited`, tone: "critical", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Your Anthropic tier is too low — upgrade at console.anthropic.com.` });
     } else if (rateLimitHits > 0) {
       items.push({ label: "AI Engine", value: `${rateLimitHits} rate-limited`, tone: "warning", url: "https://console.anthropic.com/settings/limits", external: true, tooltip: `${rateLimitHits} requests rate-limited in the last 30 days. Consider upgrading your Anthropic tier if this keeps growing.` });
     } else {
-      items.push({ label: "AI Engine", value: "Connected", tone: "success", url: "/app/api-keys", tooltip: "Anthropic API key configured." });
+      items.push({ label: "AI Engine", value: "Connected", tone: "success", url: "/app/api-keys#assistant", tooltip: "Anthropic API key configured." });
     }
     items.push(
       widgetEnabled
@@ -1563,8 +1563,8 @@ export default function Home() {
     }
     items.push(
       semanticEnabled
-        ? { label: "Semantic Search", value: semanticProvider === "voyage" ? "Voyage AI" : "OpenAI", tone: "success", url: "/app/api-keys", tooltip: "Semantic search active. Customers find products by meaning, not just keywords." }
-        : { label: "Semantic Search", value: "Off", tone: "subdued", url: "/app/api-keys", tooltip: "Optional. The assistant already searches your catalog with AI — adding a Voyage AI or OpenAI key sharpens matching by meaning (e.g. 'shoes for standing all day'). Works fine without it." }
+        ? { label: "Semantic Search", value: semanticProvider === "voyage" ? "Voyage AI" : "OpenAI", tone: "success", url: "/app/api-keys#integrations", tooltip: "Semantic search active. Customers find products by meaning, not just keywords." }
+        : { label: "Semantic Search", value: "Off", tone: "subdued", url: "/app/api-keys#integrations", tooltip: "Optional. The assistant already searches your catalog with AI — adding a Voyage AI or OpenAI key sharpens matching by meaning (e.g. 'shoes for standing all day'). Works fine without it." }
     );
     items.push(
       recommenderActive
@@ -2639,7 +2639,7 @@ export default function Home() {
               <ActionCard
                 art={<ArtSettings />}
                 title="Settings"
-                description="API keys, model strategy, semantic search, and safety limits — all in one place."
+                description="The assistant, its look, integrations — and Peak Mode for your busiest days."
                 cta="Open settings"
                 url="/app/api-keys"
               />

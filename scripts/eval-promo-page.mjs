@@ -5,7 +5,7 @@
 // Run: node scripts/eval-promo-page.mjs
 
 import assert from "node:assert/strict";
-import { pageHandleFromUrl, cutPromoSection, promoPageBlock, nowForPromos } from "../app/lib/promo-page.js";
+import { pageHandleFromUrl, cutPromoSection, promoPageBlock, nowForPromos, nowNote } from "../app/lib/promo-page.js";
 import { getPagePromos, clearPromoPageCache } from "../app/lib/promo-page.server.js";
 
 let pass = 0;
@@ -57,11 +57,13 @@ await test("no line set, or the line isn't on the page: nothing is used (never t
 });
 
 console.log("\nwhat the assistant is told");
-await test("the block gives today's date and time (Eastern and Pacific) and the ended-offer rule", () => {
+await test("the time (Eastern and Pacific) comes with the message; the block has the ended-offer rule and reads the same all day", () => {
   const now = new Date("2026-10-24T15:00:00Z");
-  const block = promoPageBlock({ text: cutPromoSection(PAGE_TEXT, STOP), url: "https://www.aetrex.com/pages/terms-conditions", now });
+  const block = promoPageBlock({ text: cutPromoSection(PAGE_TEXT, STOP), url: "https://www.aetrex.com/pages/terms-conditions" });
   assert.match(block, /PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE \(https:\/\/www\.aetrex\.com\/pages\/terms-conditions\)/);
-  assert.match(block, /Right now it's Sat, Oct 24, 2026, 11:00 AM Eastern \(Sat, Oct 24, 2026, 8:00 AM Pacific\)/);
+  assert.match(nowNote(now), /Right now it's Sat, Oct 24, 2026, 11:00 AM Eastern \(Sat, Oct 24, 2026, 8:00 AM Pacific\)/);
+  assert.match(block, /current time is given with the customer's latest message/);
+  assert.doesNotMatch(block, /Right now it's/, "no clock in the cached block");
   assert.match(block, /running unless its own text says it has ended or its end date and time have passed/);
   assert.match(block, /If two lines disagree/);
   assert.match(block, /Zoey Boot Flash Sale/);

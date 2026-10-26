@@ -2,13 +2,14 @@ import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appearDelayConfig, startTheme, internationalConfig } from "../lib/appear-delay.js";
 import { authenticate } from "../shopify.server";
-import { getShopConfig } from "../models/ShopConfig.server";
+import { getShopConfigCached } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
 import prisma from "../db.server";
 import { parseOrbColors, parseOrbBackground } from "../lib/orb-colors";
 import { recordingState } from "../lib/chat-recording.js";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
+const lastSeenWrite = new Map(); // shop → ms of the last lastWidgetSeenAt write
 
 // Storefront chat widget reads runtime config from this endpoint via the
 // Shopify app proxy. authenticate.public.appProxy verifies the proxy HMAC,
@@ -22,18 +23,22 @@ export const loader = async ({ request }) => {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const config = await getShopConfig(session.shop);
+    // Every page view lands here: the config comes from a short cache.
+    const config = await getShopConfigCached(session.shop);
 
     // Touch the lastWidgetSeenAt timestamp so the home page can mark the
     // "Enable the chat widget" setup step as done. Throttled to once every
     // five minutes so a high-traffic storefront doesn't write thousands of
     // updates per day for the same shop. Errors are swallowed because the
     // storefront should never fail to load just because a metric write
-    // missed.
-    const last = config.lastWidgetSeenAt
-      ? new Date(config.lastWidgetSeenAt).getTime()
-      : 0;
+    // missed. The cached config can be up to 30s old, so the throttle also
+    // keeps its own note of the last write.
+    const last = Math.max(
+      config.lastWidgetSeenAt ? new Date(config.lastWidgetSeenAt).getTime() : 0,
+      lastSeenWrite.get(session.shop) || 0,
+    );
     if (Date.now() - last > FIVE_MIN_MS) {
+      lastSeenWrite.set(session.shop, Date.now());
       prisma.shopConfig
         .update({
           where: { shop: session.shop },

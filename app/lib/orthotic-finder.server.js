@@ -113,14 +113,17 @@ function fitSection(fitfinder) {
     );
   }
   parts.push("To work out a FIT, call this tool with arch and ball_of_foot_pain (no line needed) — it returns the FIT and saves it for them.");
-  const saved = fitfinder.saved && fitfinder.fits.find((f) => f.key === fitfinder.saved);
-  if (saved) {
-    parts.push(
-      `THIS CUSTOMER ALREADY HAS A FIT: ${saved.label} (${saved.name}), saved from the FIT finder. That answers arch and ball-of-foot pain — ` +
-      `pass fit "${saved.key}" and don't ask those again. Mention it naturally ("Going by your ${saved.label}…") and that they can change it if something's different.`,
-    );
-  }
   return parts.join("\n");
+}
+
+// The shopper's own saved FIT, told to Claude next to the prompt rather than
+// inside the orthotic tool's text — the tool reads the same for every
+// shopper, so it stays in the cached part of the prompt.
+export function savedFitNote(fitfinder) {
+  const saved = fitfinder?.saved && (fitfinder.fits || []).find((f) => f.key === fitfinder.saved);
+  if (!saved) return "";
+  return `THIS CUSTOMER ALREADY HAS A FIT: ${saved.label} (${saved.name}), saved from the FIT finder. That answers arch and ball-of-foot pain — ` +
+    `when you use the orthotic finder, pass fit "${saved.key}" and don't ask those again. Mention it naturally ("Going by your ${saved.label}…") and that they can change it if something's different.`;
 }
 
 // shopperText: what the shopper has said in this chat — a line that's only

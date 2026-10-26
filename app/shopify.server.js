@@ -2,6 +2,7 @@ import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  LogSeverity,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
@@ -19,7 +20,7 @@ assertEncryptionKey();
 // scheduler so retention is enforced regardless of admin traffic.
 startRetentionScheduler();
 
-// Nightly full-catalog reconciliation (03:00 UTC) — safety net under the
+// Nightly full-catalog reconciliation (09:00 UTC) — safety net under the
 // real-time webhook sync. Imports shopify.server lazily at run time, so
 // starting it here creates no module cycle.
 startCatalogSyncScheduler();
@@ -33,6 +34,10 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  // The library logs every app proxy request at Info ("Authenticating app
+  // proxy request") — one line per storefront page view. Warnings and
+  // errors are still logged.
+  logger: { level: LogSeverity.Warning },
   // Online tokens give authenticate.admin a user-scoped session whose
   // onlineAccessInfo carries the logged-in staff member (first name →
   // personalised home-page greeting). The token-exchange strategy STILL

@@ -26,10 +26,34 @@ app.use(express.static("public", { maxAge: "1h" }));
 // The request log keeps the path only: app-proxy and admin query strings
 // carry signatures, session tokens and the signed-in customer's id.
 morgan.token("path", (req) => String(req.originalUrl || req.url || "").split("?")[0]);
-app.use(morgan(":method :path :status :res[content-length] - :response-time ms"));
+// widget-config is fetched on every storefront page view: it's left out of
+// the request log unless it fails.
+app.use(morgan(":method :path :status :res[content-length] - :response-time ms", {
+  skip: (req, res) => res.statusCode < 400 && String(req.originalUrl || req.url || "").startsWith("/widget-config"),
+}));
 app.all("*", createRequestHandler({ build, mode: process.env.NODE_ENV }));
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   const ip = Object.values(os.networkInterfaces()).flat().find((i) => String(i?.family).includes("4") && !i.internal)?.address;
   console.log(`[server] http://localhost:${port}${ip ? ` (http://${ip}:${port})` : ""}`);
 });
+
+// A deploy stops this server with SIGTERM: take no new requests, let the ones
+// in flight finish (a chat reply can take up to ~75s), then exit. The host
+// has to allow that long before it force-stops the old server (Railway:
+// RAILWAY_DEPLOYMENT_DRAINING_SECONDS).
+const GRACE_MS = Number(process.env.SHUTDOWN_GRACE_MS) || 80_000;
+let stopping = false;
+const shutdown = (signal) => {
+  if (stopping) return;
+  stopping = true;
+  console.log(`[server] ${signal}: finishing requests in flight (up to ${Math.round(GRACE_MS / 1000)}s)`);
+  server.close(() => {
+    console.log("[server] all requests finished — exiting");
+    process.exit(0);
+  });
+  server.closeIdleConnections?.();
+  setTimeout(() => process.exit(0), GRACE_MS).unref();
+};
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

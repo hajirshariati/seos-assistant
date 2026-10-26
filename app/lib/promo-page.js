@@ -50,13 +50,19 @@ export function nowForPromos(now = new Date()) {
   return `${fmt("America/New_York")} Eastern (${fmt("America/Los_Angeles")} Pacific)`;
 }
 
+// The current time, sent with the customer's latest message (not in the
+// block below, which then reads the same all day and stays cached).
+export function nowNote(now = new Date()) {
+  return `(Right now it's ${nowForPromos(now)}.)`;
+}
+
 // The block the assistant reads with each chat.
-export function promoPageBlock({ text, url = "", now = new Date() } = {}) {
+export function promoPageBlock({ text, url = "" } = {}) {
   const body = String(text || "").trim();
   if (!body) return "";
   return [
     `PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE${url ? ` (${url})` : ""}`,
-    `Right now it's ${nowForPromos(now)}.`,
+    "The current time is given with the customer's latest message.",
     "This is the store's own list of offers, kept up to date by the team. An offer here is running unless its own text says it has ended or its end date and time have passed — check every date against right now. Don't present an ended offer as running.",
     "Quote an offer's terms as written (who qualifies, limits, exclusions, how to get it). Don't add codes, amounts, products or conditions it doesn't state. If two lines disagree (one says an offer ended, another describes it as running), don't say it's running: say the details are shown at checkout, and link this page.",
     "---",

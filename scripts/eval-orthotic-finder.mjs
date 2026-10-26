@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder, defaultLineRules, cleanLineRules, lineRulesOf, lineAllowed, catalogForConversation } from "../app/lib/orthotic-finder.js";
-import { finderToolDef, runFinderTool } from "../app/lib/orthotic-finder.server.js";
+import { finderToolDef, runFinderTool, savedFitNote } from "../app/lib/orthotic-finder.server.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/aetrex-orthotics.json", import.meta.url), "utf8"));
 const catalog = buildOrthoticCatalog(fixture.products.map(productFromNode));
@@ -180,7 +180,11 @@ test("Claude's tool knows the FITs, the store's questions and the saved FIT", ()
   const def = finderToolDef(tree, { fitfinder: FF });
   assert.match(def.description, /FIT D — Maximum Support/);
   assert.match(def.description, /Do you have flat feet\?/);
-  assert.match(def.description, /ALREADY HAS A FIT: FIT D/);
+  assert.doesNotMatch(def.description, /ALREADY HAS A FIT/, "the tool reads the same for every shopper");
+  assert.match(savedFitNote(FF), /ALREADY HAS A FIT: FIT D/);
+  assert.match(savedFitNote(FF), /pass fit "D"/);
+  assert.equal(savedFitNote({ ...FF, saved: "" }), "");
+  assert.equal(savedFitNote(null), "");
   assert.match(def.description, /A FIT describes an orthotic insert only/, "FITs never describe shoes or sandals");
   assert.deepEqual(def.input_schema.properties.fit.enum, ["A", "B", "C", "D"]);
   const plain = finderToolDef(tree);

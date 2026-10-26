@@ -43,9 +43,12 @@ console.log("\nthe tool Claude gets");
 await test("no True Fit on the store → no tool", () => {
   assert.equal(tool(null), null);
 });
-await test("on a shoe's page the tool names that shoe; elsewhere it doesn't", () => {
-  assert.match(tool({ provider: "truefit", pageHandle: "jillian-black" }).definition.description, /"jillian-black"/);
-  assert.doesNotMatch(tool({ provider: "truefit", pageHandle: "" }).definition.description, /right now/);
+await test("on a shoe's page the page note names that shoe; the tool's own text is the same everywhere", () => {
+  const onPage = tool({ provider: "truefit", pageHandle: "jillian-black" });
+  const elsewhere = tool({ provider: "truefit", pageHandle: "" });
+  assert.match(onPage.pageNote, /"jillian-black"/);
+  assert.equal(elsewhere.pageNote, "");
+  assert.equal(onPage.definition.description, elsewhere.definition.description, "cached prompt stays the same across pages");
 });
 await test("a shoe → a Find my size button event with its real title", async () => {
   const r = await tool({ provider: "truefit", pageHandle: "" }).run({ handle: "jillian-black" });

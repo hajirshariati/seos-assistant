@@ -15,4 +15,6 @@ COPY . .
 
 RUN npm run build
 
-CMD ["npm", "run", "docker-start"]
+# Node runs as the main process (exec), so a deploy's SIGTERM reaches it and
+# chats in flight can finish (npm doesn't pass the signal on).
+CMD ["sh", "-c", "npm run setup && exec node server.mjs"]

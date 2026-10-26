@@ -247,6 +247,19 @@ model ShopConfig {
   dailyCapEnabled    Boolean  @default(false)
   dailyCapMessages   Int      @default(200)
 
+  // Store-wide chat limits (messages per minute / hour, 0 = no limit) and
+  // Peak Mode for the busiest days: higher limits, the daily cap lifted,
+  // the nightly catalog refresh paused. See app/lib/peak-mode.js.
+  chatLimitPerMin    Int       @default(120)
+  chatLimitPerHour   Int       @default(3000)
+  peakMode           String    @default("off") // off | on | scheduled
+  peakStartsAt       DateTime?
+  peakEndsAt         DateTime?
+  peakLimitPerMin    Int       @default(300)
+  peakLimitPerHour   Int       @default(8000)
+  peakLiftDailyCap   Boolean   @default(true)
+  peakPauseSync      Boolean   @default(true)
+
   // Updated on each /widget-config call from the storefront, throttled to
   // once every 5 minutes. Used by the home-page setup checklist to detect
   // whether the chat widget app embed is currently active in the merchant's

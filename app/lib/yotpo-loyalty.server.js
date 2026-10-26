@@ -20,8 +20,19 @@ function cacheGet(key) {
   return e.v;
 }
 
+// Keyed by the customer's email and holds their points and referral link, so
+// it stays small: expired entries are dropped as new ones come in, and the
+// oldest go first past the limit.
+const CACHE_MAX = 500;
 function cacheSet(key, v) {
-  CACHE.set(key, { v, t: Date.now() });
+  const now = Date.now();
+  CACHE.set(key, { v, t: now });
+  if (CACHE.size <= CACHE_MAX) return;
+  for (const [k, e] of CACHE) if (now - e.t > TTL_MS) CACHE.delete(k);
+  for (const k of CACHE.keys()) {
+    if (CACHE.size <= CACHE_MAX) break;
+    CACHE.delete(k);
+  }
 }
 
 export async function fetchYotpoLoyalty({ apiKey, guid, email }) {

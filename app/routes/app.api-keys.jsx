@@ -1,46 +1,60 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
-import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
+import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Page,
-  Layout,
-  Card,
   BlockStack,
   InlineStack,
   TextField,
   Select,
   Button,
   Banner,
-  Box,
   Text,
-  Icon,
   Badge,
-  Divider,
-  Checkbox,
+  ButtonGroup,
+  Box,
+  Icon,
 } from "@shopify/polaris";
-import { CheckCircleIcon } from "@shopify/polaris-icons";
+import {
+  MagicIcon,
+  PaintBrushFlatIcon,
+  ViewIcon,
+  ChatIcon,
+  CartIcon,
+  ConnectIcon,
+  GaugeIcon,
+  PlayCircleIcon,
+  CheckCircleIcon,
+} from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ALLOWED_MODELS, chatModel } from "../lib/claude-models.js";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
+import { getChatPulse } from "../models/ChatHealth.server";
 import { backfillShopEmbeddings } from "../lib/embeddings.server";
 import prisma from "../db.server";
 import { getShopPlan } from "../lib/billing.server";
-import { PlanGate } from "../components/PlanGate";
 import BrandHeader from "../components/BrandHeader";
-import { OrbColorsCard, VoiceInputCard } from "../components/AssistantLookCards";
+import { OrbColorsCard } from "../components/AssistantLookCards";
 import { TestRecordingCard } from "../components/TestRecordingCard";
+import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch } from "../components/SettingsUI";
 import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
+import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
+
+const iso = (d) => (d ? new Date(d).toISOString() : "");
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
-  const config = await getShopConfig(session.shop);
-  const plan = await getShopPlan(session.shop);
+  const [config, plan, pulse] = await Promise.all([
+    getShopConfig(session.shop),
+    getShopPlan(session.shop),
+    getChatPulse(session.shop).catch(() => null),
+  ]);
   let hideOnUrls = [];
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
@@ -52,7 +66,7 @@ export const loader = async ({ request }) => {
     chatRatingAfter: chatRatingConfig(config).after,
     hasYotpoKey: config.yotpoApiKey !== "",
     hasAftershipKey: config.aftershipApiKey !== "",
-    hideOnUrls,
+    hideOnUrls: Array.isArray(hideOnUrls) ? hideOnUrls : [],
     welcomeIntroOn: config.welcomeGlowStyle !== "none",
     orbColors: parseOrbColors(config.orbColors),
     orbBackground: parseOrbBackground(config.orbBackground),
@@ -85,9 +99,7 @@ export const loader = async ({ request }) => {
     homeCountries: parseCountries(config.homeCountries).join(", "),
     promoPageUrl: config.promoPageUrl || "",
     promoPageStop: config.promoPageStop || "",
-    storefrontSearchUrlPattern: config.storefrontSearchUrlPattern || "",
     referralPageUrl: config.referralPageUrl || "",
-    klaviyoFormId: config.klaviyoFormId || "",
     klaviyoCompanyId: config.klaviyoCompanyId || "",
     klaviyoListId: config.klaviyoListId || "",
     vipModeEnabled: config.vipModeEnabled === true,
@@ -106,6 +118,18 @@ export const loader = async ({ request }) => {
     imageProvider: config.imageProvider || "",
     visualizeLookLabel: visualizeLabel(config),
     hasGeminiKey: (config.geminiApiKey || "") !== "",
+    // Peak Mode and the store-wide chat limits.
+    chatLimitPerMin: config.chatLimitPerMin ?? NORMAL_LIMITS.perMin,
+    chatLimitPerHour: config.chatLimitPerHour ?? NORMAL_LIMITS.perHour,
+    peakMode: PEAK_MODES.includes(config.peakMode) ? config.peakMode : "off",
+    peakStartsAt: iso(config.peakStartsAt),
+    peakEndsAt: iso(config.peakEndsAt),
+    peakLimitPerMin: config.peakLimitPerMin ?? PEAK_LIMITS.perMin,
+    peakLimitPerHour: config.peakLimitPerHour ?? PEAK_LIMITS.perHour,
+    peakLiftDailyCap: config.peakLiftDailyCap !== false,
+    peakPauseSync: config.peakPauseSync !== false,
+    limitsOverridden: storeChatLimits(config, { env: process.env }).overridden,
+    pulse,
     plan: { id: plan.id, name: plan.name, features: plan.features },
   };
 };
@@ -114,9 +138,8 @@ export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  // Intent-based handlers for cards that submit independently via
-  // useFetcher (own success/error banners, isolated from the big
-  // settings form). Each returns its own response shape.
+  // Cards that save on their own (orb colors, test recordings, See It
+  // Styled) submit with an intent through useFetcher.
   const intent = formData.get("intent");
   if (intent === "save_orb_colors") {
     const stored = serializeOrbColors([0, 1, 2, 3, 4].map((i) => formData.get(`c${i}`)));
@@ -133,16 +156,6 @@ export const action = async ({ request }) => {
     const saved = await updateShopConfig(session.shop, { recordChatsUntil: until, recordChatsScope: scope });
     const st = recordingState(saved);
     return { recording: { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope } };
-  }
-
-  if (intent === "save_voice_input") {
-    await updateShopConfig(session.shop, { voiceInput: formData.get("on") === "true" });
-    return { saved: true };
-  }
-
-  if (intent === "save_welcome_intro") {
-    await updateShopConfig(session.shop, { welcomeGlowStyle: formData.get("on") === "true" ? "subtle" : "none" });
-    return { saved: true };
   }
 
   if (intent === "save_visualize_look") {
@@ -166,87 +179,86 @@ export const action = async ({ request }) => {
   }
 
   const data = {};
+  // A problem points back at the section it's in, so the page can open it.
+  const fail = (error, section) => ({ error, section });
+  const bool = (name, field = name) => {
+    const v = formData.get(name);
+    if (v !== null) data[field] = v === "true";
+  };
+  const text = (name, max = 500) => {
+    const v = formData.get(name);
+    if (v !== null) data[name] = String(v).trim().slice(0, max);
+  };
+  const secret = (name) => {
+    const v = formData.get(name);
+    if (v !== null && v !== "") data[name] = v;
+  };
 
-  const anthropicKey = formData.get("anthropicApiKey");
-  if (anthropicKey !== null && anthropicKey !== "") {
-    data.anthropicApiKey = anthropicKey;
-  }
-
+  // Assistant
+  secret("anthropicApiKey");
   const model = formData.get("anthropicModel");
   if (model && ALLOWED_MODELS.has(String(model))) data.anthropicModel = String(model);
+  bool("showFollowUps");
+  bool("showFeedback");
+  bool("chatRatingOn");
+  const ratingAfter = formData.get("chatRatingAfter");
+  if (ratingAfter !== null) data.chatRatingAfter = chatRatingConfig({ chatRatingAfter: ratingAfter }).after;
 
+  // Look & feel
+  const startLook = formData.get("startTheme");
+  if (startLook !== null) data.startTheme = startTheme(String(startLook));
+  const intro = formData.get("welcomeIntroOn");
+  if (intro !== null) data.welcomeGlowStyle = intro === "true" ? "subtle" : "none";
+  bool("voiceInput");
 
-  const yotpoKey = formData.get("yotpoApiKey");
-  if (yotpoKey !== null && yotpoKey !== "") {
-    data.yotpoApiKey = yotpoKey;
+  // Where it shows
+  bool("appearDelayOn");
+  const delaySec = formData.get("appearDelaySec");
+  if (delaySec !== null) {
+    const n = Number.parseInt(String(delaySec).trim(), 10);
+    if (data.appearDelayOn && (!Number.isFinite(n) || n < APPEAR_DELAY_MIN || n > APPEAR_DELAY_MAX)) return fail(`The delay should be a whole number of seconds from ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX}.`, "visibility");
+    data.appearDelaySec = clampDelay(n);
   }
-
-  const aftershipKey = formData.get("aftershipApiKey");
-  if (aftershipKey !== null && aftershipKey !== "") {
-    data.aftershipApiKey = aftershipKey;
+  bool("hideInternational");
+  const homeCountries = formData.get("homeCountries");
+  if (homeCountries !== null) data.homeCountries = parseCountries(homeCountries).join(",");
+  const hideUrlsRaw = formData.get("hideOnUrls");
+  if (hideUrlsRaw !== null) {
+    try {
+      const parsed = JSON.parse(hideUrlsRaw);
+      if (Array.isArray(parsed)) data.hideOnUrls = JSON.stringify(parsed);
+    } catch { /* ignore invalid JSON */ }
   }
+  bool("hideLiveChatButton");
 
-  const embeddingProvider = formData.get("embeddingProvider");
-  if (embeddingProvider !== null) {
-    const v = String(embeddingProvider).trim();
-    if (v === "" || v === "voyage" || v === "openai") {
-      data.embeddingProvider = v;
-    }
-  }
-  const voyageKey = formData.get("voyageApiKey");
-  if (voyageKey !== null && voyageKey !== "") {
-    data.voyageApiKey = voyageKey;
-  }
-  const openaiKey = formData.get("openaiApiKey");
-  if (openaiKey !== null && openaiKey !== "") {
-    data.openaiApiKey = openaiKey;
-  }
-
-  const supportUrl = formData.get("supportUrl");
-  if (supportUrl !== null) data.supportUrl = supportUrl.trim();
-
-  const supportLabel = formData.get("supportLabel");
-  if (supportLabel !== null) data.supportLabel = supportLabel.trim();
-
-  const trackingPageUrl = formData.get("trackingPageUrl");
-  if (trackingPageUrl !== null) data.trackingPageUrl = trackingPageUrl.trim();
-
-  const returnsPageUrl = formData.get("returnsPageUrl");
-  if (returnsPageUrl !== null) data.returnsPageUrl = returnsPageUrl.trim();
-  const returnsInChat = formData.get("returnsInChat");
-  if (returnsInChat !== null) data.returnsInChat = returnsInChat === "true";
+  // Customer care
+  text("supportUrl");
+  text("supportLabel");
+  text("trackingPageUrl");
+  text("returnsPageUrl");
+  bool("returnsInChat");
   const windowDays = formData.get("returnWindowDays");
   if (windowDays !== null) {
     const n = Number.parseInt(String(windowDays).trim(), 10);
-    if (!Number.isFinite(n) || n < 0 || n > 365) return { error: "Return window must be a number of days from 0 to 365 (0 = no limit)." };
+    if (!Number.isFinite(n) || n < 0 || n > 365) return fail("Return window must be a number of days from 0 to 365 (0 = no limit).", "care");
     data.returnWindowDays = n;
   }
-  const deliveredOnly = formData.get("returnsDeliveredOnly");
-  if (deliveredOnly !== null) data.returnsDeliveredOnly = deliveredOnly === "true";
+  bool("returnsDeliveredOnly");
 
-  const surveyOn = formData.get("feedbackSurveyOn");
-  const survey = formData.get("feedbackSurvey");
-  if (survey !== null) {
-    const raw = String(survey).trim();
-    if (raw && !typeformId(raw)) return { error: "The feedback survey should be a Typeform form ID (like jdXBrXMa) or its link." };
-    data.feedbackSurvey = raw;
+  // Shopping tools
+  const promoUrl = formData.get("promoPageUrl");
+  const promoStop = formData.get("promoPageStop");
+  if (promoUrl !== null) {
+    const u = String(promoUrl).trim();
+    if (u && !pageHandleFromUrl(u)) return fail("The promotions page should be a page link, like https://yourstore.com/pages/terms-conditions.", "tools");
+    if (u && !String(promoStop || "").trim()) return fail("Add the line where the promotions end on that page, so only the offers above it are used.", "tools");
+    data.promoPageUrl = u.slice(0, 500);
   }
-  if (surveyOn !== null) {
-    data.feedbackSurveyOn = surveyOn === "true";
-    if (data.feedbackSurveyOn && !typeformId(survey ?? "")) return { error: "Add your Typeform survey (its ID or link) to show the feedback button." };
-  }
-  const surveyLabel = formData.get("feedbackSurveyLabel");
-  if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
-  const surveyColor = formData.get("feedbackSurveyColor");
-  if (surveyColor !== null) data.feedbackSurveyColor = FEEDBACK_COLORS.includes(surveyColor) ? surveyColor : "teal";
-  const surveyIcon = formData.get("feedbackSurveyIcon");
-  if (surveyIcon !== null) data.feedbackSurveyIcon = FEEDBACK_ICONS.includes(surveyIcon) ? surveyIcon : "feedback";
-  const surveyHideAfter = formData.get("feedbackSurveyHideAfter");
-  if (surveyHideAfter !== null) data.feedbackSurveyHideAfter = surveyHideAfter === "true";
+  if (promoStop !== null) data.promoPageStop = String(promoStop).trim().slice(0, 200);
   const which = formData.get("whichOrthotic");
   if (which !== null) {
     const raw = String(which).trim();
-    if (raw && !typeformId(raw)) return { error: "The orthotic quiz should be a Typeform form ID (like ojyWbTvZ) or its link." };
+    if (raw && !typeformId(raw)) return fail("The orthotic quiz should be a Typeform form ID (like ojyWbTvZ) or its link.", "tools");
     data.whichOrthotic = raw;
   }
   const whichLabel = formData.get("whichOrthoticLabel");
@@ -255,7 +267,7 @@ export const action = async ({ request }) => {
   if (locMap !== null) {
     const raw = String(locMap).trim();
     const id = storepointId(raw);
-    if (raw && !id) return { error: "The store locator should be your Storepoint map ID (like 15ecd30bd8acd4) or its embed code." };
+    if (raw && !id) return fail("The store locator should be your Storepoint map ID (like 15ecd30bd8acd4) or its embed code.", "tools");
     data.storeLocatorMapId = id;
   }
   const locLabel = formData.get("storeLocatorLabel");
@@ -263,100 +275,89 @@ export const action = async ({ request }) => {
   const locUrl = formData.get("storeLocatorUrl");
   if (locUrl !== null) {
     const raw = String(locUrl).trim();
-    if (raw && !locatorPageUrl(raw)) return { error: "The store locator page should be a link on your store, like /pages/store-locator or https://…" };
+    if (raw && !locatorPageUrl(raw)) return fail("The store locator page should be a link on your store, like /pages/store-locator or https://…", "tools");
     data.storeLocatorUrl = raw;
   }
-  const hideLiveChat = formData.get("hideLiveChatButton");
-  if (hideLiveChat !== null) data.hideLiveChatButton = hideLiveChat === "true";
-  const delayOn = formData.get("appearDelayOn");
-  if (delayOn !== null) data.appearDelayOn = delayOn === "true";
-  const delaySec = formData.get("appearDelaySec");
-  if (delaySec !== null) {
-    const n = Number.parseInt(String(delaySec).trim(), 10);
-    if (data.appearDelayOn && (!Number.isFinite(n) || n < APPEAR_DELAY_MIN || n > APPEAR_DELAY_MAX)) return { error: `The delay should be a whole number of seconds from ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX}.` };
-    data.appearDelaySec = clampDelay(n);
+  const surveyOn = formData.get("feedbackSurveyOn");
+  const survey = formData.get("feedbackSurvey");
+  if (survey !== null) {
+    const raw = String(survey).trim();
+    if (raw && !typeformId(raw)) return fail("The feedback survey should be a Typeform form ID (like jdXBrXMa) or its link.", "tools");
+    data.feedbackSurvey = raw;
   }
-  const startLook = formData.get("startTheme");
-  if (startLook !== null) data.startTheme = startTheme(String(startLook));
-  const hideIntl = formData.get("hideInternational");
-  if (hideIntl !== null) data.hideInternational = hideIntl === "true";
-  const homeCountries = formData.get("homeCountries");
-  if (homeCountries !== null) data.homeCountries = parseCountries(homeCountries).join(",");
-  const promoUrl = formData.get("promoPageUrl");
-  const promoStop = formData.get("promoPageStop");
-  if (promoUrl !== null) {
-    const u = String(promoUrl).trim();
-    if (u && !pageHandleFromUrl(u)) return { error: "The promotions page should be a page link, like https://yourstore.com/pages/terms-conditions." };
-    if (u && !String(promoStop || "").trim()) return { error: "Add the line where the promotions end on that page, so only the offers above it are used." };
-    data.promoPageUrl = u.slice(0, 500);
+  if (surveyOn !== null) {
+    data.feedbackSurveyOn = surveyOn === "true";
+    if (data.feedbackSurveyOn && !typeformId(survey ?? "")) return fail("Add your Typeform survey (its ID or link) to show the feedback button.", "tools");
   }
-  if (promoStop !== null) data.promoPageStop = String(promoStop).trim().slice(0, 200);
+  const surveyLabel = formData.get("feedbackSurveyLabel");
+  if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
+  const surveyColor = formData.get("feedbackSurveyColor");
+  if (surveyColor !== null) data.feedbackSurveyColor = FEEDBACK_COLORS.includes(surveyColor) ? surveyColor : "teal";
+  const surveyIcon = formData.get("feedbackSurveyIcon");
+  if (surveyIcon !== null) data.feedbackSurveyIcon = FEEDBACK_ICONS.includes(surveyIcon) ? surveyIcon : "feedback";
+  bool("feedbackSurveyHideAfter");
 
-  const storefrontSearchUrlPattern = formData.get("storefrontSearchUrlPattern");
-  if (storefrontSearchUrlPattern !== null) data.storefrontSearchUrlPattern = storefrontSearchUrlPattern.trim();
-
-  const referralPageUrl = formData.get("referralPageUrl");
-  if (referralPageUrl !== null) data.referralPageUrl = referralPageUrl.trim();
-
-  const klaviyoFormId = formData.get("klaviyoFormId");
-  if (klaviyoFormId !== null) data.klaviyoFormId = klaviyoFormId.trim();
-  const klaviyoCompanyId = formData.get("klaviyoCompanyId");
-  if (klaviyoCompanyId !== null) data.klaviyoCompanyId = klaviyoCompanyId.trim();
-  const klaviyoListId = formData.get("klaviyoListId");
-  if (klaviyoListId !== null) data.klaviyoListId = klaviyoListId.trim();
-
-  const hideUrlsRaw = formData.get("hideOnUrls");
-  if (hideUrlsRaw !== null) {
-    try {
-      const parsed = JSON.parse(hideUrlsRaw);
-      if (Array.isArray(parsed)) data.hideOnUrls = JSON.stringify(parsed);
-    } catch { /* ignore invalid JSON */ }
-  }
-
-  const followUps = formData.get("showFollowUps");
-  if (followUps !== null) data.showFollowUps = followUps === "true";
-
-  const feedbackToggle = formData.get("showFeedback");
-  if (feedbackToggle !== null) data.showFeedback = feedbackToggle === "true";
-
-  const ratingToggle = formData.get("chatRatingOn");
-  if (ratingToggle !== null) data.chatRatingOn = ratingToggle === "true";
-  const ratingAfter = formData.get("chatRatingAfter");
-  if (ratingAfter !== null) data.chatRatingAfter = chatRatingConfig({ chatRatingAfter: ratingAfter }).after;
-
-
-  const vipToggle = formData.get("vipModeEnabled");
-  if (vipToggle !== null) data.vipModeEnabled = vipToggle === "true";
-
-  const loginPillToggle = formData.get("showLoginPill");
-  if (loginPillToggle !== null) data.showLoginPill = loginPillToggle === "true";
-
-
-  const yotpoLoyaltyKey = formData.get("yotpoLoyaltyApiKey");
-  if (yotpoLoyaltyKey !== null && yotpoLoyaltyKey !== "") {
-    data.yotpoLoyaltyApiKey = yotpoLoyaltyKey;
-  }
-
-  const yotpoLoyaltyGuid = formData.get("yotpoLoyaltyGuid");
-  if (yotpoLoyaltyGuid !== null) data.yotpoLoyaltyGuid = yotpoLoyaltyGuid.trim();
-
+  // Integrations
+  secret("yotpoApiKey");
+  secret("aftershipApiKey");
+  secret("yotpoLoyaltyApiKey");
+  text("yotpoLoyaltyGuid");
   const loyaltyDisplay = formData.get("loyaltyDisplay");
   if (loyaltyDisplay !== null) data.loyaltyDisplay = loyaltyDisplay === "dollars" ? "dollars" : "points";
-
   const loyaltyPointsPerDollar = formData.get("loyaltyPointsPerDollar");
   if (loyaltyPointsPerDollar !== null) {
     const n = parseInt(loyaltyPointsPerDollar, 10);
     data.loyaltyPointsPerDollar = Number.isFinite(n) && n > 0 ? n : 100;
   }
-
   const loyaltyRounding = formData.get("loyaltyRounding");
   if (loyaltyRounding !== null) {
     data.loyaltyRounding = ["up", "down", "exact"].includes(loyaltyRounding) ? loyaltyRounding : "exact";
   }
+  text("referralPageUrl");
+  text("klaviyoCompanyId");
+  text("klaviyoListId");
+  const embeddingProvider = formData.get("embeddingProvider");
+  if (embeddingProvider !== null) {
+    const v = String(embeddingProvider).trim();
+    if (v === "" || v === "voyage" || v === "openai") data.embeddingProvider = v;
+  }
+  secret("voyageApiKey");
+  secret("openaiApiKey");
+  bool("showLoginPill");
+  bool("vipModeEnabled");
 
-  const dailyCapToggle = formData.get("dailyCapEnabled");
-  if (dailyCapToggle !== null) data.dailyCapEnabled = dailyCapToggle === "true";
-
+  // Peak Mode and chat limits
+  const limit = (name, max) => {
+    const raw = formData.get(name);
+    if (raw === null) return null;
+    const s = String(raw).trim();
+    if (!/^\d+$/.test(s)) return fail("Chat limits are whole numbers of messages (0 = no limit).", "peak");
+    data[name] = Math.min(Number.parseInt(s, 10), max);
+    return null;
+  };
+  for (const [name, max] of [["chatLimitPerMin", LIMIT_MAX.perMin], ["chatLimitPerHour", LIMIT_MAX.perHour], ["peakLimitPerMin", LIMIT_MAX.perMin], ["peakLimitPerHour", LIMIT_MAX.perHour]]) {
+    const bad = limit(name, max);
+    if (bad) return bad;
+  }
+  const peakMode = formData.get("peakMode");
+  if (peakMode !== null) data.peakMode = PEAK_MODES.includes(peakMode) ? peakMode : "off";
+  const when = (name) => {
+    const raw = formData.get(name);
+    if (raw === null) return undefined;
+    const d = String(raw).trim() ? new Date(String(raw)) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  const startsAt = when("peakStartsAt");
+  const endsAt = when("peakEndsAt");
+  if (startsAt !== undefined) data.peakStartsAt = startsAt;
+  if (endsAt !== undefined) data.peakEndsAt = endsAt;
+  if (data.peakMode === "scheduled") {
+    if (!data.peakStartsAt) return fail("Pick the day Peak Mode starts.", "peak");
+    if (data.peakEndsAt && data.peakEndsAt <= data.peakStartsAt) return fail("Peak Mode's last day has to be on or after its first day.", "peak");
+  }
+  bool("peakLiftDailyCap");
+  bool("peakPauseSync");
+  bool("dailyCapEnabled");
   const dailyCapMessagesRaw = formData.get("dailyCapMessages");
   if (dailyCapMessagesRaw !== null) {
     const n = parseInt(dailyCapMessagesRaw, 10);
@@ -383,7 +384,159 @@ export const action = async ({ request }) => {
   return { success: true };
 };
 
-function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasGeminiKey, hasOpenaiKey }) {
+// ── Page ─────────────────────────────────────────────────────────────────
+
+const SECTIONS = [
+  { id: "assistant", label: "Assistant", icon: MagicIcon },
+  { id: "look", label: "Look & feel", icon: PaintBrushFlatIcon },
+  { id: "visibility", label: "Where it shows", icon: ViewIcon },
+  { id: "care", label: "Customer care", icon: ChatIcon },
+  { id: "tools", label: "Shopping tools", icon: CartIcon },
+  { id: "integrations", label: "Integrations", icon: ConnectIcon },
+  { id: "peak", label: "Peak Mode", icon: GaugeIcon },
+  { id: "testing", label: "Testing", icon: PlayCircleIcon },
+];
+
+// Every field the Save button sends, the section it lives in, and its kind
+// ("bool" → "true"/"false", "json" → JSON, "secret" → cleared after a save).
+const FIELDS = {
+  anthropicApiKey: ["assistant", "secret"], anthropicModel: ["assistant"], showFollowUps: ["assistant", "bool"],
+  showFeedback: ["assistant", "bool"], chatRatingOn: ["assistant", "bool"], chatRatingAfter: ["assistant"],
+  startTheme: ["look"], welcomeIntroOn: ["look", "bool"], voiceInput: ["look", "bool"],
+  appearDelayOn: ["visibility", "bool"], appearDelaySec: ["visibility"], hideInternational: ["visibility", "bool"],
+  homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
+  supportUrl: ["care"], supportLabel: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"],
+  promoPageUrl: ["tools"], promoPageStop: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
+  storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
+  feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
+  feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
+  yotpoApiKey: ["integrations", "secret"], yotpoLoyaltyApiKey: ["integrations", "secret"], yotpoLoyaltyGuid: ["integrations"],
+  loyaltyDisplay: ["integrations"], loyaltyPointsPerDollar: ["integrations"], loyaltyRounding: ["integrations"],
+  referralPageUrl: ["integrations"], aftershipApiKey: ["integrations", "secret"], klaviyoCompanyId: ["integrations"],
+  klaviyoListId: ["integrations"], embeddingProvider: ["integrations"], voyageApiKey: ["integrations", "secret"],
+  openaiApiKey: ["integrations", "secret"], showLoginPill: ["integrations", "bool"], vipModeEnabled: ["integrations", "bool"],
+  peakMode: ["peak"], peakStartsAt: ["peak"], peakEndsAt: ["peak"], chatLimitPerMin: ["peak"], chatLimitPerHour: ["peak"],
+  peakLimitPerMin: ["peak"], peakLimitPerHour: ["peak"], peakLiftDailyCap: ["peak", "bool"], peakPauseSync: ["peak", "bool"],
+  dailyCapEnabled: ["peak", "bool"], dailyCapMessages: ["peak"],
+};
+
+function initialValues(d) {
+  const v = {};
+  for (const [key, [, kind]] of Object.entries(FIELDS)) {
+    if (kind === "secret") v[key] = "";
+    else if (kind === "bool") v[key] = Boolean(d[key]);
+    else if (kind === "json") v[key] = d[key] || [];
+    else v[key] = d[key] === null || d[key] === undefined ? "" : String(d[key]);
+  }
+  return v;
+}
+
+const clearSecrets = (v) => {
+  const next = { ...v };
+  for (const [k, [, kind]] of Object.entries(FIELDS)) if (kind === "secret") next[k] = "";
+  return next;
+};
+const sameValue = (a, b) => (typeof a === "object" || typeof b === "object" ? JSON.stringify(a) === JSON.stringify(b) : String(a) === String(b));
+
+// Peak Mode's days: stored as the start of the first day and the start of
+// the day after the last one, in the browser's time zone.
+const pad = (n) => String(n).padStart(2, "0");
+function dayOf(isoValue, shiftDays = 0) {
+  if (!isoValue) return "";
+  const d = new Date(isoValue);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + shiftDays);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function startOfDay(day, shiftDays = 0) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || "");
+  if (!m) return "";
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + shiftDays).toISOString();
+}
+const fmtDay = (isoValue, shift = 0) => {
+  if (!isoValue) return "";
+  const d = new Date(isoValue);
+  d.setDate(d.getDate() + shift);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+};
+const fmtNum = (n) => Number(n || 0).toLocaleString("en-US");
+const fmtMoney = (n) => (n >= 100 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);
+
+const MODEL_OPTIONS = [
+  { label: "Standard — recommended", value: "claude-sonnet-4-6" },
+  { label: "Fast — lower cost", value: "claude-haiku-4-5-20251001" },
+  { label: "Advanced — most capable", value: "claude-opus-4-7" },
+];
+const SURVEY_COLORS = [
+  { label: "Teal", value: "teal" }, { label: "Green", value: "green" }, { label: "Blue", value: "blue" },
+  { label: "Purple", value: "purple" }, { label: "Rose", value: "rose" }, { label: "Amber", value: "amber" },
+  { label: "Plain (like the other buttons)", value: "plain" },
+];
+const SURVEY_ICONS = [
+  { label: "Chat bubble with dots (feedback)", value: "feedback" }, { label: "Insoles (orthotics)", value: "orthotic" },
+  { label: "Shoe", value: "shoe" }, { label: "Search", value: "search" }, { label: "Ruler (sizing)", value: "sizing" },
+  { label: "Box (orders)", value: "order" }, { label: "Truck (shipping)", value: "shipping" }, { label: "Return arrow", value: "returns" },
+  { label: "Tag (deals)", value: "deals" }, { label: "Gift", value: "gift" }, { label: "Heart", value: "heart" },
+  { label: "Star", value: "star" }, { label: "Chat bubble (support)", value: "support" }, { label: "Map pin (stores)", value: "store" },
+  { label: "Sparkle", value: "sparkle" },
+];
+
+function Connected({ on, label = "Connected" }) {
+  return <Badge tone={on ? "success" : undefined}>{on ? label : "Not set"}</Badge>;
+}
+
+// An integration: one line with its status; its fields open on demand.
+function Integration({ title, help, connected, children, connectedLabel }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Row
+      title={<InlineStack gap="200" blockAlign="center"><span>{title}</span><Connected on={connected} label={connectedLabel} /></InlineStack>}
+      help={help}
+      control={<Button onClick={() => setOpen((o) => !o)} disclosure={open ? "up" : "down"}>{open ? "Done" : connected ? "Edit" : "Set up"}</Button>}
+    >
+      {open ? <BlockStack gap="300">{children}</BlockStack> : null}
+    </Row>
+  );
+}
+
+function HideOnPages({ rules, onChange }) {
+  const [matchType, setMatchType] = useState("equals");
+  const [pattern, setPattern] = useState("");
+  const add = () => {
+    const p = pattern.trim();
+    if (!p || rules.some((r) => r.matchType === matchType && r.pattern === p)) return;
+    onChange([...rules, { matchType, pattern: p }]);
+    setPattern("");
+  };
+  return (
+    <BlockStack gap="300">
+      {rules.length > 0 && (
+        <InlineStack gap="200" wrap>
+          {rules.map((r, i) => (
+            <span key={`${r.matchType}:${r.pattern}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 4px 3px 10px", borderRadius: 999, background: "rgba(26,46,38,0.06)", fontSize: 12.5 }}>
+              <span style={{ color: "#616161" }}>{r.matchType === "contains" ? "contains" : "is"}</span>
+              <code style={{ fontSize: 12 }}>{r.pattern}</code>
+              <Button variant="plain" tone="critical" accessibilityLabel={`Remove ${r.pattern}`} onClick={() => onChange(rules.filter((_, j) => j !== i))}>×</Button>
+            </span>
+          ))}
+        </InlineStack>
+      )}
+      <InlineStack gap="200" blockAlign="end" wrap={false}>
+        <div style={{ width: 140, flex: "none" }}>
+          <Select label="Page link" options={[{ label: "is", value: "equals" }, { label: "contains", value: "contains" }]} value={matchType} onChange={setMatchType} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <TextField label="Path" labelHidden value={pattern} onChange={setPattern} placeholder="/pages/technology" autoComplete="off"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+        </div>
+        <Button onClick={add} disabled={!pattern.trim()}>Add</Button>
+      </InlineStack>
+    </BlockStack>
+  );
+}
+
+function VisualizeLook({ initialEnabled, initialProvider, initialLabel, hasGeminiKey, hasOpenaiKey }) {
   const fetcher = useFetcher();
   const [enabled, setEnabled] = useState(Boolean(initialEnabled));
   const [provider, setProvider] = useState(initialProvider || "");
@@ -391,9 +544,6 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
   const [geminiKey, setGeminiKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const saving = fetcher.state !== "idle";
-  const saved = fetcher.data?.saved === true;
-  const errorMsg = fetcher.data?.error;
-
   const save = () => {
     const fd = new FormData();
     fd.set("intent", "save_visualize_look");
@@ -404,1329 +554,513 @@ function VisualizeLookCard({ initialEnabled, initialProvider, initialLabel, hasG
     if (openaiKey) fd.set("openaiApiKey", openaiKey);
     fetcher.submit(fd, { method: "post" });
   };
-
   return (
-    <Card>
-      <BlockStack gap="400">
-        <Checkbox
-          label="Enable “See It Styled”"
-          checked={enabled}
-          onChange={setEnabled}
-          helpText="When the assistant recommends exactly ONE product, customers get a standout button that generates an AI styling preview — the real product, styled for what they described. Shown only for single-product recommendations."
-        />
+    <Row
+      title="See It Styled"
+      help="When the assistant picks one product, shoppers can tap for an AI styling preview of it. You bring an image-provider key and pay per image."
+      toggle
+      checked={enabled}
+      onChange={setEnabled}
+      always={initialEnabled}
+    >
+      <BlockStack gap="300">
         {enabled && (
-          <>
+          <div className="set-grid">
             <Select
-              label="Image provider (you bring the key; you pay the provider per image)"
-              options={[
-                { label: "Choose a provider…", value: "" },
-                { label: "Google Gemini (Nano Banana) — best product fidelity", value: "gemini" },
-                { label: "OpenAI (gpt-image-1)", value: "openai" },
-              ]}
+              label="Image provider"
+              options={[{ label: "Choose a provider…", value: "" }, { label: "Google Gemini — most faithful to the product", value: "gemini" }, { label: "OpenAI (gpt-image-1)", value: "openai" }]}
               value={provider}
               onChange={setProvider}
-              helpText="Gemini keeps the product most faithful to the original. Either way, generated images are AI styling previews — labeled as such to shoppers."
             />
+            <TextField label="Button label" value={label} onChange={setLabel} autoComplete="off" maxLength={40} />
             {provider === "gemini" && (
-              <TextField
-                label="Google AI Studio API key"
-                type="password"
-                value={geminiKey}
-                onChange={setGeminiKey}
-                autoComplete="off"
-                placeholder={hasGeminiKey ? "•••••••• (saved)" : "AIza..."}
-                helpText={hasGeminiKey
-                  ? "A key is saved. Leave blank to keep it; paste a new value to replace."
-                  : "Get a key at aistudio.google.com → API keys."}
-              />
+              <TextField label="Google AI Studio key" type="password" value={geminiKey} onChange={setGeminiKey} autoComplete="off"
+                placeholder={hasGeminiKey ? "•••••••• (saved)" : "AIza..."} helpText={hasGeminiKey ? "Leave blank to keep the saved key." : "From aistudio.google.com → API keys."} />
             )}
             {provider === "openai" && (
-              <TextField
-                label="OpenAI API key"
-                type="password"
-                value={openaiKey}
-                onChange={setOpenaiKey}
-                autoComplete="off"
-                placeholder={hasOpenaiKey ? "•••••••• (saved)" : "sk-..."}
-                helpText={hasOpenaiKey
-                  ? "A key is saved (shared with Semantic search if set there). Leave blank to keep it."
-                  : "Get a key at platform.openai.com → API keys. Uses gpt-image-1 edits."}
-              />
+              <TextField label="OpenAI key" type="password" value={openaiKey} onChange={setOpenaiKey} autoComplete="off"
+                placeholder={hasOpenaiKey ? "•••••••• (saved)" : "sk-..."} helpText={hasOpenaiKey ? "Leave blank to keep the saved key." : "From platform.openai.com → API keys."} />
             )}
-            <TextField
-              label="Button label"
-              value={label}
-              onChange={setLabel}
-              autoComplete="off"
-              maxLength={40}
-              showCharacterCount
-              helpText="The text on the standout button shoppers tap."
-            />
-            <Banner tone="info">
-              <Text as="p" variant="bodySm">
-                Generative AI can occasionally alter fine product details. The preview is labeled “AI styling preview” to shoppers, and we feed your real product image as the locked reference to keep it faithful.
-              </Text>
-            </Banner>
-          </>
+          </div>
         )}
-        {errorMsg && <Banner tone="critical"><Text as="p" variant="bodySm">{errorMsg}</Text></Banner>}
-        {saved && <Banner tone="success"><Text as="p" variant="bodySm">Saved.</Text></Banner>}
-        <div>
-          <Button onClick={save} loading={saving} variant="primary"
-            disabled={enabled && !provider}>Save</Button>
-        </div>
-      </BlockStack>
-    </Card>
-  );
-}
-
-// One switch: the chat opens with a calm, Apple-style motion (the panel
-// springs up, the welcome content rises in). No colors or timings to tune.
-function WelcomeIntroCard({ initialOn }) {
-  const fetcher = useFetcher();
-  const [on, setOn] = useState(initialOn !== false);
-  const toggle = (next) => {
-    setOn(next);
-    const fd = new FormData();
-    fd.set("intent", "save_welcome_intro");
-    fd.set("on", next ? "true" : "false");
-    fetcher.submit(fd, { method: "post" });
-  };
-  return (
-    <Card>
-      <BlockStack gap="200">
-        <InlineStack align="space-between" blockAlign="center" wrap={false} gap="400">
-          <BlockStack gap="100">
-            <Text as="h2" variant="headingMd">Opening animation</Text>
-            <Text as="p" tone="subdued">
-              When the chat opens, the panel springs up and the welcome message rises in — quick and subtle.
-              Shoppers who prefer reduced motion never see it.
-            </Text>
-          </BlockStack>
-          <Checkbox label={on ? "On" : "Off"} checked={on} onChange={toggle} />
+        {fetcher.data?.error && <Text as="p" tone="critical" variant="bodySm">{fetcher.data.error}</Text>}
+        <InlineStack gap="300" blockAlign="center">
+          <Button onClick={save} loading={saving} disabled={enabled && !provider}>Save See It Styled</Button>
+          {!saving && fetcher.data?.saved && <Text as="span" variant="bodySm" tone="success">Saved.</Text>}
         </InlineStack>
       </BlockStack>
-    </Card>
+    </Row>
   );
 }
 
-function ConnectionStatus({ connected }) {
-  return connected ? (
-    <InlineStack gap="150" blockAlign="center">
-      <Icon source={CheckCircleIcon} tone="success" />
-      <Text as="span" variant="bodySm" tone="success">Connected</Text>
-    </InlineStack>
-  ) : (
-    <Badge tone="attention">Not configured</Badge>
-  );
-}
-
-const MODEL_OPTIONS = [
-  { label: "Standard — recommended", value: "claude-sonnet-4-6" },
-  { label: "Fast — lower cost", value: "claude-haiku-4-5-20251001" },
-  { label: "Advanced — most capable", value: "claude-opus-4-7" },
-];
-
-function HideUrlsPanel({ initial }) {
-  const [rules, setRules] = useState(initial || []);
-  const [matchType, setMatchType] = useState("equals");
-  const [pattern, setPattern] = useState("");
-
-  const addRule = () => {
-    const p = pattern.trim();
-    if (!p) return;
-    const exists = rules.some((r) => r.matchType === matchType && r.pattern === p);
-    if (exists) return;
-    setRules([...rules, { matchType, pattern: p }]);
-    setPattern("");
-  };
-
-  const removeRule = (idx) => {
-    setRules(rules.filter((_, i) => i !== idx));
-  };
-
-  return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">Hide widget on specific pages</Text>
-          <Text as="p" tone="subdued" variant="bodySm">
-            The chat widget will be hidden on pages matching any of these rules. Use "equals" for exact path matches or "contains" for substring matches (e.g. all pages starting with a prefix).
-          </Text>
-        </BlockStack>
-
-        {rules.length > 0 && (
-          <BlockStack gap="200">
-            {rules.map((r, i) => (
-              <InlineStack key={i} gap="200" blockAlign="center">
-                <Badge tone={r.matchType === "contains" ? "attention" : "info"}>
-                  {r.matchType === "contains" ? "Contains" : "Equals"}
-                </Badge>
-                <Text as="span" variant="bodyMd"><code>{r.pattern}</code></Text>
-                <Button variant="plain" tone="critical" onClick={() => removeRule(i)}>Remove</Button>
-              </InlineStack>
-            ))}
-          </BlockStack>
-        )}
-
-        <Divider />
-
-        <InlineStack gap="200" blockAlign="end" wrap={false}>
-          <div style={{ minWidth: 130 }}>
-            <Select
-              label="Match type"
-              options={[
-                { label: "URL equals", value: "equals" },
-                { label: "URL contains", value: "contains" },
-              ]}
-              value={matchType}
-              onChange={setMatchType}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <TextField
-              label="URL pattern"
-              value={pattern}
-              onChange={setPattern}
-              placeholder="/pages/technology"
-              autoComplete="off"
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRule(); } }}
-            />
-          </div>
-          <Button onClick={addRule} disabled={!pattern.trim()}>Add</Button>
-        </InlineStack>
-
-        <input type="hidden" name="hideOnUrls" value={JSON.stringify(rules)} />
-      </BlockStack>
-    </Card>
-  );
-}
-
-export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, chatRatingOn: initRatingOn, chatRatingAfter: initRatingAfter, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, storeLocatorMapId: initLocMap, storeLocatorLabel: initLocLabel, storeLocatorUrl: initLocUrl, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+export default function Settings() {
+  const d = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
+  const revalidator = useRevalidator();
   const saving = nav.state === "submitting";
 
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [showOptional, setShowOptional] = useState(false);
-  const [model, setModel] = useState(anthropicModel || "claude-sonnet-4-6");
-  const [followUps, setFollowUps] = useState(initFollowUps);
-  const [ratingOn, setRatingOn] = useState(initRatingOn);
-  const [ratingAfter, setRatingAfter] = useState(String(initRatingAfter));
-  const [feedbackOn, setFeedbackOn] = useState(initFeedback);
-  const [yotpoKey, setYotpoKey] = useState("");
-  const [aftershipKey, setAftershipKey] = useState("");
-  const [embeddingProvider, setEmbeddingProvider] = useState(initEmbeddingProvider || "");
-  const [voyageKey, setVoyageKey] = useState("");
-  const [openaiKey, setOpenaiKey] = useState("");
-  const [supportUrl, setSupportUrl] = useState(initSupportUrl);
-  const [supportLabel, setSupportLabel] = useState(initSupportLabel);
-  const [trackingPageUrl, setTrackingPageUrl] = useState(initTrackingPageUrl);
-  const [returnsPageUrl, setReturnsPageUrl] = useState(initReturnsPageUrl);
-  const [returnsInChat, setReturnsInChat] = useState(initReturnsInChat);
-  const [returnWindowDays, setReturnWindowDays] = useState(String(initReturnWindowDays));
-  const [returnsDeliveredOnly, setReturnsDeliveredOnly] = useState(initReturnsDeliveredOnly);
-  const [surveyOn, setSurveyOn] = useState(initSurveyOn);
-  const [survey, setSurvey] = useState(initSurvey);
-  const [surveyLabel, setSurveyLabel] = useState(initSurveyLabel);
-  const [surveyColor, setSurveyColor] = useState(initSurveyColor);
-  const [surveyIcon, setSurveyIcon] = useState(initSurveyIcon);
-  const [surveyHideAfter, setSurveyHideAfter] = useState(initSurveyHideAfter);
-  const [which, setWhich] = useState(initWhich);
-  const [whichLabel, setWhichLabel] = useState(initWhichLabel);
-  const [locMap, setLocMap] = useState(initLocMap);
-  const [locLabel, setLocLabel] = useState(initLocLabel);
-  const [locUrl, setLocUrl] = useState(initLocUrl);
-  const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
-  const [delayOn, setDelayOn] = useState(initDelayOn);
-  const [delaySec, setDelaySec] = useState(String(initDelaySec));
-  const [startLook, setStartLook] = useState(initStartTheme);
-  const [hideIntl, setHideIntl] = useState(initHideIntl);
-  const [homeCountries, setHomeCountries] = useState(initHomeCountries);
-  const [promoUrl, setPromoUrl] = useState(initPromoUrl);
-  const [promoStop, setPromoStop] = useState(initPromoStop);
-  const [referralPageUrl, setReferralPageUrl] = useState(initReferralPageUrl);
-  const [searchPattern, setSearchPattern] = useState(initSearchPattern);
-  const [klaviyoFormId, setKlaviyoFormId] = useState(initKlaviyoFormId);
-  const [klaviyoCompanyId, setKlaviyoCompanyId] = useState(initKlaviyoCompanyId);
-  const [klaviyoListId, setKlaviyoListId] = useState(initKlaviyoListId);
-  const [vipMode, setVipMode] = useState(initVipMode);
-  const [showLoginPill, setShowLoginPill] = useState(initShowLoginPill);
-  const [dailyCapEnabled, setDailyCapEnabled] = useState(initDailyCapEnabled);
-  const [dailyCapMessages, setDailyCapMessages] = useState(String(initDailyCapMessages ?? 200));
-  const [yotpoLoyaltyKey, setYotpoLoyaltyKey] = useState("");
-  const [yotpoLoyaltyGuidState, setYotpoLoyaltyGuidState] = useState(initYotpoLoyaltyGuid);
-  const [loyaltyDisplay, setLoyaltyDisplay] = useState(initLoyaltyDisplay);
-  const [loyaltyPointsPerDollar, setLoyaltyPointsPerDollar] = useState(String(initLoyaltyPointsPerDollar));
-  const [loyaltyRounding, setLoyaltyRounding] = useState(initLoyaltyRounding);
-
-  // Contextual Save Bar plumbing — BFS 4.1.5. Track dirty state via the
-  // form's onChange (Polaris components bubble change events to the parent
-  // form), reset on successful save, and let "Discard" restore the snapshot.
+  const [values, setValues] = useState(() => initialValues(d));
+  const [saved, setSaved] = useState(() => initialValues(d));
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
   const formRef = useRef(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const initialSnapshot = useRef({
-    model: anthropicModel || "claude-sonnet-4-6",
-    followUps: initFollowUps,
-    feedbackOn: initFeedback,
-    ratingOn: initRatingOn,
-    ratingAfter: String(initRatingAfter),
-    supportUrl: initSupportUrl,
-    supportLabel: initSupportLabel,
-    trackingPageUrl: initTrackingPageUrl,
-    returnsPageUrl: initReturnsPageUrl,
-    returnsInChat: initReturnsInChat,
-    returnWindowDays: String(initReturnWindowDays),
-    returnsDeliveredOnly: initReturnsDeliveredOnly,
-    surveyOn: initSurveyOn,
-    survey: initSurvey,
-    surveyLabel: initSurveyLabel,
-    surveyColor: initSurveyColor,
-    surveyIcon: initSurveyIcon,
-    surveyHideAfter: initSurveyHideAfter,
-    which: initWhich,
-    whichLabel: initWhichLabel,
-    locMap: initLocMap,
-    locLabel: initLocLabel,
-    locUrl: initLocUrl,
-    hideLiveChat: initHideLiveChat,
-    delayOn: initDelayOn,
-    delaySec: String(initDelaySec),
-    startLook: initStartTheme,
-    hideIntl: initHideIntl,
-    homeCountries: initHomeCountries,
-    promoUrl: initPromoUrl,
-    promoStop: initPromoStop,
-    referralPageUrl: initReferralPageUrl,
-    searchPattern: initSearchPattern,
-    klaviyoFormId: initKlaviyoFormId,
-    klaviyoCompanyId: initKlaviyoCompanyId,
-    klaviyoListId: initKlaviyoListId,
-    vipMode: initVipMode,
-    showLoginPill: initShowLoginPill,
-    dailyCapEnabled: initDailyCapEnabled,
-    dailyCapMessages: String(initDailyCapMessages ?? 200),
-    yotpoLoyaltyGuid: initYotpoLoyaltyGuid,
-    loyaltyDisplay: initLoyaltyDisplay,
-    loyaltyPointsPerDollar: String(initLoyaltyPointsPerDollar),
-    loyaltyRounding: initLoyaltyRounding,
-  });
+  const set = (key) => (val) => setValues((s) => ({ ...s, [key]: val }));
+  const [section, setSection] = useState("assistant");
+  // Dates and "right now" read the browser's clock and time zone: shown once
+  // the page is running in the browser, so the server's render matches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    const fromHash = window.location.hash.replace("#", "");
+    if (SECTIONS.some((s) => s.id === fromHash)) setSection(fromHash);
+  }, []);
 
-  // Reset dirty + clear secret-input fields after a successful save, and
-  // confirm with an always-visible toast (not an out-of-view top banner).
+  const open = (id) => {
+    setSection(id);
+    try { window.history.replaceState(null, "", `#${id}`); } catch { /* sandboxed frame */ }
+  };
+  // On a phone the sections are a row of chips: keep the open one in view.
+  useEffect(() => {
+    const navEl = document.querySelector(".set-nav");
+    const item = navEl?.querySelector("[aria-current='page']");
+    if (navEl && item && navEl.scrollWidth > navEl.clientWidth) {
+      navEl.scrollTo({ left: item.offsetLeft - (navEl.clientWidth - item.offsetWidth) / 2, behavior: "smooth" });
+    }
+  }, [section]);
+
+  const dirtyKeys = Object.keys(FIELDS).filter((k) => !sameValue(values[k], saved[k]));
+  const isDirty = dirtyKeys.length > 0;
+  const dirtySections = new Set(dirtyKeys.map((k) => FIELDS[k][0]));
+
   useEffect(() => {
     if (actionData?.success) {
-      if (typeof window !== "undefined" && window.shopify?.toast) window.shopify.toast.show("Settings saved");
-      setIsDirty(false);
-      setAnthropicKey("");
-      setYotpoKey("");
-      setAftershipKey("");
-      setYotpoLoyaltyKey("");
-      setVoyageKey("");
-      setOpenaiKey("");
+      window.shopify?.toast?.show("Settings saved");
+      // Keys are never shown back: clear them, and take what was saved as
+      // the new starting point.
+      const next = clearSecrets(valuesRef.current);
+      setValues(next);
+      setSaved(next);
     }
-    if (actionData?.error && typeof window !== "undefined" && window.shopify?.toast) window.shopify.toast.show(actionData.error, { isError: true });
+    if (actionData?.error) {
+      window.shopify?.toast?.show(actionData.error, { isError: true });
+      if (actionData.section) open(actionData.section);
+    }
   }, [actionData]);
 
-  const discardChanges = () => {
-    const s = initialSnapshot.current;
-    setAnthropicKey("");
-    setModel(s.model);
-    setFollowUps(s.followUps);
-    setFeedbackOn(s.feedbackOn);
-    setRatingOn(s.ratingOn);
-    setRatingAfter(s.ratingAfter);
-    setYotpoKey("");
-    setAftershipKey("");
-    setSupportUrl(s.supportUrl);
-    setSupportLabel(s.supportLabel);
-    setTrackingPageUrl(s.trackingPageUrl);
-    setReturnsPageUrl(s.returnsPageUrl);
-    setReturnsInChat(s.returnsInChat);
-    setReturnWindowDays(s.returnWindowDays);
-    setReturnsDeliveredOnly(s.returnsDeliveredOnly);
-    setSurveyOn(s.surveyOn);
-    setSurvey(s.survey);
-    setSurveyLabel(s.surveyLabel);
-    setSurveyColor(s.surveyColor);
-    setSurveyIcon(s.surveyIcon);
-    setSurveyHideAfter(s.surveyHideAfter);
-    setWhich(s.which);
-    setWhichLabel(s.whichLabel);
-    setLocMap(s.locMap);
-    setLocLabel(s.locLabel);
-    setLocUrl(s.locUrl);
-    setHideLiveChat(s.hideLiveChat);
-    setDelayOn(s.delayOn);
-    setDelaySec(s.delaySec);
-    setStartLook(s.startLook);
-    setHideIntl(s.hideIntl);
-    setHomeCountries(s.homeCountries);
-    setPromoUrl(s.promoUrl);
-    setPromoStop(s.promoStop);
-    setReferralPageUrl(s.referralPageUrl);
-    setSearchPattern(s.searchPattern);
-    setKlaviyoFormId(s.klaviyoFormId);
-    setKlaviyoCompanyId(s.klaviyoCompanyId);
-    setKlaviyoListId(s.klaviyoListId);
-    setVipMode(s.vipMode);
-    setShowLoginPill(s.showLoginPill);
-    setYotpoLoyaltyKey("");
-    setYotpoLoyaltyGuidState(s.yotpoLoyaltyGuid);
-    setLoyaltyDisplay(s.loyaltyDisplay);
-    setLoyaltyPointsPerDollar(s.loyaltyPointsPerDollar);
-    setLoyaltyRounding(s.loyaltyRounding);
-    setDailyCapEnabled(s.dailyCapEnabled);
-    setDailyCapMessages(s.dailyCapMessages);
-    setIsDirty(false);
-  };
+  const discard = () => setValues(saved);
 
-  const submitForm = () => {
-    if (formRef.current) formRef.current.requestSubmit();
-  };
+  // Peak Mode, as saved (for the sidebar) and as being edited (for the panel).
+  const savedPeak = peakState({ peakMode: saved.peakMode, peakStartsAt: saved.peakStartsAt, peakEndsAt: saved.peakEndsAt });
+  const draftPeak = peakState({ peakMode: values.peakMode, peakStartsAt: values.peakStartsAt, peakEndsAt: values.peakEndsAt });
+  const sections = SECTIONS.map((s) => ({
+    ...s,
+    dirty: dirtySections.has(s.id),
+    pill: s.id === "peak" && mounted ? (savedPeak.active ? "On" : savedPeak.upcoming ? "Soon" : null) : null,
+  }));
 
-  const optionalOn = [
-    embeddingProvider ? "semantic search" : null,
-    initVizEnabled ? "styling previews" : null,
-    hasYotpoKey || hasAftershipKey || klaviyoCompanyId ? "integrations" : null,
-    vipMode ? "VIP experience" : null,
-    dailyCapEnabled ? "daily limit" : null,
-  ].filter(Boolean);
+  const hidden = useMemo(() => Object.entries(FIELDS).map(([k, [, kind]]) => (
+    <input key={k} type="hidden" name={k} value={kind === "bool" ? String(Boolean(values[k])) : kind === "json" ? JSON.stringify(values[k] || []) : String(values[k] ?? "")} />
+  )), [values]);
 
   return (
     <Page>
       <TitleBar title="Settings" />
-      <Form method="post" ref={formRef} onChange={() => setIsDirty(true)}>
-        <BlockStack gap="500">
+      {/* Static CSS, injected as-is: as a text child React would escape its
+          quotes on the server and the page wouldn't hydrate. */}
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS }} />
+      <Form method="post" ref={formRef}>
+        <BlockStack gap="400">
           <BrandHeader title="Settings" gutter={false} />
-          {/* Save feedback is an always-visible App Bridge toast, not a top banner. */}
-
-          {/* Data-Eraser-style settings: single-column annotated sections —
-              section title above a full-width hairline card, tight spacing, a
-              hairline divider between sections. Overrides Polaris' default
-              two-column annotated layout (which renders the description in a
-              narrow left rail). Page-scoped so it only affects Settings. */}
-          <style>{`
-            .set-intro { font-size: 13.5px; color: #5e6f67; max-width: 760px; margin: -6px 0 2px; }
-            /* Polaris offsets Layout with a negative margin (-space-400) that
-               its sections add back (+space-400) to land at the page edge.
-               Zeroing the section margin below would leave that negative
-               margin uncompensated and shove all content ~16px LEFT of the
-               BrandHeader/intro. Zero the Layout margin too so the section,
-               header, and intro share one left edge. */
-            .Polaris-Layout { margin: 0 !important; }
-            .Polaris-Layout__AnnotationWrapper { display: block; margin: 0; }
-            .Polaris-Layout__Annotation,
-            .Polaris-Layout__AnnotationContent { display: block; margin: 0; max-width: 100%; width: 100%; }
-            .Polaris-Layout__Annotation { padding: 0 0 12px 0; }
-            .Polaris-Layout__AnnotatedSection { margin: 0 !important; max-width: 100% !important; }
-            .Polaris-Layout__AnnotatedSection + .Polaris-Layout__AnnotatedSection {
-              border-top: 1px solid rgba(30,27,51,0.08);
-              margin-top: 24px !important;
-              padding-top: 24px !important;
-            }
-            /* The "Get your API key here" helper links are raw <a> tags, so
-               they don't pick up Polaris' --p-color-text-link token and fall
-               back to the browser's blue/visited-purple default — jarring in
-               the green theme. Force the brand green on settings-page links. */
-            .Polaris-Layout__Annotation a,
-            .Polaris-Layout__AnnotationContent a { color: #2D6B4F; text-underline-offset: 2px; }
-            .set-optional { border-top: 1px solid rgba(30,27,51,0.08); margin-top: 24px; padding-top: 24px; }
-            .Polaris-Layout__Annotation a:hover,
-            .Polaris-Layout__AnnotationContent a:hover { color: #245741; }
-          `}</style>
-          <p className="set-intro">Most stores only need the first few sections below. Everything under "Optional add-ons" can be left as it is.</p>
-
-          <Layout>
-            <Layout.AnnotatedSection
-              title="AI Engine (required)"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Powers the AI assistant. Pay-as-you-go usage — SEoS Assistant adds no markup.
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    <a href="https://console.anthropic.com" target="_blank" rel="noreferrer">
-                      Get your API key here
-                    </a>
-                    .
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h3" variant="headingSm">API Key</Text>
-                    <ConnectionStatus connected={hasAnthropicKey} />
-                  </InlineStack>
-
-                  <TextField
-                    label="API key"
-                    type="password"
-                    value={anthropicKey}
-                    onChange={setAnthropicKey}
-                    placeholder={hasAnthropicKey ? "••••••••••••••••" : "Paste API key"}
-                    autoComplete="off"
-                    helpText="Encrypted at rest. Leave blank to keep your existing key."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="AI model"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Which Claude model answers your customers. The default is the best balance of quality, speed and cost.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Select
-                    label="Model"
-                    options={MODEL_OPTIONS.filter(
-                      (o) => o.value !== "claude-opus-4-7" || plan.features?.advancedModel,
-                    )}
-                    value={model}
-                    onChange={setModel}
-                    helpText="Standard is recommended — every answer is fact-checked, so a bigger model mostly adds cost and wait time."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Support link"
-              description="When a customer needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias) if your store has one, otherwise this page. This link overrides the Support URL in the theme editor."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Support page URL"
-                    value={supportUrl}
-                    onChange={setSupportUrl}
-                    placeholder="https://yourstore.com/pages/contact"
-                    autoComplete="off"
-                    helpText="Left blank, the theme editor's Support URL is used."
-                  />
-                  <TextField
-                    label="Button label (optional)"
-                    value={supportLabel}
-                    onChange={setSupportLabel}
-                    placeholder="Chat with Aetrex Support"
-                    autoComplete="off"
-                    helpText="Shown exactly as typed. Left blank, it reads “Chat with Aetrex Support”."
-                  />
-                  <TextField
-                    label="Order tracking page URL"
-                    value={trackingPageUrl}
-                    onChange={setTrackingPageUrl}
-                    placeholder="https://orders.yourstore.com"
-                    autoComplete="off"
-                    helpText="AfterShip, Parcel Panel, or any branded tracking page. When set, logged-in customers get a tracking link to this page instead of the raw carrier URL. The AI appends the tracking number automatically."
-                  />
-                  <TextField
-                    label="Returns page URL"
-                    value={returnsPageUrl}
-                    onChange={setReturnsPageUrl}
-                    placeholder="https://returns.yourstore.com"
-                    autoComplete="off"
-                    helpText="Your AfterShip Returns page. Used for “View return” after a return is started in the chat, and as the fallback (prefilled with the order number and email) when a return can't be started in the chat."
-                  />
-                  <Checkbox
-                    label="Returns and exchanges in the chat"
-                    checked={returnsInChat}
-                    onChange={setReturnsInChat}
-                    helpText={returnsInChat
-                      ? "On: signed-in shoppers start returns and exchanges right in the chat (uses the AfterShip API key). Turn off to send them to the returns page instead."
-                      : "Off: order cards show “Start a return”, which opens the returns page above with the order filled in. Order tracking is unaffected."}
-                  />
-                  <TextField
-                    label="Return window (days)"
-                    type="number"
-                    min={0}
-                    max={365}
-                    value={returnWindowDays}
-                    onChange={setReturnWindowDays}
-                    autoComplete="off"
-                    suffix="days after the order is placed"
-                    helpText="Orders older than this don't get a return button, and the assistant explains why. 0 = no limit. Match your return policy."
-                  />
-                  <Checkbox
-                    label="Only after the order is delivered"
-                    checked={returnsDeliveredOnly}
-                    onChange={setReturnsDeliveredOnly}
-                    helpText={returnsDeliveredOnly
-                      ? "On: the return button appears once the order shows as delivered."
-                      : "Off: the return button appears as soon as the order has shipped."}
-                  />
-                  <TextField
-                    label="Search results page"
-                    value={searchPattern}
-                    onChange={setSearchPattern}
-                    placeholder="/search?q={q}&type=product"
-                    autoComplete="off"
-                    helpText="Not used right now: the 'View all' button under product cards opens every match inside the chat, so it always shows exactly what the assistant found. Put {q} where the search words go. Leave blank to use Shopify's standard search page."
-                  />
-                  <TextField
-                    label="Referral program page URL"
-                    value={referralPageUrl}
-                    onChange={setReferralPageUrl}
-                    placeholder="https://yourstore.com/pages/refer"
-                    autoComplete="off"
-                    helpText="Your Give-$X-Get-$X / referral landing page. When a customer asks how to refer friends, the AI links them here so they can get their personal referral link and share options. Used as a fallback when the customer's personal link isn't available from Yotpo."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Feedback survey and live chat"
-              description="Put your feedback survey in the chat, in place of the fourth Start here button, and tidy the corner of the page."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Feedback button in the chat"
-                    checked={surveyOn}
-                    onChange={setSurveyOn}
-                    helpText={surveyOn
-                      ? "On: the fourth Start here button becomes your feedback button, and the survey opens right inside the chat. The site's own floating Feedback button is hidden. Once a shopper sends it, their usual fourth button comes back."
-                      : "Off: the fourth Start here button is the one set in the theme editor."}
-                  />
-                  <TextField
-                    label="Typeform survey"
-                    value={survey}
-                    onChange={setSurvey}
-                    placeholder="jdXBrXMa or https://form.typeform.com/to/jdXBrXMa"
-                    autoComplete="off"
-                    disabled={!surveyOn}
-                    helpText="The form's ID or its link. Answers land in the same Typeform form as always."
-                  />
-                  <TextField
-                    label="Button text"
-                    value={surveyLabel}
-                    onChange={setSurveyLabel}
-                    maxLength={40}
-                    autoComplete="off"
-                    disabled={!surveyOn}
-                  />
-                  <InlineStack gap="400" wrap={false}>
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        label="Button color"
-                        options={[
-                          { label: "Teal", value: "teal" },
-                          { label: "Green", value: "green" },
-                          { label: "Blue", value: "blue" },
-                          { label: "Purple", value: "purple" },
-                          { label: "Rose", value: "rose" },
-                          { label: "Amber", value: "amber" },
-                          { label: "Plain (like the other buttons)", value: "plain" },
-                        ]}
-                        value={surveyColor}
-                        onChange={setSurveyColor}
-                        disabled={!surveyOn}
-                        helpText="A soft tint behind the button and a matching icon. Adjusts itself in the dark look."
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        label="Button icon"
-                        options={[
-                          { label: "Chat bubble with dots (feedback)", value: "feedback" },
-                          { label: "Insoles (orthotics)", value: "orthotic" },
-                          { label: "Shoe", value: "shoe" },
-                          { label: "Search", value: "search" },
-                          { label: "Ruler (sizing)", value: "sizing" },
-                          { label: "Box (orders)", value: "order" },
-                          { label: "Truck (shipping)", value: "shipping" },
-                          { label: "Return arrow", value: "returns" },
-                          { label: "Tag (deals)", value: "deals" },
-                          { label: "Gift", value: "gift" },
-                          { label: "Heart", value: "heart" },
-                          { label: "Star", value: "star" },
-                          { label: "Chat bubble (support)", value: "support" },
-                          { label: "Map pin (stores)", value: "store" },
-                          { label: "Sparkle", value: "sparkle" },
-                        ]}
-                        value={surveyIcon}
-                        onChange={setSurveyIcon}
-                        disabled={!surveyOn}
-                      />
-                    </div>
-                  </InlineStack>
-                  <Checkbox
-                    label="Hide the button once a shopper has sent the form"
-                    checked={surveyHideAfter}
-                    onChange={setSurveyHideAfter}
-                    disabled={!surveyOn}
-                    helpText={surveyHideAfter
-                      ? "On: after sending it, that shopper sees the usual fourth button instead (for a year). Right for a one-time survey."
-                      : "Off: the button stays for everyone, every visit. Right for a tool people come back to, like a quiz."}
-                  />
-                  <Checkbox
-                    label="Hide the live chat button (Zendesk)"
-                    checked={hideLiveChat}
-                    onChange={setHideLiveChat}
-                    helpText="Removes the separate chat button from the corner of the page. Live chat still opens from the assistant whenever a shopper asks for a person."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Which orthotic do I have?"
-              description="A short visual quiz that helps customers work out which orthotic they already have, so they can reorder it."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Typeform quiz"
-                    value={which}
-                    onChange={setWhich}
-                    placeholder="ojyWbTvZ or https://form.typeform.com/to/ojyWbTvZ"
-                    autoComplete="off"
-                    helpText={which.trim()
-                      ? "On: when a customer wants to reorder an orthotic but isn't sure which one they have, the assistant offers this quiz. It opens right inside the chat. Signed-in customers' past orders are checked first."
-                      : "The form's ID or its link. Leave blank to turn it off."}
-                  />
-                  <TextField
-                    label="Button text"
-                    value={whichLabel}
-                    onChange={setWhichLabel}
-                    maxLength={40}
-                    autoComplete="off"
-                    disabled={!which.trim()}
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Store locator"
-              description="Your store map (Storepoint), opened right inside the chat when a customer asks where to buy or try on in person."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Storepoint map"
-                    value={locMap}
-                    onChange={setLocMap}
-                    placeholder="15ecd30bd8acd4 or paste the whole embed code"
-                    autoComplete="off"
-                    multiline={locMap.includes("<") ? 3 : undefined}
-                    helpText={storepointId(locMap)
-                      ? `On: map ${storepointId(locMap)}. The assistant shows a button that opens the map in the chat. On the store locator page itself, the button takes the shopper to the map on that page.`
-                      : "Your map ID, or paste Storepoint's embed code and the ID is taken from it. Leave blank to turn it off."}
-                  />
-                  <TextField
-                    label="Button text"
-                    value={locLabel}
-                    onChange={setLocLabel}
-                    maxLength={40}
-                    autoComplete="off"
-                    disabled={!storepointId(locMap)}
-                  />
-                  <TextField
-                    label="Store locator page"
-                    value={locUrl}
-                    onChange={setLocUrl}
-                    placeholder="/pages/store-locator"
-                    autoComplete="off"
-                    disabled={!storepointId(locMap)}
-                    helpText="Optional. If the map can't load in the chat, shoppers get a link to this page instead."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Promotions page"
-              description="A page on your site where you keep your current offers. The assistant reads it live (every 15 minutes), so when someone asks about deals it knows what's running."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <TextField
-                    label="Promotions page link"
-                    value={promoUrl}
-                    onChange={setPromoUrl}
-                    placeholder="https://www.aetrex.com/pages/terms-conditions"
-                    autoComplete="off"
-                    helpText="Leave blank to use only the promotions added on the Knowledge page."
-                  />
-                  <TextField
-                    label="Promotions end at this line"
-                    value={promoStop}
-                    onChange={setPromoStop}
-                    placeholder="STANDARD TERMS AND CONDITIONS OF SALE"
-                    autoComplete="off"
-                    disabled={!promoUrl.trim()}
-                    helpText="Everything above this line on the page counts as your current offers; nothing below it is used. If the line isn't found, the page isn't used. Offers whose end date has passed aren't mentioned as running."
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Showing the chat"
-              description="When the chat appears on your store's pages, who sees it, and the look it starts in."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Hide the chat for international shoppers"
-                    checked={hideIntl}
-                    onChange={setHideIntl}
-                    helpText={hideIntl
-                      ? "On: shoppers browsing from outside your home countries (as Global-e or Shopify Markets sets their country) don't see the chat. Prices in the chat are in your store's currency, which wouldn't match their local prices."
-                      : "Off: every shopper sees the chat, wherever they are."}
-                  />
-                  <TextField
-                    label="Home countries"
-                    value={homeCountries}
-                    onChange={setHomeCountries}
-                    placeholder="US"
-                    autoComplete="off"
-                    disabled={!hideIntl}
-                    helpText="Two-letter country codes, separated by commas (e.g. US, PR). Shoppers in these countries see the chat."
-                  />
-                  <Select
-                    label="Starts in"
-                    options={[{ label: "Dark mode", value: "dark" }, { label: "Light mode", value: "light" }]}
-                    value={startLook}
-                    onChange={setStartLook}
-                    helpText="The look shoppers see first. They can switch any time with the sun/moon button in the chat, and their choice is remembered on their device."
-                  />
-                  <Checkbox
-                    label="Wait before showing the chat"
-                    checked={delayOn}
-                    onChange={setDelayOn}
-                    helpText={delayOn
-                      ? "On: the chat appears on each page after the delay below, so shoppers see your page first."
-                      : "Off: the chat shows as soon as the page loads."}
-                  />
-                  <TextField
-                    label="Delay (seconds)"
-                    type="number"
-                    min={APPEAR_DELAY_MIN}
-                    max={APPEAR_DELAY_MAX}
-                    value={delaySec}
-                    onChange={setDelaySec}
-                    autoComplete="off"
-                    disabled={!delayOn}
-                    helpText={`From ${APPEAR_DELAY_MIN} to ${APPEAR_DELAY_MAX} seconds.`}
-                  />
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Chat features"
-              description="Toggle AI behaviors for the storefront chat widget."
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Follow-up questions"
-                    checked={followUps}
-                    onChange={setFollowUps}
-                    helpText="AI suggests 2-3 clickable follow-up questions after each response. Only suggests questions it can answer."
-                  />
-                  <Divider />
-                  <Checkbox
-                    label="Helpful / Not helpful feedback"
-                    checked={feedbackOn}
-                    onChange={setFeedbackOn}
-                    helpText="Shows thumbs up/down on product responses. Negative feedback appears in Analytics with hashed user data."
-                  />
-                  <Divider />
-                  <Checkbox
-                    label="Ask how the chat went"
-                    checked={ratingOn}
-                    onChange={setRatingOn}
-                    helpText="After a few replies, a small “How's the chat going?” note with thumbs up / down and an optional comment. Asked once per conversation, and not again for two weeks once a shopper answers or closes it. Ratings and comments appear in Analytics."
-                  />
-                  {ratingOn && (
-                    <Select
-                      label="Ask after"
-                      options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} replies`, value: String(n) }))}
-                      value={ratingAfter}
-                      onChange={setRatingAfter}
-                    />
-                  )}
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Widget visibility"
-              description="Choose which pages show the chat, and whether it opens with a subtle animation."
-            >
-              <BlockStack gap="400">
-                <HideUrlsPanel initial={hideOnUrls} />
-                <WelcomeIntroCard initialOn={welcomeIntroOn} />
-              </BlockStack>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Assistant look & voice"
-              description="The colors of the assistant's animated mark, and the talk button in the chat."
-            >
-              <BlockStack gap="400">
-                <OrbColorsCard initial={orbColors} initialBg={orbBackground} />
-                <VoiceInputCard initialOn={voiceInput} />
-              </BlockStack>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Testing"
-              description="Record conversations while your team tests the assistant, then review them under Test recordings."
-            >
-              <TestRecordingCard initial={recording} shopDomain={shopDomain} />
-            </Layout.AnnotatedSection>
-
-            <Layout.Section>
-              <div className="set-optional">
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">Optional add-ons</Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    {optionalOn.length > 0
-                      ? `Turned on: ${optionalOn.join(", ")}.`
-                      : "None turned on. Your assistant works fully without these."}
-                    {" "}Semantic search, styling previews, Yotpo/Klaviyo/AfterShip integrations, VIP customer experience and a daily message limit.
-                  </Text>
-                  <InlineStack>
-                    <Button onClick={() => setShowOptional((v) => !v)} disclosure={showOptional ? "up" : "down"}>
-                      {showOptional ? "Hide optional settings" : "Show optional settings"}
-                    </Button>
-                  </InlineStack>
-                </BlockStack>
+          <div className="set-shell">
+            <SettingsNav sections={sections} current={section} onSelect={open} />
+            <div className="set-links" style={{ minWidth: 0 }}>
+              <div hidden={section !== "assistant"}><AssistantSection d={d} values={values} set={set} /></div>
+              <div hidden={section !== "look"}><LookSection d={d} values={values} set={set} /></div>
+              <div hidden={section !== "visibility"}><VisibilitySection values={values} set={set} /></div>
+              <div hidden={section !== "care"}><CareSection values={values} set={set} /></div>
+              <div hidden={section !== "tools"}><ToolsSection d={d} values={values} set={set} /></div>
+              <div hidden={section !== "integrations"}><IntegrationsSection d={d} values={values} set={set} /></div>
+              <div hidden={section !== "peak"}>
+                <PeakSection d={d} values={values} set={set} draftPeak={draftPeak} mounted={mounted} onRefresh={() => revalidator.revalidate()} refreshing={revalidator.state !== "idle"} />
               </div>
-            </Layout.Section>
-
-            {showOptional && (
-              <>
-            <Layout.AnnotatedSection
-              title="Semantic search (optional)"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Sharpen product matching by meaning, not just keywords. Customers asking for "shoes for standing all day" will find arch-support styles even when the description doesn't say "standing". Handles typos, synonyms (red ≈ crimson), and use-case queries.
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Optional — the assistant already searches your catalog with AI and works fully without this. Bring your own API key from Voyage AI (recommended) or OpenAI. Cost is paid by you to the provider — typically under $1/month for catalogs under 5,000 products.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Select
-                    label="Embedding provider"
-                    options={[
-                      { label: "Disabled (use keyword search only)", value: "" },
-                      { label: "Voyage AI — recommended (cheaper, optimized for retrieval)", value: "voyage" },
-                      { label: "OpenAI", value: "openai" },
-                    ]}
-                    value={embeddingProvider}
-                    onChange={setEmbeddingProvider}
-                    helpText="Disabled keeps the current keyword search. Enabling either provider adds semantic matching on top."
-                  />
-
-                  {embeddingProvider === "voyage" && (
-                    <BlockStack gap="200">
-                      <TextField
-                        label="Voyage AI API key"
-                        type="password"
-                        value={voyageKey}
-                        onChange={setVoyageKey}
-                        autoComplete="off"
-                        placeholder={hasVoyageKey ? "•••••••• (saved)" : "pa-..."}
-                        helpText={hasVoyageKey
-                          ? "A key is saved. Leave blank to keep it; paste a new value to replace."
-                          : "Get a key at voyageai.com → Account → API keys."}
-                      />
-                    </BlockStack>
-                  )}
-
-                  {embeddingProvider === "openai" && (
-                    <BlockStack gap="200">
-                      <TextField
-                        label="OpenAI API key"
-                        type="password"
-                        value={openaiKey}
-                        onChange={setOpenaiKey}
-                        autoComplete="off"
-                        placeholder={hasOpenaiKey ? "•••••••• (saved)" : "sk-..."}
-                        helpText={hasOpenaiKey
-                          ? "A key is saved. Leave blank to keep it; paste a new value to replace."
-                          : "Get a key at platform.openai.com → API keys. Uses text-embedding-3-small."}
-                      />
-                    </BlockStack>
-                  )}
-
-                  {embeddingProvider !== "" && (
-                    <Banner tone="info">
-                      <Text as="p" variant="bodySm">
-                        After you save, your catalog is embedded automatically in the background (a few minutes). New and updated products are embedded as they change. Progress shows on the Catalog page.
-                      </Text>
-                    </Banner>
-                  )}
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="See It Styled (AI styling preview)"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    When the assistant lands on a single best product, shoppers can tap a standout button to see an AI styling preview — their actual product, styled for what they described (e.g. “heels to go with my blue dress”).
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Optional. Only appears for single-product recommendations. You bring your own image-provider key and pay that provider per image.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <VisualizeLookCard
-                initialEnabled={initVizEnabled}
-                initialProvider={initImageProvider}
-                initialLabel={initVizLabel}
-                hasGeminiKey={hasGeminiKey}
-                hasOpenaiKey={hasOpenaiKey}
-              />
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Integrations (optional)"
-              description="Connect third-party services for richer AI context — product reviews, sizing data, and return insights. Each service is independent; connect only what you use."
-            >
-              <BlockStack gap="400">
-                <PlanGate
-                  plan={plan}
-                  feature="yotpoIntegration"
-                  summary="Pull review data and customer sizing feedback into the chat — powers fit summaries, star ratings, and 'what do reviewers say' answers."
-                >
-                  <Card>
-                    <BlockStack gap="300">
-                      <InlineStack align="space-between" blockAlign="center">
-                        <InlineStack gap="200" blockAlign="center">
-                          <Text as="h3" variant="headingMd">Yotpo Reviews</Text>
-                        </InlineStack>
-                        <Badge tone={hasYotpoKey ? "success" : undefined}>
-                          {hasYotpoKey ? "Connected" : "Not set"}
-                        </Badge>
-                      </InlineStack>
-                      <Text as="p" tone="subdued" variant="bodySm">
-                        Product review data — fit summaries, star ratings, sample reviews. Powers sizing recommendations and "what do reviewers say" answers.
-                      </Text>
-                      <TextField
-                        label="Yotpo API key"
-                        labelHidden
-                        type="password"
-                        value={yotpoKey}
-                        onChange={setYotpoKey}
-                        placeholder={hasYotpoKey ? "••••••••••••••••" : "Paste key to enable"}
-                        autoComplete="off"
-                        helpText="Lets the AI reference product reviews and customer sizing feedback."
-                      />
-                    </BlockStack>
-                  </Card>
-                </PlanGate>
-
-                <PlanGate
-                  plan={plan}
-                  feature="yotpoIntegration"
-                  summary="Show points, VIP tier, and personal referral links to logged-in customers via the chat."
-                >
-                <Card>
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text as="h3" variant="headingMd">Yotpo Loyalty &amp; Referrals</Text>
-                      <Badge tone={hasYotpoLoyaltyKey ? "success" : undefined}>
-                        {hasYotpoLoyaltyKey ? "Connected" : "Not set"}
-                      </Badge>
-                    </InlineStack>
-                    <Text as="p" tone="subdued" variant="bodySm">
-                      Points, VIP tier, and personal referral link for logged-in customers. Only used when VIP mode is enabled below.
-                    </Text>
-                    <TextField
-                      label="Yotpo Loyalty API key"
-                      type="password"
-                      value={yotpoLoyaltyKey}
-                      onChange={setYotpoLoyaltyKey}
-                      placeholder={hasYotpoLoyaltyKey ? "••••••••••••••••" : "Paste key to enable loyalty VIP perks"}
-                      autoComplete="off"
-                      helpText="From Yotpo Loyalty admin → Program Settings → API Key."
-                    />
-                    <TextField
-                      label="Yotpo Loyalty GUID"
-                      value={yotpoLoyaltyGuidState}
-                      onChange={setYotpoLoyaltyGuidState}
-                      placeholder="Optional — GUID from Program Settings"
-                      autoComplete="off"
-                      helpText="Optional. Some Yotpo accounts require the GUID alongside the API key. Leave blank if your API key works alone."
-                    />
-                    <Select
-                      label="How should the chat display loyalty balances?"
-                      options={[
-                        { label: "Points (e.g. '250 points')", value: "points" },
-                        { label: "Dollar value (e.g. '$2.50 in rewards')", value: "dollars" },
-                      ]}
-                      value={loyaltyDisplay}
-                      onChange={setLoyaltyDisplay}
-                      helpText="Controls how the AI references loyalty balances to logged-in customers."
-                    />
-                    {loyaltyDisplay === "dollars" && (
-                      <BlockStack gap="300">
-                        <TextField
-                          label="Conversion rate (points per $1)"
-                          type="number"
-                          min={1}
-                          value={loyaltyPointsPerDollar}
-                          onChange={setLoyaltyPointsPerDollar}
-                          helpText="Example: 100 means 100 points = $1. 500 points → $5.00."
-                          autoComplete="off"
-                        />
-                        <Select
-                          label="Rounding"
-                          options={[
-                            { label: "Exact (e.g. $2.53)", value: "exact" },
-                            { label: "Round down (e.g. $2)", value: "down" },
-                            { label: "Round up (e.g. $3)", value: "up" },
-                          ]}
-                          value={loyaltyRounding}
-                          onChange={setLoyaltyRounding}
-                          helpText="How the converted dollar amount is displayed."
-                        />
-                      </BlockStack>
-                    )}
-                  </BlockStack>
-                </Card>
-                </PlanGate>
-
-                <PlanGate
-                  plan={plan}
-                  feature="aftershipIntegration"
-                  summary="Lets the AI cite return-reason data so it can warn customers when a product runs small or large based on real return rates."
-                >
-                  <Card>
-                    <BlockStack gap="300">
-                      <InlineStack align="space-between" blockAlign="center">
-                        <Text as="h3" variant="headingMd">Aftership</Text>
-                        <Badge tone={hasAftershipKey ? "success" : undefined}>
-                          {hasAftershipKey ? "Connected" : "Not set"}
-                        </Badge>
-                      </InlineStack>
-                      <Text as="p" tone="subdued" variant="bodySm">
-                        In-chat returns: signed-in customers pick the items and a reason in the chat and the return is created in AfterShip Returns (your return rules, labels and emails stay as they are). "Too small" / "Too large" also offers an exchange: the return plus the same shoe in the next size, ready to add to cart.
-                      </Text>
-                      <TextField
-                        label="AfterShip Returns API key"
-                        labelHidden
-                        type="password"
-                        value={aftershipKey}
-                        onChange={setAftershipKey}
-                        placeholder={hasAftershipKey ? "••••••••••••••••" : "Paste key to enable"}
-                        autoComplete="off"
-                        helpText="An AfterShip Returns API key (Settings → API keys in AfterShip; your plan needs API access). Without it, the chat sends customers to the returns page below, with their order filled in."
-                      />
-                    </BlockStack>
-                  </Card>
-                </PlanGate>
-
-                <PlanGate
-                  plan={plan}
-                  feature="klaviyoIntegration"
-                  summary="Show a newsletter signup form in the chat."
-                >
-                <Card>
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text as="h3" variant="headingMd">Klaviyo</Text>
-                    </InlineStack>
-                    <Text as="p" tone="subdued" variant="bodySm">
-                      Lets the assistant offer a newsletter signup form in the chat when a customer wants deals or updates.
-                    </Text>
-                    <TextField
-                      label="Company ID (public API key)"
-                      value={klaviyoCompanyId}
-                      onChange={setKlaviyoCompanyId}
-                      placeholder="AbC123"
-                      autoComplete="off"
-                      helpText="Found in Klaviyo → Settings → API Keys → Public API Key. Used for the in-chat signup form."
-                    />
-                    <TextField
-                      label="List ID"
-                      value={klaviyoListId}
-                      onChange={setKlaviyoListId}
-                      placeholder="XyZ789"
-                      autoComplete="off"
-                      helpText="The list to subscribe to. Found in Klaviyo → Audience → Lists → click your list → ID in the URL."
-                    />
-                  </BlockStack>
-                </Card>
-                </PlanGate>
-              </BlockStack>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="VIP customer experience"
-              description="Personalize the chat for logged-in customers using their order history and profile."
-            >
-              <PlanGate
-                plan={plan}
-                feature="vipMode"
-                summary="VIP mode greets logged-in customers by name, references their past orders for size recommendations, and unlocks Yotpo/Klaviyo enrichment in the chat."
-              >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Show login pill in chat header"
-                    checked={showLoginPill}
-                    onChange={setShowLoginPill}
-                    helpText="Adds a 'Login' button next to the menu for anonymous visitors, and 'Hi [name]!' for logged-in customers."
-                  />
-                  <Checkbox
-                    label="Enable VIP mode for logged-in customers"
-                    checked={vipMode}
-                    onChange={setVipMode}
-                    helpText="Gives the AI access to the customer's order history, lifetime spend, and tags so it can deliver a more personalized experience. No PII (email, address, payment) is ever exposed in chat."
-                  />
-                </BlockStack>
-              </Card>
-              </PlanGate>
-            </Layout.AnnotatedSection>
-
-            <Layout.AnnotatedSection
-              title="Daily message cap"
-              description={
-                <BlockStack gap="200">
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    Optional safety net to keep daily AI costs predictable.
-                  </Text>
-                  <Text as="p" tone="subdued" variant="bodySm">
-                    When enabled, the assistant pauses for the rest of the day once the cap is hit and resumes the next day at midnight UTC. Customers see a friendly &quot;back tomorrow&quot; message instead of an error. Counts every conversation across your storefront.
-                  </Text>
-                </BlockStack>
-              }
-            >
-              <Card>
-                <BlockStack gap="400">
-                  <Checkbox
-                    label="Enable daily cap"
-                    checked={dailyCapEnabled}
-                    onChange={setDailyCapEnabled}
-                    helpText="Off by default. Most stores leave this off and rely on monthly plan limits."
-                  />
-                  <TextField
-                    label="Maximum messages per day"
-                    type="number"
-                    min="1"
-                    max="100000"
-                    value={dailyCapMessages}
-                    onChange={setDailyCapMessages}
-                    disabled={!dailyCapEnabled}
-                    autoComplete="off"
-                    helpText="Conversations counted against the cap reset at midnight UTC."
-                  />
-                  {dailyCapEnabled && (
-                    <Banner tone="info">
-                      <Text as="p" variant="bodySm">
-                        <strong>Tip:</strong> a typical store costs roughly 1–3¢ per conversation depending on the AI model. Pick a cap based on how much you&apos;re willing to spend per day — for example, 200 messages at 2¢ each ≈ $4/day.
-                      </Text>
-                    </Banner>
-                  )}
-                </BlockStack>
-              </Card>
-            </Layout.AnnotatedSection>
-              </>
-            )}
-          </Layout>
-
-          <input type="hidden" name="anthropicApiKey" value={anthropicKey} />
-          <input type="hidden" name="anthropicModel" value={model} />
-          <input type="hidden" name="showFollowUps" value={String(followUps)} />
-          <input type="hidden" name="chatRatingOn" value={String(ratingOn)} />
-          <input type="hidden" name="chatRatingAfter" value={ratingAfter} />
-          <input type="hidden" name="showFeedback" value={String(feedbackOn)} />
-          <input type="hidden" name="yotpoApiKey" value={yotpoKey} />
-          <input type="hidden" name="aftershipApiKey" value={aftershipKey} />
-          <input type="hidden" name="embeddingProvider" value={embeddingProvider} />
-          <input type="hidden" name="voyageApiKey" value={voyageKey} />
-          <input type="hidden" name="openaiApiKey" value={openaiKey} />
-          <input type="hidden" name="supportUrl" value={supportUrl} />
-          <input type="hidden" name="supportLabel" value={supportLabel} />
-          <input type="hidden" name="trackingPageUrl" value={trackingPageUrl} />
-          <input type="hidden" name="returnsPageUrl" value={returnsPageUrl} />
-          <input type="hidden" name="returnsInChat" value={String(returnsInChat)} />
-          <input type="hidden" name="returnWindowDays" value={returnWindowDays} />
-          <input type="hidden" name="returnsDeliveredOnly" value={String(returnsDeliveredOnly)} />
-          <input type="hidden" name="feedbackSurveyOn" value={String(surveyOn)} />
-          <input type="hidden" name="feedbackSurvey" value={survey} />
-          <input type="hidden" name="feedbackSurveyLabel" value={surveyLabel} />
-          <input type="hidden" name="feedbackSurveyColor" value={surveyColor} />
-          <input type="hidden" name="feedbackSurveyIcon" value={surveyIcon} />
-          <input type="hidden" name="feedbackSurveyHideAfter" value={String(surveyHideAfter)} />
-          <input type="hidden" name="whichOrthotic" value={which} />
-          <input type="hidden" name="whichOrthoticLabel" value={whichLabel} />
-          <input type="hidden" name="storeLocatorMapId" value={locMap} />
-          <input type="hidden" name="storeLocatorLabel" value={locLabel} />
-          <input type="hidden" name="storeLocatorUrl" value={locUrl} />
-          <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
-          <input type="hidden" name="appearDelayOn" value={String(delayOn)} />
-          <input type="hidden" name="appearDelaySec" value={delaySec} />
-          <input type="hidden" name="startTheme" value={startLook} />
-          <input type="hidden" name="hideInternational" value={String(hideIntl)} />
-          <input type="hidden" name="homeCountries" value={homeCountries} />
-          <input type="hidden" name="promoPageUrl" value={promoUrl} />
-          <input type="hidden" name="promoPageStop" value={promoStop} />
-          <input type="hidden" name="referralPageUrl" value={referralPageUrl} />
-          <input type="hidden" name="storefrontSearchUrlPattern" value={searchPattern} />
-          <input type="hidden" name="klaviyoFormId" value={klaviyoFormId} />
-          <input type="hidden" name="klaviyoCompanyId" value={klaviyoCompanyId} />
-          <input type="hidden" name="klaviyoListId" value={klaviyoListId} />
-          <input type="hidden" name="vipModeEnabled" value={String(vipMode)} />
-          <input type="hidden" name="showLoginPill" value={String(showLoginPill)} />
-          <input type="hidden" name="yotpoLoyaltyApiKey" value={yotpoLoyaltyKey} />
-          <input type="hidden" name="yotpoLoyaltyGuid" value={yotpoLoyaltyGuidState} />
-          <input type="hidden" name="loyaltyDisplay" value={loyaltyDisplay} />
-          <input type="hidden" name="loyaltyPointsPerDollar" value={loyaltyPointsPerDollar} />
-          <input type="hidden" name="loyaltyRounding" value={loyaltyRounding} />
-          <input type="hidden" name="dailyCapEnabled" value={String(dailyCapEnabled)} />
-          <input type="hidden" name="dailyCapMessages" value={dailyCapMessages} />
-
-          <Box paddingBlockEnd="800">
-            <InlineStack align="end">
-              <Button variant="primary" submit loading={saving}>
-                Save changes
-              </Button>
-            </InlineStack>
-          </Box>
+              <div hidden={section !== "testing"}>
+                <SectionHead title="Testing">Record conversations while your team tests the assistant, then review them under Test recordings.</SectionHead>
+                <TestRecordingCard initial={d.recording} shopDomain={d.shopDomain} />
+              </div>
+              {section !== "testing" && isDirty && (
+                <div className="set-save">
+                  <InlineStack gap="200">
+                    <Button onClick={discard}>Discard</Button>
+                    <Button variant="primary" submit loading={saving}>Save changes</Button>
+                  </InlineStack>
+                </div>
+              )}
+            </div>
+          </div>
         </BlockStack>
+        {hidden}
       </Form>
 
-      {/* Contextual Save Bar — App Bridge ui-save-bar. Appears at the top of
-          the embedded admin whenever the form is dirty. The native <button>
-          children inside SaveBar use App Bridge custom attributes (variant,
-          loading) and are intentionally not Polaris components. */}
+      {/* Contextual Save Bar — App Bridge ui-save-bar, shown while anything is
+          unsaved. Its buttons are native elements with App Bridge attributes. */}
       <SaveBar id="seos-settings-save-bar" open={isDirty}>
-        <button
-          variant="primary"
-          loading={saving ? "" : undefined}
-          onClick={submitForm}
-        >
-          Save changes
-        </button>
-        <button onClick={discardChanges}>Discard</button>
+        <button variant="primary" loading={saving ? "" : undefined} onClick={() => formRef.current?.requestSubmit()}>Save changes</button>
+        <button onClick={discard}>Discard</button>
       </SaveBar>
     </Page>
+  );
+}
+
+// ── Sections ─────────────────────────────────────────────────────────────
+
+function AssistantSection({ d, values, set }) {
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Assistant">The AI behind the chat, and what it adds to its answers.</SectionHead>
+      <Group title="AI engine" badge={<Connected on={d.hasAnthropicKey} />}>
+        <Row stack>
+          <div className="set-grid">
+            <TextField
+              label="Anthropic API key"
+              type="password"
+              value={values.anthropicApiKey}
+              onChange={set("anthropicApiKey")}
+              placeholder={d.hasAnthropicKey ? "•••••••••••••••• (saved)" : "Paste API key"}
+              autoComplete="off"
+              helpText={<>Encrypted. Leave blank to keep the saved key. <a href="https://console.anthropic.com" target="_blank" rel="noreferrer">Get a key</a></>}
+            />
+            <Select
+              label="Model"
+              options={MODEL_OPTIONS.filter((o) => o.value !== "claude-opus-4-7" || d.plan.features?.advancedModel)}
+              value={values.anthropicModel}
+              onChange={set("anthropicModel")}
+              helpText="Standard is the best balance — every answer is fact-checked."
+            />
+          </div>
+        </Row>
+      </Group>
+      <Group title="In the chat">
+        <Row title="Follow-up questions" help="2–3 tappable follow-ups after each answer — only ones the assistant can answer." toggle checked={values.showFollowUps} onChange={set("showFollowUps")} />
+        <Row title="Helpful / Not helpful" help="Thumbs under product answers. Feedback shows in Analytics." toggle checked={values.showFeedback} onChange={set("showFeedback")} />
+        <Row title="Ask how the chat went" help="A quiet “How's the chat going?” after a few replies, once per chat. Ratings and comments show in Analytics." toggle checked={values.chatRatingOn} onChange={set("chatRatingOn")}>
+          <div style={{ maxWidth: 220 }}>
+            <Select label="Ask after" options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} replies`, value: String(n) }))} value={values.chatRatingAfter} onChange={set("chatRatingAfter")} />
+          </div>
+        </Row>
+      </Group>
+    </BlockStack>
+  );
+}
+
+function LookSection({ d, values, set }) {
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Look & feel">How the assistant looks and moves on your store.</SectionHead>
+      <Group>
+        <Row
+          title="Starts in"
+          help="The look shoppers see first. They can switch with the sun/moon button; their pick is remembered."
+          control={<div style={{ width: 150 }}><Select label="Starts in" labelHidden options={[{ label: "Dark mode", value: "dark" }, { label: "Light mode", value: "light" }]} value={values.startTheme} onChange={set("startTheme")} /></div>}
+        />
+        <Row title="Opening animation" help="The panel springs up and the welcome rises in. Skipped for shoppers who prefer reduced motion." toggle checked={values.welcomeIntroOn} onChange={set("welcomeIntroOn")} />
+        <Row title="Talk button" help="A mic in the message box: shoppers speak and their words appear as they talk. Shown where the browser supports it." toggle checked={values.voiceInput} onChange={set("voiceInput")} />
+      </Group>
+      <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} />
+    </BlockStack>
+  );
+}
+
+function VisibilitySection({ values, set }) {
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Where it shows">When the chat appears, and for whom.</SectionHead>
+      <Group>
+        <Row title="Wait before showing" help="The chat appears after a short delay, so shoppers see your page first." toggle checked={values.appearDelayOn} onChange={set("appearDelayOn")}>
+          <div style={{ maxWidth: 220 }}>
+            <TextField label="Delay" type="number" min={APPEAR_DELAY_MIN} max={APPEAR_DELAY_MAX} value={values.appearDelaySec} onChange={set("appearDelaySec")} autoComplete="off" suffix="seconds" helpText={`${APPEAR_DELAY_MIN}–${APPEAR_DELAY_MAX} seconds.`} />
+          </div>
+        </Row>
+        <Row title="Hide for international shoppers" help="Shoppers outside your home countries (as Global-e or Shopify Markets sets them) don't see the chat — its prices are in your store's currency." toggle checked={values.hideInternational} onChange={set("hideInternational")}>
+          <div style={{ maxWidth: 320 }}>
+            <TextField label="Home countries" value={values.homeCountries} onChange={set("homeCountries")} placeholder="US" autoComplete="off" helpText="Two-letter codes, separated by commas (e.g. US, PR)." />
+          </div>
+        </Row>
+        <Row title="Hide the Zendesk chat button" help="Removes the separate live chat button from the corner. Live chat still opens from the assistant when a shopper asks for a person." toggle checked={values.hideLiveChatButton} onChange={set("hideLiveChatButton")} />
+      </Group>
+      <Group title="Hidden on these pages">
+        <Row stack help="The chat stays off pages whose link is (or contains) one of these.">
+          <HideOnPages rules={values.hideOnUrls} onChange={set("hideOnUrls")} />
+        </Row>
+      </Group>
+    </BlockStack>
+  );
+}
+
+function CareSection({ values, set }) {
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Customer care">Handing shoppers to your team, and their orders and returns.</SectionHead>
+      <Group title="Support">
+        <Row stack help="When a shopper needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias), or this page if there isn't one.">
+          <div className="set-grid">
+            <TextField label="Support page" value={values.supportUrl} onChange={set("supportUrl")} placeholder="https://yourstore.com/pages/contact" autoComplete="off" helpText="Blank: the theme editor's Support URL." />
+            <TextField label="Button label" value={values.supportLabel} onChange={set("supportLabel")} placeholder="Chat with Aetrex Support" autoComplete="off" />
+          </div>
+        </Row>
+      </Group>
+      <Group title="Orders & returns">
+        <Row stack>
+          <div className="set-grid">
+            <TextField label="Order tracking page" value={values.trackingPageUrl} onChange={set("trackingPageUrl")} placeholder="https://orders.yourstore.com" autoComplete="off" helpText="Signed-in shoppers' tracking links open here." />
+            <TextField label="Returns page" value={values.returnsPageUrl} onChange={set("returnsPageUrl")} placeholder="https://returns.yourstore.com" autoComplete="off" helpText="Your AfterShip Returns page, prefilled with the order." />
+          </div>
+        </Row>
+        <Row
+          title="Returns and exchanges in the chat"
+          help={values.returnsInChat ? "Signed-in shoppers start returns and exchanges right in the chat (needs the AfterShip key in Integrations)." : "Order cards show “Start a return”, which opens the returns page with the order filled in."}
+          toggle
+          checked={values.returnsInChat}
+          onChange={set("returnsInChat")}
+        />
+        <Row
+          title="Return window"
+          help="Older orders don't get a return button, and the assistant explains why. 0 = no limit."
+          control={<div style={{ width: 130 }}><TextField label="Return window" labelHidden type="number" min={0} max={365} value={values.returnWindowDays} onChange={set("returnWindowDays")} autoComplete="off" suffix="days" /></div>}
+        />
+        <Row title="Only after delivery" help={values.returnsDeliveredOnly ? "The return button appears once the order is delivered." : "The return button appears as soon as the order ships."} toggle checked={values.returnsDeliveredOnly} onChange={set("returnsDeliveredOnly")} />
+      </Group>
+    </BlockStack>
+  );
+}
+
+function ToolsSection({ d, values, set }) {
+  const mapId = storepointId(values.storeLocatorMapId);
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Shopping tools">Helpers shoppers can open right inside the chat.</SectionHead>
+      <Group>
+        <Row title="Promotions page" help="The assistant reads your offers page live (every 15 minutes), so it knows what's running." stack>
+          <div className="set-grid">
+            <TextField label="Page link" value={values.promoPageUrl} onChange={set("promoPageUrl")} placeholder="https://www.aetrex.com/pages/terms-conditions" autoComplete="off" />
+            <TextField label="Offers end at this line" value={values.promoPageStop} onChange={set("promoPageStop")} placeholder="STANDARD TERMS AND CONDITIONS OF SALE" autoComplete="off" disabled={!values.promoPageUrl.trim()} helpText="Only text above it counts as offers." />
+          </div>
+        </Row>
+        <Row title="Which orthotic do I have?" help="A visual quiz (Typeform) that tells shoppers which orthotic they own, so they can reorder it." stack>
+          <div className="set-grid">
+            <TextField label="Typeform quiz" value={values.whichOrthotic} onChange={set("whichOrthotic")} placeholder="ojyWbTvZ or its link" autoComplete="off" helpText="Blank turns it off." />
+            <TextField label="Button text" value={values.whichOrthoticLabel} onChange={set("whichOrthoticLabel")} maxLength={40} autoComplete="off" disabled={!values.whichOrthotic.trim()} />
+          </div>
+        </Row>
+        <Row title="Store locator" help="Your Storepoint map, opened in the chat when a shopper asks where to buy or try on in person." stack>
+          <div className="set-grid set-grid--3">
+            <TextField label="Storepoint map" value={values.storeLocatorMapId} onChange={set("storeLocatorMapId")} placeholder="Map ID or embed code" autoComplete="off" helpText={mapId ? `Map ${mapId}` : "Blank turns it off."} />
+            <TextField label="Button text" value={values.storeLocatorLabel} onChange={set("storeLocatorLabel")} maxLength={40} autoComplete="off" disabled={!mapId} />
+            <TextField label="Locator page" value={values.storeLocatorUrl} onChange={set("storeLocatorUrl")} placeholder="/pages/store-locator" autoComplete="off" disabled={!mapId} helpText="If the map can't load." />
+          </div>
+        </Row>
+        <Row
+          title="Feedback button"
+          help="The fourth Start here button becomes your survey, opened inside the chat. The site's own floating Feedback button is hidden."
+          toggle
+          checked={values.feedbackSurveyOn}
+          onChange={set("feedbackSurveyOn")}
+        >
+          <BlockStack gap="300">
+            <div className="set-grid">
+              <TextField label="Typeform survey" value={values.feedbackSurvey} onChange={set("feedbackSurvey")} placeholder="jdXBrXMa or its link" autoComplete="off" />
+              <TextField label="Button text" value={values.feedbackSurveyLabel} onChange={set("feedbackSurveyLabel")} maxLength={40} autoComplete="off" />
+              <Select label="Button color" options={SURVEY_COLORS} value={values.feedbackSurveyColor} onChange={set("feedbackSurveyColor")} />
+              <Select label="Button icon" options={SURVEY_ICONS} value={values.feedbackSurveyIcon} onChange={set("feedbackSurveyIcon")} />
+            </div>
+            <InlineStack gap="300" blockAlign="center" wrap={false}>
+              <Switch checked={values.feedbackSurveyHideAfter} onChange={set("feedbackSurveyHideAfter")} label="Hide after a shopper sends it" />
+              <Text as="span" variant="bodySm">Hide it once a shopper has sent the form <Text as="span" tone="subdued">(right for a one-time survey)</Text></Text>
+            </InlineStack>
+          </BlockStack>
+        </Row>
+      </Group>
+      <Group>
+        <VisualizeLook initialEnabled={d.visualizeLookEnabled} initialProvider={d.imageProvider} initialLabel={d.visualizeLookLabel} hasGeminiKey={d.hasGeminiKey} hasOpenaiKey={d.hasOpenaiKey} />
+      </Group>
+    </BlockStack>
+  );
+}
+
+function IntegrationsSection({ d, values, set }) {
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Integrations">Connect the services you already use. Each one is optional.</SectionHead>
+      <Group>
+        <Integration title="Yotpo Reviews" help="Star ratings, fit summaries and “what do reviewers say” answers." connected={d.hasYotpoKey}>
+          <TextField label="Yotpo API key" type="password" value={values.yotpoApiKey} onChange={set("yotpoApiKey")} placeholder={d.hasYotpoKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText={d.hasYotpoKey ? "Leave blank to keep the saved key." : undefined} />
+        </Integration>
+        <Integration title="Yotpo Loyalty & Referrals" help="Points, VIP tier and a personal referral link for signed-in shoppers (with VIP mode on)." connected={d.hasYotpoLoyaltyKey}>
+          <div className="set-grid">
+            <TextField label="Loyalty API key" type="password" value={values.yotpoLoyaltyApiKey} onChange={set("yotpoLoyaltyApiKey")} placeholder={d.hasYotpoLoyaltyKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText="Yotpo Loyalty → Program Settings → API Key." />
+            <TextField label="GUID (optional)" value={values.yotpoLoyaltyGuid} onChange={set("yotpoLoyaltyGuid")} autoComplete="off" helpText="Only if your account needs it." />
+            <Select label="Show balances as" options={[{ label: "Points (250 points)", value: "points" }, { label: "Dollars ($2.50 in rewards)", value: "dollars" }]} value={values.loyaltyDisplay} onChange={set("loyaltyDisplay")} />
+            <TextField label="Referral page" value={values.referralPageUrl} onChange={set("referralPageUrl")} placeholder="https://yourstore.com/pages/refer" autoComplete="off" helpText="When a shopper's own link isn't available." />
+            {values.loyaltyDisplay === "dollars" && (
+              <>
+                <TextField label="Points per $1" type="number" min={1} value={values.loyaltyPointsPerDollar} onChange={set("loyaltyPointsPerDollar")} autoComplete="off" />
+                <Select label="Rounding" options={[{ label: "Exact ($2.53)", value: "exact" }, { label: "Round down ($2)", value: "down" }, { label: "Round up ($3)", value: "up" }]} value={values.loyaltyRounding} onChange={set("loyaltyRounding")} />
+              </>
+            )}
+          </div>
+        </Integration>
+        <Integration title="AfterShip Returns" help="Returns and exchanges started right in the chat, with your rules, labels and emails." connected={d.hasAftershipKey}>
+          <TextField label="AfterShip Returns API key" type="password" value={values.aftershipApiKey} onChange={set("aftershipApiKey")} placeholder={d.hasAftershipKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText="AfterShip → Settings → API keys (your plan needs API access)." />
+        </Integration>
+        <Integration title="Klaviyo" help="A newsletter signup form in the chat when a shopper wants deals or updates." connected={Boolean(values.klaviyoCompanyId && values.klaviyoListId)}>
+          <div className="set-grid">
+            <TextField label="Company ID (public key)" value={values.klaviyoCompanyId} onChange={set("klaviyoCompanyId")} placeholder="AbC123" autoComplete="off" helpText="Klaviyo → Settings → API Keys." />
+            <TextField label="List ID" value={values.klaviyoListId} onChange={set("klaviyoListId")} placeholder="XyZ789" autoComplete="off" helpText="Audience → Lists → your list." />
+          </div>
+        </Integration>
+        <Integration
+          title="Semantic search"
+          help="Finds the right part of your store's pages and team notes by meaning, not just matching words."
+          connected={Boolean(values.embeddingProvider)}
+          connectedLabel={values.embeddingProvider === "voyage" ? "Voyage AI" : "OpenAI"}
+        >
+          <div className="set-grid">
+            <Select label="Provider" options={[{ label: "Off (keyword matching)", value: "" }, { label: "Voyage AI — recommended", value: "voyage" }, { label: "OpenAI", value: "openai" }]} value={values.embeddingProvider} onChange={set("embeddingProvider")} />
+            {values.embeddingProvider === "voyage" && (
+              <TextField label="Voyage AI key" type="password" value={values.voyageApiKey} onChange={set("voyageApiKey")} placeholder={d.hasVoyageKey ? "•••••••• (saved)" : "pa-..."} autoComplete="off" />
+            )}
+            {values.embeddingProvider === "openai" && (
+              <TextField label="OpenAI key" type="password" value={values.openaiApiKey} onChange={set("openaiApiKey")} placeholder={d.hasOpenaiKey ? "•••••••• (saved)" : "sk-..."} autoComplete="off" />
+            )}
+          </div>
+        </Integration>
+      </Group>
+      <Group title="Signed-in shoppers">
+        <Row title="Login button in the chat" help="“Login” for visitors, “Hi [name]!” for signed-in shoppers." toggle checked={values.showLoginPill} onChange={set("showLoginPill")} />
+        <Row title="VIP mode" help="The assistant uses a signed-in shopper's order history to personalize sizes and suggestions. No email, address or payment details are ever shown." toggle checked={values.vipModeEnabled} onChange={set("vipModeEnabled")} />
+      </Group>
+    </BlockStack>
+  );
+}
+
+function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing }) {
+  const p = d.pulse;
+  const perMin = Number(values.chatLimitPerMin) || 0;
+  const perHour = Number(values.chatLimitPerHour) || 0;
+  const peakMin = Number(values.peakLimitPerMin) || 0;
+  const peakHour = Number(values.peakLimitPerHour) || 0;
+  const avg = p?.avgCostUsd || 0;
+  const away = p ? p.turnedAway.storeLimit + p.turnedAway.dailyCap + p.turnedAway.aiBusy : 0;
+  const limitText = (m, h) => `${m ? `${fmtNum(m)} a minute` : "no per-minute limit"} · ${h ? `${fmtNum(h)} an hour` : "no hourly limit"}`;
+  const tight = p && perMin > 0 && p.busiestMinute >= perMin * 0.7;
+
+  const status = !mounted ? null
+    : draftPeak.active ? { tone: "success", text: draftPeak.mode === "on" ? "On now" : `On until ${draftPeak.endsAt ? fmtDay(draftPeak.endsAt, -1) : "you turn it off"}` }
+    : draftPeak.upcoming ? { tone: "info", text: `Starts ${fmtDay(draftPeak.startsAt)}` }
+    : draftPeak.ended ? { tone: undefined, text: "Schedule ended" }
+    : { tone: undefined, text: "Off" };
+
+  const chooseMode = (mode) => set("peakMode")(mode);
+
+  return (
+    <BlockStack gap="400">
+      <SectionHead title="Peak Mode">Built for your biggest days — sales, launches and holidays. Higher chat limits and nothing heavy running in the background, so every shopper gets an answer.</SectionHead>
+
+      <Group>
+        <div className="set-peak-top">
+          <div className={`set-peak-mark${draftPeak.active ? " set-peak-mark--on" : ""}`} aria-hidden="true"><Icon source={GaugeIcon} /></div>
+          <BlockStack gap="300">
+            <InlineStack gap="300" blockAlign="center">
+              <ButtonGroup variant="segmented">
+                <Button pressed={values.peakMode === "off"} onClick={() => chooseMode("off")}>Off</Button>
+                <Button pressed={values.peakMode === "on"} onClick={() => chooseMode("on")}>On now</Button>
+                <Button pressed={values.peakMode === "scheduled"} onClick={() => chooseMode("scheduled")}>Schedule</Button>
+              </ButtonGroup>
+              {status && <Badge tone={status.tone}>{status.text}</Badge>}
+            </InlineStack>
+            {values.peakMode === "scheduled" && (
+              <div className="set-grid" style={{ maxWidth: 420 }}>
+                <TextField label="First day" type="date" value={mounted ? dayOf(values.peakStartsAt) : ""} onChange={(day) => set("peakStartsAt")(startOfDay(day))} autoComplete="off" />
+                <TextField label="Last day" type="date" value={mounted ? dayOf(values.peakEndsAt, -1) : ""} onChange={(day) => set("peakEndsAt")(startOfDay(day, 1))} autoComplete="off" helpText="Blank: until you turn it off." />
+              </div>
+            )}
+          </BlockStack>
+        </div>
+        <Row title="Higher chat limits" help={`${limitText(peakMin, peakHour)} — set below.`} control={<span aria-label="Included"><Icon source={CheckCircleIcon} tone="success" /></span>} />
+        <Row title="Lift the daily message cap" help={values.dailyCapEnabled ? "The assistant never goes quiet on your busiest day." : "Only matters when the daily cap below is on."} toggle checked={values.peakLiftDailyCap} onChange={set("peakLiftDailyCap")} />
+        <Row title="Pause the nightly catalog refresh" help="The full re-sync sits out. Product and stock changes still reach the chat live." toggle checked={values.peakPauseSync} onChange={set("peakPauseSync")} />
+      </Group>
+
+      <Group title="Right now" badge={<Button variant="plain" onClick={onRefresh} loading={refreshing}>Refresh</Button>}>
+        <Row stack>
+          {p ? (
+            <BlockStack gap="300">
+              <div className="set-grid set-grid--3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+                <Stat label="Last minute" value={fmtNum(p.lastMinute)} hint="messages" />
+                <Stat label="Last hour" value={fmtNum(p.lastHour)} hint="messages" />
+                <Stat label="Busiest minute" value={fmtNum(p.busiestMinute)} hint="past 7 days" />
+                <Stat label="Busiest hour" value={fmtNum(p.busiestHour)} hint="past 7 days" />
+              </div>
+              <Text as="p" variant="bodySm" tone={away ? "critical" : "subdued"}>
+                {away
+                  ? `${fmtNum(away)} shopper message${away === 1 ? " was" : "s were"} turned away in the past 7 days — store limit ${fmtNum(p.turnedAway.storeLimit)}, daily cap ${fmtNum(p.turnedAway.dailyCap)}, AI provider busy ${fmtNum(p.turnedAway.aiBusy)}.`
+                  : "No shopper was turned away in the past 7 days."}
+                {avg > 0 ? ` A message costs about ${(avg * 100).toFixed(1)}¢ on average.` : ""}
+              </Text>
+            </BlockStack>
+          ) : (
+            <Text as="p" variant="bodySm" tone="subdued">Numbers show here once shoppers start chatting.</Text>
+          )}
+        </Row>
+      </Group>
+
+      <Group title="Chat limits">
+        <Row stack help="Messages from all shoppers together — a safety net against bots and runaway spend. 0 = no limit.">
+          <BlockStack gap="300">
+            {d.limitsOverridden && <Banner tone="warning">A server setting (CHAT_STORE_PER_MIN / CHAT_STORE_PER_HOUR) is overriding these limits.</Banner>}
+            <div className="set-limits" role="group" aria-label="Chat limits">
+              <span />
+              <Text as="span" variant="headingXs">Every day</Text>
+              <Text as="span" variant="headingXs">In Peak Mode</Text>
+              <Text as="span" variant="bodySm">Messages a minute</Text>
+              <TextField label="Every day, messages a minute" labelHidden type="number" min={0} value={values.chatLimitPerMin} onChange={set("chatLimitPerMin")} autoComplete="off" />
+              <TextField label="In Peak Mode, messages a minute" labelHidden type="number" min={0} value={values.peakLimitPerMin} onChange={set("peakLimitPerMin")} autoComplete="off" />
+              <Text as="span" variant="bodySm">Messages an hour</Text>
+              <TextField label="Every day, messages an hour" labelHidden type="number" min={0} value={values.chatLimitPerHour} onChange={set("chatLimitPerHour")} autoComplete="off" />
+              <TextField label="In Peak Mode, messages an hour" labelHidden type="number" min={0} value={values.peakLimitPerHour} onChange={set("peakLimitPerHour")} autoComplete="off" />
+            </div>
+            {avg > 0 && (perHour > 0 || peakHour > 0) && (
+              <Text as="p" variant="bodySm" tone="subdued">
+                At about {(avg * 100).toFixed(1)}¢ a message, the hourly limits keep spend under {perHour > 0 ? `${fmtMoney(perHour * avg)} an hour every day` : "— (no everyday limit)"}{peakHour > 0 ? ` and ${fmtMoney(peakHour * avg)} an hour in Peak Mode` : ""}.
+              </Text>
+            )}
+            {tight && <Banner tone="warning">Your busiest minute this week reached {fmtNum(p.busiestMinute)} messages — close to the everyday limit of {fmtNum(perMin)}. Consider raising it.</Banner>}
+          </BlockStack>
+        </Row>
+      </Group>
+
+      <Group title="Daily message cap">
+        <Row
+          title="Stop for the day after a set number of messages"
+          help={`Off for most stores. When it's reached, the assistant says it's back tomorrow (resets at midnight UTC).${values.peakLiftDailyCap ? " Lifted while Peak Mode is on." : ""}`}
+          toggle
+          checked={values.dailyCapEnabled}
+          onChange={set("dailyCapEnabled")}
+        >
+          <div style={{ maxWidth: 220 }}>
+            <TextField label="Messages per day" type="number" min={1} max={100000} value={values.dailyCapMessages} onChange={set("dailyCapMessages")} autoComplete="off" />
+          </div>
+        </Row>
+      </Group>
+
+      <Box paddingInlineStart="100">
+        <BlockStack gap="100">
+          <Text as="h4" variant="headingXs">Before a big day</Text>
+          <Text as="p" variant="bodySm" tone="subdued">· Turn Peak Mode on (or schedule it) a day early.</Text>
+          <Text as="p" variant="bodySm" tone="subdued">· Check your Anthropic spend limit covers the event (console.anthropic.com → Settings → Limits).</Text>
+          <Text as="p" variant="bodySm" tone="subdued">· Hold app updates until it's over.</Text>
+        </BlockStack>
+      </Box>
+    </BlockStack>
   );
 }

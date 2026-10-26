@@ -27,7 +27,9 @@ const { default: prisma } = await import("../app/db.server.js");
 const { recordHealth, getHealthSummary, cleanupOldHealth } = await import("../app/models/ChatHealth.server.js");
 const { saveCampaign } = await import("../app/models/Campaign.server.js");
 const { saveDecisionTree, incrementCompletedCount } = await import("../app/models/DecisionTree.server.js");
-const { getShopConfig, saveKnowledgeFile, deleteKnowledgeFile, incrementRateLimitHits } = await import("../app/models/ShopConfig.server.js");
+const { getShopConfig, getShopConfigCached, updateShopConfig, saveKnowledgeFile, deleteKnowledgeFile, incrementRateLimitHits } = await import("../app/models/ShopConfig.server.js");
+const { getChatPulse } = await import("../app/models/ChatHealth.server.js");
+const { getUsageSummary } = await import("../app/models/ChatUsage.server.js");
 const { recordFeedback, recordChatRating } = await import("../app/models/ChatFeedback.server.js");
 const { syncCatalog } = await import("../app/models/Product.server.js");
 const { healthCheck: healthz } = await import("../app/lib/health-check.server.js");
@@ -198,10 +200,56 @@ await test("re-syncing the website keeps unchanged chunks and replaces only what
   assert.equal(rows.length, changed.chunks);
 });
 
+console.log("\nbusy days");
+await test("Peak Mode settings: a new store gets the everyday and peak limits", async () => {
+  const c = await getShopConfig(B);
+  assert.equal(c.chatLimitPerMin, 120);
+  assert.equal(c.chatLimitPerHour, 3000);
+  assert.equal(c.peakMode, "off");
+  assert.equal(c.peakLimitPerMin, 300);
+  assert.equal(c.peakLimitPerHour, 8000);
+  assert.equal(c.peakLiftDailyCap, true);
+  assert.equal(c.peakPauseSync, true);
+});
+await test("the storefront's config cache: one read for a burst, cleared the moment settings are saved", async () => {
+  const first = await Promise.all(Array.from({ length: 20 }, () => getShopConfigCached(B)));
+  assert.ok(first.every((c) => c === first[0]), "a burst shares one read");
+  await updateShopConfig(B, { peakMode: "on", peakLimitPerMin: 450 });
+  const after = await getShopConfigCached(B);
+  assert.equal(after.peakMode, "on");
+  assert.equal(after.peakLimitPerMin, 450);
+});
+await test("Peak Mode's live numbers: messages now, busiest minute and hour, cost, shoppers turned away", async () => {
+  const now = new Date();
+  const ago = (ms) => new Date(now.getTime() - ms);
+  await prisma.chatUsage.createMany({ data: [
+    ...Array.from({ length: 3 }, () => ({ shop: B, model: "m", costUsd: 0.04, createdAt: ago(20_000) })),
+    ...Array.from({ length: 5 }, () => ({ shop: B, model: "m", costUsd: 0.02, createdAt: ago(2 * 60 * 60_000) })),
+    { shop: B, model: "m", costUsd: 9, internal: true, createdAt: ago(10_000) },
+  ] });
+  await prisma.chatHealthEvent.createMany({ data: [
+    { shop: B, ok: false, errorKind: "store_rate_limited" },
+    { shop: B, ok: false, errorKind: "store_rate_limited" },
+    { shop: B, ok: false, errorKind: "daily_cap" },
+    { shop: B, ok: false, errorKind: "rate_limit" },
+    { shop: B, ok: false, errorKind: "client_left" },
+  ] });
+  const p = await getChatPulse(B, now);
+  assert.equal(p.lastMinute, 3, "test chats aren't counted");
+  assert.equal(p.lastHour, 3);
+  assert.equal(p.busiestHour, 5);
+  assert.ok(p.busiestMinute >= 3 && p.busiestMinute <= 5);
+  assert.ok(Math.abs(p.avgCostUsd - 0.0275) < 1e-6, String(p.avgCostUsd));
+  assert.deepEqual(p.turnedAway, { storeLimit: 2, dailyCap: 1, aiBusy: 1 });
+  const usage = await getUsageSummary(B, 7);
+  assert.equal(usage.totalMessages, 8, "dashboard summary reads only real chats");
+  assert.ok(Math.abs(usage.totalCost - 0.22) < 1e-6, String(usage.totalCost));
+});
+
 // Cleanup — every row this run created.
 for (const shop of [A, B]) {
   await prisma.product.deleteMany({ where: { shop } });
-  for (const m of ["chatHealthEvent", "knowledgeChunk", "campaign", "decisionTree", "knowledgeFile", "chatFeedback", "catalogSyncState", "shopConfig"]) {
+  for (const m of ["chatHealthEvent", "chatUsage", "knowledgeChunk", "campaign", "decisionTree", "knowledgeFile", "chatFeedback", "catalogSyncState", "shopConfig"]) {
     await prisma[m].deleteMany({ where: { shop } });
   }
 }

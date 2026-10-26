@@ -1,0 +1,10 @@
+-- Store-wide chat limits and Peak Mode (Settings → Peak Mode).
+ALTER TABLE "ShopConfig" ADD COLUMN "chatLimitPerMin" INTEGER NOT NULL DEFAULT 120;
+ALTER TABLE "ShopConfig" ADD COLUMN "chatLimitPerHour" INTEGER NOT NULL DEFAULT 3000;
+ALTER TABLE "ShopConfig" ADD COLUMN "peakMode" TEXT NOT NULL DEFAULT 'off';
+ALTER TABLE "ShopConfig" ADD COLUMN "peakStartsAt" TIMESTAMP(3);
+ALTER TABLE "ShopConfig" ADD COLUMN "peakEndsAt" TIMESTAMP(3);
+ALTER TABLE "ShopConfig" ADD COLUMN "peakLimitPerMin" INTEGER NOT NULL DEFAULT 300;
+ALTER TABLE "ShopConfig" ADD COLUMN "peakLimitPerHour" INTEGER NOT NULL DEFAULT 8000;
+ALTER TABLE "ShopConfig" ADD COLUMN "peakLiftDailyCap" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "ShopConfig" ADD COLUMN "peakPauseSync" BOOLEAN NOT NULL DEFAULT true;

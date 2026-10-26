@@ -16,7 +16,8 @@ import { fetchCustomerContext } from "../customer-context.server.js";
 import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
 import { getPagePromos } from "../promo-page.server.js";
-import { promoPageBlock } from "../promo-page.js";
+import { promoPageBlock, nowNote } from "../promo-page.js";
+import { savedFitNote } from "../orthotic-finder.server.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
@@ -60,7 +61,7 @@ export function formatLoyalty(loyalty, config = {}) {
 }
 
 // Pure: the per-request system block. Exported for tests.
-export function buildStoreContextBlock({ rules = [], campaigns = [], customer = null, loyaltyText = "", pagePromos = "", promoPageUrl = "", now = new Date() } = {}) {
+export function buildStoreContextBlock({ rules = [], campaigns = [], customer = null, loyaltyText = "", pagePromos = "", promoPageUrl = "" } = {}) {
   const parts = [];
   const ruleText = rules.map((r) => String(r || "").trim()).filter(Boolean).join("\n\n").slice(0, MAX_RULES_CHARS);
   if (ruleText) parts.push(`INSTRUCTIONS FROM THE STORE TEAM (apply them to what the customer means in this conversation)\n${ruleText}`);
@@ -75,7 +76,7 @@ export function buildStoreContextBlock({ rules = [], campaigns = [], customer = 
     parts.push("ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now. Marked-down products may still be on sale — find them with the product search (on_sale: true).");
   }
   // The store's promotions page, read live (Settings → Promotions page).
-  const pageBlock = promoPageBlock({ text: pagePromos, url: promoPageUrl, now });
+  const pageBlock = promoPageBlock({ text: pagePromos, url: promoPageUrl });
   if (pageBlock) parts.push(`${pageBlock}\nWhen the customer asks about sales, promotions or deals, list the running offers above first, then marked-down products (product search, on_sale: true).`);
   if (customer?.firstName) {
     const lines = [`The customer is logged in. First name: ${customer.firstName} (use it at most once, naturally).`];
@@ -244,6 +245,10 @@ export async function buildLeanStoreExtras({
     }));
   }
 
+  // The orthotic finder's tool reads the same for every shopper; their saved
+  // FIT (if any) is told alongside.
+  const fitNote = (rec.tools || []).some((d) => d?.input_schema?.properties?.fit) ? savedFitNote(fitfinder) : "";
+
   log(
     `[lean] store extras: tools=[${tools.map((t) => t.definition.name).join(",") || "-"}] ` +
     `rules=${rules.length} promos=${campaigns.length} pagePromos=${pagePromos ? pagePromos.length : 0} customer=${customer?.firstName ? "yes" : "no"}`,
@@ -252,5 +257,9 @@ export async function buildLeanStoreExtras({
     tools,
     similarAttributes: Array.isArray(similarAttributes) ? similarAttributes.map(String).filter(Boolean) : [],
     systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText, pagePromos, promoPageUrl: config.promoPageUrl || "" }),
+    // This shopper and page (after the cached prompt), and the current time
+    // with their latest message, so offers' end dates can be checked.
+    pageBlock: [trueFit?.pageNote, fitNote].filter(Boolean).join("\n\n"),
+    turnNote: campaigns.length || pagePromos ? nowNote() : "",
   };
 }

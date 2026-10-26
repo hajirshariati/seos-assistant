@@ -82,16 +82,40 @@ function resolveRange(arg) {
   return { start, end: new Date() };
 }
 
-export async function getUsageSummary(shop, range = 30) {
-  const { start, end } = resolveRange(range);
-  const records = await prisma.chatUsage.findMany({
-    where: { shop, internal: false, createdAt: { gte: start, lte: end } },
-    orderBy: { createdAt: "desc" },
-  });
-  return summarizeUsageRecords(records, start.toISOString(), end.toISOString());
+// The dashboards read every chat row in their range. On a busy day staff
+// refresh them often on the same server that answers shoppers, so each
+// result is kept for a minute and only the columns the summaries use are read.
+const SUMMARY_TTL_MS = 60_000;
+const summaryCache = new Map(); // key → { at, value }
+function cachedSummary(key, compute) {
+  const hit = summaryCache.get(key);
+  if (hit && Date.now() - hit.at < SUMMARY_TTL_MS) return hit.value;
+  const value = compute();
+  summaryCache.set(key, { at: Date.now(), value });
+  value.catch(() => summaryCache.delete(key));
+  if (summaryCache.size > 200) summaryCache.delete(summaryCache.keys().next().value);
+  return value;
 }
 
-export async function getDailySeries(shop, range = 30, { timeZone = "" } = {}) {
+const SUMMARY_COLUMNS = { createdAt: true, model: true, inputTokens: true, outputTokens: true, toolCalls: true, costUsd: true, embeddingCostUsd: true, imageCostUsd: true, imageCount: true };
+
+export function getUsageSummary(shop, range = 30) {
+  return cachedSummary(`usage|${shop}|${JSON.stringify(range)}`, async () => {
+    const { start, end } = resolveRange(range);
+    const records = await prisma.chatUsage.findMany({
+      where: { shop, internal: false, createdAt: { gte: start, lte: end } },
+      select: SUMMARY_COLUMNS,
+      orderBy: { createdAt: "desc" },
+    });
+    return summarizeUsageRecords(records, start.toISOString(), end.toISOString());
+  });
+}
+
+export function getDailySeries(shop, range = 30, { timeZone = "" } = {}) {
+  return cachedSummary(`daily|${shop}|${JSON.stringify(range)}|${timeZone}`, () => dailySeries(shop, range, { timeZone }));
+}
+
+async function dailySeries(shop, range, { timeZone }) {
   const dayKey = dayKeyIn(timeZone);
   const { start, end } = resolveRange(range);
   const [usageRows, feedbackRows] = await Promise.all([

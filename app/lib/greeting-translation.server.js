@@ -18,6 +18,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import prisma from "../db.server";
+import { forgetShopConfig } from "../models/ShopConfig.server.js";
 import { DEFAULT_MODEL } from "./claude-models.js";
 import { TARGET_LANGUAGES, curatedTranslations } from "./greeting-curated.js";
 
@@ -57,7 +58,7 @@ export function getGreetingCtaTranslations(config, requestedPhrase) {
         return prisma.shopConfig.update({
           where: { shop: config.shop },
           data: { greetingCtaTranslations: JSON.stringify({ v: CACHE_VERSION, phrase, results }) },
-        });
+        }).then(() => forgetShopConfig(config.shop));
       })
       .catch((err) => console.error("[greeting-translation] failed:", err?.message || err));
   }

@@ -6,7 +6,7 @@
 
 import { authenticate } from "../shopify.server";
 import { shouldRecord, cleanTester } from "../lib/chat-recording.js";
-import { getShopConfig } from "../models/ShopConfig.server";
+import { getShopConfigCached } from "../models/ShopConfig.server";
 import { getTodayMessageCount } from "../models/ChatUsage.server";
 import { leanChatResponse } from "../lib/lean/respond.server.js";
 import { sanitizeHistory, withoutTrailingCopy } from "../lib/lean/history.js";
@@ -14,6 +14,7 @@ import { sanitizeFitfinder } from "../lib/orthotic-finder.js";
 import { sanitizeSizeFinder } from "../lib/lean/size-finder.server.js";
 import { checkIpShopRate, checkStoreChatRate, clientIp } from "../lib/rate-limit.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
+import { storeChatLimits, dailyCapApplies, busyMessage } from "../lib/peak-mode.js";
 
 // Real questions are short; very long pastes would crowd out the context.
 const MAX_MESSAGE_CHARS = 2000;
@@ -70,20 +71,21 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
       { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
     );
   }
+  const config = await getShopConfigCached(shop);
   // Store-wide ceiling: however the requests are spread across addresses,
-  // the store's chat spend per minute and per hour stays bounded.
+  // the store's chat spend per minute and per hour stays bounded. The limits
+  // are the store's (Settings → Peak Mode), higher while Peak Mode is on.
   if (!internal) {
-    const store = checkStoreChatRate(shop);
+    const store = checkStoreChatRate(shop, storeChatLimits(config, { env: process.env }));
     if (!store.ok) {
       recordHealth({ shop, ok: false, errorKind: "store_rate_limited" });
       return Response.json(
-        { error: "store_busy", retryAfter: store.retryAfter, message: "I'm getting a lot of questions right now — please try again in a minute." },
+        { error: "store_busy", retryAfter: store.retryAfter, message: busyMessage(store.retryAfter) },
         { status: 429, headers: { "Retry-After": String(store.retryAfter) } },
       );
     }
   }
 
-  const config = await getShopConfig(shop);
   if (!config.anthropicApiKey) {
     recordHealth({ shop, ok: false, errorKind: "no_api_key", internal });
     return Response.json(
@@ -92,8 +94,9 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     );
   }
 
-  // Optional merchant spending guardrail (UTC day, counted from ChatUsage).
-  if (!internal && config.dailyCapEnabled && config.dailyCapMessages > 0) {
+  // Optional merchant spending guardrail (UTC day, counted from ChatUsage);
+  // Peak Mode can lift it for the busiest days.
+  if (!internal && dailyCapApplies(config)) {
     const todayCount = await getTodayMessageCount(shop);
     if (todayCount >= config.dailyCapMessages) {
       recordHealth({ shop, ok: false, errorKind: "daily_cap" });

@@ -1,8 +1,6 @@
 // Product webhooks (create/update): dedupe, coalesce and drain in the
 // background so Shopify gets its 200 at once.
 import { upsertProductFromWebhook, syncCatalog } from "../models/Product.server";
-import { getShopConfig } from "../models/ShopConfig.server";
-import { resolveShopEmbedding, embedAndStoreProducts } from "./embeddings.server";
 import prisma from "../db.server";
 
 // ── Webhook storm handling ─────────────────────────────────────────
@@ -12,9 +10,11 @@ import prisma from "../db.server";
 // catalog and produces hundreds of webhooks in seconds, then a trickle
 // for many minutes. Live trace 2026-06-10 16:50: ~150 distinct
 // products in 25s. Each webhook used to cost a DB query + a Shopify
-// GraphQL fetch + a multi-row upsert + an embedding API call — run
-// concurrently that has caused Postgres "too many clients" FATALs and
-// embedding-provider failures ("[embeddings] batch failed").
+// GraphQL fetch + a multi-row upsert (and, until it was dropped, an
+// embedding API call) — run concurrently that caused Postgres "too many
+// clients" FATALs. Product embeddings aren't computed here any more: the
+// chat searches the catalog in memory and never reads them, and on a busy
+// sale day every order's stock change would re-embed the product.
 //
 // Three layers of defense, all in-memory (single-instance app):
 //
@@ -24,8 +24,7 @@ import prisma from "../db.server";
 //
 //  2. COALESCE — the request handler only enqueues the product id and
 //     acks 200 immediately. A drain runs DEBOUNCE_MS later and
-//     processes the batch with limited concurrency, batching the
-//     embedding calls instead of one API call per product.
+//     processes the batch with limited concurrency.
 //
 //  3. CIRCUIT BREAKER — when one drain batch holds ≥ FULL_SYNC_THRESHOLD
 //     distinct products, that's a bulk catalog operation: one paginated
@@ -97,8 +96,6 @@ async function drainQueue(shop) {
       } catch (err) {
         console.error(`[webhook PRODUCTS_UPDATE] full sync failed:`, err?.message || err);
       }
-      // Fall through to re-embed the touched products below (the full
-      // sync refreshes rows but does not recompute embeddings).
     } else {
       console.log(
         `[webhook PRODUCTS_UPDATE] ${shop}: draining ${ids.length} coalesced update(s)`,
@@ -110,6 +107,9 @@ async function drainQueue(shop) {
           try {
             await upsertProductFromWebhook(shop, { id }, admin);
           } catch (err) {
+            // Shopify's API was busy: keep the product for the next pass
+            // instead of losing the change until the nightly sync.
+            if (err?.code === "THROTTLED") { q.ids.add(id); q.retryLater = true; continue; }
             console.error(`[webhook PRODUCTS_UPDATE] upsert ${id} failed:`, err?.message || err);
           }
         }
@@ -117,45 +117,6 @@ async function drainQueue(shop) {
       await Promise.all(
         Array.from({ length: Math.min(DRAIN_CONCURRENCY, ids.length) }, worker),
       );
-    }
-
-    // One batched embedding pass for the whole drain instead of one
-    // background API call per product.
-    try {
-      const config = await getShopConfig(shop).catch(() => null);
-      const resolved = config ? resolveShopEmbedding(config) : null;
-      if (resolved) {
-        const gids = ids.map((id) =>
-          typeof id === "string" && id.startsWith("gid://")
-            ? id
-            : `gid://shopify/Product/${id}`,
-        );
-        const rows = await prisma.product.findMany({
-          where: { shop, shopifyId: { in: gids } },
-          select: {
-            id: true,
-            title: true,
-            vendor: true,
-            productType: true,
-            tags: true,
-            description: true,
-            attributesJson: true,
-          },
-        });
-        if (rows.length > 0) {
-          // Provider-safe chunks (same 50 limit the backfill uses).
-          for (let i = 0; i < rows.length; i += 50) {
-            await embedAndStoreProducts(
-              prisma,
-              resolved.provider,
-              resolved.apiKey,
-              rows.slice(i, i + 50),
-            );
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`[webhook PRODUCTS_UPDATE] batch embed failed:`, err?.message || err);
     }
   } finally {
     q.draining = false;

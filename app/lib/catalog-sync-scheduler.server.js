@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { nightlySyncPaused } from "./peak-mode.js";
 
 // Nightly catalog reconciliation. Webhooks keep the catalog current in
 // real time (single updates within seconds, bulk edits via the 40+
@@ -9,9 +10,15 @@ import prisma from "../db.server";
 //
 // syncCatalog claims the shop's sync atomically, so an overlapping manual
 // or webhook-triggered sync steps aside instead of running twice.
-// Set DISABLE_CATALOG_SYNC_SCHEDULER=true to turn the nightly run off.
+// Set DISABLE_CATALOG_SYNC_SCHEDULER=true to turn the nightly run off. A
+// store in Peak Mode (Settings) sits it out by default.
+//
+// 09:00 UTC is 4-5 AM in New York and 1-2 AM in Los Angeles: the quietest
+// hour for US shoppers (03:00 UTC was the evening peak on the West Coast).
 
-export const SYNC_HOUR_UTC = 3;
+export const SYNC_HOUR_UTC = 9;
+// A sync whose state row hasn't moved for this long is dead.
+const STALE_RUNNING_MS = 10 * 60 * 1000;
 
 export function nextScheduledSyncAt(now = Date.now()) {
   const d = new Date(now);
@@ -31,13 +38,14 @@ export function startCatalogSyncScheduler() {
   started = true;
 
   // A deploy/restart kills any in-flight sync, leaving its state stuck on
-  // "running" forever (the process that owned it is gone). One instance
-  // serves the app, so at boot anything still marked running is dead —
-  // flag it as interrupted so the admin shows the truth and the nightly
-  // run (or a manual refresh) takes it from there.
+  // "running" forever (the process that owned it is gone). A live sync
+  // updates its row as it goes, so one that hasn't moved for a while is
+  // dead — flag it as interrupted so the admin shows the truth and the
+  // nightly run (or a manual refresh) takes it from there. A sync another
+  // server is still running is left alone.
   prisma.catalogSyncState
     .updateMany({
-      where: { status: { in: ["running", "stopping"] } },
+      where: { status: { in: ["running", "stopping"] }, updatedAt: { lt: new Date(Date.now() - STALE_RUNNING_MS) } },
       data: {
         status: "error",
         lastError: "Sync interrupted by a server restart — it will retry at the next nightly run, or use Refresh on the Catalog page.",
@@ -61,6 +69,11 @@ export function startCatalogSyncScheduler() {
       });
       console.log(`[sync-scheduler] nightly reconciliation: ${shops.length} shop(s)`);
       for (const { shop } of shops) {
+        const config = await prisma.shopConfig.findUnique({ where: { shop }, select: { peakMode: true, peakStartsAt: true, peakEndsAt: true, peakPauseSync: true } }).catch(() => null);
+        if (config && nightlySyncPaused(config)) {
+          console.log(`[sync-scheduler] ${shop}: Peak Mode is on — nightly sync skipped (product changes still sync live)`);
+          continue;
+        }
         try {
           const { admin } = await unauthenticated.admin(shop);
           syncCatalogAsync(admin, shop);

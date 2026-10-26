@@ -203,7 +203,11 @@ export async function fetchAndUpsertProduct(admin, shop, shopifyGid) {
   const resp = await admin.graphql(query, { variables: { id: shopifyGid } });
   const json = await resp.json();
   const node = json?.data?.product;
-  if (!node) return null;
+  if (!node) {
+    const throttled = (json?.errors || []).some((e) => e?.extensions?.code === "THROTTLED" || /throttl/i.test(e?.message || ""));
+    if (throttled) throw Object.assign(new Error("Shopify API throttled"), { code: "THROTTLED" });
+    return null;
+  }
   return upsertProduct(shop, node, mappings);
 }
 

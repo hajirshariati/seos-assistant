@@ -36,13 +36,44 @@ export async function getShopConfig(shop) {
   return decryptConfig(config);
 }
 
+// The storefront reads the config on every page view (widget-config) and
+// every chat message: those read it through a short per-shop cache, so a
+// busy day isn't one database read (and eight key decryptions) per request.
+// Saving clears this server's copy at once; another change shows within
+// CONFIG_TTL_MS. Admin pages always read it fresh (getShopConfig).
+// SHOP_CONFIG_CACHE_MS shortens it (the server tests use 1s).
+const CONFIG_TTL_MS = /^\d+$/.test(process.env.SHOP_CONFIG_CACHE_MS || "") ? Number(process.env.SHOP_CONFIG_CACHE_MS) : 30_000;
+const configCache = new Map(); // shop → { at, value }
+const configLoading = new Map(); // shop → promise, so a burst shares one read
+
+export async function getShopConfigCached(shop) {
+  const hit = configCache.get(shop);
+  if (hit && Date.now() - hit.at < CONFIG_TTL_MS) return hit.value;
+  if (!configLoading.has(shop)) {
+    configLoading.set(shop, getShopConfig(shop)
+      .then((value) => {
+        configCache.set(shop, { at: Date.now(), value });
+        if (configCache.size > 1000) configCache.delete(configCache.keys().next().value);
+        return value;
+      })
+      .finally(() => configLoading.delete(shop)));
+  }
+  return configLoading.get(shop);
+}
+
+export function forgetShopConfig(shop) {
+  configCache.delete(shop);
+}
+
 export async function updateShopConfig(shop, data) {
+  forgetShopConfig(shop);
   const encryptedData = encryptWriteData(data);
   const saved = await prisma.shopConfig.upsert({
     where: { shop },
     update: { ...encryptedData, updatedAt: new Date() },
     create: { shop, ...encryptedData },
   });
+  forgetShopConfig(shop);
   return decryptConfig(saved);
 }
 

@@ -67,3 +67,46 @@ export async function cleanupOldHealth() {
     console.error("[health] cleanup error:", err?.message);
   }
 }
+
+// Settings → Peak Mode's "right now" numbers: how busy the chat is, its
+// busiest minute and hour this week (to size the limits against), what a
+// message costs on average, and how many shoppers were turned away and why.
+const TURNED_AWAY = ["store_rate_limited", "daily_cap", "rate_limit", "busy"];
+
+export async function getChatPulse(shop, now = new Date()) {
+  const t = now.getTime();
+  const minuteAgo = new Date(t - 60_000);
+  const hourAgo = new Date(t - 60 * 60_000);
+  const weekAgo = new Date(t - 7 * 24 * 60 * 60_000);
+  const real = { shop, internal: false };
+  const [lastMinute, lastHour, busiest, avg, away] = await Promise.all([
+    prisma.chatUsage.count({ where: { ...real, createdAt: { gte: minuteAgo } } }),
+    prisma.chatUsage.count({ where: { ...real, createdAt: { gte: hourAgo } } }),
+    prisma.$queryRaw`
+      SELECT
+        (SELECT COALESCE(MAX(n), 0)::int FROM (SELECT COUNT(*) AS n FROM "ChatUsage" WHERE shop = ${shop} AND NOT internal AND "createdAt" >= ${weekAgo} GROUP BY date_trunc('minute', "createdAt")) m) AS "busiestMinute",
+        (SELECT COALESCE(MAX(n), 0)::int FROM (SELECT COUNT(*) AS n FROM "ChatUsage" WHERE shop = ${shop} AND NOT internal AND "createdAt" >= ${weekAgo} GROUP BY date_trunc('hour', "createdAt")) h) AS "busiestHour"`,
+    prisma.chatUsage.aggregate({
+      where: { ...real, createdAt: { gte: weekAgo }, NOT: { model: { startsWith: "image:" } } },
+      _avg: { costUsd: true },
+    }),
+    prisma.chatHealthEvent.groupBy({
+      by: ["errorKind"],
+      where: { shop, internal: false, ok: false, errorKind: { in: TURNED_AWAY }, createdAt: { gte: weekAgo } },
+      _count: { _all: true },
+    }),
+  ]);
+  const count = (kind) => away.find((r) => r.errorKind === kind)?._count?._all || 0;
+  return {
+    lastMinute,
+    lastHour,
+    busiestMinute: Number(busiest?.[0]?.busiestMinute) || 0,
+    busiestHour: Number(busiest?.[0]?.busiestHour) || 0,
+    avgCostUsd: Number(avg?._avg?.costUsd) || 0,
+    turnedAway: {
+      storeLimit: count("store_rate_limited"),
+      dailyCap: count("daily_cap"),
+      aiBusy: count("rate_limit") + count("busy"),
+    },
+  };
+}

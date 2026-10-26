@@ -104,8 +104,8 @@ export default function Recordings() {
           <BlockStack gap="400">
             <Banner tone={recording.on ? "info" : undefined}>
               {recording.on
-                ? <>Recording {recording.scope === "everyone" ? "every chat" : "testers' chats"} until {when(recording.until)}. Change it in <Link to="/app/api-keys">Settings → Testing</Link>.</>
-                : <>Recording is off. Turn it on in <Link to="/app/api-keys">Settings → Testing</Link> and share the tester link with your team.</>}
+                ? <>Recording {recording.scope === "everyone" ? "every chat" : "testers' chats"} until {when(recording.until)}. Change it in <Link to="/app/api-keys#testing">Settings → Testing</Link>.</>
+                : <>Recording is off. Turn it on in <Link to="/app/api-keys#testing">Settings → Testing</Link> and share the tester link with your team.</>}
             </Banner>
             {shown.length === 0 ? (
               <Card>

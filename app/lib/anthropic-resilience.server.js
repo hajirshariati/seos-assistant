@@ -10,9 +10,9 @@
 // errors, most of them recover invisibly.
 //
 // What we retry:
-//   - HTTP 5xx (server errors)
-//   - HTTP 429 (rate limit; uses backoff, not retry-after header — keeps
-//     this dependency-free)
+//   - HTTP 5xx (server errors) and 529 (overloaded)
+//   - HTTP 429 (rate limit), waiting at least as long as the API's
+//     retry-after asks — unless that's longer than a shopper should wait
 //   - Network errors (ECONNRESET, ETIMEDOUT, ECONNREFUSED, network)
 //
 // What we do NOT retry:
@@ -20,7 +20,7 @@
 //     help and just delays the customer's error
 //   - Errors after partial output (would duplicate to the customer)
 
-const RETRYABLE_HTTP_CODES = new Set([429, 500, 502, 503, 504, 522, 524]);
+const RETRYABLE_HTTP_CODES = new Set([429, 500, 502, 503, 504, 522, 524, 529]);
 const RETRYABLE_NETWORK_CODES = new Set([
   "ECONNRESET",
   "ETIMEDOUT",
@@ -44,14 +44,27 @@ function isRetryableError(err) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Exponential backoff with jitter. Defaults: 2 retries, 500ms then 1500ms.
-// Total worst-case added latency on success: ~2s. On failure: same as
-// before, with the original error rethrown.
+// How long the API asked us to wait before trying again (retry-after-ms or
+// retry-after, in seconds), in ms — or null.
+export function retryAfterMs(err) {
+  const h = err?.headers;
+  const get = (k) => (h && typeof h.get === "function" ? h.get(k) : h?.[k]);
+  const ms = Number(get("retry-after-ms"));
+  if (Number.isFinite(ms) && ms > 0) return ms;
+  const sec = Number(get("retry-after"));
+  if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+  return null;
+}
+
+// Exponential backoff with jitter. Defaults: 2 retries, 500ms then 1500ms,
+// or the API's retry-after when that's longer. No retry waits past
+// maxWaitMs, or past deadlineAt (the end of the shopper's turn) — then the
+// original error is rethrown at once.
 //
 // Use ONLY for non-streaming calls or stream-init that hasn't emitted
 // tokens to the customer yet. Retrying mid-stream would duplicate text.
 export async function withAnthropicRetry(fn, opts = {}) {
-  const { maxRetries = 2, baseDelayMs = 500, label = "anthropic" } = opts;
+  const { maxRetries = 2, baseDelayMs = 500, label = "anthropic", maxWaitMs = 10_000, deadlineAt = 0 } = opts;
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -59,7 +72,11 @@ export async function withAnthropicRetry(fn, opts = {}) {
     } catch (err) {
       lastErr = err;
       if (attempt === maxRetries || !isRetryableError(err)) throw err;
-      const delay = baseDelayMs * Math.pow(3, attempt) + Math.floor(Math.random() * 200);
+      const backoff = baseDelayMs * Math.pow(3, attempt) + Math.floor(Math.random() * 200);
+      const delay = Math.max(backoff, retryAfterMs(err) || 0);
+      if (delay > maxWaitMs) throw err;
+      // Leave the retry a few seconds to run before the turn's end.
+      if (deadlineAt && Date.now() + delay + 3000 > deadlineAt) throw err;
       console.log(`[${label}] retry ${attempt + 1}/${maxRetries} after ${delay}ms — ${err?.status || err?.code || "unknown"}: ${String(err?.message || err).slice(0, 120)}`);
       await sleep(delay);
     }
@@ -84,6 +101,10 @@ export function classifyAnthropicError(err) {
   if (RETRYABLE_NETWORK_CODES.has(err?.code)) {
     return { kind: "network", retryable: true };
   }
+  // This server already has as many AI requests running as it allows.
+  if (err?.code === "AI_BUSY") {
+    return { kind: "busy", retryable: true };
+  }
   return { kind: "unknown", retryable: false };
 }
 
@@ -96,6 +117,7 @@ export function customerFacingFailureMessage(kind) {
     case "billing":
       return "I'm temporarily unavailable right now. Please try again shortly, or reach out to our customer service team and they'll be glad to help.";
     case "rate_limit":
+    case "busy":
       return "I'm getting a lot of questions right now! Please try again in a moment.";
     case "upstream":
     case "network":

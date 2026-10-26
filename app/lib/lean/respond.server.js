@@ -20,8 +20,17 @@ import { recordHealth } from "../../models/ChatHealth.server.js";
 import { chatModel, CHECK_MODEL } from "../claude-models.js";
 import { saveRecording } from "../../models/ChatRecording.server.js";
 import { describeExtras } from "../chat-recording.js";
+import { createLimiter } from "../concurrency.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
+
+// At most this many AI calls run at once on this server; the rest wait their
+// turn (a busy day's burst, not a stream of rate-limit errors).
+const aiCalls = createLimiter(Number.parseInt(process.env.AI_MAX_CONCURRENT, 10) || 64);
+// A turn ends by this time whatever happens: each AI call gets only the time
+// that's left (the engine stops using tools after 45s and answers).
+const TURN_HARD_LIMIT_MS = 75_000;
+const callTimeout = (endAt) => Math.max(5_000, Math.min(40_000, endAt - Date.now()));
 
 // Store info for Claude: the store team's uploaded notes first (they win if
 // anything differs), then what was learned from the store's own website
@@ -127,7 +136,7 @@ export function leanChatResponse({
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder, sizeFinder })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
-              return { tools: [], similarAttributes: [], systemBlock: "" };
+              return { tools: [], similarAttributes: [], systemBlock: "", pageBlock: "", turnNote: "" };
             }),
         ]);
         // No message text in the logs — shoppers type emails, order numbers, health details.
@@ -136,13 +145,12 @@ export function leanChatResponse({
         // Quick yes/no meaning checks on the cheap model. A failure or a slow
         // answer is "can't tell" (null): the engine then doesn't force a rewrite.
         const checkUsage = {};
+        // The 6s limit stops the call itself, so a slow check isn't billed.
         const askYesNo = async (question) => {
           if (abort.signal.aborted) return null;
-          let timer;
-          const resp = await Promise.race([
-            anthropic.messages.create({ model: CHECK_MODEL, max_tokens: 5, messages: [{ role: "user", content: question }] }, { signal: abort.signal }),
-            new Promise((resolve) => { timer = setTimeout(() => resolve(null), 6000); }),
-          ]).catch(() => null).finally(() => clearTimeout(timer));
+          const resp = await anthropic.messages
+            .create({ model: CHECK_MODEL, max_tokens: 5, messages: [{ role: "user", content: question }] }, { signal: abort.signal, timeout: 6000 })
+            .catch(() => null);
           if (!resp) return null;
           for (const k of ["input_tokens", "output_tokens"]) checkUsage[k] = (checkUsage[k] || 0) + (Number(resp.usage?.[k]) || 0);
           const word = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim().toUpperCase();
@@ -158,13 +166,19 @@ export function leanChatResponse({
           lookupStoreInfo: makeStoreInfoLookup({ shop, config }),
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
+          pageSystem: extras.pageBlock,
+          turnNote: extras.turnNote,
           similarAttributes: extras.similarAttributes,
           liveStock: makeLiveStock({ shop, accessToken }),
           viewingHandle,
           askYesNo,
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
-            return withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal }));
+            const endAt = turnStarted + TURN_HARD_LIMIT_MS;
+            return aiCalls.run(
+              () => withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal, timeout: callTimeout(endAt) }), { deadlineAt: endAt }),
+              { waitMs: Math.min(15_000, Math.max(0, endAt - Date.now() - 20_000)) },
+            );
           },
         });
         send({ type: "text", text: result.text });

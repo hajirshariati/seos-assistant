@@ -21,19 +21,20 @@ async function findProduct(shop, handle) {
   });
 }
 
+// The tool's text is the same for every shopper (so it stays in the cached
+// part of the prompt); the shoe page they're on comes as `pageNote`.
 export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
   if (!sizeFinder) return null;
-  const here = sizeFinder.pageHandle
-    ? ` The customer is on the page for "${sizeFinder.pageHandle}" right now — use that handle when they mean the shoe they're looking at.`
-    : "";
   return {
+    pageNote: sizeFinder.pageHandle
+      ? `TRUE FIT: the customer is on the page for "${sizeFinder.pageHandle}" right now — use that handle with open_true_fit when they mean the shoe they're looking at.`
+      : "",
     definition: {
       name: "open_true_fit",
       description:
         "Offer True Fit, the store's personal size finder, for one shoe. Use when the customer asks what size to get in a shoe, how it fits, or whether to size up or down. Shoes only — never for orthotics or accessories (orthotic choice and FITs belong to the orthotic finder). " +
-        "It shows a \"Find my size with True Fit\" button under your reply; the customer answers a few quick questions in True Fit and their recommended size comes back to you as their next message. Don't guess a size yourself." +
-        here +
-        " When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence. Many shoes are sold in two-size steps (\"9 - 9.5 US\"), so True Fit's size is often exactly one of the shoe's sizes — pass it as given. If the shoe is sold in single sizes instead, show it without a size and ask which they'd like with taps (e.g. <<Size 9>><<Size 9.5>>). If show_products says the size is sold out, say so and offer the in-stock sizes.",
+        "It shows a \"Find my size with True Fit\" button under your reply; the customer answers a few quick questions in True Fit and their recommended size comes back to you as their next message. Don't guess a size yourself. " +
+        "When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence. Many shoes are sold in two-size steps (\"9 - 9.5 US\"), so True Fit's size is often exactly one of the shoe's sizes — pass it as given. If the shoe is sold in single sizes instead, show it without a size and ask which they'd like with taps (e.g. <<Size 9>><<Size 9.5>>). If show_products says the size is sold out, say so and offer the in-stock sizes.",
       input_schema: {
         type: "object",
         properties: { handle: { type: "string", description: "The shoe's product handle (from a search, a shown card, or the current page)." } },

@@ -269,6 +269,11 @@ export async function runLeanTurn({
   extraTools = [],
   // Per-request context (promotions, logged-in customer, store team rules).
   extraSystem = "",
+  // This shopper and page (the shoe page they're on, their saved FIT) — after
+  // the cached prompt, so the shared part reads the same for every shopper.
+  pageSystem = "",
+  // Sent with the latest message only (the current time, for offers' dates).
+  turnNote = "",
   // Qualities "similar" means for this store; empty → no similar tool.
   similarAttributes = [],
   deadlineMs = TURN_DEADLINE_MS,
@@ -301,6 +306,7 @@ export async function runLeanTurn({
   // The product page the shopper is on: "this", "these", "it" usually mean it.
   const viewing = viewingHandle ? byHandle.get(viewingHandle) || null : null;
   if (viewing) system.push({ type: "text", text: viewingNote(viewing) });
+  if (String(pageSystem || "").trim()) system.push({ type: "text", text: String(pageSystem).trim() });
 
   const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
   const lastAssistantText = [...messages].reverse().find((m) => m?.role === "assistant" && typeof m.content === "string")?.content || "";
@@ -324,6 +330,10 @@ export async function runLeanTurn({
     const last = conv[conv.length - 1];
     const note = { type: "text", text: OFFERS_NOTE };
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+  }
+  if (String(turnNote || "").trim()) {
+    const last = conv[conv.length - 1];
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), { type: "text", text: String(turnNote).trim() }];
   }
   const typedCodes = codesInText(catalog, latestUserMessage);
   if (typedCodes.length) {

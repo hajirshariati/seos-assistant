@@ -22,6 +22,8 @@ const LOAD = Number((process.argv.find((a) => a.startsWith("--load=")) || "--loa
 const SECRET = "integration-secret";
 const ENCRYPTION_KEY = "1".repeat(64);
 const SHOP = `integration-${Date.now()}.myshopify.com`;
+const BUSY_SHOP = `integration-busy-${Date.now()}.myshopify.com`;
+const PAGE_VIEWS = Number((process.argv.find((a) => a.startsWith("--pageviews=")) || "--pageviews=2000").split("=")[1]);
 const APP_PORT = 3990 + Math.floor(Math.random() * 9);
 const MODEL_PORT = APP_PORT + 100;
 const MODEL_DELAY_MS = 400; // per model call — a fast real Claude step is ~1-3s
@@ -36,7 +38,11 @@ const COLORS = ["Black", "Red", "Navy", "White", "Taupe"];
 const CATS = ["Sandals", "Sneakers", "Boots", "Wedges/Heels", "Loafers"];
 async function seed() {
   await prisma.session.create({ data: { id: `offline_${SHOP}`, shop: SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
-  await prisma.shopConfig.create({ data: { shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514" } });
+  // No store-wide limit here: the load test sends far more than a store would.
+  await prisma.shopConfig.create({ data: { shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514", chatLimitPerMin: 0, chatLimitPerHour: 0 } });
+  // A second store with a tiny limit, for the busy-store checks.
+  await prisma.session.create({ data: { id: `offline_${BUSY_SHOP}`, shop: BUSY_SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
+  await prisma.shopConfig.create({ data: { shop: BUSY_SHOP, anthropicApiKey: encrypt("sk-ant-test"), chatLimitPerMin: 2, chatLimitPerHour: 100, peakLimitPerMin: 10 } });
   const rows = [];
   for (let i = 0; i < 300; i++) {
     for (const color of COLORS) {
@@ -101,15 +107,15 @@ function modelServer() {
 }
 
 // ── signed app-proxy requests ──
-function signed(pathname, extra = {}) {
-  const p = new URLSearchParams({ shop: SHOP, logged_in_customer_id: "", path_prefix: "/apps/hajirai", timestamp: String(Math.floor(Date.now() / 1000)), ...extra });
+function signed(pathname, extra = {}, shop = SHOP) {
+  const p = new URLSearchParams({ shop, logged_in_customer_id: "", path_prefix: "/apps/hajirai", timestamp: String(Math.floor(Date.now() / 1000)), ...extra });
   const msg = [...p.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join("");
   p.set("signature", crypto.createHmac("sha256", SECRET).update(msg).digest("hex"));
   return `http://localhost:${APP_PORT}${pathname}?${p}`;
 }
-async function chat(message, { ip = "198.51.100.1", history = [], signal, extra = {} } = {}) {
+async function chat(message, { ip = "198.51.100.1", history = [], signal, extra = {}, shop = SHOP } = {}) {
   const t0 = Date.now();
-  const res = await fetch(signed("/chat"), {
+  const res = await fetch(signed("/chat", {}, shop), {
     method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ message, history, ...extra }), signal,
   });
   if (!res.headers.get("content-type")?.includes("event-stream")) return { status: res.status, body: await res.json().catch(() => null), ms: Date.now() - t0 };
@@ -126,6 +132,8 @@ async function test(name, fn) {
   catch (err) { failed++; results.push({ name, ok: false, error: err.message }); console.log(`  ✗ ${name}\n      ${err.message}`); }
 }
 const healthRows = () => prisma.chatHealthEvent.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
+// The server keeps each store's settings for SHOP_CONFIG_CACHE_MS.
+const configCacheExpiry = () => new Promise((r) => setTimeout(r, 1100));
 
 const productCount = await seed();
 const mock = modelServer();
@@ -135,8 +143,8 @@ const server = spawn(process.execPath, ["server.mjs"], {
     ...process.env, NODE_ENV: "production", PORT: String(APP_PORT), DATABASE_URL: DB, ENCRYPTION_KEY,
     SHOPIFY_API_KEY: "integration-key", SHOPIFY_API_SECRET: SECRET, SHOPIFY_APP_URL: `http://localhost:${APP_PORT}`, SCOPES: "read_products",
     ANTHROPIC_BASE_URL: `http://localhost:${MODEL_PORT}`, DISABLE_CATALOG_SYNC_SCHEDULER: "true",
-    // The load test below sends far more than a store would per minute.
-    CHAT_STORE_PER_MIN: "100000", CHAT_STORE_PER_HOUR: "100000",
+    // Settings changes made straight in the database show within a second.
+    SHOP_CONFIG_CACHE_MS: "1000",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -235,6 +243,7 @@ await test("test recordings: off by default; testers only; everyone; failures ke
   await chat("sandals for plantar fasciitis", { ip: "198.51.100.41", extra: { tester: "Ann", session_id: "sess-a", page: "/" } }); await settle();
   assert.equal((await rows()).length, 0, "off: nothing recorded, even for a tester");
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: new Date(Date.now() + 864e5), recordChatsScope: "testers" } });
+  await configCacheExpiry();
   const cfg = await (await fetch(signed("/widget-config", { cta: "x" }))).json();
   assert.deepEqual(cfg.recording, { on: true, scope: "testers" });
   await chat("sandals for plantar fasciitis", { ip: "198.51.100.42", extra: { session_id: "sess-b", page: "/" } }); await settle();
@@ -253,10 +262,57 @@ await test("test recordings: off by default; testers only; everyone; failures ke
   r = await rows();
   assert.equal(r.at(-1).ok, false, "a failed turn is kept, marked failed");
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsScope: "everyone" } });
+  await configCacheExpiry();
   await chat("sandals for plantar fasciitis", { ip: "198.51.100.45", extra: { session_id: "sess-c" } }); await settle();
   r = await rows();
   assert.equal(r.at(-1).sessionId, "sess-c", "everyone: an ordinary shopper is recorded");
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: null, recordChatsScope: "testers" } });
+  await configCacheExpiry();
+});
+
+console.log("\nbusy days (Settings → Peak Mode)");
+await test("past the store's per-minute limit, a shopper gets the friendly busy note (and it's recorded)", async () => {
+  const a = await chat("sandals please", { shop: BUSY_SHOP, ip: "198.51.100.90" });
+  const b = await chat("sandals please", { shop: BUSY_SHOP, ip: "198.51.100.91" });
+  const c = await chat("sandals please", { shop: BUSY_SHOP, ip: "198.51.100.92" });
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  assert.equal(c.status, 429);
+  assert.equal(c.body.error, "store_busy");
+  assert.match(c.body.message, /Lots of shoppers are chatting right now — please try again in a minute/);
+  await new Promise((r) => setTimeout(r, 200));
+  const rows = await prisma.chatHealthEvent.findMany({ where: { shop: BUSY_SHOP, errorKind: "store_rate_limited" } });
+  assert.equal(rows.length, 1);
+});
+await test("Peak Mode on → the higher peak limit applies at once", async () => {
+  await prisma.shopConfig.update({ where: { shop: BUSY_SHOP }, data: { peakMode: "on" } });
+  await configCacheExpiry();
+  const r = await chat("sandals please", { shop: BUSY_SHOP, ip: "198.51.100.93" });
+  assert.equal(r.status, 200, "3rd message this minute passes under the peak limit of 10");
+});
+
+console.log(`\npage views: ${PAGE_VIEWS} widget-config loads, 100 at a time`);
+let pageViews = null;
+await test(`${PAGE_VIEWS} storefront page views all get their settings`, async () => {
+  const t0 = Date.now();
+  const ms = [];
+  let ok = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < PAGE_VIEWS) {
+      next += 1;
+      const s0 = Date.now();
+      const res = await fetch(signed("/widget-config", { cta: "What can I help you find today?" }));
+      if (res.ok && Array.isArray((await res.json()).hideOnUrls)) ok += 1;
+      ms.push(Date.now() - s0);
+    }
+  };
+  await Promise.all(Array.from({ length: 100 }, worker));
+  const wall = Date.now() - t0;
+  ms.sort((x, y) => x - y);
+  pageViews = { requests: PAGE_VIEWS, ok, perSecond: Math.round(PAGE_VIEWS / (wall / 1000)), p50Ms: ms[Math.floor(ms.length * 0.5)], p95Ms: ms[Math.floor(ms.length * 0.95)], maxMs: ms.at(-1) };
+  console.log(`      ${JSON.stringify(pageViews)}`);
+  assert.equal(ok, PAGE_VIEWS);
 });
 
 console.log(`\nload: ${LOAD} shoppers at once (each turn = 3 model steps × ${MODEL_DELAY_MS}ms)`);
@@ -274,15 +330,31 @@ await test(`${LOAD} simultaneous chats all complete correctly`, async () => {
     serverOverheadP50Ms: ms[Math.floor(ms.length * 0.5)] - modelFloor,
     serverOverheadP95Ms: ms[Math.floor(ms.length * 0.95)] - modelFloor,
   };
+  console.log(`      ${JSON.stringify(load)}`);
   assert.equal(ok.length, LOAD);
+});
+
+console.log("\ndeploys");
+await test("on SIGTERM the server takes no new work but finishes a chat in progress, then exits", async () => {
+  const p = chat("SLOW sandals", { ip: "198.51.100.95" });
+  await new Promise((r) => setTimeout(r, 1500));
+  const exited = new Promise((r) => server.once("exit", (code) => r(code)));
+  server.kill("SIGTERM");
+  const r = await p;
+  assert.equal(r.events?.at(-1)?.type, "done", "the chat in progress finished");
+  assert.equal(r.events[1]?.products?.length, 2);
+  assert.equal(await exited, 0, "clean exit after the last request");
+  assert.match(serverLog, /SIGTERM: finishing requests in flight/);
 });
 
 server.kill();
 mock.close();
-for (const m of ["chatHealthEvent", "chatUsage", "chatFeedback", "chatTopic", "chatProductMention", "chatRecording", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop: SHOP } });
+for (const shop of [SHOP, BUSY_SHOP]) {
+  for (const m of ["chatHealthEvent", "chatUsage", "chatFeedback", "chatTopic", "chatProductMention", "chatRecording", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop } });
+}
 await prisma.product.deleteMany({ where: { shop: SHOP } });
 await prisma.$disconnect();
 if (failed) console.log("\n--- server log (tail) ---\n" + serverLog.split("\n").slice(-40).join("\n"));
 console.log(`\n${passed} passed, ${failed} failed`);
-console.log(JSON.stringify({ integration: { passed, failed, results, load, products: productCount, at: new Date().toISOString() } }));
+console.log(JSON.stringify({ integration: { passed, failed, results, load, pageViews, products: productCount, at: new Date().toISOString() } }));
 process.exit(failed ? 1 : 0);
