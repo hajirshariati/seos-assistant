@@ -862,7 +862,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   await page.waitForSelector("[data-map]", { timeout: 5000 });
   check(`store map (${label}): the reply carries the store map button`, (await page.$eval("[data-map]", (b) => b.textContent.trim() + "|" + b.getAttribute("data-map"))) === "Find a store near you|15ecd30bd8acd4");
   await page.click("[data-map]");
-  await page.waitForTimeout(900);
+  await page.waitForFunction(() => getComputedStyle(document.querySelector(".ai-chat-fbsheet__map")).opacity === "1", null, { timeout: 4000 }).catch(() => {});
   const m = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"), map = document.querySelector(".ai-chat-fbsheet__map"); const r = sh.getBoundingClientRect(), pr = p.getBoundingClientRect(); return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), ready: sh.classList.contains("is-ready"), title: document.querySelector(".ai-chat-fbsheet__title").textContent, inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2, stub: !!map.querySelector(".sp-stub"), shown: getComputedStyle(map).opacity === "1", loads: window.__spLoads, scrolls: map.querySelector(".ai-chat-locator").scrollHeight > map.querySelector(".ai-chat-locator").clientHeight }; });
   check(`store map (${label}): it opens inside the chat, titled with the button's text`, m.kind === "map" && m.open && m.ready && m.inside && m.stub && m.shown && m.loads === 1 && m.title === "Find a store near you", JSON.stringify(m));
   check(`store map (${label}): a tall map scrolls inside the sheet`, m.scrolls);
@@ -889,6 +889,83 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   await page.waitForTimeout(600);
   check(`store map (${label}): the button is still under the reply after a reload`, (await page.$$eval("[data-map=\"15ecd30bd8acd4\"]", (b) => b.length)) === 1);
   check(`store map (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// "View all": more matches than the cards show → a row under the cards opens
+// every match in the sheet, as a scrolling list; Add to cart works there (its
+// picker opens inside the card), back returns to the button, and the button
+// comes back after a reload.
+for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width: 1280, height: 800 } }], ["phone", "/showcase", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789" + path);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "saleboots");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-viewall]", { timeout: 5000 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: out(`va-${label}-row`) });
+  const row = await page.evaluate(() => {
+    const b = document.querySelector("[data-viewall]"), bub = b.closest(".ai-chat-msg-bubble"), cards = bub.querySelector(".ai-chat-products-wrap, .ai-chat-products"), cmp = bub.querySelector(".ai-cmp-cta");
+    const r = b.getBoundingClientRect(), br = bub.getBoundingClientRect();
+    return { label: b.querySelector(".ai-cmp-cta__label").textContent, hint: b.querySelector(".ai-cmp-cta__hint").textContent, thumbs: b.querySelectorAll(".ai-cmp-cta__thumb").length, afterCards: !!(cards.compareDocumentPosition(b) & 4), beforeCompare: !cmp || !!(b.compareDocumentPosition(cmp) & 4), fits: r.left >= br.left - 0.5 && r.right <= br.right + 0.5, height: Math.round(r.height), popup: b.getAttribute("aria-haspopup") };
+  });
+  check(`view all (${label}): a row under the cards names the full count`, row.label === "View all 10 women's sale boots" && row.hint === "8 more to browse" && row.thumbs === 3, JSON.stringify(row));
+  check(`view all (${label}): right under the cards, above Compare, inside the bubble, easy to tap`, row.afterCards && row.beforeCompare && row.fits && row.height >= 44 && row.popup === "dialog", JSON.stringify(row));
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: out(`va-${label}-sheet`) });
+  const sh = await page.evaluate(() => {
+    const sh = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"), list = document.querySelector(".ai-chat-fbsheet__list");
+    const r = sh.getBoundingClientRect(), pr = p.getBoundingClientRect();
+    const cards = [...list.querySelectorAll(".ai-chat-product-card")];
+    const c0 = cards[0].getBoundingClientRect(), img = cards[0].querySelector(".ai-chat-product-img").getBoundingClientRect();
+    return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), title: document.querySelector(".ai-chat-fbsheet__title").textContent, inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2,
+      count: list.querySelector(".ai-chat-viewall__count").textContent, cards: cards.length, handles: cards.map((c) => c.getAttribute("data-handle")).slice(0, 4).join(","),
+      rowLayout: img.width < c0.width / 2, fitTools: list.querySelectorAll(".ai-chat-card-fit").length, sale: !!list.querySelector(".compare-at"),
+      scrolls: list.scrollHeight > list.clientHeight, focus: document.activeElement && document.activeElement.classList.contains("ai-chat-fbsheet__back"),
+      listShown: getComputedStyle(list).visibility === "visible", formHidden: getComputedStyle(document.querySelector(".ai-chat-fbsheet__form")).visibility === "hidden",
+      behindInert: document.querySelector(".ai-chat-messages").closest("[inert]") !== null || document.querySelector(".ai-chat-messages").inert === true };
+  });
+  check(`view all (${label}): the list opens in the chat, titled, with every match`, sh.kind === "list" && sh.open && sh.inside && sh.title === "Women's Sale Boots" && sh.count === "10 results" && sh.cards === 10 && sh.handles === "savannah-red,jillian-black,orthotic-one,carly-white", JSON.stringify(sh));
+  check(`view all (${label}): row cards (image beside the details), sale prices, no fit tools, it scrolls`, sh.rowLayout && sh.sale && sh.fitTools === 0 && sh.scrolls && sh.listShown && sh.formHidden, JSON.stringify(sh));
+  check(`view all (${label}): focus moves into the sheet; the chat behind is out of reach`, sh.focus && sh.behindInert, JSON.stringify(sh));
+  // Add to cart from the list: the picker opens inside that card.
+  const before = cartLog.length;
+  await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="jillian-black"] [data-atc]');
+  await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-product-card[data-handle=\"jillian-black\"] .ai-chat-atc-panel.is-inline", { timeout: 5000 });
+  for (const opt of ["Size", "Width"]) {
+    const sel = `.ai-chat-fbsheet__list .ai-chat-atc-panel [data-opt="${opt}"]:not(.is-out):not([aria-disabled="true"])`;
+    if (await page.$(sel)) await page.click(sel);
+  }
+  await page.click(".ai-chat-fbsheet__list .ai-chat-atc-panel [data-atc-add]");
+  await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-atc-done", { timeout: 5000 });
+  const added = await page.evaluate(() => { const d = document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"), l = document.querySelector(".ai-chat-fbsheet__list"); const r = d.getBoundingClientRect(), lr = l.getBoundingClientRect(); return { inView: r.top >= lr.top - 1 && r.bottom <= lr.bottom + 1 }; });
+  check(`view all (${label}): Add to cart works in the list, picker inside the card, kept in view`, cartLog.length === before + 1 && PRODUCTS["jillian-black"].variants.some((v) => v.id === cartLog.at(-1)) && added.inView, JSON.stringify({ added, n: cartLog.length - before, last: cartLog.at(-1) }));
+  await page.screenshot({ path: out(`va-${label}-added`) });
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(600);
+  const back = await page.evaluate(() => ({ closed: document.querySelector(".ai-chat-fbsheet").hidden, focus: document.activeElement && document.activeElement.hasAttribute("data-viewall") }));
+  check(`view all (${label}): back closes the list and returns focus to the button`, back.closed && back.focus, JSON.stringify(back));
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(500);
+  const kept = await page.evaluate(() => !!document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"));
+  check(`view all (${label}): reopening shows the same list (not rebuilt)`, kept);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  check(`view all (${label}): Escape closes it`, await page.evaluate(() => document.querySelector(".ai-chat-fbsheet").hidden));
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  check(`view all (${label}): the button is still under the reply after a reload`, (await page.$$eval("[data-viewall]", (b) => b.length)) === 1);
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(600);
+  check(`view all (${label}): and still opens the full list`, (await page.$$eval(".ai-chat-fbsheet__list .ai-chat-product-card", (c) => c.length)) === 10);
+  check(`view all (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 {

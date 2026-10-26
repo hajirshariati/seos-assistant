@@ -154,12 +154,13 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
   };
 }
 
-export function leanSearch(catalog, params = {}) {
+// Every in-stock product a search matches, best first — the one ranking both
+// the search tool and the "View all" list use.
+function rankMatches(catalog, params = {}) {
   const products = (catalog?.products || []).filter((p) => p.inStock);
   const catalogHasGender = products.some((p) => p.gender.length > 0);
   const filters = activeFilters(params);
   const terms = queryTerms(params.query);
-  const limit = Math.min(Math.max(Number(params.limit) || 6, 1), 10);
 
   const matches = products.filter((p) => passes(p, filters, catalogHasGender));
   let ranked = matches
@@ -170,6 +171,18 @@ export function leanSearch(catalog, params = {}) {
   const queryMatched = terms.length === 0 || ranked.some((x) => x.matched > 0);
   if (terms.length > 0 && queryMatched) ranked = ranked.filter((x) => x.matched > 0);
   else if (terms.length > 0 && Object.keys(filters).length === 0) ranked = [];
+  return { products, catalogHasGender, filters, terms, ranked, queryMatched };
+}
+
+// All the products a search matched (each colorway is its own product, as on
+// the store's own listings), best first.
+export function allMatches(catalog, params = {}) {
+  return rankMatches(catalog, params).ranked.map((x) => x.p);
+}
+
+export function leanSearch(catalog, params = {}) {
+  const { products, catalogHasGender, filters, ranked, queryMatched } = rankMatches(catalog, params);
+  const limit = Math.min(Math.max(Number(params.limit) || 6, 1), 10);
 
   // One card per style; the other in-stock colors of that style ride along.
   const styleColors = new Map();

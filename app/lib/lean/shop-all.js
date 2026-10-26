@@ -1,41 +1,35 @@
-// Lean engine — the "View all" link under product cards. Built from the
-// filters of the search Claude ran to find the products it showed, so it opens
-// the store's own search for the same thing ("View all Women's Pink Sandals").
-// Pure.
+// Lean engine — the "View all" button under product cards. When the search
+// behind the cards matched more products than the reply shows, the button
+// opens every match in a sheet inside the chat. The list is the chat's own
+// search, so it's exactly what the assistant found — filters, size and color
+// included. The words come from that search's filters
+// ("View all 16 women's sale boots"). Pure.
 
-const DEFAULT_PATTERN = "/search?q={q}&type=product";
+export const VIEW_ALL_MAX = 48;
 
-function titleCase(s) {
-  return String(s || "").toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).trim();
-}
-
-function genderLabel(g) {
+function genderWord(g) {
   const v = String(g || "").toLowerCase();
-  if (/^(women|womens|women's|female)$/.test(v)) return { token: "women", label: "Women's" };
-  if (/^(men|mens|men's|male)$/.test(v)) return { token: "men", label: "Men's" };
-  if (/^(kid|kids|kids'|children|youth|boys|girls)$/.test(v)) return { token: "kids", label: "Kids'" };
-  return null;
+  if (/^(women|womens|women's|female)$/.test(v)) return "women's";
+  if (/^(men|mens|men's|male)$/.test(v)) return "men's";
+  if (/^(kid|kids|kids'|children|youth|boys|girls)$/.test(v)) return "kids'";
+  return "";
 }
 
-// search: the search_products input. Returns { url, label } or null when the
-// search was too vague to be worth a link (no line, category or color).
-export function buildShopAllLink(search, { pattern = "" } = {}) {
-  if (!search || typeof search !== "object") return null;
-  const one = (list) => (Array.isArray(list) && list.length === 1 ? String(list[0]) : "");
-  const gender = genderLabel(search.gender);
-  const color = one(search.colors);
-  const category = one(search.categories);
-  if (!gender && !color && !category) return null;
+const clean = (s) => String(s || "").toLowerCase().replace(/\s*\/\s*/g, " & ").replace(/\s+/g, " ").trim();
+const cap = (s) => s.replace(/(^|\s|&\s)([a-z])/g, (m, pre, c) => pre + c.toUpperCase());
 
-  const tokens = [];
-  const words = [];
-  if (search.on_sale) { tokens.push("sale"); words.push("Sale"); }
-  if (gender) { tokens.push(gender.token); words.push(gender.label); }
-  if (color) { tokens.push(color.toLowerCase()); words.push(titleCase(color)); }
-  if (category) { tokens.push(category.toLowerCase()); words.push(titleCase(category)); }
-  else words.push("Styles");
-
-  const q = tokens.map((t) => encodeURIComponent(t).replace(/%20/g, "+")).join("+");
-  const tpl = String(pattern || "").includes("{q}") ? String(pattern).trim() : DEFAULT_PATTERN;
-  return { url: tpl.replace("{q}", q), label: `View all ${words.join(" ")}` };
+// search: the search_products input; total: how many products it matched.
+// Returns { label, title } — the button's words and the sheet's heading.
+export function viewAllWords(search, total) {
+  const s = search && typeof search === "object" ? search : {};
+  const one = (list) => (Array.isArray(list) && list.length === 1 ? clean(list[0]) : "");
+  const words = [genderWord(s.gender), one(s.colors), s.on_sale ? "sale" : "", one(s.categories)].filter(Boolean);
+  const noun = one(s.categories) ? "" : (words.length ? "styles" : "matches");
+  const phrase = [...words, noun].filter(Boolean).join(" ");
+  const size = String(s.size || "").trim().slice(0, 12);
+  const heading = phrase === "matches" ? "All matches" : cap(phrase);
+  return {
+    label: `View all ${total} ${phrase}`,
+    title: `${heading}${size ? ` · Size ${size}` : ""}`.slice(0, 48),
+  };
 }

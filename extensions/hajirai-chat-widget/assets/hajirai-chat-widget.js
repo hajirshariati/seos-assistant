@@ -2081,8 +2081,15 @@ function fbSheetEl(){
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
   fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
-    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div></div>';
-  fbSheet.addEventListener('click',function(e){if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback()}});
+    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div></div>';
+  fbSheet.addEventListener('click',function(e){
+    if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback();return}
+    /* The "View all" list: its cards work like the ones in the chat. */
+    if(!e.target.closest('.ai-chat-fbsheet__list'))return;
+    var atc=e.target.closest('[data-atc]');
+    if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
+    if(e.target.closest('.ai-chat-product-card a[href]'))markChatAttributed();
+  });
   panel.appendChild(fbSheet);
   return fbSheet;
 }
@@ -2365,7 +2372,7 @@ function cardHelper(p,t){
   if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
   return '';
 }
-function prodCard(p){
+function prodCard(p,o){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
 var u=safeUrl(p.url)||(p.handle?(SHOP_ROOT+'products/'+encodeURIComponent(p.handle)):'#');
@@ -2380,7 +2387,7 @@ var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preK
 var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
 var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
 var buyBtn='<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>';
-var fitBtn=cardHelper(p,t);
+var fitBtn=o&&o.noHelper?'':cardHelper(p,t);
 /* With a fit tool, the buy button and the tool share one row. */
 var buyHtml=fitBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row">'+buyBtn+fitBtn+'</div>':buyBtn;
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
@@ -2405,7 +2412,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-23 compare-3'}catch(e){}
+try{window.__hajiraiWidget='2026-10-26 view-all'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2415,6 +2422,66 @@ function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 /* A button under the reply that opens one of the store's Typeforms. */
 var pendingForm=null,pendingMap=null;
+/* "View all 16 women's sale boots": when the search behind the cards matched
+   more than they show, every match opens in the sheet — the chat's own
+   search, so exactly what the assistant found, each with Add to cart. */
+var pendingViewAll=null,viewAllStore={},viewAllSeq=0,VA_MAX=48;
+var VA_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>';
+function cleanViewAll(p){
+  if(!p||!Array.isArray(p.products))return null;
+  var list=[];
+  for(var i=0;i<p.products.length&&list.length<VA_MAX;i++){
+    var c=p.products[i];
+    if(!c||typeof c!=='object'||!c.handle||!c.title)continue;
+    list.push({handle:String(c.handle),title:String(c.title),url:String(c.url||''),image:String(c.image||''),price:c.price||'',price_formatted:String(c.price_formatted||''),compare_at_price:c.compare_at_price||undefined,kind:c.kind||'',choose:Array.isArray(c.choose)?c.choose.slice(0,4):undefined});
+  }
+  if(list.length<2)return null;
+  var total=Math.max(parseInt(p.total,10)||0,list.length);
+  return {label:String(p.label||'').trim().slice(0,80)||('View all '+total),title:String(p.title||'').trim().slice(0,48)||'All matches',total:total,products:list};
+}
+function viewAllHtml(va,shown){
+  var id='va'+(++viewAllSeq);viewAllStore[id]=va;
+  var seen={};(shown||[]).forEach(function(x){if(x&&x.handle)seen[x.handle]=1});
+  var more=va.products.filter(function(x){return !seen[x.handle]});
+  var rest=va.total-(va.products.length-more.length);
+  var thumbs='';
+  for(var i=0;i<Math.min(more.length,3);i++)thumbs+='<span class="ai-cmp-cta__thumb">'+(more[i].image?'<img src="'+esc(more[i].image)+'" alt="" loading="lazy">':'')+'</span>';
+  var hint=rest+' more to browse';
+  return '<div class="ai-va-cta"><button type="button" class="ai-cmp-cta__btn" data-viewall="'+id+'" aria-haspopup="dialog" aria-label="'+esc(va.label+' — '+hint)+'"><span class="ai-cmp-cta__icon">'+VA_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(va.label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__thumbs" aria-hidden="true">'+thumbs+'</span><span class="ai-cmp-cta__go" aria-hidden="true">'+WI.arrow+'</span></button></div>';
+}
+/* Right under the cards, above Compare. */
+function placeViewAll(bubble,va,shown){
+  if(!bubble||!va)return;
+  var html=viewAllHtml(va,shown);
+  var cmp=bubble.querySelector('.ai-cmp-cta');
+  if(cmp){cmp.insertAdjacentHTML('beforebegin',html);return}
+  var row=bubble.querySelector('.ai-chat-products-wrap')||bubble.querySelector('.ai-chat-products');
+  if(row)row.insertAdjacentHTML('afterend',html);else bubble.insertAdjacentHTML('beforeend',html);
+}
+function openViewAll(opener,id){
+  var va=viewAllStore[id];if(!va)return;
+  fbOpener=opener||null;
+  var sh=fbSheetEl(),box=$('.ai-chat-fbsheet__list',sh);
+  sheetKind='list';
+  sheetTitle=va.title;
+  $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
+  sh.setAttribute('aria-label',sheetTitle);
+  sh.setAttribute('data-kind','list');
+  $('.ai-chat-fbsheet__state',sh).innerHTML='';
+  sh.classList.remove('is-failed');sh.classList.add('is-ready');
+  if(box.getAttribute('data-va')!==id){
+    var h='<p class="ai-chat-viewall__count">'+(va.total>va.products.length?'Showing '+va.products.length+' of '+va.total:va.total+' results')+'</p><div class="ai-chat-products">';
+    for(var i=0;i<va.products.length;i++)h+=prodCard(va.products[i],{noHelper:true});
+    h+='</div>';
+    if(va.total>va.products.length)h+='<p class="ai-chat-viewall__more">Tell the chat a size, color or style to narrow these down.</p>';
+    box.innerHTML=h;box.setAttribute('data-va',id);box.scrollTop=0;
+  }
+  menu.style.display='none';
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fbBehind(true);
+  setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
+  if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_open',chat_view_all_count:va.total})}catch(e){}
+}
 function mapCtaHtml(m){
   return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-map="'+esc(m.mapId)+'" data-map-label="'+esc(m.label)+'" data-map-url="'+esc(m.url||'')+'" aria-haspopup="dialog">'+esc(m.label)+'</button>';
 }
@@ -2734,7 +2801,7 @@ function openAtcPanel(card,product,m,sel,state){
   var img=card.getAttribute('data-image')||'';
   /* A lone card opens its picker inside itself (one tidy unit); with
      several cards it opens under the row, naming the product. */
-  var inline=!card.closest('.ai-chat-viz-host')&&card.parentNode&&card.parentNode.children.length===1;
+  var inline=!!card.closest('.ai-chat-fbsheet__list')||(!card.closest('.ai-chat-viz-host')&&card.parentNode&&card.parentNode.children.length===1);
   if(inline){
     panel.classList.add('is-inline');
     card.classList.add('has-inline-picker');
@@ -2819,7 +2886,7 @@ function openAtcPanel(card,product,m,sel,state){
       var v=variantFor(m,sel);
       if(!v||!v.available)return;
       setBusy(add,true);add.textContent='Adding\u2026';
-      addToCart(v.id,1).then(function(){render({added:v})}).catch(function(err){
+      addToCart(v.id,1).then(function(){render({added:v});keepInView(panel)}).catch(function(err){
         delete productJsCache[card.getAttribute('data-handle')];
         render({error:err.message||'Could not add to cart.'});
       });
@@ -3081,9 +3148,12 @@ function renderReturn(card,step,info){
    scroll only as far as needed to show the box, never past its top. */
 function keepInView(el){requestAnimationFrame(function(){
   if(!el||!msgsEl||!el.isConnected)return;
-  var m=msgsEl.getBoundingClientRect(),r=el.getBoundingClientRect(),pad=12;
-  if(r.bottom>m.bottom-pad)msgsEl.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
-  else if(r.top<m.top+pad)msgsEl.scrollTop-=m.top+pad-r.top;
+  var sc=el.closest('.ai-chat-fbsheet__list')||msgsEl;
+  /* In the "View all" list the whole card stays in sight, name included. */
+  if(sc!==msgsEl){var cd=el.closest('.ai-chat-product-card');if(cd)el=cd}
+  var m=sc.getBoundingClientRect(),r=el.getBoundingClientRect(),pad=12;
+  if(r.bottom>m.bottom-pad)sc.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
+  else if(r.top<m.top+pad)sc.scrollTop-=m.top+pad-r.top;
 })}
 /* fetch with a time limit; resolves {status, d} and never throws on HTTP errors. */
 function retFetch(url,opts,ms){
@@ -3451,7 +3521,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -3492,6 +3562,7 @@ if(p.type==='size_finder'&&p.handle){
 }
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
 if(p.type==='map_cta'){pendingMap=cleanMap(p)}
+if(p.type==='view_all'){pendingViewAll=cleanViewAll(p)}
 if(p.type==='klaviyo_form'){
   later(function(){showKlaviyoForm('Stay Connected')},300);
 }
@@ -3609,6 +3680,11 @@ if(cleanText){
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
   if(pendingForm)_saved.formCta=pendingForm;
   if(pendingMap)_saved.mapCta=pendingMap;
+  if(pendingViewAll&&prods&&prods.length){
+    _saved.viewAll=pendingViewAll;
+    /* The full lists are big: only the latest three stay with the history. */
+    for(var vk=messages.length-1,vn=1;vk>=0;vk--){if(messages[vk].viewAll&&++vn>3)delete messages[vk].viewAll}
+  }
   messages.push(_saved);saveH(messages)
 }
 if(vizCta&&vizCta.productHandle&&mDiv){
@@ -3636,7 +3712,11 @@ if(pendingMap&&mDiv){
   var mcb=$('.ai-chat-msg-bubble',mDiv);
   if(mcb)mcb.insertAdjacentHTML('beforeend',mapCtaHtml(pendingMap));
 }
-pendingForm=null;pendingMap=null;
+if(pendingViewAll&&mDiv&&prods&&prods.length){
+  var vab=$('.ai-chat-msg-bubble',mDiv);
+  if(vab)placeViewAll(vab,pendingViewAll,prods);
+}
+pendingForm=null;pendingMap=null;pendingViewAll=null;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -3870,6 +3950,8 @@ var tfBtn=e.target.closest('[data-truefit]');
 if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
 var fbBtn=e.target.closest('[data-feedback]');
 if(fbBtn){e.preventDefault();openFeedback(fbBtn);return;}
+var vaBtn=e.target.closest('[data-viewall]');
+if(vaBtn){e.preventDefault();openViewAll(vaBtn,vaBtn.getAttribute('data-viewall'));return;}
 var mapBtn=e.target.closest('[data-map]');
 if(mapBtn){e.preventDefault();openLocator(mapBtn,mapBtn.getAttribute('data-map'),mapBtn.getAttribute('data-map-label'),mapBtn.getAttribute('data-map-url'));return;}
 var formBtn=e.target.closest('[data-form]');
@@ -3904,6 +3986,8 @@ else for(var i=0;i<messages.length;i++){
   if(_mc&&_md){var _mb=$('.ai-chat-msg-bubble',_md);if(_mb)_mb.insertAdjacentHTML('beforeend',mapCtaHtml(_mc))}
   var _fc=messages[i].formCta;
   if(_fc&&/^[A-Za-z0-9]{4,32}$/.test(String(_fc.form||''))&&_md){var _fb=$('.ai-chat-msg-bubble',_md);if(_fb)_fb.insertAdjacentHTML('beforeend',formCtaHtml({form:String(_fc.form),label:String(_fc.label||'').slice(0,40)||'Open the quiz'}))}
+  var _va=messages[i].viewAll;
+  if(_va&&_md&&messages[i].products&&messages[i].products.length){var _vac=cleanViewAll(_va),_vab=$('.ai-chat-msg-bubble',_md);if(_vac&&_vab)placeViewAll(_vab,_vac,messages[i].products)}
   if(messages[i].comparison&&_md){var _cb=$('.ai-chat-msg-bubble',_md);if(_cb)_cb.insertAdjacentHTML('beforeend',compareHtml(messages[i].comparison))}
   var _os=messages[i].orders;
   if(Array.isArray(_os)&&_os.length&&_md){

@@ -27,7 +27,8 @@ const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
-const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
+const { viewAllWords, VIEW_ALL_MAX } = await import("../app/lib/lean/shop-all.js");
+const { allMatches } = await import("../app/lib/lean/search.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
 const { resolvePreselect } = await import("../app/lib/lean/variant-choice.js");
@@ -226,18 +227,36 @@ await test("compare: the table comes from the catalog, the reply isn't asked for
   assert.equal(r.retried, false);
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Price \(differs\)|Price \(same\)/, "the model gets the table's facts");
 });
-await test("View-all link: built from the search filters, store pattern honored, vague searches get none", () => {
-  assert.deepEqual(
-    buildShopAllLink({ query: "x", gender: "women", colors: ["Pink"], categories: ["sandals"] }),
-    { url: "/search?q=women+pink+sandals&type=product", label: "View all Women's Pink Sandals" },
-  );
-  assert.deepEqual(
-    buildShopAllLink({ query: "x", gender: "men", on_sale: true }, { pattern: "https://www.aetrex.com/collections/shop?q={q}&tab=products" }),
-    { url: "https://www.aetrex.com/collections/shop?q=sale+men&tab=products", label: "View all Sale Men's Styles" },
-  );
-  assert.equal(buildShopAllLink({ query: "comfy shoes" }), null);
-  assert.equal(buildShopAllLink({ query: "x", colors: ["Black", "Navy"] }), null, "two colors can't be one search");
-  assert.equal(buildShopAllLink(null), null);
+await test("View all: words from the search filters", () => {
+  assert.deepEqual(viewAllWords({ query: "x", gender: "women", on_sale: true, categories: ["Boots"] }, 16), { label: "View all 16 women's sale boots", title: "Women's Sale Boots" });
+  assert.deepEqual(viewAllWords({ query: "x", colors: ["Dark Brown"], categories: ["wedges/heels"], size: "9.5" }, 7), { label: "View all 7 dark brown wedges & heels", title: "Dark Brown Wedges & Heels · Size 9.5" });
+  assert.deepEqual(viewAllWords({ query: "x", gender: "men", on_sale: true }, 30), { label: "View all 30 men's sale styles", title: "Men's Sale Styles" });
+  assert.deepEqual(viewAllWords({ query: "comfy" }, 12), { label: "View all 12 matches", title: "All matches" });
+  assert.equal(viewAllWords({ query: "x", colors: ["Black", "Navy"] }, 9).label, "View all 9 matches", "two colors aren't one word");
+});
+// "Any boots on sale?" → 4 cards of many: the reply carries every match.
+await test("View all: every match of the search behind the cards, only when there are more", async () => {
+  const run = async (input, handles) => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", input)] },
+      { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles })] },
+      { stop_reason: "end_turn", content: [txt("Here are a few.")] },
+    ]);
+    return runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "show me" }], latestUserMessage: "show me", callModel: s.callModel, log: quiet });
+  };
+  const all = allMatches(catalog, { query: "", gender: "women" });
+  assert.ok(all.length > 2, "the test catalog has several women's styles");
+  const r = await run({ query: "", gender: "women" }, all.slice(0, 2).map((p) => p.handle));
+  assert.equal(r.viewAll.total, all.length);
+  assert.deepEqual(r.viewAll.products.map((c) => c.handle), all.slice(0, VIEW_ALL_MAX).map((p) => p.handle), "the same products, best first");
+  assert.equal(r.viewAll.label, `View all ${all.length} women's styles`);
+  assert.ok(r.viewAll.products.every((c) => c.title && c.url && c.handle), "full cards");
+  const mila = allMatches(catalog, { query: "margot" });
+  assert.ok(mila.length >= 1 && mila.length <= 4);
+  const r2 = await run({ query: "margot" }, mila.map((p) => p.handle));
+  assert.equal(r2.viewAll, null, "every match already shown → no button");
+  const one = await run({ query: "", gender: "women" }, []);
+  assert.equal(one.viewAll, null, "no cards → no button");
 });
 await test("invented product → fact check → Claude rewrites once", async () => {
   const s = scripted([

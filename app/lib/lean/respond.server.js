@@ -18,13 +18,8 @@ import { runLeanTurn } from "./engine.js";
 import { makeLiveStock } from "./live-stock.server.js";
 import { recordHealth } from "../../models/ChatHealth.server.js";
 import { chatModel, CHECK_MODEL } from "../claude-models.js";
-import { buildShopAllLink } from "./shop-all.js";
 import { saveRecording } from "../../models/ChatRecording.server.js";
 import { describeExtras } from "../chat-recording.js";
-
-// The "View all …" button under a set of product cards (opens the store's
-// search for the same thing). Paused for now; flip to true to bring it back.
-const SHOW_SHOP_ALL_LINK = false;
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -175,10 +170,8 @@ export function leanChatResponse({
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
         for (const ev of result.events || []) send(ev);
-        if (SHOW_SHOP_ALL_LINK && result.cards.length > 1) {
-          const link = buildShopAllLink(result.shopAllSearch, { pattern: config.storefrontSearchUrlPattern });
-          if (link) send({ type: "link", ...link });
-        }
+        // More matches than the cards show: the full list, opened in the chat.
+        if (result.viewAll) send({ type: "view_all", ...result.viewAll });
         if (result.cards.length === 1) {
           const card = result.cards[0];
           const product = catalog.products.find((p) => p.handle === card.handle);

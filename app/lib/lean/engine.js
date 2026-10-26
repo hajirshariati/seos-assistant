@@ -8,7 +8,8 @@
 // `anthropic` client and `lookupStoreInfo` function, so it runs in tests with
 // stubs.
 
-import { leanSearch, productDetails, similarProducts } from "./search.js";
+import { leanSearch, allMatches, productDetails, similarProducts } from "./search.js";
+import { viewAllWords, VIEW_ALL_MAX } from "./shop-all.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
@@ -637,6 +638,17 @@ export async function runLeanTurn({
   const shopAllSearch = cards.length
     ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null
     : null;
+  // More matches than the cards show → "View all N …" opens every match of
+  // that search in the chat (each with its own Add to cart).
+  let viewAll = null;
+  if (shopAllSearch) {
+    const all = allMatches(catalog, shopAllSearch);
+    const shownSet = new Set(cards.map((c) => c.handle));
+    if (all.length > cards.length && all.some((p) => !shownSet.has(p.handle))) {
+      viewAll = { ...viewAllWords(shopAllSearch, all.length), total: all.length, products: all.slice(0, VIEW_ALL_MAX).map((p) => toCard(p)) };
+      log(`[lean] view all: ${all.length} matches (${cards.length} shown)`);
+    }
+  }
   log(
     `[lean] final textLen=${text.length} cards=${cards.length} tools=${toolCalls} rewrite=${retried} ` +
     `unresolved=${finalIssues.map((i) => i.code).join(",") || "-"} ms=${Date.now() - started}`,
@@ -647,6 +659,7 @@ export async function runLeanTurn({
     followUps: cards.length ? followUps : [],
     supportRequested,
     shopAllSearch,
+    viewAll,
     topics,
     mentions,
     events,

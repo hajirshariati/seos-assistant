@@ -248,6 +248,17 @@ export function start(port) {
             w({ type: "done" });
             return resp.end();
           }
+          // "Any boots on sale?": two cards of ten matches → View all.
+          if (parsed.message === "saleboots") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            const more = Array.from({ length: 6 }, (_, i) => ({ title: `Sale Boot ${i + 1} - Black`, handle: `sale-boot-${i + 1}`, url: `/products/sale-boot-${i + 1}`, image: img, price: "99.95", price_formatted: "$99.95", compare_at_price: 14995, choose: ["Size"], kind: "footwear" }));
+            w({ type: "text", text: "Here are two of the boots on sale." });
+            w({ type: "products", products: [cards[0], cards[2]] });
+            w({ type: "view_all", label: "View all 10 women's sale boots", title: "Women's Sale Boots", total: 10, products: [cards[0], cards[1], cards[2], carly, ...more] });
+            w({ type: "done" });
+            return resp.end();
+          }
           if (parsed.message === "quizme") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);

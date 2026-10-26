@@ -40,6 +40,7 @@ export function describeExtras(events = []) {
     else if (e.type === "klaviyo_form") out.push("sign-up form");
     else if (e.type === "map_cta") out.push(`store map button: ${e.label || "Find a store near you"}`);
     else if (e.type === "form_cta") out.push(`quiz button: ${e.label || "Identify my orthotic"}`);
+    else if (e.type === "view_all") out.push(e.label || "View all");
     else if (e.type === "login_prompt") out.push("sign-in button");
     else if (e.type === "order_cards" && Array.isArray(e.orders)) out.push(`orders: ${e.orders.map((o) => `#${o.number} ${o.stageLabel}`).join(", ")}`);
     else if (e.type === "link" && e.label) out.push(`link: ${e.label}`);

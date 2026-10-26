@@ -957,7 +957,7 @@ export default function ApiKeys() {
                     onChange={setSearchPattern}
                     placeholder="/search?q={q}&type=product"
                     autoComplete="off"
-                    helpText="The 'View all' button under a set of product cards (e.g. 'View all Women's Sandals') opens your store's search — it's paused for now, so this pattern isn't used yet. Put {q} where the search words go. Leave blank to use Shopify's standard search page."
+                    helpText="Not used right now: the 'View all' button under product cards opens every match inside the chat, so it always shows exactly what the assistant found. Put {q} where the search words go. Leave blank to use Shopify's standard search page."
                   />
                   <TextField
                     label="Referral program page URL"
