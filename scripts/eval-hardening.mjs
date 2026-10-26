@@ -10,6 +10,7 @@ import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TU
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
 import { typeformId, feedbackSurveyConfig, whichOrthoticConfig, storepointId, locatorPageUrl, storeLocatorConfig } from "../app/lib/feedback-survey.js";
+import { chatRatingConfig, cleanComment } from "../app/lib/chat-rating.js";
 import { appearDelayConfig, clampDelay, startTheme, parseCountries, internationalConfig } from "../app/lib/appear-delay.js";
 
 let pass = 0;
@@ -20,6 +21,18 @@ function test(name, fn) {
 }
 
 console.log("\nconversation history from the browser");
+test("chat check-in: on by default after 3 replies; the setting stays in range", () => {
+  assert.deepEqual(chatRatingConfig({}), { on: true, after: 3 });
+  assert.deepEqual(chatRatingConfig({ chatRatingOn: false, chatRatingAfter: 5 }), { on: false, after: 5 });
+  assert.equal(chatRatingConfig({ chatRatingAfter: 1 }).after, 2);
+  assert.equal(chatRatingConfig({ chatRatingAfter: 99 }).after, 8);
+  assert.equal(chatRatingConfig({ chatRatingAfter: "x" }).after, 3);
+});
+test("chat check-in: a comment is one clean paragraph, at most 500 characters", () => {
+  assert.equal(cleanComment("  Loved it\n\n thanks\u0000 "), "Loved it thanks");
+  assert.equal(cleanComment("x".repeat(900)).length, 500);
+  assert.equal(cleanComment(undefined), "");
+});
 test("an oversized history is cut to the most recent turns that fit", () => {
   const big = Array.from({ length: 200 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `${i} ` + "x".repeat(25000) }));
   const h = sanitizeHistory(big);

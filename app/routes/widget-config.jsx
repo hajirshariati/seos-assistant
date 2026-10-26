@@ -1,4 +1,5 @@
 import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
+import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appearDelayConfig, startTheme, internationalConfig } from "../lib/appear-delay.js";
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
@@ -71,6 +72,8 @@ export const loader = async ({ request }) => {
         supportUrl: String(config.supportUrl || "").trim(),
         supportLabel: String(config.supportLabel || "").trim(),
         showFeedback: config.showFeedback !== false,
+        // Settings → "How's the chat going?" check-in after a few replies.
+        chatRating: chatRatingConfig(config),
         // Settings → Feedback survey and live chat.
         feedbackSurvey: feedbackSurveyConfig(config),
         hideLiveChatButton: config.hideLiveChatButton === true,

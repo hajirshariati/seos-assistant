@@ -5121,3 +5121,166 @@ button.ai-chat-launcher__text {
   .ai-chat-launcher.is-arriving { animation-name: aiLauncherFade; }
   @keyframes aiLauncherFade { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* ================================================================
+   "How's the chat going?" — one quiet line under the conversation.
+   Not a chat bubble: centered, hairline, smaller type. Thumbs up or
+   down, then an optional one-line comment, then a short thanks that
+   folds away.
+   ================================================================ */
+.ai-chat-panel .ai-chat-rate {
+  align-self: center;
+  width: 100%;
+  max-width: 340px;
+  margin: 2px auto 6px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), max-height 0.35s ease, margin 0.35s ease;
+}
+.ai-chat-panel .ai-chat-rate.is-in { opacity: 1; transform: none; }
+.ai-chat-panel .ai-chat-rate.is-out { opacity: 0; transform: translateY(-4px); max-height: 0 !important; margin: 0 auto; overflow: hidden; }
+.ai-chat-panel .ai-chat-rate__card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 5px 5px 5px 15px;
+  box-sizing: border-box;
+  border: 1px solid var(--seos-line);
+  border-radius: 999px;
+  background: var(--seos-bg-raised, #fff);
+  color: var(--seos-text-2);
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+.ai-chat-panel .ai-chat-rate__q { flex: 1; min-width: 0; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-rate__btns { display: flex; gap: 4px; flex: none; }
+.ai-chat-panel .ai-chat-rate__vote,
+.ai-chat-panel .ai-chat-rate__x,
+.ai-chat-panel .ai-chat-rate__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+.ai-chat-panel .ai-chat-rate__vote {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--seos-line);
+  background: transparent;
+  color: var(--seos-text);
+}
+.ai-chat-panel .ai-chat-rate__x {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--seos-text-2);
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-rate__vote:hover { background: var(--seos-surface); border-color: var(--seos-line-strong); }
+  .ai-chat-panel .ai-chat-rate__x:hover { background: var(--seos-surface); color: var(--seos-text); }
+}
+.ai-chat-panel .ai-chat-rate__vote:active,
+.ai-chat-panel .ai-chat-rate__send:active { transform: scale(0.92); }
+.ai-chat-panel .ai-chat-rate__vote:focus-visible,
+.ai-chat-panel .ai-chat-rate__x:focus-visible,
+.ai-chat-panel .ai-chat-rate__send:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+
+/* After the vote: the thanks, and a one-line comment field. */
+.ai-chat-panel .ai-chat-rate__card.is-voted {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 20px;
+}
+.ai-chat-panel .ai-chat-rate__top { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.ai-chat-panel .ai-chat-rate__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--seos-surface);
+  color: var(--seos-text);
+}
+.ai-chat-panel .ai-chat-rate__mark svg { width: 13px; height: 13px; }
+.ai-chat-panel .ai-chat-rate__form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 3px 3px 3px 12px;
+  border-radius: 999px;
+  background: var(--seos-surface);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow 0.15s ease;
+}
+.ai-chat-panel .ai-chat-rate__form:focus-within { box-shadow: inset 0 0 0 1px var(--seos-line-strong); }
+.ai-chat-panel .ai-chat-rate__input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--seos-text);
+  font: inherit;
+  font-size: 14px;
+}
+.ai-chat-panel .ai-chat-rate__input::placeholder { color: var(--seos-text-2); opacity: 0.8; }
+.ai-chat-panel .ai-chat-rate__send {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: var(--seos-ink);
+  color: #fff;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-rate__send { color: #0d0d12; }
+.ai-chat-panel .ai-chat-rate__send:disabled { opacity: 0.25; cursor: default; transform: none; }
+
+/* The thanks: a small centered line, then it folds away. */
+.ai-chat-panel .ai-chat-rate__card.is-done {
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 14px;
+  border-color: transparent;
+  background: transparent;
+}
+.ai-chat-panel .ai-chat-rate__card.is-done .ai-chat-rate__q { flex: none; }
+.ai-chat-panel .ai-chat-rate__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--seos-ink);
+  color: #fff;
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-rate__check { color: #0d0d12; }
+
+/* Phones: 16px text so iOS doesn't zoom into the comment field. */
+@media (max-width: 600px) {
+  .ai-chat-panel .ai-chat-rate__input { font-size: 16px; }
+  .ai-chat-panel .ai-chat-rate__input::placeholder { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-rate,
+  .ai-chat-panel .ai-chat-rate.is-in,
+  .ai-chat-panel .ai-chat-rate.is-out { transform: none; transition: opacity 0.15s ease; }
+}

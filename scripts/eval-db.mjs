@@ -28,7 +28,7 @@ const { recordHealth, getHealthSummary, cleanupOldHealth } = await import("../ap
 const { saveCampaign } = await import("../app/models/Campaign.server.js");
 const { saveDecisionTree, incrementCompletedCount } = await import("../app/models/DecisionTree.server.js");
 const { getShopConfig, saveKnowledgeFile, deleteKnowledgeFile, incrementRateLimitHits } = await import("../app/models/ShopConfig.server.js");
-const { recordFeedback } = await import("../app/models/ChatFeedback.server.js");
+const { recordFeedback, recordChatRating } = await import("../app/models/ChatFeedback.server.js");
 const { syncCatalog } = await import("../app/models/Product.server.js");
 const { healthCheck: healthz } = await import("../app/lib/health-check.server.js");
 const { syncStoreKnowledge } = await import("../app/lib/store-knowledge/sync.server.js");
@@ -125,6 +125,20 @@ await test("feedback transcripts drop emails and phone numbers; the IP is a keye
   assert.equal(JSON.parse(row.conversation).length, 1, "only user/assistant turns kept");
   assert.deepEqual(row.products, ["Jillian", "Savannah"]);
   assert.match(row.userHash, /^[0-9a-f]{16}$/);
+});
+
+await test("chat check-in: one rating per conversation; the comment updates it, contact details removed", async () => {
+  const conv = [{ role: "user", content: "boots in 9" }, { role: "assistant", content: "Here are three." }];
+  const first = await recordChatRating({ shop: A, sessionId: "rate-1", vote: "up", conversation: conv, ip: "203.0.113.9" });
+  assert.equal(first.kind, "chat");
+  assert.equal(first.comment, null);
+  assert.equal(first.botResponse, "Here are three.");
+  const again = await recordChatRating({ shop: A, sessionId: "rate-1", vote: "up", comment: "Great — mail me at jane@x.com", conversation: conv, ip: "203.0.113.9" });
+  assert.equal(again.id, first.id, "the same row");
+  assert.match(again.comment, /Great — mail me at \[email\]/);
+  assert.equal(await prisma.chatFeedback.count({ where: { shop: A, sessionId: "rate-1" } }), 1);
+  const answer = await recordFeedback({ shop: A, sessionId: "rate-1", vote: "down", botResponse: "x", products: [], conversation: null, ip: "" });
+  assert.equal(answer.kind, "answer", "Helpful / Not helpful stays its own kind");
 });
 
 console.log("\ncatalog sync");

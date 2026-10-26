@@ -1,4 +1,5 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
+import { chatRatingConfig } from "../lib/chat-rating.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useRef, useEffect } from "react";
@@ -47,6 +48,8 @@ export const loader = async ({ request }) => {
     anthropicModel: chatModel(config.anthropicModel),
     showFollowUps: config.showFollowUps !== false,
     showFeedback: config.showFeedback !== false,
+    chatRatingOn: config.chatRatingOn !== false,
+    chatRatingAfter: chatRatingConfig(config).after,
     hasYotpoKey: config.yotpoApiKey !== "",
     hasAftershipKey: config.aftershipApiKey !== "",
     hideOnUrls,
@@ -315,6 +318,11 @@ export const action = async ({ request }) => {
 
   const feedbackToggle = formData.get("showFeedback");
   if (feedbackToggle !== null) data.showFeedback = feedbackToggle === "true";
+
+  const ratingToggle = formData.get("chatRatingOn");
+  if (ratingToggle !== null) data.chatRatingOn = ratingToggle === "true";
+  const ratingAfter = formData.get("chatRatingAfter");
+  if (ratingAfter !== null) data.chatRatingAfter = chatRatingConfig({ chatRatingAfter: ratingAfter }).after;
 
 
   const vipToggle = formData.get("vipModeEnabled");
@@ -595,7 +603,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, storeLocatorMapId: initLocMap, storeLocatorLabel: initLocLabel, storeLocatorUrl: initLocUrl, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, chatRatingOn: initRatingOn, chatRatingAfter: initRatingAfter, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, storeLocatorMapId: initLocMap, storeLocatorLabel: initLocLabel, storeLocatorUrl: initLocUrl, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -604,6 +612,8 @@ export default function ApiKeys() {
   const [showOptional, setShowOptional] = useState(false);
   const [model, setModel] = useState(anthropicModel || "claude-sonnet-4-6");
   const [followUps, setFollowUps] = useState(initFollowUps);
+  const [ratingOn, setRatingOn] = useState(initRatingOn);
+  const [ratingAfter, setRatingAfter] = useState(String(initRatingAfter));
   const [feedbackOn, setFeedbackOn] = useState(initFeedback);
   const [yotpoKey, setYotpoKey] = useState("");
   const [aftershipKey, setAftershipKey] = useState("");
@@ -660,6 +670,8 @@ export default function ApiKeys() {
     model: anthropicModel || "claude-sonnet-4-6",
     followUps: initFollowUps,
     feedbackOn: initFeedback,
+    ratingOn: initRatingOn,
+    ratingAfter: String(initRatingAfter),
     supportUrl: initSupportUrl,
     supportLabel: initSupportLabel,
     trackingPageUrl: initTrackingPageUrl,
@@ -723,6 +735,8 @@ export default function ApiKeys() {
     setModel(s.model);
     setFollowUps(s.followUps);
     setFeedbackOn(s.feedbackOn);
+    setRatingOn(s.ratingOn);
+    setRatingAfter(s.ratingAfter);
     setYotpoKey("");
     setAftershipKey("");
     setSupportUrl(s.supportUrl);
@@ -1231,6 +1245,21 @@ export default function ApiKeys() {
                     onChange={setFeedbackOn}
                     helpText="Shows thumbs up/down on product responses. Negative feedback appears in Analytics with hashed user data."
                   />
+                  <Divider />
+                  <Checkbox
+                    label="Ask how the chat went"
+                    checked={ratingOn}
+                    onChange={setRatingOn}
+                    helpText="After a few replies, a small “How's the chat going?” note with thumbs up / down and an optional comment. Asked once per conversation, and not again for two weeks once a shopper answers or closes it. Ratings and comments appear in Analytics."
+                  />
+                  {ratingOn && (
+                    <Select
+                      label="Ask after"
+                      options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} replies`, value: String(n) }))}
+                      value={ratingAfter}
+                      onChange={setRatingAfter}
+                    />
+                  )}
                 </BlockStack>
               </Card>
             </Layout.AnnotatedSection>
@@ -1625,6 +1654,8 @@ export default function ApiKeys() {
           <input type="hidden" name="anthropicApiKey" value={anthropicKey} />
           <input type="hidden" name="anthropicModel" value={model} />
           <input type="hidden" name="showFollowUps" value={String(followUps)} />
+          <input type="hidden" name="chatRatingOn" value={String(ratingOn)} />
+          <input type="hidden" name="chatRatingAfter" value={ratingAfter} />
           <input type="hidden" name="showFeedback" value={String(feedbackOn)} />
           <input type="hidden" name="yotpoApiKey" value={yotpoKey} />
           <input type="hidden" name="aftershipApiKey" value={aftershipKey} />

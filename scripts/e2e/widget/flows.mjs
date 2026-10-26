@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -981,6 +981,119 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   check(`view all (${label}): and still opens the full list`, (await page.$$eval(".ai-chat-fbsheet__list .ai-chat-product-card", (c) => c.length)) === 10);
   check(`view all (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
+}
+// "How's the chat going?": after the store's number of replies, one quiet
+// line under the conversation (not a bubble); thumbs, then an optional
+// comment, then a short thanks that folds away. Asked once per
+// conversation; answered or closed → not again for two weeks; never while
+// the shopper is typing; a new message makes an unanswered one step aside.
+{
+  const rateCtx = async (opts) => { const ctx = await browser.newContext(opts); const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message)); return { ctx, page, errors }; };
+  const say = async (page, q) => {
+    const before = await page.$$eval(".ai-chat-msg--assistant", (m) => m.length);
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", q);
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((n) => document.querySelectorAll(".ai-chat-msg--assistant").length > n, before, { timeout: 6000 });
+    await page.waitForTimeout(250);
+  };
+  for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+    const { ctx, page, errors } = await rateCtx(opts);
+    const fb0 = feedbackBodies.length;
+    await page.goto("http://localhost:4789/showcase?rate=3");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "hello 1");
+    await say(page, "hello 1");
+    await page.waitForTimeout(2200);
+    check(`chat rating (${label}): not before the store's number of replies`, (await page.$$(".ai-chat-rate")).length === 0);
+    await say(page, "hello 1");
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    await page.waitForTimeout(450);
+    await page.screenshot({ path: out(`rate-${label}-ask`) });
+    const a = await page.evaluate(() => {
+      const r = document.querySelector(".ai-chat-rate"), m = document.querySelector(".ai-chat-messages"), card = r.querySelector(".ai-chat-rate__card");
+      const rr = card.getBoundingClientRect(), mr = m.getBoundingClientRect(), last = [...m.children].filter((x) => x.classList.contains("ai-chat-msg")).pop();
+      return { text: r.querySelector(".ai-chat-rate__q").textContent, votes: [...r.querySelectorAll("[data-rate]")].map((b) => b.getAttribute("aria-label")).join("|"), x: !!r.querySelector("[data-rate-x]"),
+        afterLast: !!(last.compareDocumentPosition(r) & 4), notBubble: !r.closest(".ai-chat-msg") && !r.querySelector(".ai-chat-msg-bubble"), height: Math.round(rr.height),
+        centered: Math.abs((rr.left - mr.left) - (mr.right - rr.right)) < 3, inside: rr.left >= mr.left && rr.right <= mr.right, font: parseFloat(getComputedStyle(r.querySelector(".ai-chat-rate__q")).fontSize),
+        bubbleFont: parseFloat(getComputedStyle(document.querySelector(".ai-chat-msg-bubble p")).fontSize), tap: Math.min(...[...r.querySelectorAll("button")].map((b) => b.getBoundingClientRect().height)) };
+    });
+    check(`chat rating (${label}): after the 3rd reply, one quiet line asks "How's the chat going?" with thumbs`, a.text === "How’s the chat going?" && a.votes === "Going well|Not great" && a.x && a.afterLast && a.notBubble, JSON.stringify(a));
+    check(`chat rating (${label}): compact, centered, smaller than the chat text, still easy to tap`, a.height <= 48 && a.centered && a.inside && a.font < a.bubbleFont && a.tap >= 28, JSON.stringify(a));
+    check(`chat rating (${label}): nothing is sent until they answer`, feedbackBodies.length === fb0);
+    await page.click('.ai-chat-rate [data-rate="up"]');
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: out(`rate-${label}-voted`) });
+    const v = await page.evaluate(() => { const r = document.querySelector(".ai-chat-rate"); const i = r.querySelector(".ai-chat-rate__input"); return { state: r.getAttribute("data-state"), q: r.querySelector(".ai-chat-rate__q").textContent, input: !!i, placeholder: i && i.placeholder, sendOff: r.querySelector(".ai-chat-rate__send").disabled, focused: document.activeElement === i, height: Math.round(r.getBoundingClientRect().height) }; });
+    const vote = feedbackBodies[fb0];
+    check(`chat rating (${label}): a thumb records the rating for the whole chat right away`, vote && vote.kind === "chat" && vote.vote === "up" && !vote.comment && Array.isArray(vote.conversation) && vote.conversation.length >= 3 && /^sess_/.test(vote.session), JSON.stringify(vote));
+    check(`chat rating (${label}): then an optional one-line comment (keyboard not forced open on a phone)`, v.state === "voted" && v.q === "Thanks! Anything to add?" && v.input && v.placeholder === "Add a comment (optional)" && v.sendOff && v.focused === (label === "desktop") && v.height <= 100, JSON.stringify(v));
+    await page.fill(".ai-chat-rate__input", "Loved the boot picks");
+    check(`chat rating (${label}): send turns on once there's a comment`, !(await page.$eval(".ai-chat-rate__send", (b) => b.disabled)));
+    await page.press(".ai-chat-rate__input", "Enter");
+    await page.waitForTimeout(300);
+    const c = feedbackBodies[fb0 + 1];
+    check(`chat rating (${label}): the comment is sent with the same rating`, c && c.kind === "chat" && c.vote === "up" && c.comment === "Loved the boot picks" && c.session === vote.session, JSON.stringify(c));
+    check(`chat rating (${label}): a short thanks`, (await page.$eval(".ai-chat-rate", (r) => r.getAttribute("data-state") + "|" + r.textContent.trim())) === "done|Thanks for the feedback");
+    await page.waitForTimeout(3900);
+    check(`chat rating (${label}): the thanks folds away`, (await page.$$(".ai-chat-rate")).length === 0);
+    await say(page, "hello 1");
+    await page.waitForTimeout(2200);
+    check(`chat rating (${label}): not asked again in this conversation`, (await page.$$(".ai-chat-rate")).length === 0);
+    // A new conversation within two weeks of answering: not asked.
+    const quiet = await page.evaluate(() => Date.now() - Number(localStorage.getItem("hajirai_rate_done") || 0) < 60000);
+    check(`chat rating (${label}): answering starts a two-week quiet period`, quiet);
+    check(`chat rating (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Closed with ×: gone, nothing sent, quiet for two weeks.
+  {
+    const { ctx, page, errors } = await rateCtx({ viewport: { width: 1280, height: 800 } });
+    const fb0 = feedbackBodies.length;
+    await page.goto("http://localhost:4789/showcase?rate=2");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "hello 1");
+    await say(page, "hello 1");
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    await page.click(".ai-chat-rate [data-rate-x]");
+    await page.waitForTimeout(600);
+    const x = await page.evaluate(() => ({ gone: !document.querySelector(".ai-chat-rate"), quiet: !!localStorage.getItem("hajirai_rate_done") }));
+    check("chat rating: × closes it, sends nothing, and it stays quiet for two weeks", x.gone && x.quiet && feedbackBodies.length === fb0, JSON.stringify(x));
+    // Comment skipped: × after a thumb → the thanks, only the vote sent.
+    await page.evaluate(() => { localStorage.removeItem("hajirai_rate_done"); Object.keys(localStorage).filter((k) => k.startsWith("hajirai_rate_")).forEach((k) => localStorage.removeItem(k)); });
+    await say(page, "hello 1");
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    await page.click('.ai-chat-rate [data-rate="down"]');
+    await page.waitForTimeout(300);
+    const dq = await page.$eval(".ai-chat-rate__q", (q) => q.textContent);
+    await page.click(".ai-chat-rate [data-rate-x]");
+    await page.waitForTimeout(300);
+    check("chat rating: a thumbs-down asks what could be better; skipping the comment keeps just the vote", dq === "Sorry about that. What could we do better?" && (await page.$eval(".ai-chat-rate", (r) => r.getAttribute("data-state"))) === "done" && feedbackBodies.length === fb0 + 1 && feedbackBodies.at(-1).vote === "down" && !feedbackBodies.at(-1).comment, JSON.stringify(feedbackBodies.slice(fb0)));
+    check("chat rating: no JS errors (closing)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Typing: it waits. A new message: an unanswered one steps aside.
+  {
+    const { ctx, page, errors } = await rateCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase?rate=2");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "hello 1");
+    await say(page, "hello 1");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "and in wide");
+    await page.waitForTimeout(2300);
+    check("chat rating: never pops up while the shopper is typing", (await page.$$(".ai-chat-rate")).length === 0);
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelectorAll(".ai-chat-msg--assistant").length >= 3, null, { timeout: 6000 });
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    check("chat rating: it comes after the next reply instead", true);
+    await say(page, "hello 1");
+    await page.waitForTimeout(600);
+    check("chat rating: a new message while it's unanswered — it steps aside", (await page.$$(".ai-chat-rate")).length === 0);
+    check("chat rating: no JS errors (typing)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
 }
 {
   // Storepoint can't load: a tappable link to the locator page.

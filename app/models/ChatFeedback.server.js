@@ -37,6 +37,30 @@ export async function recordFeedback({ shop, sessionId, vote, botResponse, produ
   });
 }
 
+// The check-in rating of a whole conversation: one per conversation — a
+// changed mind or the comment that follows the vote updates it.
+export async function recordChatRating({ shop, sessionId, vote, comment = "", conversation, ip }) {
+  const transcript = Array.isArray(conversation)
+    ? conversation
+      .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: redactContactDetails(String(m.content || "").slice(0, 300)) }))
+    : null;
+  const lastReply = transcript ? [...transcript].reverse().find((m) => m.role === "assistant")?.content || "" : "";
+  const data = {
+    vote,
+    ...(comment ? { comment: redactContactDetails(comment) } : {}),
+    ...(transcript ? { conversation: JSON.stringify(transcript), botResponse: lastReply.slice(0, 500) } : {}),
+  };
+  const existing = sessionId
+    ? await prisma.chatFeedback.findFirst({ where: { shop, sessionId, kind: "chat" }, orderBy: { createdAt: "desc" }, select: { id: true } })
+    : null;
+  if (existing) return prisma.chatFeedback.update({ where: { id: existing.id }, data });
+  return prisma.chatFeedback.create({
+    data: { shop, sessionId, kind: "chat", botResponse: "", products: [], userHash: hashValue(ip), ...data },
+  });
+}
+
 function resolveRange(arg) {
   if (arg && typeof arg === "object" && arg.startDate && arg.endDate) {
     return { start: new Date(arg.startDate), end: new Date(arg.endDate) };
@@ -121,6 +145,8 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      kind: true,
+      comment: true,
       conversation: true,
       vote: true,
       products: true,
@@ -151,8 +177,12 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
         // For down-voted rows, surface the AI's response that was
         // flagged. Rendered inline as 'AI RESPONDED' on the row so
         // the merchant can see the failure mode without expanding.
-        flaggedAiResponse: r.vote === "down" ? (r.botResponse || null) : null,
+        flaggedAiResponse: r.vote === "down" && r.kind !== "chat" ? (r.botResponse || null) : null,
         vote: r.vote,
+        // "chat": the shopper rated the whole conversation (the check-in),
+        // with their comment if they left one.
+        kind: r.kind === "chat" ? "chat" : "answer",
+        comment: r.comment || null,
         products: r.products || [],
         date: r.createdAt,
         transcript,

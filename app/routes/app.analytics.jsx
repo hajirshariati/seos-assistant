@@ -354,8 +354,9 @@ function RankList({ rows, countLabel }) {
 // One conversation row: date + vote pill + the customer's question and the
 // AI's answer, expanding into the full chat-bubble transcript on click.
 function ConversationRow({
-  date, vote, productsCount, productsList, headlineText, aiResponseText, transcript,
+  date, vote, kind, comment, productsCount, productsList, headlineText, aiResponseText, transcript,
 }) {
+  const chat = kind === "chat";
   const [open, setOpen] = useState(false);
   const hasTranscript = Array.isArray(transcript) && transcript.length > 0;
   return (
@@ -367,8 +368,9 @@ function ConversationRow({
             hour: "numeric", minute: "2-digit",
           })}
         </span>
-        {vote === "up" && <span className="seos-an-vote is-up">Helpful</span>}
-        {vote === "down" && <span className="seos-an-vote is-down">Not helpful</span>}
+        {vote === "up" && <span className="seos-an-vote is-up">{chat ? "Chat went well" : "Helpful"}</span>}
+        {vote === "down" && <span className="seos-an-vote is-down">{chat ? "Chat not great" : "Not helpful"}</span>}
+        {chat && <span className="seos-an-vote">Rated the whole chat</span>}
         {productsCount > 0 && (
           <span className="seos-an-vote">{productsCount} product{productsCount > 1 ? "s" : ""}</span>
         )}
@@ -380,6 +382,12 @@ function ConversationRow({
         <div className="seos-an-convo-block">
           <span className="seos-an-convo-role">Customer asked</span>
           <p>{headlineText}</p>
+        </div>
+      )}
+      {comment && (
+        <div className="seos-an-convo-block">
+          <span className="seos-an-convo-role">Customer comment</span>
+          <p>{comment}</p>
         </div>
       )}
       {aiResponseText && (
@@ -421,6 +429,7 @@ function ConversationsCard({ rows, onExport, exporting }) {
     if (filter === "down") return rows.filter((r) => r.vote === "down");
     if (filter === "up") return rows.filter((r) => r.vote === "up");
     if (filter === "unrated") return rows.filter((r) => r.vote !== "up" && r.vote !== "down");
+    if (filter === "comments") return rows.filter((r) => r.comment);
     return rows;
   }, [rows, filter]);
   // Counts derive from the visible rows (capped at 20) so the chip numbers
@@ -431,7 +440,7 @@ function ConversationsCard({ rows, onExport, exporting }) {
       if (r.vote === "up") up++;
       else if (r.vote === "down") down++;
     }
-    return { up, down, unrated: rows.length - up - down };
+    return { up, down, unrated: rows.length - up - down, comments: rows.filter((r) => r.comment).length };
   }, [rows]);
 
   const Chip = ({ value, label, count, tone }) => (
@@ -458,6 +467,7 @@ function ConversationsCard({ rows, onExport, exporting }) {
         {counts.down > 0 && <Chip value="down" label="Not helpful" count={counts.down} tone="down" />}
         {counts.up > 0 && <Chip value="up" label="Helpful" count={counts.up} tone="up" />}
         {counts.unrated > 0 && <Chip value="unrated" label="No vote" count={counts.unrated} />}
+        {counts.comments > 0 && <Chip value="comments" label="With comments" count={counts.comments} />}
       </div>
       {filtered.length === 0 ? (
         <div className="seos-an-empty">No conversations match this filter.</div>
@@ -468,6 +478,8 @@ function ConversationsCard({ rows, onExport, exporting }) {
               key={q.id}
               date={q.date}
               vote={q.vote}
+              kind={q.kind}
+              comment={q.comment}
               productsCount={q.products?.length || 0}
               productsList={q.products}
               headlineText={q.lastUserQuestion || q.question}

@@ -14,6 +14,7 @@ export const startedReturns = {};
 // shopper never hears back), or make the next request slow.
 export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false };
 export const compareLog = [];
+export const feedbackBodies = [];
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
   { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
@@ -202,13 +203,20 @@ export function start(port) {
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
+        if (u.pathname === "/apps/hajirai/feedback") {
+          feedbackBodies.push(JSON.parse(body || "{}"));
+          return send(200, "application/json", '{"ok":true}');
+        }
         if (u.pathname === "/apps/hajirai/compare") {
           compareLog.push(u.searchParams.get("handles"));
           if (mockCtl.compareFail) return send(500, "application/json", JSON.stringify({ error: "failed", message: "The comparison couldn't load right now." }));
           const c = buildComparison(CMP_CATALOG, String(u.searchParams.get("handles") || "").split(","));
           return setTimeout(() => send(c.error ? 404 : 200, "application/json", JSON.stringify(c.error ? { error: "not_found" } : { ok: true, intro: comparisonIntro(c), comparison: c })), 120);
         }
-        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }], ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
+        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
+          // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
+          chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
+          ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
         if (u.pathname === "/apps/hajirai/chat") {

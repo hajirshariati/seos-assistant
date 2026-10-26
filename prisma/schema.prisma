@@ -202,6 +202,9 @@ model ShopConfig {
   storeLocatorMapId   String   @default("")
   storeLocatorLabel   String   @default("Find a store near you")
   storeLocatorUrl     String   @default("")
+  // A quiet "How's the chat going?" check-in after a few replies.
+  chatRatingOn        Boolean  @default(true)
+  chatRatingAfter     Int      @default(3)
   hideLiveChatButton  Boolean  @default(false)
   appearDelayOn       Boolean  @default(false)
   appearDelaySec      Int      @default(3)
@@ -404,7 +407,12 @@ model ChatFeedback {
   id           String   @id @default(cuid())
   shop         String
   sessionId    String
+  // "answer": Helpful / Not helpful under one reply. "chat": the check-in
+  // rating of the whole conversation (one per conversation, with an
+  // optional comment).
+  kind         String   @default("answer")
   vote         String
+  comment      String?
   botResponse  String
   products     String[]
   conversation String?
@@ -412,6 +420,7 @@ model ChatFeedback {
   createdAt    DateTime @default(now())
 
   @@index([shop])
+  @@index([shop, sessionId])
   @@index([shop, createdAt])
   @@index([createdAt])
 }

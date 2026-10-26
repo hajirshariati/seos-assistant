@@ -1,5 +1,6 @@
 import { authenticate } from "../shopify.server";
-import { recordFeedback } from "../models/ChatFeedback.server";
+import { recordFeedback, recordChatRating } from "../models/ChatFeedback.server";
+import { cleanComment } from "../lib/chat-rating.js";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -23,6 +24,19 @@ export const action = async ({ request }) => {
     try { body = JSON.parse(raw); } catch { /* handled below */ }
     if (!body?.vote || !["up", "down"].includes(body.vote)) {
       return Response.json({ error: "Invalid vote" }, { status: 400 });
+    }
+
+    // The "How's the chat going?" check-in: the whole conversation.
+    if (body.kind === "chat") {
+      await recordChatRating({
+        shop: session.shop,
+        sessionId: String(body.session || "").slice(0, 100),
+        vote: body.vote,
+        comment: cleanComment(body.comment),
+        conversation: Array.isArray(body.conversation) ? body.conversation : null,
+        ip,
+      });
+      return Response.json({ ok: true });
     }
 
     await recordFeedback({

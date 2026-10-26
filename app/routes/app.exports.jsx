@@ -118,12 +118,16 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
       ? qs.filter((q) => q.vote === vote)
       : vote === "unrated"
         ? qs.filter((q) => q.vote !== "up" && q.vote !== "down")
-        : qs;
+        : vote === "comments"
+          ? qs.filter((q) => q.comment)
+          : qs;
     return toCsv(
-      ["Date", "Vote", "First Question", "Last Question", "Flagged AI Response", "Products", "Conversation"],
+      ["Date", "Vote", "Rated", "Comment", "First Question", "Last Question", "Flagged AI Response", "Products", "Conversation"],
       rows.map((q) => [
         new Date(q.date).toISOString(),
         q.vote || "",
+        q.kind === "chat" ? "Whole chat" : "One answer",
+        q.comment || "",
         q.question || "",
         q.lastUserQuestion || "",
         q.flaggedAiResponse || "",
@@ -166,7 +170,7 @@ export const loader = async ({ request }) => {
     return new Response(`Unknown export section: ${section}`, { status: 400 });
   }
 
-  const voteSlug = vote === "down" ? "not-helpful" : vote === "up" ? "helpful" : vote === "unrated" ? "no-vote" : "";
+  const voteSlug = vote === "down" ? "not-helpful" : vote === "up" ? "helpful" : vote === "unrated" ? "no-vote" : vote === "comments" ? "with-comments" : "";
   const fname = `${section}${voteSlug ? `-${voteSlug}` : ""}_${startDate.toISOString().slice(0, 10)}_to_${endDate.toISOString().slice(0, 10)}.csv`;
   return csvResponse(fname, csv);
 };

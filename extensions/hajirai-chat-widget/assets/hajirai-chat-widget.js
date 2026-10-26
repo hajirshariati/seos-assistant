@@ -64,6 +64,7 @@ function hideAssistant(){
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false)SHOW_FEEDBACK=false;
+  if(d.chatRating&&typeof d.chatRating==='object'){RATE_ON=d.chatRating.on!==false;var _ra=parseInt(d.chatRating.after,10);if(_ra>=2&&_ra<=8)RATE_AFTER=_ra}
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
   if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers'}
@@ -2417,7 +2418,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-26 view-all-grid'}catch(e){}
+try{window.__hajiraiWidget='2026-10-26 chat-rating'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -3287,6 +3288,7 @@ panel.addEventListener('click',function(e){
 function sendMessage(){
 var text=inputEl.value.trim();
 if(!text||isStreaming)return;
+rateStepAside();
 var w=$('.ai-chat-welcome',msgsEl);
 if(w)w.remove();
 msgsEl.classList.remove('is-welcome');
@@ -3801,11 +3803,117 @@ if(prods&&prods.length>0&&mDiv){
   }
 }
 scrollMsgTop(mDiv);
+maybeAskRating();
 }
 
 /* Delayed UI for the current chat only — "Clear chat" cancels it. */
 var chatGen=0;
 function later(fn,ms){var g=chatGen;setTimeout(function(){if(g===chatGen)fn()},ms)}
+/* ── "How's the chat going?" ──────────────────────────────────────────
+   After a few replies, one quiet note under the conversation — not a chat
+   bubble: thumbs up or down for the whole chat, then an optional comment.
+   Asked once per conversation; once a shopper answers or closes it, not
+   again for two weeks. Never while a reply is coming, while they're typing,
+   or with a sheet open; and it never pulls them away from what they're
+   reading. Settings → "Ask how the chat went". */
+var RATE_ON=true,RATE_AFTER=3,RATE_DONE='hajirai_rate_done',RATE_QUIET=14*864e5;
+var RATE_ICON={
+  up:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3z"/><path d="M7 10l4.2-7.2a1.8 1.8 0 0 1 3.3 1.3L13.6 9H19a2 2 0 0 1 2 2.3l-1.2 7.5A2.6 2.6 0 0 1 17.2 21H7"/></svg>',
+  down:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3z"/><path d="M17 14l-4.2 7.2a1.8 1.8 0 0 1-3.3-1.3l.9-4.9H5a2 2 0 0 1-2-2.3l1.2-7.5A2.6 2.6 0 0 1 6.8 3H17"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  send:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+};
+function rateShownKey(){return 'hajirai_rate_'+getSess()}
+/* Asked in this conversation already, or answered / closed lately. */
+function rateQuiet(){try{return !!localStorage.getItem(rateShownKey())||Date.now()-(+localStorage.getItem(RATE_DONE)||0)<RATE_QUIET}catch(e){return true}}
+function rateNearBottom(){return msgsEl.scrollHeight-msgsEl.scrollTop-msgsEl.clientHeight<90}
+function rateAskHtml(){
+  return '<div class="ai-chat-rate__card"><span class="ai-chat-rate__q">How’s the chat going?</span>'+
+    '<span class="ai-chat-rate__btns"><button type="button" class="ai-chat-rate__vote" data-rate="up" aria-label="Going well" title="Going well">'+RATE_ICON.up+'</button>'+
+    '<button type="button" class="ai-chat-rate__vote" data-rate="down" aria-label="Not great" title="Not great">'+RATE_ICON.down+'</button></span>'+
+    '<button type="button" class="ai-chat-rate__x" data-rate-x aria-label="No thanks" title="No thanks">'+RATE_ICON.x+'</button></div>';
+}
+function rateCommentHtml(vote){
+  return '<div class="ai-chat-rate__card is-voted"><div class="ai-chat-rate__top"><span class="ai-chat-rate__mark">'+RATE_ICON[vote]+'</span>'+
+    '<span class="ai-chat-rate__q" role="status">'+(vote==='up'?'Thanks! Anything to add?':'Sorry about that. What could we do better?')+'</span>'+
+    '<button type="button" class="ai-chat-rate__x" data-rate-x aria-label="Skip" title="Skip">'+RATE_ICON.x+'</button></div>'+
+    '<form class="ai-chat-rate__form" novalidate><input class="ai-chat-rate__input" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" placeholder="Add a comment (optional)" aria-label="Add a comment (optional)">'+
+    '<button type="submit" class="ai-chat-rate__send" aria-label="Send comment" disabled>'+RATE_ICON.send+'</button></form></div>';
+}
+function rateDoneHtml(){return '<div class="ai-chat-rate__card is-done" role="status"><span class="ai-chat-rate__check">'+RATE_ICON.check+'</span><span class="ai-chat-rate__q">Thanks for the feedback</span></div>'}
+function ratePost(vote,comment){
+  var p={kind:'chat',vote:vote,session:getSess(),conversation:messages.slice(-10).map(function(m){return{role:m.role,content:String(m.content||'').slice(0,300)}})};
+  if(comment)p.comment=comment;
+  try{fetch(FEEDBACK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}).catch(function(){})}catch(e){}
+}
+function rateMarkDone(){try{localStorage.setItem(RATE_DONE,String(Date.now()))}catch(e){}}
+/* Fold away: fade, then collapse the space it took. */
+function rateRemove(row){
+  if(!row||!row.isConnected)return;
+  row.style.maxHeight=row.offsetHeight+'px';void row.offsetHeight;
+  row.classList.add('is-out');
+  setTimeout(function(){if(row.isConnected)row.remove()},window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?0:380);
+}
+function rateFinish(row){
+  if(!row||!row.isConnected)return;
+  row.innerHTML=rateDoneHtml();row.setAttribute('data-state','done');
+  later(function(){rateRemove(row)},3200);
+}
+/* A new chat message while the question is still open: it steps aside. */
+function rateStepAside(){
+  var row=$('.ai-chat-rate',msgsEl);if(!row)return;
+  var st=row.getAttribute('data-state');
+  if(st==='ask')rateRemove(row);
+  else if(st==='voted'){var inp=$('.ai-chat-rate__input',row);var c=inp?inp.value.trim():'';if(c)ratePost(row.getAttribute('data-vote'),c);rateFinish(row)}
+}
+function maybeAskRating(){
+  if(!RATE_ON||isStreaming||$('.ai-chat-rate',msgsEl))return;
+  var n=0;for(var i=0;i<messages.length;i++)if(messages[i].role==='assistant')n++;
+  if(n<RATE_AFTER||rateQuiet())return;
+  later(function(){
+    if(!RATE_ON||isStreaming||$('.ai-chat-rate',msgsEl)||rateQuiet())return;
+    if(inputEl.value.trim()||(fbSheet&&!fbSheet.hidden))return;
+    try{localStorage.setItem(rateShownKey(),'1')}catch(e){}
+    var near=rateNearBottom();
+    var row=el('div','ai-chat-rate',rateAskHtml());
+    row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');
+    msgsEl.appendChild(row);
+    void row.offsetWidth;row.classList.add('is-in');
+    if(near)keepInView(row);
+    row.addEventListener('click',function(e){
+      var v=e.target.closest('[data-rate]');
+      if(v&&row.getAttribute('data-state')==='ask'){
+        var vote=v.getAttribute('data-rate')==='down'?'down':'up';
+        ratePost(vote,'');rateMarkDone();
+        var keep=rateNearBottom();
+        row.innerHTML=rateCommentHtml(vote);row.setAttribute('data-state','voted');row.setAttribute('data-vote',vote);
+        if(keep)keepInView(row);
+        /* A keyboard on screen is a lot to ask for an optional comment:
+           the field takes focus only with a mouse or trackpad. */
+        if(window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches){var inp=$('.ai-chat-rate__input',row);if(inp)try{inp.focus({preventScroll:true})}catch(_){}}
+        else{var xb=$('.ai-chat-rate__x',row);if(xb)try{xb.focus({preventScroll:true})}catch(_){}}
+        return;
+      }
+      if(e.target.closest('[data-rate-x]')){
+        if(row.getAttribute('data-state')==='ask'){rateMarkDone();rateRemove(row);try{inputEl.focus({preventScroll:true})}catch(_){}}
+        else rateFinish(row);
+      }
+    });
+    row.addEventListener('input',function(e){
+      if(!e.target.classList.contains('ai-chat-rate__input'))return;
+      var b=$('.ai-chat-rate__send',row);if(b)b.disabled=!e.target.value.trim();
+    });
+    row.addEventListener('submit',function(e){
+      e.preventDefault();
+      var inp=$('.ai-chat-rate__input',row),c=inp?inp.value.trim():'';
+      if(c)ratePost(row.getAttribute('data-vote')||'up',c);
+      rateFinish(row);
+    });
+    row.addEventListener('keydown',function(e){if(e.key==='Escape'&&row.getAttribute('data-state')==='voted'){e.preventDefault();e.stopPropagation();rateFinish(row)}});
+  },1600);
+}
+
 function clearChat(){
 chatGen++;clearWatchdog();
 messages=[];_memSess='';try{localStorage.removeItem(HK);localStorage.removeItem(SK)}catch(e){}
