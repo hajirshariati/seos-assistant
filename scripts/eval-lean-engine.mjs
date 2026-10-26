@@ -21,12 +21,12 @@ register("data:text/javascript," + encodeURIComponent(HOOK));
 const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefined : noop), apply: async () => [] });
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
-const { buildLeanCatalog, productCodes, codesInText } = await import("../app/lib/lean/catalog.js");
+const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes } = await import("../app/lib/lean/catalog.js");
 const { leanSearch, productDetails, similarProducts } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
 const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
@@ -504,6 +504,55 @@ await test("a typed code is flagged as a product, and get_my_orders refuses it",
   assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /product code for: Women's Casual Comfort Posted Orthotics/);
   assert.equal(orderRuns, 0, "the order lookup never ran");
   assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /isn't an order number/);
+});
+// The live failure: the box says "L2400"; the product on sale is "LL2400"
+// (the L2400 itself is a draft) — "didn't match a specific product", twice.
+const LL2400 = { ...row("First Generation Women's Customizable Orthotics", { type: "Orthotics", cat: "Orthotics", price: "89.95" }), handle: "ll2400w-m" };
+LL2400.variants = LL2400.variants.map((v, i) => ({ ...v, sku: `LL2400W0${4 + i}` }));
+const LL2400M = { ...row("First Generation Men's Customizable Orthotics", { type: "Orthotics", cat: "Orthotics", price: "89.95" }), handle: "ll2400m-m" };
+LL2400M.variants = LL2400M.variants.map((v, i) => ({ ...v, sku: `LL2400M0${7 + i}` }));
+const closeCatalog = buildLeanCatalog([...ROWS, L820, LL2400, LL2400M], { shop: "s.myshopify.com" });
+await test("close codes: one typo apart — a letter added or left out, a swap, one changed", () => {
+  assert.equal(oneEditApart("l2400", "ll2400"), true, "letter left out");
+  assert.equal(oneEditApart("lll2400", "ll2400"), true, "letter added");
+  assert.equal(oneEditApart("l2040", "l2400"), true, "neighbors swapped");
+  assert.equal(oneEditApart("l2401", "l2400"), true, "one changed");
+  assert.equal(oneEditApart("l2400", "l2400"), false, "same is exact, not close");
+  assert.equal(oneEditApart("l24", "l2400"), false);
+  assert.equal(oneEditApart("x9999", "l2400"), false);
+  assert.deepEqual(closeCodes(closeCatalog.byCode, "l2400").map((c) => c.code), ["ll2400"], "the closest kind first, the style code");
+  assert.deepEqual(closeCodes(closeCatalog.byCode, "size10"), [], "a size isn't a code");
+  assert.deepEqual(closeCodes(closeCatalog.byCode, "1171674"), [], "an order number isn't a code");
+});
+await test("close codes: L2400 / L 2400 / L-2400 find the LL2400, marked close; exact codes stay exact", () => {
+  for (const msg of ["L2400", "do you have the L 2400?", "l-2400 womens"]) {
+    const f = codesInText(closeCatalog, msg);
+    assert.ok(f.length >= 1 && f[0].code === "ll2400" && f[0].close === true && /^l/.test(f[0].typed), `${msg} → ${JSON.stringify(f.map((x) => x.code))}`);
+    assert.deepEqual([...new Set(f[0].products.map((p) => p.handle))].sort(), ["ll2400m-m", "ll2400w-m"]);
+  }
+  const exact = codesInText(closeCatalog, "LL2400");
+  assert.equal(exact[0].close, false);
+  assert.deepEqual(codesInText(closeCatalog, "L2400", { close: false }), [], "order lookups use exact codes only");
+  assert.deepEqual(codesInText(closeCatalog, "where is order #1171674"), []);
+});
+await test("close codes: search finds the closest product; the note says closest, never 'nothing matched'", async () => {
+  const r = leanSearch(closeCatalog, { query: "L2400" });
+  assert.ok(["ll2400w-m", "ll2400m-m"].includes(r.products[0].handle), JSON.stringify(r.products.map((p) => p.handle)));
+  assert.equal(leanSearch(closeCatalog, { query: "LL2400" }).products[0].handle.startsWith("ll2400"), true);
+  const note = codesNote(codesInText(closeCatalog, "L2400"));
+  assert.match(note, /"L2400" isn't exactly one of this store's product codes\. The closest is "LL2400": First Generation/);
+  assert.match(note, /query "ll2400"/);
+  assert.match(note, /closest match to "L2400"/);
+  assert.match(note, /Don't say nothing matched/);
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "ll2400" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: ["ll2400w-m", "ll2400m-m"] })] },
+    { stop_reason: "end_turn", content: [txt("The closest match to L2400 is our First Generation Customizable Orthotics, in women's and men's.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog: closeCatalog, model: "m", messages: [{ role: "user", content: "L2400" }], latestUserMessage: "L2400", callModel: s.callModel, log: quiet });
+  assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /The closest is \\"LL2400\\"/);
+  assert.deepEqual(r2.cards.map((c) => c.handle).sort(), ["ll2400m-m", "ll2400w-m"]);
+  assert.deepEqual(r2.issues, []);
 });
 await test("an answer written with a lookup isn't lost when the reply continues it", async () => {
   assert.equal(joinContinuation("Yes, the L820 is in stock.", "And don't forget the free gel insert!"), "Yes, the L820 is in stock.\n\nAnd don't forget the free gel insert!");

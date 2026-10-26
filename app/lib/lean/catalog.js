@@ -271,18 +271,62 @@ export function buildLeanCatalog(rows = [], { shop = "" } = {}) {
   return { products, vocab: buildVocabulary(products), byCode };
 }
 
-// Product codes the customer typed ("L820", "#l2305w") that are this store's
-// → [{ code, products }]. Order numbers are digits, so they never match.
-export function codesInText(catalog, text) {
+// One typo apart: a letter added or left out ("l2400" / "ll2400"), two
+// neighbors swapped, or one character changed.
+export function oneEditApart(a, b) {
+  if (a === b) return false;
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  if (la === lb) {
+    let i = 0;
+    while (a[i] === b[i]) i++;
+    if (a.slice(i + 1) === b.slice(i + 1)) return true;
+    return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2);
+  }
+  const [s, l] = la < lb ? [a, b] : [b, a];
+  let i = 0;
+  while (i < s.length && s[i] === l[i]) i++;
+  return s.slice(i) === l.slice(i + 1);
+}
+
+// Worth a close look: letters and at least three digits ("l2400"), not a
+// size ("size10") or an order number (digits only).
+const looksLikeCode = (w) => w.length >= 4 && /[a-z]/.test(w) && (w.match(/\d/g) || []).length >= 3;
+
+// The store's codes one typo away from a typed one, closest kind first (a
+// letter added or left out — the box says "L2400", the product is
+// "LL2400"), at most three codes.
+export function closeCodes(byCode, word) {
+  if (!byCode?.size || !looksLikeCode(word)) return [];
+  const found = [];
+  for (const [code, products] of byCode) {
+    if (!products.length || !looksLikeCode(code) || !oneEditApart(word, code)) continue;
+    found.push({ code, products, rank: code.length !== word.length ? 0 : 1 });
+  }
+  return found.sort((a, b) => a.rank - b.rank || a.code.length - b.code.length).slice(0, 3).map(({ code, products }) => ({ code, products }));
+}
+
+// Product codes the customer typed ("L820", "#l2305w", "L 2400") that are
+// this store's → [{ code, products, typed, close }]. Order numbers are
+// digits, so they never match. With close: true (the default), a code that
+// isn't the store's gets the store's codes one typo away, marked close.
+export function codesInText(catalog, text, { close = true } = {}) {
   const byCode = catalog?.byCode;
   if (!byCode || !byCode.size) return [];
+  const words = String(text || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  // "L 2400", "L-2400": a short letter prefix split from its number.
+  const joined = words.flatMap((w, i) => (/^[a-z]{1,3}$/.test(w) && /^\d{3,}[a-z0-9]*$/.test(words[i + 1] || "") ? [w + words[i + 1]] : []));
   const seen = new Set();
   const out = [];
-  for (const w of String(text || "").toLowerCase().split(/[^a-z0-9]+/)) {
+  for (const w of [...words, ...joined]) {
     if (!w || seen.has(w) || !/[a-z]/.test(w) || !/\d/.test(w)) continue;
     seen.add(w);
     const products = byCode.get(w);
-    if (products?.length) out.push({ code: w, products });
+    if (products?.length) { out.push({ code: w, products, typed: w, close: false }); continue; }
+    if (!close) continue;
+    for (const c of closeCodes(byCode, w)) {
+      if (!out.some((o) => o.code === c.code)) out.push({ ...c, typed: w, close: true });
+    }
   }
   return out;
 }

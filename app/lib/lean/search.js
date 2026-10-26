@@ -7,7 +7,7 @@
 
 import { valueOverlap } from "../similar-attributes.js";
 import { matchColorValues } from "../color-match.js";
-import { styleName } from "./catalog.js";
+import { styleName, closeCodes } from "./catalog.js";
 import { merchScore, fewSizesLeft, ratingOf } from "./merch.js";
 
 // How much merchandising can move a product among equally relevant ones. A
@@ -57,15 +57,18 @@ function haystacks(p) {
   };
 }
 
-function scoreProduct(p, terms) {
+// close: term → Set of products whose code is one typo from it (closeCodes).
+function scoreProduct(p, terms, close = null) {
   if (terms.length === 0) return { score: 0, matched: 0 };
   const h = haystacks(p);
   let score = 0;
   let matched = 0;
   for (const t of terms) {
     let hit = false;
-    // The store's own product code ("l820"): an exact match outranks any word.
+    // The store's own product code ("l820"): an exact match outranks any word,
+    // and a code one typo off ("l2400" for "ll2400") comes next.
     if (p.codes?.includes(t)) { score += 10; hit = true; }
+    else if (close?.get(t)?.has(p)) { score += 8; hit = true; }
     for (const [field, w] of FIELD_WEIGHTS) {
       if (hasTerm(h[field], t)) { score += w; hit = true; }
     }
@@ -171,6 +174,14 @@ function rankMatches(catalog, params = {}) {
   const terms = queryTerms(params.query);
 
   const matches = products.filter((p) => passes(p, filters, catalogHasGender));
+  // A typed code that isn't the store's but is one typo from some ("l2400" →
+  // "ll2400"): those products count as a match.
+  const close = new Map();
+  for (const t of terms) {
+    if (catalog?.byCode?.has(t)) continue;
+    const near = closeCodes(catalog?.byCode, t);
+    if (near.length) close.set(t, new Set(near.flatMap((c) => c.products)));
+  }
   // Best first: what was asked for, then what sells (sizes in stock, rating,
   // best sellers) — not the cheapest, which is often a last odd size. Price
   // order only when the customer asks for it.
@@ -178,7 +189,7 @@ function rankMatches(catalog, params = {}) {
   const sort = String(params.sort || "best");
   const byPrice = (dir) => (a, b) => b.matched - a.matched || dir * (a.p.price - b.p.price) || b.merch - a.merch;
   let ranked = matches
-    .map((p) => ({ p, ...scoreProduct(p, terms), merch: merchScore(p, { sizeFiltered }) }))
+    .map((p) => ({ p, ...scoreProduct(p, terms, close), merch: merchScore(p, { sizeFiltered }) }))
     .sort(sort === "price_low" ? byPrice(1) : sort === "price_high" ? byPrice(-1)
       : (a, b) => b.matched - a.matched || (b.score + MERCH_WEIGHT * b.merch) - (a.score + MERCH_WEIGHT * a.merch) || a.p.price - b.p.price);
   // The query narrows too: when some filtered products match its words, only

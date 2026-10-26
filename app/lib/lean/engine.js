@@ -174,9 +174,16 @@ export function mentionsOffer(text) {
 // a code is searched as the product it is, never taken for an order number.
 export function codesNote(found) {
   if (!found.length) return "";
-  const lines = found.slice(0, 3).map(({ code, products }) =>
-    `"${code.toUpperCase()}" is this store's product code for: ${[...new Set(products.map((p) => p.title))].slice(0, 4).join("; ")}`);
-  return `(${lines.join(". ")}. It's a product, not an order number — search it with product search, query "${found[0].code}".)`;
+  const titles = (products) => [...new Set(products.map((p) => p.title))].slice(0, 4).join("; ");
+  const exact = found.filter((f) => !f.close);
+  if (exact.length) {
+    const lines = exact.slice(0, 3).map(({ code, products }) => `"${code.toUpperCase()}" is this store's product code for: ${titles(products)}`);
+    return `(${lines.join(". ")}. It's a product, not an order number — search it with product search, query "${exact[0].code}".)`;
+  }
+  // Not one of the store's codes, but one typo away from some: the closest.
+  const typed = found[0].typed.toUpperCase();
+  const lines = found.slice(0, 3).map(({ code, products }) => `"${code.toUpperCase()}": ${titles(products)}`);
+  return `("${typed}" isn't exactly one of this store's product codes. The closest ${found.length === 1 ? "is" : "are"} ${lines.join("; ")}. It's most likely a product code with a small difference (a box or an old order can print it slightly differently) — search the closest with product search, query "${found[0].code}", show it, and say it's the closest match to "${typed}". Don't say nothing matched.)`;
 }
 
 // Text written alongside a lookup is usually filler ("Let me check…"), but a
@@ -501,7 +508,7 @@ export async function runLeanTurn({
     }
     const ext = extraByName.get(name);
     // "L820" is a product code here, not an order number: send Claude to the product.
-    const codeAsOrder = name === "get_my_orders" && input?.orderNumber ? codesInText(catalog, input.orderNumber) : [];
+    const codeAsOrder = name === "get_my_orders" && input?.orderNumber ? codesInText(catalog, input.orderNumber, { close: false }) : [];
     if (codeAsOrder.length) {
       log(`[lean] get_my_orders refused: "${codeAsOrder[0].code}" is a product code`);
       return { error: `"${input.orderNumber}" isn't an order number — it's this store's product code for ${codeAsOrder[0].products[0].title}. Search it with product search (query "${codeAsOrder[0].code}") and show it.` };
