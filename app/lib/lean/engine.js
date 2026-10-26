@@ -16,7 +16,7 @@ import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { productKind, codesInText } from "./catalog.js";
-import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown } from "../medical-disclaimer.js";
+import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown, footConditionQuestion } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
 const MAX_CARDS = 4;
@@ -312,6 +312,14 @@ export async function runLeanTurn({
     ? Promise.resolve().then(() => askYesNo(offersQuestion(lastAssistantText, latestUserMessage))).catch(() => null)
     : Promise.resolve(offersMaybe);
   let offersAsked = null; // resolved at the first fact check
+  // Pain or a condition named and the health note not given yet in this chat
+  // → the check model says whether the shopper wants help with it (vs.
+  // returning an orthotic named after it). Read when the reply is done.
+  const conditionMaybe = medicalDisclaimerRequired({ workflow: "condition_recommendation", message: latestUserMessage, text: "" }) &&
+    !disclaimerAlreadyShown(messages);
+  const conditionCheck = conditionMaybe && askYesNo
+    ? Promise.resolve().then(() => askYesNo(footConditionQuestion(lastAssistantText, latestUserMessage))).catch(() => null)
+    : Promise.resolve(conditionMaybe);
   if (offersMaybe) {
     const last = conv[conv.length - 1];
     const note = { type: "text", text: OFFERS_NOTE };
@@ -340,6 +348,7 @@ export async function runLeanTurn({
   let preselects = new Map();
   let followUps = [];
   let supportRequested = null;
+  let ordersLooked = false;
   let compared = []; // handles in this reply's comparison table
   let soldOut = []; // sizes the customer asked for that aren't in stock
   const events = [];
@@ -481,6 +490,7 @@ export async function runLeanTurn({
       return { error: `"${input.orderNumber}" isn't an order number — it's this store's product code for ${codeAsOrder[0].products[0].title}. Search it with product search (query "${codeAsOrder[0].code}") and show it.` };
     }
     if (ext) {
+      if (name === "get_my_orders") ordersLooked = true;
       const raw = await ext.run(input);
       const { _events, ...result } = raw && typeof raw === "object" ? raw : { result: raw };
       if (Array.isArray(_events)) events.push(..._events);
@@ -608,19 +618,10 @@ export async function runLeanTurn({
 
   if (finalIssues.some((i) => i.code === "missing_offers")) log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
 
+  const fellBack = !text;
   if (!text) {
     log("[lean] no reply text — sent the fallback message");
     text = "Sorry — I couldn't finish that one. Could you try asking again?";
-  }
-
-  // The note is for customers who brought up pain, a condition or orthotics —
-  // not for a fashion question whose answer happens to mention orthotics — and
-  // once per conversation, not under every reply.
-  if (
-    medicalDisclaimerRequired({ workflow: "condition_recommendation", message: latestUserMessage, text: "" }) &&
-    !disclaimerAlreadyShown(messages)
-  ) {
-    text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
   }
 
   // The reply sends the customer to a person ("tap below to reach customer
@@ -630,6 +631,17 @@ export async function runLeanTurn({
     supportRequested = "reply points to customer service";
     topic("support", "");
     log("[lean] support button: the reply points to customer service");
+  }
+
+  // The health note is for customers asking for help with pain or a
+  // condition — not for a fashion question whose answer mentions orthotics,
+  // and not under an order, return or customer-service reply — and once per
+  // conversation, not under every reply.
+  if (conditionMaybe && !fellBack) {
+    const said = await conditionCheck;
+    const supportTurn = Boolean(supportRequested) || (ordersLooked && !shown.length);
+    log(`[lean] condition check: ${said === null ? "unsure" : said ? "yes" : "no"}${supportTurn ? " — order/support reply, no note" : ""}`);
+    if (said !== false && !supportTurn) text = applyMedicalDisclaimer({ workflow: "condition_recommendation", message: latestUserMessage, text }).text;
   }
 
   // Products in the comparison table aren't repeated as cards.

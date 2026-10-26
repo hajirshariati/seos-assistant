@@ -665,6 +665,51 @@ await test("no medical note on a fashion question, even if the reply mentions or
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
   assert.doesNotMatch(r.text, /podiatrist/);
 });
+await test("no medical note on returns and orders that name an orthotic", async () => {
+  const msg = "i am returing a pair of inserts and spoke to customer service about getting the same price on a newmpair";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "contact_support", { reason: "price match on a return" })] },
+    { stop_reason: "end_turn", content: [txt("Use the button below to reach the team about matching the price.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
+  assert.doesNotMatch(r.text, /podiatrist/);
+});
+await test("no medical note under an order or support reply, even with a condition word", async () => {
+  const orders = { definition: { name: "get_my_orders", description: "orders", input_schema: { type: "object", properties: {} } }, run: async () => ({ orders: [{ name: "#1001", status: "Delivered" }] }) };
+  const msg = "where are my plantar fasciitis orthotics? I ordered last week";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "get_my_orders", {})] },
+    { stop_reason: "end_turn", content: [txt("Your order #1001 was delivered.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, extraTools: [orders], log: quiet });
+  assert.doesNotMatch(r.text, /podiatrist/, "order reply");
+  const msg2 = "my heels hurt, can I talk to someone?";
+  const s2 = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "contact_support", { reason: "wants a person" })] },
+    { stop_reason: "end_turn", content: [txt("Sure — tap below to reach our team.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg2 }], latestUserMessage: msg2, callModel: s2.callModel, log: quiet });
+  assert.doesNotMatch(r2.text, /podiatrist/, "support reply");
+});
+await test("the check model decides the medical note: yes, no, couldn't tell", async () => {
+  const msg = "show me shoes in red good for plantar fasciitis";
+  const steps = () => scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sandal", colors: ["red"], conditions: ["plantar fasciitis"], gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Savannah sandal in red is built for plantar fasciitis support.")] },
+  ]);
+  const run = (askYesNo) => runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: steps().callModel, askYesNo, log: quiet });
+  const asked = [];
+  assert.match((await run(async (q) => { asked.push(q); return true; })).text, /podiatrist/, "yes → note");
+  assert.equal(asked.filter((q) => /health condition/.test(q)).length, 1, "asked once");
+  assert.match(asked.find((q) => /health condition/.test(q)), /plantar fasciitis/);
+  assert.doesNotMatch((await run(async () => false)).text, /podiatrist/, "no → no note");
+  assert.match((await run(async () => null)).text, /podiatrist/, "couldn't tell → note");
+  let calls = 0;
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are some sneakers.")] }]);
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "black sneakers" }], latestUserMessage: "black sneakers", callModel: s.callModel, askYesNo: async () => { calls++; return true; }, log: quiet });
+  assert.equal(calls, 0, "no condition word → no check");
+});
 
 console.log("\nplumbing");
 await test("conversation normalization: starts with user, merges repeats", () => {

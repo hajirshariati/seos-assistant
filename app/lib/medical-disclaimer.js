@@ -9,11 +9,12 @@
 // Scope: deliberately NOT every condition_recommendation turn — "cute sandals
 // for vacation" plans to condition_recommendation but is not medical. The
 // disclaimer fires when the customer's message (or the reply itself) actually
-// mentions a medical condition / foot pain / orthotic therapy.
+// mentions a medical condition or foot pain.
 
-// Medical condition / pain / orthotic-therapy terms. Mirrors the validator's
-// condition vocabulary (grounding-validator PRODUCT_DATA_INTENT_RE) plus the
-// orthotic-therapy nouns.
+// Medical condition / pain terms. Mirrors the validator's condition
+// vocabulary (grounding-validator PRODUCT_DATA_INTENT_RE). Product names
+// (orthotics, insoles, inserts, arch supports) are not on it: "I'm returning
+// a pair of inserts" or "where's my orthotic order" is not a health question.
 const MEDICAL_TERM_RE = new RegExp(
   "\\b(?:plantar\\s+fasciitis|fasciitis|plantar|bunions?|neuroma|metatarsal(?:gia)?|sesamoid\\w*|capsulitis|" +
   "overpronat\\w*|supinat\\w*|flat\\s+feet|flat[-\\s]?foot|fallen\\s+arch(?:es)?|high\\s+arch(?:es)?|" +
@@ -23,8 +24,7 @@ const MEDICAL_TERM_RE = new RegExp(
   "(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?|balls?\\s+of\\s+(?:my\\s+)?feet)\\s+(?:hurts?|hurting|aches?|aching|(?:are|is|get|gets|feel|feels)\\s+(?:so\\s+|really\\s+|very\\s+)?(?:sore|achy|painful|swollen|numb))|" +
   "(?:sore|achy|aching|painful|tired|swollen|numb)\\s+(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?)|" +
   "pain\\s+in\\s+(?:my|the)\\s+(?:feet|foot|heels?|arch(?:es)?|toes?|ankles?|ball)|" +
-  "neuropath\\w*|hammer\\s?toes?|gout|morton\\W?s|achilles|tendon\\w*|shin\\s+splints?|hallux|" +
-  "orthotics?|insoles?|inserts?|arch\\s+supports?)\\b",
+  "neuropath\\w*|hammer\\s?toes?|gout|morton\\W?s|achilles|tendon\\w*|shin\\s+splints?|hallux)\\b",
   "i",
 );
 
@@ -67,6 +67,20 @@ export function applyMedicalDisclaimer({ workflow = "", message = "", text = "" 
   if (!medicalDisclaimerRequired({ workflow, message, text: t })) return { text: t, applied: false };
   if (DISCLAIMER_PRESENT_RE.test(t)) return { text: t, applied: false };
   return { text: `${t} ${MEDICAL_DISCLAIMER_TEXT}`, applied: true };
+}
+
+// Yes/no question for the quick check model: the word list finds a condition
+// word, this decides whether the shopper is actually asking for help with it
+// ("my heels hurt" yes; "returning my plantar fasciitis kit" no).
+export function footConditionQuestion(lastAssistantText, message) {
+  return [
+    "A shopper is chatting with a shoe and orthotic store's assistant.",
+    lastAssistantText ? `The assistant last said: """${String(lastAssistantText).slice(0, 600)}"""` : "",
+    `The shopper now wrote: """${String(message).slice(0, 400)}"""`,
+    "Is the shopper describing foot, leg or body pain, an injury, or a health condition (for example plantar fasciitis, bunions, neuropathy, diabetes, sore heels) that they want help with?",
+    "Answer NO if the condition word only comes up in an order, return, exchange, shipping or price question, or as part of a product's name.",
+    "Reply with YES or NO only.",
+  ].filter(Boolean).join("\n");
 }
 
 // Shown once per conversation: true when an earlier assistant reply already
