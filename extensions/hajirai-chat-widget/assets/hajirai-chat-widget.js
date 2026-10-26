@@ -72,10 +72,10 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
   if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
   if(d.feedbackSurvey&&typeof d.feedbackSurvey==='object'){
-    var hb={fb:d.feedbackSurvey,hideChat:d.hideLiveChatButton===true},was=FB_ON+'|'+FB_FORM+'|'+FB_LABEL;
+    var hb={fb:d.feedbackSurvey,hideChat:d.hideLiveChatButton===true},was=[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|');
     try{localStorage.setItem(HOST_KEY,JSON.stringify(hb))}catch(e){}
     applyHostButtons(hb);
-    if(was!==FB_ON+'|'+FB_FORM+'|'+FB_LABEL&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
+    if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   appearConfig(d.appearDelay);
   if(d.startTheme==='light'||d.startTheme==='dark'){
@@ -145,12 +145,17 @@ var SUPPORT_URL=C.supportUrl||'';
    openSupportChat). Remembered from the last visit so a page shows the
    right buttons straight away; the config call keeps it current. */
 var HOST_KEY='hajirai_host_buttons';
-var FB_ON=false,FB_FORM='',FB_LABEL='Share feedback',HIDE_LIVECHAT=false;
+var FB_ON=false,FB_FORM='',FB_LABEL='Share feedback',FB_COLOR='teal',FB_ICON='feedback',FB_HIDE_AFTER=true,HIDE_LIVECHAT=false;
 function applyHostButtons(cfg){
   cfg=cfg||{};var fb=cfg.fb||{};
   FB_FORM=/^[A-Za-z0-9]{4,32}$/.test(String(fb.form||''))?String(fb.form):'';
   FB_ON=fb.on===true&&!!FB_FORM;
   FB_LABEL=String(fb.label||'').trim().slice(0,40)||'Share feedback';
+  /* Its look (Settings): a tint from a fixed set, and an icon. */
+  FB_COLOR=/^(teal|green|blue|purple|rose|amber|plain)$/.test(String(fb.color||''))?String(fb.color):'teal';
+  FB_ICON=/^[a-z]{3,12}$/.test(String(fb.icon||''))?String(fb.icon):'feedback';
+  /* Off: the button stays after it's sent (a quiz people come back to). */
+  FB_HIDE_AFTER=fb.hideAfter!==false;
   HIDE_LIVECHAT=cfg.hideChat===true;
   /* The store's own buttons this replaces: its floating Feedback button
      (when the survey lives in the chat) and, if asked, live chat's. */
@@ -1127,7 +1132,9 @@ function ctaTileHtml(c){
   return '<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(c.m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(c.l,c.i)+'</span><span class="ai-chat-welcome__cta-label">'+esc(c.l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
 function fbTileHtml(){
-  return '<button type="button" class="ai-chat-welcome__cta-btn is-feedback" data-feedback="1" aria-haspopup="dialog"><span class="ai-chat-welcome__cta-icon">'+WI.feedback+'</span><span class="ai-chat-welcome__cta-label">'+esc(FB_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
+  var key=FB_ICON==='feedback'?'feedback':CTA_ICONS[FB_ICON];
+  var ic=!key?WI.feedback:key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
+  return '<button type="button" class="ai-chat-welcome__cta-btn is-feedback'+(FB_COLOR!=='teal'?' fb-'+FB_COLOR:'')+'" data-feedback="1" aria-haspopup="dialog"><span class="ai-chat-welcome__cta-icon">'+ic+'</span><span class="ai-chat-welcome__cta-label">'+esc(FB_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
 /* A Popular button: sends its message, or, when the message is a Typeform
    link, opens that form in the chat — that one gets an icon, chosen from
@@ -2040,12 +2047,14 @@ return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:
    orthotic do I have?"). The sheet holds one form at a time. */
 function fbDoneKey(){return 'hajirai_fb_done_'+FB_FORM}
 var fbSheet=null,fbSdk=null,fbOpener=null,fbSent=false;
-var sheetForm='',sheetTitle='',sheetKind='fb';
+var sheetForm='',sheetTitle='',sheetKind='fb',sheetSubmitted=false;
 /* A Typeform link in a button's message: the form's ID, else ''. Plain
    words are never taken for a form. */
 function formIdOf(v){var m=String(v||'').match(/typeform\.com\/to\/([A-Za-z0-9]{4,32})(?![A-Za-z0-9])/);return m?m[1]:''}
 function fbShown(){
-  if(!FB_ON||fbSent)return false;
+  if(!FB_ON)return false;
+  if(!FB_HIDE_AFTER)return true;
+  if(fbSent)return false;
   try{return !((parseInt(localStorage.getItem(fbDoneKey()),10)||0)>Date.now())}catch(e){return true}
 }
 function fbUrl(){return 'https://form.typeform.com/to/'+(sheetForm||FB_FORM)+location.search}
@@ -2119,7 +2128,9 @@ function openForm(opener,form,title,kind){
       iframeProps:{title:sheetTitle},
       onReady:function(){if(sheetForm===mine)sh.classList.add('is-ready')},
       onSubmit:function(){
-        if(thisKind!=='fb'){fbTrack('submit');return}
+        /* Sent: the next open starts the form afresh. */
+        if(sheetForm===mine)sheetSubmitted=true;
+        if(thisKind!=='fb'||!FB_HIDE_AFTER){fbTrack('submit');return}
         fbSent=true;
         var year=Date.now()+365*864e5;
         try{localStorage.setItem(fbDoneKey(),String(year));
@@ -2142,8 +2153,11 @@ function closeFeedback(){
   sh.classList.remove('is-open');fbBehind(false);
   var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
   if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)gone();else setTimeout(gone,420);
+  /* Sent and kept: the form starts afresh next time. */
+  if(sheetSubmitted&&!(fbSent&&sheetKind==='fb')){var sf=$('.ai-chat-fbsheet__form',sh);if(sf)sf.innerHTML='';sheetForm='';sheetSubmitted=false}
   /* Sent: the button makes way for Start here button 4. */
   if(fbSent&&sheetKind==='fb'){
+    sheetSubmitted=false;
     var t=$('[data-feedback]',panel);
     if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}
     if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML='';sheetForm=''}

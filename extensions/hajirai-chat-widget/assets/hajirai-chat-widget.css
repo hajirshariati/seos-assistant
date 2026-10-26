@@ -4474,16 +4474,35 @@ button.ai-chat-launcher__text {
 /* ── Feedback ─────────────────────────────────────────────────────────────
    The Start here button: the same quiet row, with a faint teal wash and a
    teal icon, so it reads as its own thing without shouting. */
-.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback { background: rgba(11, 106, 128, 0.07); }
-.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback .ai-chat-welcome__cta-icon { color: #0b6a80; }
-@media (hover: hover) {
-  .ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback:hover { background: rgba(11, 106, 128, 0.12); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback {
+  --fb-bg: rgba(11, 106, 128, 0.07); --fb-bg-h: rgba(11, 106, 128, 0.12); --fb-ic: #0b6a80;
+  background: var(--fb-bg);
 }
-.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback { background: rgba(94, 190, 212, 0.11); }
-.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback .ai-chat-welcome__cta-icon { color: #7ccadc; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback .ai-chat-welcome__cta-icon { color: var(--fb-ic); }
 @media (hover: hover) {
-  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback:hover { background: rgba(94, 190, 212, 0.17) !important; }
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback:hover { background: var(--fb-bg-h); }
 }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback {
+  --fb-bg: rgba(94, 190, 212, 0.11); --fb-bg-h: rgba(94, 190, 212, 0.17); --fb-ic: #7ccadc;
+  background: var(--fb-bg);
+}
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback:hover { background: var(--fb-bg-h) !important; }
+}
+/* Its color, picked in Settings (teal above is the default). Light, then
+   dark — each dark rule outranks its light one. */
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-green { --fb-bg: rgba(30, 130, 76, 0.08); --fb-bg-h: rgba(30, 130, 76, 0.13); --fb-ic: #1e824c; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-blue { --fb-bg: rgba(0, 113, 227, 0.07); --fb-bg-h: rgba(0, 113, 227, 0.12); --fb-ic: #0066cc; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-purple { --fb-bg: rgba(124, 58, 237, 0.07); --fb-bg-h: rgba(124, 58, 237, 0.12); --fb-ic: #6d35d4; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-rose { --fb-bg: rgba(214, 51, 108, 0.07); --fb-bg-h: rgba(214, 51, 108, 0.12); --fb-ic: #c42a60; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-amber { --fb-bg: rgba(201, 120, 0, 0.09); --fb-bg-h: rgba(201, 120, 0, 0.15); --fb-ic: #a35f00; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-feedback.fb-plain { --fb-bg: var(--seos-surface); --fb-bg-h: #ececf0; --fb-ic: #86868b; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-green { --fb-bg: rgba(90, 200, 130, 0.12); --fb-bg-h: rgba(90, 200, 130, 0.18); --fb-ic: #7fd3a0; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-blue { --fb-bg: rgba(100, 170, 255, 0.13); --fb-bg-h: rgba(100, 170, 255, 0.19); --fb-ic: #8ec2ff; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-purple { --fb-bg: rgba(170, 130, 255, 0.14); --fb-bg-h: rgba(170, 130, 255, 0.2); --fb-ic: #c0a6ff; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-rose { --fb-bg: rgba(255, 120, 160, 0.13); --fb-bg-h: rgba(255, 120, 160, 0.19); --fb-ic: #ff9bbb; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-amber { --fb-bg: rgba(255, 190, 90, 0.13); --fb-bg-h: rgba(255, 190, 90, 0.19); --fb-ic: #ffc56b; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-feedback.fb-plain { --fb-bg: var(--seos-surface); --fb-bg-h: #2a2a31; --fb-ic: #8e8e93; }
 
 /* The survey: a sheet that slides up over the conversation, inside the
    chat window, with a slim bar to step back to the chat. */

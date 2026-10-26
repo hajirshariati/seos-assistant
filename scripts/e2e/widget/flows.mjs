@@ -802,6 +802,45 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`quiz (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The feedback button's look and lifetime from Settings: a green tint and
+// the insoles icon, and kept after sending (a quiz people come back to);
+// reopening after sending starts the form afresh.
+for (const theme of ["light", "dark"]) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  let builds = 0;
+  await page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".js") ? TF_STUB.replace("window.__tf={id:id,o:o};", "window.__tf={id:id,o:o};window.__builds=(window.__builds||0)+1;") : "" }));
+  await page.addInitScript((t) => { try { localStorage.setItem("hajirai_theme_pick", t); } catch (e) { /* private mode */ } }, theme);
+  await page.goto("http://localhost:4789/full?fb=2&fblook=1");
+  await page.waitForTimeout(500);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  const t = await page.$eval("[data-feedback]", (b) => { const cs = getComputedStyle(b), ic = getComputedStyle(b.querySelector(".ai-chat-welcome__cta-icon")); const plain = document.querySelector(".ai-chat-welcome__cta-btn:not(.is-feedback)"); return { text: b.textContent.trim(), cls: b.className, bg: cs.backgroundColor, icon: ic.color, insole: !!b.querySelector(".ai-chat-welcome__cta-icon g[transform]"), plainBg: getComputedStyle(plain).backgroundColor, theme: document.querySelector(".ai-chat-panel").getAttribute("data-theme") }; });
+  const green = theme === "light" ? /rgba\(30, 130, 76/.test(t.bg) && t.icon === "rgb(30, 130, 76)" : /rgba\(90, 200, 130/.test(t.bg) && t.icon === "rgb(127, 211, 160)";
+  check(`feedback look (${theme}): the button takes the color and icon from Settings`, t.text === "Identify My Orthotic" && /fb-green/.test(t.cls) && t.insole && green && t.bg !== t.plainBg, JSON.stringify(t));
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.__tf.o.onSubmit({ responseId: "x" }));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(600);
+  const kept = await page.evaluate(() => ({ tile: !!document.querySelector("[data-feedback]"), done: localStorage.getItem("hajirai_fb_done_ojyWbTvZ") }));
+  check(`feedback look (${theme}): kept after sending when Settings say so`, kept.tile && !kept.done, JSON.stringify(kept));
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(700);
+  builds = await page.evaluate(() => window.__builds);
+  check(`feedback look (${theme}): reopening after sending starts the form afresh`, builds === 2 && (await page.$$eval(".ai-chat-fbsheet__form iframe", (f) => f.length)) === 1, `builds ${builds}`);
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(500);
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  check(`feedback look (${theme}): still there after a reload`, !!(await page.$("[data-feedback].fb-green")));
+  check(`feedback look (${theme}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // Typeform can't load: the sheet says so and offers the survey in a new tab.
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });

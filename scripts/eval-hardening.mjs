@@ -98,11 +98,17 @@ test("takes a Typeform ID or any of its links, and nothing else", () => {
   for (const bad of ["", "x", "jdX BrXMa", "javascript:alert(1)", "https://evil.example/to/abc", "<b>"]) assert.equal(typeformId(bad), "", bad);
 });
 test("the widget gets the button only when it's on and has a survey", () => {
-  assert.deepEqual(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "https://form.typeform.com/to/jdXBrXMa", feedbackSurveyLabel: "" }), { on: true, form: "jdXBrXMa", label: "Share feedback" });
+  assert.deepEqual(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "https://form.typeform.com/to/jdXBrXMa", feedbackSurveyLabel: "" }), { on: true, form: "jdXBrXMa", label: "Share feedback", color: "teal", icon: "feedback", hideAfter: true });
   assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "" }).on, false);
   assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: false, feedbackSurvey: "jdXBrXMa" }).on, false);
   assert.equal(feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "jdXBrXMa", feedbackSurveyLabel: "x".repeat(90) }).label.length, 40);
-  assert.deepEqual(feedbackSurveyConfig(), { on: false, form: "", label: "Share feedback" });
+  assert.deepEqual(feedbackSurveyConfig(), { on: false, form: "", label: "Share feedback", color: "teal", icon: "feedback", hideAfter: true });
+});
+test("the button's color and icon come only from the fixed lists; it can stay after sending", () => {
+  const c = feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "ojyWbTvZ", feedbackSurveyColor: "green", feedbackSurveyIcon: "orthotic", feedbackSurveyHideAfter: false });
+  assert.deepEqual([c.color, c.icon, c.hideAfter], ["green", "orthotic", false]);
+  const bad = feedbackSurveyConfig({ feedbackSurveyOn: true, feedbackSurvey: "ojyWbTvZ", feedbackSurveyColor: "red;}body{x", feedbackSurveyIcon: "<svg>" });
+  assert.deepEqual([bad.color, bad.icon, bad.hideAfter], ["teal", "feedback", true]);
 });
 
 console.log("\nshowing the chat after a delay");

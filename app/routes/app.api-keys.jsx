@@ -1,4 +1,4 @@
-import { typeformId } from "../lib/feedback-survey.js";
+import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS } from "../lib/feedback-survey.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useRef, useEffect } from "react";
@@ -66,6 +66,9 @@ export const loader = async ({ request }) => {
     feedbackSurveyOn: config.feedbackSurveyOn === true,
     feedbackSurvey: config.feedbackSurvey || "",
     feedbackSurveyLabel: config.feedbackSurveyLabel || "Share feedback",
+    feedbackSurveyColor: FEEDBACK_COLORS.includes(config.feedbackSurveyColor) ? config.feedbackSurveyColor : "teal",
+    feedbackSurveyIcon: FEEDBACK_ICONS.includes(config.feedbackSurveyIcon) ? config.feedbackSurveyIcon : "feedback",
+    feedbackSurveyHideAfter: config.feedbackSurveyHideAfter !== false,
     whichOrthotic: config.whichOrthotic || "",
     whichOrthoticLabel: config.whichOrthoticLabel || "Identify my orthotic",
     hideLiveChatButton: config.hideLiveChatButton === true,
@@ -228,6 +231,12 @@ export const action = async ({ request }) => {
   }
   const surveyLabel = formData.get("feedbackSurveyLabel");
   if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
+  const surveyColor = formData.get("feedbackSurveyColor");
+  if (surveyColor !== null) data.feedbackSurveyColor = FEEDBACK_COLORS.includes(surveyColor) ? surveyColor : "teal";
+  const surveyIcon = formData.get("feedbackSurveyIcon");
+  if (surveyIcon !== null) data.feedbackSurveyIcon = FEEDBACK_ICONS.includes(surveyIcon) ? surveyIcon : "feedback";
+  const surveyHideAfter = formData.get("feedbackSurveyHideAfter");
+  if (surveyHideAfter !== null) data.feedbackSurveyHideAfter = surveyHideAfter === "true";
   const which = formData.get("whichOrthotic");
   if (which !== null) {
     const raw = String(which).trim();
@@ -568,7 +577,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -593,6 +602,9 @@ export default function ApiKeys() {
   const [surveyOn, setSurveyOn] = useState(initSurveyOn);
   const [survey, setSurvey] = useState(initSurvey);
   const [surveyLabel, setSurveyLabel] = useState(initSurveyLabel);
+  const [surveyColor, setSurveyColor] = useState(initSurveyColor);
+  const [surveyIcon, setSurveyIcon] = useState(initSurveyIcon);
+  const [surveyHideAfter, setSurveyHideAfter] = useState(initSurveyHideAfter);
   const [which, setWhich] = useState(initWhich);
   const [whichLabel, setWhichLabel] = useState(initWhichLabel);
   const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
@@ -637,6 +649,9 @@ export default function ApiKeys() {
     surveyOn: initSurveyOn,
     survey: initSurvey,
     surveyLabel: initSurveyLabel,
+    surveyColor: initSurveyColor,
+    surveyIcon: initSurveyIcon,
+    surveyHideAfter: initSurveyHideAfter,
     which: initWhich,
     whichLabel: initWhichLabel,
     hideLiveChat: initHideLiveChat,
@@ -696,6 +711,9 @@ export default function ApiKeys() {
     setSurveyOn(s.surveyOn);
     setSurvey(s.survey);
     setSurveyLabel(s.surveyLabel);
+    setSurveyColor(s.surveyColor);
+    setSurveyIcon(s.surveyIcon);
+    setSurveyHideAfter(s.surveyHideAfter);
     setWhich(s.which);
     setWhichLabel(s.whichLabel);
     setHideLiveChat(s.hideLiveChat);
@@ -956,6 +974,60 @@ export default function ApiKeys() {
                     maxLength={40}
                     autoComplete="off"
                     disabled={!surveyOn}
+                  />
+                  <InlineStack gap="400" wrap={false}>
+                    <div style={{ flex: 1 }}>
+                      <Select
+                        label="Button color"
+                        options={[
+                          { label: "Teal", value: "teal" },
+                          { label: "Green", value: "green" },
+                          { label: "Blue", value: "blue" },
+                          { label: "Purple", value: "purple" },
+                          { label: "Rose", value: "rose" },
+                          { label: "Amber", value: "amber" },
+                          { label: "Plain (like the other buttons)", value: "plain" },
+                        ]}
+                        value={surveyColor}
+                        onChange={setSurveyColor}
+                        disabled={!surveyOn}
+                        helpText="A soft tint behind the button and a matching icon. Adjusts itself in the dark look."
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Select
+                        label="Button icon"
+                        options={[
+                          { label: "Chat bubble with dots (feedback)", value: "feedback" },
+                          { label: "Insoles (orthotics)", value: "orthotic" },
+                          { label: "Shoe", value: "shoe" },
+                          { label: "Search", value: "search" },
+                          { label: "Ruler (sizing)", value: "sizing" },
+                          { label: "Box (orders)", value: "order" },
+                          { label: "Truck (shipping)", value: "shipping" },
+                          { label: "Return arrow", value: "returns" },
+                          { label: "Tag (deals)", value: "deals" },
+                          { label: "Gift", value: "gift" },
+                          { label: "Heart", value: "heart" },
+                          { label: "Star", value: "star" },
+                          { label: "Chat bubble (support)", value: "support" },
+                          { label: "Map pin (stores)", value: "store" },
+                          { label: "Sparkle", value: "sparkle" },
+                        ]}
+                        value={surveyIcon}
+                        onChange={setSurveyIcon}
+                        disabled={!surveyOn}
+                      />
+                    </div>
+                  </InlineStack>
+                  <Checkbox
+                    label="Hide the button once a shopper has sent the form"
+                    checked={surveyHideAfter}
+                    onChange={setSurveyHideAfter}
+                    disabled={!surveyOn}
+                    helpText={surveyHideAfter
+                      ? "On: after sending it, that shopper sees the usual fourth button instead (for a year). Right for a one-time survey."
+                      : "Off: the button stays for everyone, every visit. Right for a tool people come back to, like a quiz."}
                   />
                   <Checkbox
                     label="Hide the live chat button (Zendesk)"
@@ -1504,6 +1576,9 @@ export default function ApiKeys() {
           <input type="hidden" name="feedbackSurveyOn" value={String(surveyOn)} />
           <input type="hidden" name="feedbackSurvey" value={survey} />
           <input type="hidden" name="feedbackSurveyLabel" value={surveyLabel} />
+          <input type="hidden" name="feedbackSurveyColor" value={surveyColor} />
+          <input type="hidden" name="feedbackSurveyIcon" value={surveyIcon} />
+          <input type="hidden" name="feedbackSurveyHideAfter" value={String(surveyHideAfter)} />
           <input type="hidden" name="whichOrthotic" value={which} />
           <input type="hidden" name="whichOrthoticLabel" value={whichLabel} />
           <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
