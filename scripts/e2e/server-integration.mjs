@@ -237,6 +237,31 @@ await test("widget-config, feedback and See It Styled answer signed requests cor
   assert.equal(viz.status, 403, "feature off for this store → refused, no image call");
 });
 
+await test("View all pages: the reply sends page 1 and its search; the endpoint serves the rest, same order", async () => {
+  const r = await chat("i need supportive sandals", { ip: "198.51.100.60" });
+  const va = r.events.find((e) => e.type === "view_all");
+  assert.ok(va, "a view_all event");
+  assert.equal(va.pageSize, 24);
+  assert.equal(va.products.length, 24);
+  assert.ok(va.total > 48, `total ${va.total}`);
+  assert.deepEqual(va.search, { query: "sandal", categories: ["sandals"] });
+  const get = (page, search = va.search) => fetch(signed("/view-all", { search: JSON.stringify(search), page: String(page) }));
+  const p1 = await (await get(1)).json();
+  assert.deepEqual(p1.products.map((c) => c.handle), va.products.map((c) => c.handle), "page 1 matches the reply");
+  const p2 = await (await get(2)).json();
+  assert.equal(p2.ok, true);
+  assert.equal(p2.page, 2);
+  assert.equal(p2.total, va.total);
+  assert.equal(p2.pages, Math.ceil(va.total / 24));
+  assert.equal(p2.products.length, 24);
+  assert.ok(p2.products.every((c) => /sandal/i.test(c.title) && c.price_formatted === "$119.95" && c.url && c.image));
+  assert.equal(new Set([...p1.products, ...p2.products].map((c) => c.handle)).size, 48, "no repeats across pages");
+  const last = await (await get(999)).json();
+  assert.equal(last.page, p2.pages, "past the end → the last page");
+  assert.equal((await get(2, { evil: "x" })).status, 400, "a search with nothing usable is refused");
+  const unsigned = await fetch(`http://localhost:${APP_PORT}/view-all?shop=${SHOP}&search=%7B%7D&page=2`);
+  assert.ok(unsigned.status >= 400 && unsigned.status < 500, `unsigned → ${unsigned.status}`);
+});
 await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
   const settle = () => new Promise((r) => setTimeout(r, 250));

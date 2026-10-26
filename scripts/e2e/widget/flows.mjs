@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -982,6 +982,102 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   await page.waitForTimeout(600);
   check(`view all (${label}): and still opens the full list`, (await page.$$eval(".ai-chat-fbsheet__list .ai-chat-product-card", (c) => c.length)) === 10);
   check(`view all (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// "View all" in pages: 60 matches, 24 to a page. A frosted pill floats at the
+// bottom of the list (reachable wherever the shopper has scrolled); the next
+// page is fetched ahead, pages already seen come back instantly, a page that
+// fails says so with Try again, and paging still works after a reload.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/showcase");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "manyboots");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-viewall]", { timeout: 5000 });
+  const logStart = viewAllLog.length;
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(700);
+  const state = () => page.evaluate(() => {
+    const list = document.querySelector(".ai-chat-fbsheet__list"), pager = list.querySelector(".ai-va-pager");
+    const cards = [...list.querySelectorAll(".ai-chat-products--grid > .ai-chat-product-card")];
+    const prev = pager && pager.querySelector('[data-va-step="-1"]'), next = pager && pager.querySelector('[data-va-step="1"]');
+    const pr = pager ? pager.getBoundingClientRect() : null, lr = list.getBoundingClientRect();
+    return { count: list.querySelector(".ai-chat-viewall__count").textContent, live: list.querySelector(".ai-chat-viewall__count").getAttribute("aria-live"), label: pager ? pager.querySelector(".ai-va-pager__label").textContent : "", cards: cards.length,
+      first: cards[0] && cards[0].getAttribute("data-handle"), last: cards.length && cards[cards.length - 1].getAttribute("data-handle"),
+      prevOff: prev ? prev.disabled : null, nextOff: next ? next.disabled : null, nextLabel: next ? next.getAttribute("aria-label") : "",
+      pagerInView: pr ? pr.bottom <= lr.bottom + 1 && pr.top >= lr.top : false, pagerFits: pr ? pr.left >= lr.left && pr.right <= lr.right : false, pagerTall: pr ? Math.round(pr.height) : 0,
+      scrollTop: Math.round(list.scrollTop), noSideways: list.scrollWidth <= list.clientWidth + 1, focusOnNext: document.activeElement === next };
+  });
+  let st = await state();
+  await page.screenshot({ path: out(`va-pages-${label}-1`) });
+  check(`view all pages (${label}): the first page, its range, and the page pill`, st.count === "1\u201324 of 60" && st.live === "polite" && st.label === "Page 1 of 3" && st.cards === 24 && st.first === "boot-1" && st.last === "boot-24" && st.prevOff === true && st.nextOff === false && st.nextLabel === "Next page, 2 of 3", JSON.stringify(st));
+  check(`view all pages (${label}): the pill sits in view at the bottom, fits, easy to tap, no sideways scroll`, st.pagerInView && st.pagerFits && st.pagerTall >= 40 && st.noSideways, JSON.stringify(st));
+  // Page 2 was fetched ahead of time with the same search.
+  await page.waitForTimeout(400);
+  const ahead = viewAllLog.slice(logStart);
+  check(`view all pages (${label}): page 2 is loaded ahead, with the reply's search`, ahead.length === 1 && ahead[0].page === 2 && ahead[0].search.on_sale === true && ahead[0].search.gender === "women", JSON.stringify(ahead));
+  // Scroll halfway: the pill is still right there.
+  await page.evaluate(() => { const l = document.querySelector(".ai-chat-fbsheet__list"); l.scrollTop = l.scrollHeight / 2; });
+  await page.waitForTimeout(150);
+  st = await state();
+  check(`view all pages (${label}): mid-list, the pill is still in view`, st.pagerInView, JSON.stringify(st));
+  await page.click('.ai-va-pager [data-va-step="1"]');
+  await page.waitForTimeout(250);
+  st = await state();
+  await page.screenshot({ path: out(`va-pages-${label}-2`) });
+  check(`view all pages (${label}): Next shows page 2 at once (it was loaded ahead), from the top`, st.count === "25\u201348 of 60" && st.label === "Page 2 of 3" && st.first === "boot-25" && st.cards === 24 && st.scrollTop === 0 && st.prevOff === false && st.focusOnNext, JSON.stringify(st));
+  await page.waitForTimeout(400);
+  await page.click('.ai-va-pager [data-va-step="1"]');
+  await page.waitForTimeout(250);
+  st = await state();
+  check(`view all pages (${label}): the last page — 12 boots, Next off`, st.count === "49\u201360 of 60" && st.label === "Page 3 of 3" && st.cards === 12 && st.last === "boot-60" && st.nextOff === true && st.prevOff === false, JSON.stringify(st));
+  const beforeBack = viewAllLog.length;
+  await page.click('.ai-va-pager [data-va-step="-1"]');
+  await page.waitForTimeout(100);
+  st = await state();
+  check(`view all pages (${label}): Previous is instant — pages already seen aren't fetched again`, st.label === "Page 2 of 3" && st.first === "boot-25" && viewAllLog.length === beforeBack, JSON.stringify({ st, fetched: viewAllLog.length - beforeBack }));
+  // Add to cart still works on a later page.
+  const beforeCart = cartLog.length;
+  await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="boot-25"] [data-atc]');
+  await page.waitForTimeout(400);
+  check(`view all pages (${label}): cards on later pages keep Add to cart`, (await page.$(".ai-chat-fbsheet__list .ai-chat-atc-panel")) !== null || cartLog.length > beforeCart);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  // A page that fails: the pill stays, a note says so, Try again loads it.
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  mockCtl.viewAllFail = 2;
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(700);
+  st = await state();
+  check(`view all pages (${label}): after a reload the list still opens on page 1 of 3`, st.label === "Page 1 of 3" && st.cards === 24, JSON.stringify(st));
+  await page.click('.ai-va-pager [data-va-step="1"]');
+  await page.waitForSelector(".ai-va-error:not([hidden])", { timeout: 5000 });
+  const fail = await page.evaluate(() => { const e = document.querySelector(".ai-va-error"), r = e.getBoundingClientRect(), l = document.querySelector(".ai-chat-fbsheet__list").getBoundingClientRect(); return { text: e.textContent, role: e.getAttribute("role"), inView: r.top >= l.top && r.bottom <= l.bottom, page: document.querySelector(".ai-va-pager__label").textContent, dim: document.querySelector(".ai-chat-fbsheet__list").classList.contains("is-loading") }; });
+  await page.screenshot({ path: out(`va-pages-${label}-failed`) });
+  check(`view all pages (${label}): a failed page says so, in view, and keeps the current page`, /Page 2 couldn.t load/.test(fail.text) && /Try again/.test(fail.text) && fail.role === "alert" && fail.inView && fail.page === "Page 1 of 3" && !fail.dim, JSON.stringify(fail));
+  // Try again, on a slow connection: while the page loads the list dims and
+  // Next spins (and taps can't stack up); then it shows.
+  mockCtl.viewAllDelayMs = 1200;
+  await page.click("[data-va-retry]");
+  await page.waitForTimeout(250);
+  const busy = await page.evaluate(() => ({ dim: document.querySelector(".ai-chat-fbsheet__list").classList.contains("is-loading"), busy: document.querySelector('.ai-va-pager [data-va-step="1"]').classList.contains("is-busy"), aria: document.querySelector(".ai-chat-fbsheet__list").getAttribute("aria-busy"), errGone: document.querySelector(".ai-va-error").hidden }));
+  await page.screenshot({ path: out(`va-pages-${label}-loading`) });
+  const asked = viewAllLog.length;
+  await page.click('.ai-va-pager [data-va-step="1"]');
+  await page.waitForTimeout(1500);
+  mockCtl.viewAllDelayMs = 150;
+  st = await state();
+  check(`view all pages (${label}): while a page loads the list dims and Next spins`, busy.dim && busy.busy && busy.aria === "true" && busy.errGone, JSON.stringify(busy));
+  check(`view all pages (${label}): Try again loads it — an extra tap while loading doesn't skip a page`, st.label === "Page 2 of 3" && st.first === "boot-25" && viewAllLog.length === asked + 1 && (await page.evaluate(() => document.querySelector(".ai-va-error").hidden && !document.querySelector(".ai-chat-fbsheet__list").classList.contains("is-loading"))), JSON.stringify({ st, extraFetches: viewAllLog.length - asked }));
+  check(`view all pages (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // "How's the chat going?": after the store's number of replies, one quiet

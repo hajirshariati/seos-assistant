@@ -12,8 +12,10 @@ export const returnBodies = [];
 export const startedReturns = {};
 // Test switches: drop the connection after the next return is created (the
 // shopper never hears back), or make the next request slow.
-export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false };
+export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150 };
 export const compareLog = [];
+// "View all" pages the widget asked for ({ page, search }).
+export const viewAllLog = [];
 export const feedbackBodies = [];
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
@@ -79,6 +81,8 @@ const cards = [
   { title: PRODUCTS["jillian-black"].title, handle: "jillian-black", url: "/products/jillian-black", image: img, price: "119.95", price_formatted: "$119.95", choose: ["Size", "Width"], kind: "footwear" },
   { title: PRODUCTS["orthotic-one"].title, handle: "orthotic-one", url: "/products/orthotic-one", image: img, price: "69.95", price_formatted: "$69.95", kind: "orthotic" },
 ];
+// A big search for "View all" pages: 60 sale boots.
+const MANY_BOOTS = Array.from({ length: 60 }, (_, i) => ({ title: `Boot ${i + 1} - Black`, handle: `boot-${i + 1}`, url: `/products/boot-${i + 1}`, image: img, price: "99.95", price_formatted: "$99.95", compare_at_price: 14995, choose: ["Size"], kind: "footwear" }));
 const carly = { title: "Carly Arch Support Sneaker - White", handle: "carly-white", url: "/products/carly-white", image: img, price: "139.95", price_formatted: "$139.95", choose: ["Size", "Width"], kind: "footwear" };
 for (const p of CMP_CATALOG.products) p.image = img;
 const page = (style) => `<!doctype html><script>setTimeout(function(){var d=document.createElement("div");d.id="floater";d.style.cssText="position:fixed;right:16px;bottom:16px;width:48px;height:48px;z-index:999999;pointer-events:none";var f=document.createElement("iframe");f.style.cssText="width:48px;height:48px;border:0;border-radius:50%;background:#333;pointer-events:auto";d.appendChild(f);document.body.appendChild(d)},6000)</script><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
@@ -207,6 +211,18 @@ export function start(port) {
           feedbackBodies.push(JSON.parse(body || "{}"));
           return send(200, "application/json", '{"ok":true}');
         }
+        // "View all" pages: 60 boots, 24 to a page, for the search the reply sent.
+        if (u.pathname === "/apps/hajirai/view-all") {
+          let search = null;
+          try { search = JSON.parse(u.searchParams.get("search") || "null"); } catch { /* bad */ }
+          const asked = Number(u.searchParams.get("page")) || 1;
+          viewAllLog.push({ page: asked, search });
+          if (mockCtl.viewAllFail > 0) { mockCtl.viewAllFail -= 1; return setTimeout(() => send(500, "application/json", JSON.stringify({ error: "failed" })), mockCtl.viewAllDelayMs); }
+          const pages = Math.ceil(MANY_BOOTS.length / 24);
+          const n = Math.min(Math.max(asked, 1), pages);
+          const body = JSON.stringify({ ok: true, page: n, pages, total: MANY_BOOTS.length, pageSize: 24, products: MANY_BOOTS.slice((n - 1) * 24, n * 24) });
+          return setTimeout(() => send(search?.on_sale === true ? 200 : 400, "application/json", search?.on_sale === true ? body : '{"error":"bad_search"}'), mockCtl.viewAllDelayMs);
+        }
         if (u.pathname === "/apps/hajirai/compare") {
           compareLog.push(u.searchParams.get("handles"));
           if (mockCtl.compareFail) return send(500, "application/json", JSON.stringify({ error: "failed", message: "The comparison couldn't load right now." }));
@@ -264,6 +280,16 @@ export function start(port) {
             w({ type: "text", text: "Here are two of the boots on sale." });
             w({ type: "products", products: [cards[0], cards[2]] });
             w({ type: "view_all", label: "View all 10 women's sale boots", title: "Women's Sale Boots", total: 10, products: [cards[0], cards[1], cards[2], carly, ...more] });
+            w({ type: "done" });
+            return resp.end();
+          }
+          // "Any boots on sale?" in a big store: 60 matches, a page of 24 at a time.
+          if (parsed.message === "manyboots") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "Here are two of the boots on sale." });
+            w({ type: "products", products: [MANY_BOOTS[0], MANY_BOOTS[1]] });
+            w({ type: "view_all", label: "View all 60 women's sale boots", title: "Women's Sale Boots", total: 60, pageSize: 24, search: { gender: "women", on_sale: true, categories: ["Boots"] }, products: MANY_BOOTS.slice(0, 24) });
             w({ type: "done" });
             return resp.end();
           }

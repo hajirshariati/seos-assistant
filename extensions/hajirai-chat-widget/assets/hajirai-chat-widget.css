@@ -4657,6 +4657,104 @@ button.ai-chat-launcher__text {
   color: var(--seos-text-2);
   text-align: center;
 }
+/* Pages: a small frosted pill floating at the bottom of the list — reachable
+   wherever the shopper has scrolled to, sitting under the last row at the
+   end. A page that's loading dims; one that fails says so above the pill. */
+.ai-chat-panel .ai-chat-fbsheet__list .ai-va-dock {
+  position: sticky;
+  bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  pointer-events: none;
+}
+.ai-chat-panel .ai-chat-fbsheet__list .ai-va-dock > * { pointer-events: auto; }
+.ai-chat-panel .ai-va-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  background: color-mix(in srgb, var(--seos-bg, #fff) 86%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  backdrop-filter: saturate(180%) blur(18px);
+  box-shadow: 0 0 0 1px var(--seos-line), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.ai-chat-panel[data-theme="dark"] .ai-va-pager { box-shadow: 0 0 0 1px var(--seos-line-strong), 0 10px 28px rgba(0, 0, 0, 0.5); }
+.ai-chat-panel .ai-va-pager__btn {
+  all: unset;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: var(--seos-text);
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-va-pager__btn:hover:not(:disabled) { background: var(--seos-surface); }
+}
+.ai-chat-panel .ai-va-pager__btn:active:not(:disabled) { background: var(--seos-line-strong); }
+.ai-chat-panel .ai-va-pager__btn:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 1px; }
+.ai-chat-panel .ai-va-pager__btn:disabled { opacity: 0.28; cursor: default; }
+.ai-chat-panel .ai-va-pager__btn.is-busy svg { display: none; }
+.ai-chat-panel .ai-va-pager__btn.is-busy::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: ai-va-spin 0.7s linear infinite;
+}
+@keyframes ai-va-spin { to { transform: rotate(360deg); } }
+.ai-chat-panel .ai-va-pager__label {
+  min-width: 92px;
+  padding: 0 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--seos-text);
+  white-space: nowrap;
+}
+.ai-chat-panel .ai-chat-fbsheet__list .ai-chat-products--grid { transition: opacity 0.15s ease; }
+.ai-chat-panel .ai-chat-fbsheet__list.is-loading .ai-chat-products--grid { opacity: 0.45; }
+.ai-chat-panel .ai-va-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--seos-text);
+  background: var(--seos-bg, #fff);
+  box-shadow: 0 0 0 1px var(--seos-line), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.ai-chat-panel .ai-va-error[hidden] { display: none; }
+.ai-chat-panel .ai-va-error button {
+  all: unset;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--seos-bg, #fff);
+  background: var(--seos-ink);
+  cursor: pointer;
+}
+.ai-chat-panel .ai-va-error button:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-va-pager__btn.is-busy::after { animation-duration: 2s; }
+  .ai-chat-panel .ai-chat-fbsheet__list .ai-chat-products--grid { transition: none; }
+}
 /* Until it's ready (or if it fails), the empty form/map layer lets taps
    through to the message and its "open it elsewhere" link underneath. */
 .ai-chat-panel .ai-chat-fbsheet:not(.is-ready) .ai-chat-fbsheet__form,

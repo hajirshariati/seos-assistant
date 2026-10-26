@@ -2086,7 +2086,13 @@ function fbSheetEl(){
   fbSheet.addEventListener('click',function(e){
     if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback();return}
     /* The "View all" list: its cards work like the ones in the chat. */
-    if(!e.target.closest('.ai-chat-fbsheet__list'))return;
+    var vaBox=e.target.closest('.ai-chat-fbsheet__list');
+    if(!vaBox)return;
+    /* Page buttons, and Try again on a page that didn't load. */
+    var step=e.target.closest('[data-va-step]');
+    if(step){e.preventDefault();var cur=viewAllStore[vaBox.getAttribute('data-va')];if(cur)vaGo(vaBox,(cur.page||1)+(parseInt(step.getAttribute('data-va-step'),10)||0),step);return}
+    var retry=e.target.closest('[data-va-retry]');
+    if(retry){e.preventDefault();var nb=$('[data-va-step="1"]',vaBox);vaGo(vaBox,parseInt(retry.getAttribute('data-va-retry'),10)||1,nb);return}
     var atc=e.target.closest('[data-atc]');
     if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
     /* True Fit / FITFinder carry on in the chat: close the list first. */
@@ -2418,7 +2424,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-26 chat-rating'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 view-all-pages'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2430,23 +2436,97 @@ var pendingCompare=null;
 var pendingForm=null,pendingMap=null;
 /* "View all 16 women's sale boots": when the search behind the cards matched
    more than they show, every match opens in the sheet — the chat's own
-   search, so exactly what the assistant found, each with Add to cart. */
+   search, so exactly what the assistant found, each with Add to cart. A page
+   at a time: the first comes with the reply, the others from
+   /apps/hajirai/view-all (the same search, sent back), kept once loaded, and
+   the next one fetched ahead so stepping forward is instant. */
 var pendingViewAll=null,viewAllStore={},viewAllSeq=0,VA_MAX=48;
+var VIEW_ALL_URL='/apps/hajirai/view-all';
+var VA_PREV='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg>';
+var VA_NEXT='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>';
+function vaCard(c){
+  if(!c||typeof c!=='object'||!c.handle||!c.title)return null;
+  return {handle:String(c.handle),title:String(c.title),url:String(c.url||''),image:String(c.image||''),price:c.price||'',price_formatted:String(c.price_formatted||''),compare_at_price:c.compare_at_price||undefined,kind:c.kind||'',choose:Array.isArray(c.choose)?c.choose.slice(0,4):undefined};
+}
 var VA_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>';
 function cleanViewAll(p){
   if(!p||!Array.isArray(p.products))return null;
   var list=[];
-  for(var i=0;i<p.products.length&&list.length<VA_MAX;i++){
-    var c=p.products[i];
-    if(!c||typeof c!=='object'||!c.handle||!c.title)continue;
-    list.push({handle:String(c.handle),title:String(c.title),url:String(c.url||''),image:String(c.image||''),price:c.price||'',price_formatted:String(c.price_formatted||''),compare_at_price:c.compare_at_price||undefined,kind:c.kind||'',choose:Array.isArray(c.choose)?c.choose.slice(0,4):undefined});
-  }
+  for(var i=0;i<p.products.length&&list.length<VA_MAX;i++){var c=vaCard(p.products[i]);if(c)list.push(c)}
   if(list.length<2)return null;
   var total=Math.max(parseInt(p.total,10)||0,list.length);
-  return {label:String(p.label||'').trim().slice(0,80)||('View all '+total),title:String(p.title||'').trim().slice(0,48)||'All matches',total:total,products:list};
+  /* The search behind the list, sent back as-is for the other pages. */
+  var search=null;
+  if(p.search&&typeof p.search==='object'&&!Array.isArray(p.search)){try{var js=JSON.stringify(p.search);if(js.length<=1500)search=JSON.parse(js)}catch(e){}}
+  return {label:String(p.label||'').trim().slice(0,80)||('View all '+total),title:String(p.title||'').trim().slice(0,48)||'All matches',total:total,products:list,search:search,pageSize:Math.min(Math.max(parseInt(p.pageSize,10)||list.length,1),VA_MAX)};
+}
+/* Pages: only when the server can send the rest (older saved chats can't). */
+function vaPaged(va){return !!(va.search&&va.total>va.products.length)}
+function vaPages(va){return vaPaged(va)?Math.max(1,Math.ceil(va.total/va.pageSize)):1}
+function vaCountText(va){
+  if(!vaPaged(va))return va.total>va.products.length?'Showing '+va.products.length+' of '+va.total:va.total+' results';
+  var a=(va.page-1)*va.pageSize+1,b=Math.min(va.page*va.pageSize,va.total);
+  return a+'\u2013'+b+' of '+va.total;
+}
+function vaPagerHtml(){
+  return '<div class="ai-va-dock"><div class="ai-va-error" role="alert" hidden></div>'+
+    '<nav class="ai-va-pager" aria-label="Pages"><button type="button" class="ai-va-pager__btn" data-va-step="-1" aria-label="Previous page">'+VA_PREV+'</button>'+
+    '<span class="ai-va-pager__label" aria-hidden="true"></span>'+
+    '<button type="button" class="ai-va-pager__btn" data-va-step="1" aria-label="Next page">'+VA_NEXT+'</button></nav></div>';
+}
+/* Show page n (already loaded) in the list. */
+function vaShow(va,box,n){
+  va.page=n;
+  var items=va.cache[n]||[],h='';
+  for(var i=0;i<items.length;i++)h+=prodCard(items[i]);
+  var grid=$('.ai-chat-products--grid',box);if(grid)grid.innerHTML=h;
+  var cnt=$('.ai-chat-viewall__count',box);if(cnt)cnt.textContent=vaCountText(va);
+  var pager=$('.ai-va-pager',box);
+  if(pager){
+    var last=vaPages(va),lab=$('.ai-va-pager__label',pager),prev=$('[data-va-step="-1"]',pager),next=$('[data-va-step="1"]',pager);
+    if(lab)lab.textContent='Page '+n+' of '+last;
+    if(prev)prev.disabled=n<=1;
+    if(next)next.disabled=n>=last;
+    if(next)next.setAttribute('aria-label',n<last?'Next page, '+(n+1)+' of '+last:'Next page');
+    if(prev)prev.setAttribute('aria-label',n>1?'Previous page, '+(n-1)+' of '+last:'Previous page');
+  }
+}
+function vaFetch(va,n){
+  va.inflight=va.inflight||{};
+  if(va.inflight[n])return va.inflight[n];
+  var req=retFetch(VIEW_ALL_URL+'?search='+encodeURIComponent(JSON.stringify(va.search))+'&page='+n,{},12000).then(function(r){
+    var d=r.d||{},list=[];
+    if(r.status!==200||!d.ok||!Array.isArray(d.products))throw new Error('page');
+    d.products.forEach(function(c){var x=vaCard(c);if(x)list.push(x)});
+    if(!list.length)throw new Error('empty');
+    var got=parseInt(d.page,10)||n;
+    va.cache[got]=list;
+    if(parseInt(d.total,10)>0)va.total=parseInt(d.total,10);
+    return got;
+  });
+  va.inflight[n]=req;
+  req.then(function(){delete va.inflight[n]},function(){delete va.inflight[n]});
+  return req;
+}
+/* The page after this one, quietly, so Next is instant. */
+function vaPrefetch(va,n){if(vaPaged(va)&&n<=vaPages(va)&&!va.cache[n])vaFetch(va,n).catch(function(){})}
+function vaGo(box,n,btn){
+  var va=viewAllStore[box.getAttribute('data-va')];
+  if(!va||!vaPaged(va)||va.loading||n<1||n>vaPages(va))return;
+  var err=$('.ai-va-error',box);if(err){err.hidden=true;err.innerHTML=''}
+  var done=function(page){vaShow(va,box,page);box.scrollTop=0;vaPrefetch(va,page+1)};
+  if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_page',chat_view_all_page:n})}catch(e){}
+  if(va.cache[n]){done(n);return}
+  va.loading=true;box.classList.add('is-loading');box.setAttribute('aria-busy','true');if(btn)btn.classList.add('is-busy');
+  var finish=function(){va.loading=false;box.classList.remove('is-loading');box.removeAttribute('aria-busy');if(btn)btn.classList.remove('is-busy')};
+  vaFetch(va,n).then(function(page){finish();if(box.getAttribute('data-va')===va.id)done(page)},function(){
+    finish();
+    if(err&&box.getAttribute('data-va')===va.id){err.innerHTML='<span>Page '+n+' couldn\u2019t load.</span><button type="button" data-va-retry="'+n+'">Try again</button>';err.hidden=false}
+  });
 }
 function viewAllHtml(va,shown){
-  var id='va'+(++viewAllSeq);viewAllStore[id]=va;
+  /* A copy for the sheet: its loaded pages never go into the saved chat. */
+  var id='va'+(++viewAllSeq);viewAllStore[id]=Object.assign({},va,{id:id,page:1,cache:{1:va.products}});
   var seen={};(shown||[]).forEach(function(x){if(x&&x.handle)seen[x.handle]=1});
   var more=va.products.filter(function(x){return !seen[x.handle]});
   var rest=va.total-(va.products.length-more.length);
@@ -2476,12 +2556,14 @@ function openViewAll(opener,id){
   $('.ai-chat-fbsheet__state',sh).innerHTML='';
   sh.classList.remove('is-failed');sh.classList.add('is-ready');
   if(box.getAttribute('data-va')!==id){
-    /* The chat's own card style, as a grid (no sideways scrolling). */
-    var h='<p class="ai-chat-viewall__count">'+(va.total>va.products.length?'Showing '+va.products.length+' of '+va.total:va.total+' results')+'</p><div class="ai-chat-products ai-chat-products--grid'+(PRODUCT_CARD_STYLE==='showcase'?' ai-chat-products--showcase':'')+'">';
-    for(var i=0;i<va.products.length;i++)h+=prodCard(va.products[i]);
-    h+='</div>';
+    /* The chat's own card style, as a grid (no sideways scrolling), a page
+       at a time with the page buttons floating at the bottom. */
+    var h='<p class="ai-chat-viewall__count" aria-live="polite"></p><div class="ai-chat-products ai-chat-products--grid'+(PRODUCT_CARD_STYLE==='showcase'?' ai-chat-products--showcase':'')+'"></div>';
     if(va.total>va.products.length)h+='<p class="ai-chat-viewall__more">Tell the chat a size, color or style to narrow these down.</p>';
-    box.innerHTML=h;box.setAttribute('data-va',id);box.scrollTop=0;
+    if(vaPaged(va))h+=vaPagerHtml();
+    box.innerHTML=h;box.setAttribute('data-va',id);box.classList.toggle('is-paged',vaPaged(va));
+    vaShow(va,box,va.page||1);box.scrollTop=0;
+    vaPrefetch(va,(va.page||1)+1);
   }
   menu.style.display='none';
   sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');

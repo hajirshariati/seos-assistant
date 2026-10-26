@@ -27,7 +27,7 @@ const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
-const { viewAllWords, VIEW_ALL_MAX } = await import("../app/lib/lean/shop-all.js");
+const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
 const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
@@ -292,7 +292,9 @@ await test("View all: every match of the search behind the cards, only when ther
   assert.ok(all.length > 2, "the test catalog has several women's styles");
   const r = await run({ query: "", gender: "women" }, all.slice(0, 2).map((p) => p.handle));
   assert.equal(r.viewAll.total, all.length);
-  assert.deepEqual(r.viewAll.products.map((c) => c.handle), all.slice(0, VIEW_ALL_MAX).map((p) => p.handle), "the same products, best first");
+  assert.deepEqual(r.viewAll.products.map((c) => c.handle), all.slice(0, VIEW_ALL_PAGE).map((p) => p.handle), "the first page, best first");
+  assert.equal(r.viewAll.pageSize, VIEW_ALL_PAGE);
+  assert.deepEqual(r.viewAll.search, { gender: "women" }, "the search, sent back for the other pages");
   assert.equal(r.viewAll.label, `View all ${all.length} women's styles`);
   assert.ok(r.viewAll.products.every((c) => c.title && c.url && c.handle), "full cards");
   const mila = allMatches(catalog, { query: "margot" });
@@ -301,6 +303,33 @@ await test("View all: every match of the search behind the cards, only when ther
   assert.equal(r2.viewAll, null, "every match already shown → no button");
   const one = await run({ query: "", gender: "women" }, []);
   assert.equal(one.viewAll, null, "no cards → no button");
+});
+await test("View all pages: every match reachable, same order, page numbers kept in range", async () => {
+  const { viewAllPage } = await import("../app/lib/lean/engine.js");
+  const search = { gender: "women" };
+  const all = allMatches(catalog, search);
+  const size = 2;
+  const pages = [];
+  for (let n = 1; n <= Math.ceil(all.length / size); n++) pages.push(...pageOf(all, n, size).items.map((p) => p.handle));
+  assert.deepEqual(pages, all.map((p) => p.handle), "paging through returns every match once, in order");
+  const p1 = viewAllPage(catalog, search, 1);
+  assert.equal(p1.page, 1);
+  assert.equal(p1.total, all.length);
+  assert.equal(p1.pages, Math.max(1, Math.ceil(all.length / VIEW_ALL_PAGE)));
+  assert.ok(p1.products.every((c) => c.title && c.url && c.handle && c.price_formatted), "full cards");
+  assert.equal(viewAllPage(catalog, search, 999).page, p1.pages, "past the end → the last page");
+  assert.equal(viewAllPage(catalog, search, "junk").page, 1);
+  assert.equal(pageOf([], 1).pages, 1);
+});
+await test("View all pages: the search sent back is cleaned to what product search takes", () => {
+  assert.deepEqual(cleanViewAllSearch({ query: " boots ", gender: "women", on_sale: true, categories: ["Boots", 3, ""], size: 9.5, sort: "price_low", limit: 4, evil: "x" }),
+    { query: "boots", categories: ["Boots"], gender: "women", on_sale: true, size: "9.5", sort: "price_low" });
+  assert.deepEqual(cleanViewAllSearch({ colors: "Black", max_price: "120" }), { colors: ["Black"], max_price: 120 });
+  assert.equal(cleanViewAllSearch({ on_sale: "yes", sort: "random" }), null, "nothing usable");
+  assert.equal(cleanViewAllSearch(null), null);
+  assert.equal(cleanViewAllSearch(["boots"]), null);
+  assert.equal(cleanViewAllSearch({ query: "x".repeat(500) }).query.length, 200);
+  assert.equal(cleanViewAllSearch({ categories: Array.from({ length: 30 }, (_, i) => `c${i}`) }).categories.length, 10);
 });
 await test("invented product → fact check → Claude rewrites once", async () => {
   const s = scripted([

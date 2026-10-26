@@ -9,7 +9,7 @@
 // stubs.
 
 import { leanSearch, allMatches, productDetails, similarProducts } from "./search.js";
-import { viewAllWords, VIEW_ALL_MAX } from "./shop-all.js";
+import { viewAllWords, cleanViewAllSearch, pageOf } from "./shop-all.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
@@ -214,6 +214,13 @@ export function orthoticAnswerQuestion(lastAssistantText, message) {
     "Answer NO if the chat is about finding shoes (for example shoes that fit the shopper's own orthotics).",
     "Reply with YES or NO only.",
   ].join("\n");
+}
+
+// One page of "View all", for the sheet's page buttons: the same search,
+// ranked the same way, as cards.
+export function viewAllPage(catalog, search, page) {
+  const r = pageOf(allMatches(catalog, search), page);
+  return { page: r.page, pages: r.pages, total: r.total, pageSize: r.pageSize, products: r.items.map((p) => toCard(p)) };
 }
 
 export function toCard(p, preselect = null) {
@@ -661,13 +668,20 @@ export async function runLeanTurn({
     ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null
     : null;
   // More matches than the cards show → "View all N …" opens every match of
-  // that search in the chat (each with its own Add to cart).
+  // that search in the chat, a page at a time (each with its own Add to cart).
   let viewAll = null;
   if (shopAllSearch) {
     const all = allMatches(catalog, shopAllSearch);
     const shownSet = new Set(cards.map((c) => c.handle));
     if (all.length > cards.length && all.some((p) => !shownSet.has(p.handle))) {
-      viewAll = { ...viewAllWords(shopAllSearch, all.length), total: all.length, products: all.slice(0, VIEW_ALL_MAX).map((p) => toCard(p)) };
+      const first = pageOf(all, 1);
+      viewAll = {
+        ...viewAllWords(shopAllSearch, all.length),
+        total: all.length,
+        pageSize: first.pageSize,
+        search: cleanViewAllSearch(shopAllSearch),
+        products: first.items.map((p) => toCard(p)),
+      };
       log(`[lean] view all: ${all.length} matches (${cards.length} shown)`);
     }
   }
