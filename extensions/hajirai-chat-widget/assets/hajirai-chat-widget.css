@@ -4575,6 +4575,32 @@ button.ai-chat-launcher__text {
   transition: opacity 0.3s ease;
 }
 .ai-chat-panel .ai-chat-fbsheet.is-ready .ai-chat-fbsheet__form { opacity: 1; }
+/* The store map: its own part of the sheet, kept once built. Only the part
+   for what's open shows; the other keeps its size (hidden, not removed) so
+   the map never has to redraw. Storepoint draws on white in both looks. */
+.ai-chat-panel .ai-chat-fbsheet__map {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: #fff;
+}
+.ai-chat-panel .ai-chat-fbsheet[data-kind="map"] .ai-chat-fbsheet__form,
+.ai-chat-panel .ai-chat-fbsheet:not([data-kind="map"]) .ai-chat-fbsheet__map { visibility: hidden; pointer-events: none; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="map"].is-ready .ai-chat-fbsheet__map { opacity: 1; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="map"] .ai-chat-fbsheet__form { opacity: 0; }
+.ai-chat-panel .ai-chat-locator {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.ai-chat-panel .ai-chat-locator #storepoint-container { min-height: 100%; }
+/* Until it's ready (or if it fails), the empty form/map layer lets taps
+   through to the message and its "open it elsewhere" link underneath. */
+.ai-chat-panel .ai-chat-fbsheet:not(.is-ready) .ai-chat-fbsheet__form,
+.ai-chat-panel .ai-chat-fbsheet:not(.is-ready) .ai-chat-fbsheet__map { pointer-events: none; }
 .ai-chat-panel .ai-chat-fbsheet__form > *,
 .ai-chat-panel .ai-chat-fbsheet__form iframe { width: 100% !important; height: 100% !important; border: 0; }
 .ai-chat-panel .ai-chat-fbsheet__state {

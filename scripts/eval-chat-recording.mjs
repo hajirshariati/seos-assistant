@@ -53,6 +53,7 @@ test("tester names are cleaned and capped", () => {
   assert.equal(cleanTester("x".repeat(80)).length, 40);
 });
 test("what came with a reply is listed in one line", () => {
+  assert.equal(describeExtras([{ type: "map_cta", mapId: "15ecd30bd8acd4", label: "Find a store near you" }]), "store map button: Find a store near you");
   assert.equal(describeExtras([{ type: "form_cta", form: "ojyWbTvZ", label: "Identify my orthotic" }]), "quiz button: Identify my orthotic");
   const line = describeExtras([{ type: "support_cta" }, { type: "visualize_cta" }, { type: "fitfinder_fit", key: "D" }, { type: "suggestions", questions: ["Wide?", "Returns?"] }, { type: "nonsense" }]);
   assert.equal(line, "support button · See It Styled · FIT D · suggested: Wide? | Returns?");

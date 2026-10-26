@@ -239,6 +239,15 @@ export function start(port) {
             return resp.end();
           }
           // The assistant offers the "which orthotic do I have?" quiz.
+          // The assistant opens the store locator (Storepoint) in the chat.
+          if (parsed.message === "storesnear") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "Search your area on our store map." });
+            w({ type: "map_cta", mapId: "15ecd30bd8acd4", label: "Find a store near you", url: "/pages/store-locator" });
+            w({ type: "done" });
+            return resp.end();
+          }
           if (parsed.message === "quizme") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);

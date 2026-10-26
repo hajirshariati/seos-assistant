@@ -9,7 +9,7 @@ import fs from "node:fs";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
-import { typeformId, feedbackSurveyConfig, whichOrthoticConfig } from "../app/lib/feedback-survey.js";
+import { typeformId, feedbackSurveyConfig, whichOrthoticConfig, storepointId, locatorPageUrl, storeLocatorConfig } from "../app/lib/feedback-survey.js";
 import { appearDelayConfig, clampDelay, startTheme, parseCountries, internationalConfig } from "../app/lib/appear-delay.js";
 
 let pass = 0;
@@ -83,6 +83,18 @@ test("the chat block's settings stay within Shopify's limits", () => {
 });
 
 console.log("\nfeedback survey setting");
+test("store locator: the Storepoint ID from an ID or the embed code; links only to the store", () => {
+  const embed = `<div id="storepoint-container" data-map-id="15ecd30bd8acd4"></div><script>(function(){var a=document.createElement("script");a.type="text/javascript";a.async=!0;a.src="https://cdn.storepoint.co/api/v1/js/15ecd30bd8acd4.js";var b=document.getElementsByTagName("script")[0];b.parentNode.insertBefore(a,b);}());</script>`;
+  assert.equal(storepointId(embed), "15ecd30bd8acd4");
+  assert.equal(storepointId(" 15ecd30bd8acd4 "), "15ecd30bd8acd4");
+  assert.equal(storepointId("https://cdn.storepoint.co/api/v1/js/15ecd30bd8acd4.js"), "15ecd30bd8acd4");
+  for (const bad of ["", "abc", "15ecd30bd8acd4\"><img>", "<script>x</script>"]) assert.equal(storepointId(bad), "", bad);
+  assert.equal(locatorPageUrl("/pages/store-locator"), "/pages/store-locator");
+  assert.equal(locatorPageUrl("https://www.aetrex.com/pages/store-locator"), "https://www.aetrex.com/pages/store-locator");
+  for (const bad of ["javascript:alert(1)", "//evil.example", "http://x.example", "/a b"]) assert.equal(locatorPageUrl(bad), "", bad);
+  assert.equal(storeLocatorConfig({}), null);
+  assert.deepEqual(storeLocatorConfig({ storeLocatorMapId: "15ecd30bd8acd4", storeLocatorLabel: "", storeLocatorUrl: "javascript:x" }), { mapId: "15ecd30bd8acd4", label: "Find a store near you", url: "" });
+});
 test("which-orthotic quiz: on only with a valid Typeform, label defaulted and capped", () => {
   assert.equal(whichOrthoticConfig({}), null);
   assert.equal(whichOrthoticConfig({ whichOrthotic: "  " }), null);

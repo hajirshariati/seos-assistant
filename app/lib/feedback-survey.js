@@ -33,3 +33,30 @@ export function whichOrthoticConfig(config = {}) {
   if (!form) return null;
   return { form, label: String(config.whichOrthoticLabel || "").trim().slice(0, 40) || "Identify my orthotic" };
 }
+
+// The store locator (Storepoint) in the chat. Settings take the map ID or
+// the whole embed code; the widget needs the ID.
+export function storepointId(value) {
+  const v = String(value || "").trim();
+  const m = v.match(/data-map-id=["']([A-Za-z0-9]{6,32})["']/) || v.match(/storepoint\.co\/api\/v1\/js\/([A-Za-z0-9]{6,32})\.js/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9]{6,32}$/.test(v) ? v : "";
+}
+
+// Its link: a page on the store (a path or an https address), else "".
+export function locatorPageUrl(value) {
+  const v = String(value || "").trim();
+  if (/^\/(?!\/)[^\s<>"']*$/.test(v)) return v;
+  if (/^https:\/\/[^\s<>"']+$/i.test(v)) return v;
+  return "";
+}
+
+export function storeLocatorConfig(config = {}) {
+  const mapId = storepointId(config.storeLocatorMapId);
+  if (!mapId) return null;
+  return {
+    mapId,
+    label: String(config.storeLocatorLabel || "").trim().slice(0, 40) || "Find a store near you",
+    url: locatorPageUrl(config.storeLocatorUrl),
+  };
+}

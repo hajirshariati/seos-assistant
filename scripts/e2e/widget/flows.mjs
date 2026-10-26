@@ -841,6 +841,79 @@ for (const theme of ["light", "dark"]) {
   check(`feedback look (${theme}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The store locator (Storepoint, stubbed) in the same sheet: opened from
+// the assistant's button, kept once built (switching to the feedback
+// survey and back never reloads it), back after a reload; if it can't load,
+// a link to the locator page that can be tapped; on the locator page
+// itself, the button takes the shopper to the page's own map.
+const SP_STUB = `(function(){var c=document.getElementById("storepoint-container");window.__spLoads=(window.__spLoads||0)+1;setTimeout(function(){c.innerHTML='<div class="sp-stub" style="height:900px">Stores near you, map '+c.getAttribute("data-map-id")+'</div>'},150)})();`;
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.route("https://cdn.storepoint.co/**", (r) => r.fulfill({ status: 200, contentType: "application/javascript", body: SP_STUB }));
+  await page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".js") ? TF_STUB : "" }));
+  await page.goto("http://localhost:4789/full?fb=2");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "storesnear");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-map]", { timeout: 5000 });
+  check(`store map (${label}): the reply carries the store map button`, (await page.$eval("[data-map]", (b) => b.textContent.trim() + "|" + b.getAttribute("data-map"))) === "Find a store near you|15ecd30bd8acd4");
+  await page.click("[data-map]");
+  await page.waitForTimeout(900);
+  const m = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"), map = document.querySelector(".ai-chat-fbsheet__map"); const r = sh.getBoundingClientRect(), pr = p.getBoundingClientRect(); return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), ready: sh.classList.contains("is-ready"), title: document.querySelector(".ai-chat-fbsheet__title").textContent, inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2, stub: !!map.querySelector(".sp-stub"), shown: getComputedStyle(map).opacity === "1", loads: window.__spLoads, scrolls: map.querySelector(".ai-chat-locator").scrollHeight > map.querySelector(".ai-chat-locator").clientHeight }; });
+  check(`store map (${label}): it opens inside the chat, titled with the button's text`, m.kind === "map" && m.open && m.ready && m.inside && m.stub && m.shown && m.loads === 1 && m.title === "Find a store near you", JSON.stringify(m));
+  check(`store map (${label}): a tall map scrolls inside the sheet`, m.scrolls);
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(500);
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(700);
+  const f = await page.evaluate(() => ({ kind: document.querySelector(".ai-chat-fbsheet").getAttribute("data-kind"), id: window.__tf && window.__tf.id, mapHidden: getComputedStyle(document.querySelector(".ai-chat-fbsheet__map")).visibility === "hidden", formShown: getComputedStyle(document.querySelector(".ai-chat-fbsheet__form")).opacity === "1" }));
+  check(`store map (${label}): the feedback survey then shows in its place`, f.kind === "form" && f.id === "jdXBrXMa" && f.mapHidden && f.formShown, JSON.stringify(f));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(500);
+  await page.click("[data-map]");
+  await page.waitForTimeout(400);
+  const again = await page.evaluate(() => ({ ready: document.querySelector(".ai-chat-fbsheet").classList.contains("is-ready"), loads: window.__spLoads, stub: !!document.querySelector(".ai-chat-fbsheet__map .sp-stub"), formHidden: getComputedStyle(document.querySelector(".ai-chat-fbsheet__form")).visibility === "hidden" }));
+  check(`store map (${label}): back to the map, it's still there (not reloaded)`, again.ready && again.loads === 1 && again.stub && again.formHidden, JSON.stringify(again));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  check(`store map (${label}): the button is still under the reply after a reload`, (await page.$$eval("[data-map=\"15ecd30bd8acd4\"]", (b) => b.length)) === 1);
+  check(`store map (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+{
+  // Storepoint can't load: a tappable link to the locator page.
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  await page.route("https://cdn.storepoint.co/**", (r) => r.abort());
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "storesnear");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-map]", { timeout: 5000 });
+  await page.click("[data-map]");
+  await page.waitForTimeout(1500);
+  const fail = await page.evaluate(() => { const a = document.querySelector(".ai-chat-fbsheet__alt"); if (!a) return null; const r = a.getBoundingClientRect(); const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { href: a.getAttribute("href"), text: a.textContent, tappable: top === a || a.contains(top), msg: document.querySelector(".ai-chat-fbsheet__msg").textContent }; });
+  check("store map: if it can't load, a tappable link to the store locator page", fail && fail.href === "/pages/store-locator" && fail.tappable && /couldn’t open/.test(fail.msg), JSON.stringify(fail));
+  // On the store locator page itself: to that page's own map, chat closed.
+  await page.goto("http://localhost:4789/full");
+  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div style="height:1500px"></div><div id="storepoint-container" data-map-id="15ecd30bd8acd4" style="height:400px">page map</div>'));
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(600);
+  await page.click("[data-map]");
+  await page.waitForTimeout(1200);
+  const onPage = await page.evaluate(() => ({ chatOpen: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: !!document.querySelector(".ai-chat-fbsheet:not([hidden]).is-open"), mapTop: Math.round(document.getElementById("storepoint-container").getBoundingClientRect().top) }));
+  check("store map: on the locator page, the button goes to that page's map", !onPage.chatOpen && !onPage.sheet && onPage.mapTop < 300, JSON.stringify(onPage));
+  await ctx.close();
+}
 // Typeform can't load: the sheet says so and offers the survey in a new tab.
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });

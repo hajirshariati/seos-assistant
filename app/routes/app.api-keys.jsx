@@ -1,4 +1,4 @@
-import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS } from "../lib/feedback-survey.js";
+import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useRef, useEffect } from "react";
@@ -71,6 +71,9 @@ export const loader = async ({ request }) => {
     feedbackSurveyHideAfter: config.feedbackSurveyHideAfter !== false,
     whichOrthotic: config.whichOrthotic || "",
     whichOrthoticLabel: config.whichOrthoticLabel || "Identify my orthotic",
+    storeLocatorMapId: config.storeLocatorMapId || "",
+    storeLocatorLabel: config.storeLocatorLabel || "Find a store near you",
+    storeLocatorUrl: config.storeLocatorUrl || "",
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -245,6 +248,21 @@ export const action = async ({ request }) => {
   }
   const whichLabel = formData.get("whichOrthoticLabel");
   if (whichLabel !== null) data.whichOrthoticLabel = String(whichLabel).trim().slice(0, 40) || "Identify my orthotic";
+  const locMap = formData.get("storeLocatorMapId");
+  if (locMap !== null) {
+    const raw = String(locMap).trim();
+    const id = storepointId(raw);
+    if (raw && !id) return { error: "The store locator should be your Storepoint map ID (like 15ecd30bd8acd4) or its embed code." };
+    data.storeLocatorMapId = id;
+  }
+  const locLabel = formData.get("storeLocatorLabel");
+  if (locLabel !== null) data.storeLocatorLabel = String(locLabel).trim().slice(0, 40) || "Find a store near you";
+  const locUrl = formData.get("storeLocatorUrl");
+  if (locUrl !== null) {
+    const raw = String(locUrl).trim();
+    if (raw && !locatorPageUrl(raw)) return { error: "The store locator page should be a link on your store, like /pages/store-locator or https://…" };
+    data.storeLocatorUrl = raw;
+  }
   const hideLiveChat = formData.get("hideLiveChatButton");
   if (hideLiveChat !== null) data.hideLiveChatButton = hideLiveChat === "true";
   const delayOn = formData.get("appearDelayOn");
@@ -577,7 +595,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, feedbackSurveyColor: initSurveyColor, feedbackSurveyIcon: initSurveyIcon, feedbackSurveyHideAfter: initSurveyHideAfter, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, storeLocatorMapId: initLocMap, storeLocatorLabel: initLocLabel, storeLocatorUrl: initLocUrl, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -607,6 +625,9 @@ export default function ApiKeys() {
   const [surveyHideAfter, setSurveyHideAfter] = useState(initSurveyHideAfter);
   const [which, setWhich] = useState(initWhich);
   const [whichLabel, setWhichLabel] = useState(initWhichLabel);
+  const [locMap, setLocMap] = useState(initLocMap);
+  const [locLabel, setLocLabel] = useState(initLocLabel);
+  const [locUrl, setLocUrl] = useState(initLocUrl);
   const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
   const [delayOn, setDelayOn] = useState(initDelayOn);
   const [delaySec, setDelaySec] = useState(String(initDelaySec));
@@ -654,6 +675,9 @@ export default function ApiKeys() {
     surveyHideAfter: initSurveyHideAfter,
     which: initWhich,
     whichLabel: initWhichLabel,
+    locMap: initLocMap,
+    locLabel: initLocLabel,
+    locUrl: initLocUrl,
     hideLiveChat: initHideLiveChat,
     delayOn: initDelayOn,
     delaySec: String(initDelaySec),
@@ -716,6 +740,9 @@ export default function ApiKeys() {
     setSurveyHideAfter(s.surveyHideAfter);
     setWhich(s.which);
     setWhichLabel(s.whichLabel);
+    setLocMap(s.locMap);
+    setLocLabel(s.locLabel);
+    setLocUrl(s.locUrl);
     setHideLiveChat(s.hideLiveChat);
     setDelayOn(s.delayOn);
     setDelaySec(s.delaySec);
@@ -1062,6 +1089,44 @@ export default function ApiKeys() {
                     maxLength={40}
                     autoComplete="off"
                     disabled={!which.trim()}
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Store locator"
+              description="Your store map (Storepoint), opened right inside the chat when a customer asks where to buy or try on in person."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <TextField
+                    label="Storepoint map"
+                    value={locMap}
+                    onChange={setLocMap}
+                    placeholder="15ecd30bd8acd4 or paste the whole embed code"
+                    autoComplete="off"
+                    multiline={locMap.includes("<") ? 3 : undefined}
+                    helpText={storepointId(locMap)
+                      ? `On: map ${storepointId(locMap)}. The assistant shows a button that opens the map in the chat. On the store locator page itself, the button takes the shopper to the map on that page.`
+                      : "Your map ID, or paste Storepoint's embed code and the ID is taken from it. Leave blank to turn it off."}
+                  />
+                  <TextField
+                    label="Button text"
+                    value={locLabel}
+                    onChange={setLocLabel}
+                    maxLength={40}
+                    autoComplete="off"
+                    disabled={!storepointId(locMap)}
+                  />
+                  <TextField
+                    label="Store locator page"
+                    value={locUrl}
+                    onChange={setLocUrl}
+                    placeholder="/pages/store-locator"
+                    autoComplete="off"
+                    disabled={!storepointId(locMap)}
+                    helpText="Optional. If the map can't load in the chat, shoppers get a link to this page instead."
                   />
                 </BlockStack>
               </Card>
@@ -1581,6 +1646,9 @@ export default function ApiKeys() {
           <input type="hidden" name="feedbackSurveyHideAfter" value={String(surveyHideAfter)} />
           <input type="hidden" name="whichOrthotic" value={which} />
           <input type="hidden" name="whichOrthoticLabel" value={whichLabel} />
+          <input type="hidden" name="storeLocatorMapId" value={locMap} />
+          <input type="hidden" name="storeLocatorLabel" value={locLabel} />
+          <input type="hidden" name="storeLocatorUrl" value={locUrl} />
           <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
           <input type="hidden" name="appearDelayOn" value={String(delayOn)} />
           <input type="hidden" name="appearDelaySec" value={delaySec} />

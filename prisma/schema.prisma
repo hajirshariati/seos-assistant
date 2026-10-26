@@ -197,6 +197,11 @@ model ShopConfig {
   // a Popular button can open it too. Empty = off.
   whichOrthotic      String   @default("")
   whichOrthoticLabel String   @default("Identify my orthotic")
+  // The store locator (Storepoint) inside the chat: its map ID, the button
+  // text, and the locator page (the fallback link). Empty map ID = off.
+  storeLocatorMapId   String   @default("")
+  storeLocatorLabel   String   @default("Find a store near you")
+  storeLocatorUrl     String   @default("")
   hideLiveChatButton  Boolean  @default(false)
   appearDelayOn       Boolean  @default(false)
   appearDelaySec      Int      @default(3)

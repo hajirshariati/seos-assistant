@@ -2081,7 +2081,7 @@ function fbSheetEl(){
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
   fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
-    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div></div>';
+    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div></div>';
   fbSheet.addEventListener('click',function(e){if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback()}});
   panel.appendChild(fbSheet);
   return fbSheet;
@@ -2105,12 +2105,15 @@ function openForm(opener,form,title,kind){
   sheetTitle=String(title||'').trim().slice(0,40)||(sheetKind==='fb'?'Share feedback':'Quiz');
   $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
   sh.setAttribute('aria-label',sheetTitle);
+  sh.setAttribute('data-kind','form');
   menu.style.display='none';
   sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
   fbBehind(true);
   setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
   fbTrack('open');
-  if(same)return;/* already loaded: pick up where they left off */
+  /* already loaded: pick up where they left off (the store map may have
+     been showing, so it's shown as ready again) */
+  if(same){sh.classList.remove('is-failed');sh.classList.add('is-ready');return}
   /* Another form was here: start this one fresh. */
   box.innerHTML='';
   var st=$('.ai-chat-fbsheet__state',sh);
@@ -2126,7 +2129,7 @@ function openForm(opener,form,title,kind){
       transitiveSearchParams:true,
       opacity:100,
       iframeProps:{title:sheetTitle},
-      onReady:function(){if(sheetForm===mine)sh.classList.add('is-ready')},
+      onReady:function(){if(sheetForm===mine&&sh.getAttribute('data-kind')==='form')sh.classList.add('is-ready')},
       onSubmit:function(){
         /* Sent: the next open starts the form afresh. */
         if(sheetForm===mine)sheetSubmitted=true;
@@ -2140,12 +2143,72 @@ function openForm(opener,form,title,kind){
       }
     });
     /* Ready even if Typeform's own signal never comes. */
-    setTimeout(function(){if(sheetForm===mine)sh.classList.add('is-ready')},4000);
+    setTimeout(function(){if(sheetForm===mine&&sh.getAttribute('data-kind')==='form')sh.classList.add('is-ready')},4000);
   },function(){
-    if(sheetForm!==mine)return;
+    if(sheetForm!==mine||sh.getAttribute('data-kind')!=='form')return;
     sh.classList.add('is-failed');
     $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__msg">'+(thisKind==='fb'?'The survey couldn’t open here.':'This couldn’t open here.')+'</span><a class="ai-chat-fbsheet__alt" href="'+esc(fbUrl())+'" target="_blank" rel="noopener">Open it in a new tab</a>';
   });
+}
+/* The store locator (Storepoint), in the same sheet. It's put on the page
+   exactly as on the store's own locator page — Storepoint's container and
+   script — inside a part of the sheet that's kept once built, so going
+   back and forth never reloads the map. On the locator page itself (its
+   own map already there) the button takes the shopper to that map. */
+var LOC_URL='',mapBuilt='',mapState='',mapTimer=null;
+function locatorTrack(){if(window.dataLayer)try{window.dataLayer.push({event:'store_locator_open',store_locator_source:'chat'})}catch(e){}}
+function openLocator(opener,mapId,title,url){
+  if(!/^[A-Za-z0-9]{6,32}$/.test(String(mapId||'')))return;
+  if(url)LOC_URL=url;
+  var onPage=document.getElementById('storepoint-container');
+  if(onPage&&!panel.contains(onPage)){
+    toggle(false);
+    try{onPage.scrollIntoView({behavior:'smooth',block:'start'})}catch(e){}
+    return;
+  }
+  fbOpener=opener||null;
+  var sh=fbSheetEl(),box=$('.ai-chat-fbsheet__map',sh);
+  sheetKind='map';
+  sheetTitle=String(title||'').trim().slice(0,40)||'Find a store near you';
+  $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
+  sh.setAttribute('aria-label',sheetTitle);
+  sh.setAttribute('data-kind','map');
+  menu.style.display='none';
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fbBehind(true);
+  setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
+  locatorTrack();
+  var st=$('.ai-chat-fbsheet__state',sh);
+  var loading='<span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the store map…</span>';
+  var showFail=function(){
+    mapState='failed';
+    if(sh.getAttribute('data-kind')!=='map')return;
+    sh.classList.remove('is-ready');sh.classList.add('is-failed');
+    st.innerHTML='<span class="ai-chat-fbsheet__msg">The store map couldn’t open here.</span>'+(LOC_URL&&safeUrl(LOC_URL)?'<a class="ai-chat-fbsheet__alt" href="'+esc(safeUrl(LOC_URL))+'">Go to the store locator</a>':'');
+  };
+  if(mapBuilt===mapId){
+    sh.classList.remove('is-failed','is-ready');
+    if(mapState==='ready'){sh.classList.add('is-ready');return}
+    if(mapState==='failed'){showFail();return}
+    st.innerHTML=loading;return;
+  }
+  mapBuilt=mapId;mapState='loading';
+  sh.classList.remove('is-ready','is-failed');
+  st.innerHTML=loading;
+  box.innerHTML='<div class="ai-chat-locator"><div id="storepoint-container" data-map-id="'+esc(mapId)+'"></div></div>';
+  var sc=document.createElement('script');sc.src='https://cdn.storepoint.co/api/v1/js/'+mapId+'.js';sc.async=true;
+  sc.onerror=function(){if(mapBuilt===mapId&&mapState==='loading'){clearInterval(mapTimer);showFail()}};
+  document.head.appendChild(sc);
+  /* Ready once Storepoint has drawn something in its container. */
+  var t0=Date.now();clearInterval(mapTimer);
+  mapTimer=setInterval(function(){
+    if(mapBuilt!==mapId||mapState!=='loading'){clearInterval(mapTimer);return}
+    var c=$('#storepoint-container',box);
+    if(c&&c.children.length){
+      clearInterval(mapTimer);mapState='ready';
+      setTimeout(function(){if(sh.getAttribute('data-kind')==='map'&&mapState==='ready')sh.classList.add('is-ready')},300);
+    }else if(Date.now()-t0>15000){clearInterval(mapTimer);showFail()}
+  },200);
 }
 function closeFeedback(){
   if(!fbSheet||fbSheet.hidden)return;
@@ -2351,7 +2414,15 @@ function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
 function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 /* A button under the reply that opens one of the store's Typeforms. */
-var pendingForm=null;
+var pendingForm=null,pendingMap=null;
+function mapCtaHtml(m){
+  return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-map="'+esc(m.mapId)+'" data-map-label="'+esc(m.label)+'" data-map-url="'+esc(m.url||'')+'" aria-haspopup="dialog">'+esc(m.label)+'</button>';
+}
+function cleanMap(p){
+  if(!p||!/^[A-Za-z0-9]{6,32}$/.test(String(p.mapId||'')))return null;
+  var u=String(p.url||'');
+  return {mapId:String(p.mapId),label:String(p.label||'').trim().slice(0,40)||'Find a store near you',url:/^(\/(?!\/)|https:\/\/)[^\s<>"']*$/i.test(u)?u:''};
+}
 function formCtaHtml(f){
   return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-form="'+esc(f.form)+'" data-form-label="'+esc(f.label)+'" aria-haspopup="dialog">'+esc(f.label)+'</button>';
 }
@@ -3380,7 +3451,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -3420,6 +3491,7 @@ if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
+if(p.type==='map_cta'){pendingMap=cleanMap(p)}
 if(p.type==='klaviyo_form'){
   later(function(){showKlaviyoForm('Stay Connected')},300);
 }
@@ -3536,6 +3608,7 @@ if(cleanText){
   /* The comparison table comes back with the chat too. */
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
   if(pendingForm)_saved.formCta=pendingForm;
+  if(pendingMap)_saved.mapCta=pendingMap;
   messages.push(_saved);saveH(messages)
 }
 if(vizCta&&vizCta.productHandle&&mDiv){
@@ -3559,7 +3632,11 @@ if(pendingForm&&mDiv){
   var fcb=$('.ai-chat-msg-bubble',mDiv);
   if(fcb)fcb.insertAdjacentHTML('beforeend',formCtaHtml(pendingForm));
 }
-pendingForm=null;
+if(pendingMap&&mDiv){
+  var mcb=$('.ai-chat-msg-bubble',mDiv);
+  if(mcb)mcb.insertAdjacentHTML('beforeend',mapCtaHtml(pendingMap));
+}
+pendingForm=null;pendingMap=null;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -3793,6 +3870,8 @@ var tfBtn=e.target.closest('[data-truefit]');
 if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
 var fbBtn=e.target.closest('[data-feedback]');
 if(fbBtn){e.preventDefault();openFeedback(fbBtn);return;}
+var mapBtn=e.target.closest('[data-map]');
+if(mapBtn){e.preventDefault();openLocator(mapBtn,mapBtn.getAttribute('data-map'),mapBtn.getAttribute('data-map-label'),mapBtn.getAttribute('data-map-url'));return;}
 var formBtn=e.target.closest('[data-form]');
 if(formBtn){e.preventDefault();openForm(formBtn,formBtn.getAttribute('data-form'),formBtn.getAttribute('data-form-label'),'quiz');return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');
@@ -3821,6 +3900,8 @@ else for(var i=0;i<messages.length;i++){
   var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
   var _cta=messages[i].linkCTA;
   if(_cta&&_cta.url&&_md){var _lb=$('.ai-chat-msg-bubble',_md);if(_lb)_lb.insertAdjacentHTML('beforeend',ctaHtml(_cta))}
+  var _mc=cleanMap(messages[i].mapCta);
+  if(_mc&&_md){var _mb=$('.ai-chat-msg-bubble',_md);if(_mb)_mb.insertAdjacentHTML('beforeend',mapCtaHtml(_mc))}
   var _fc=messages[i].formCta;
   if(_fc&&/^[A-Za-z0-9]{4,32}$/.test(String(_fc.form||''))&&_md){var _fb=$('.ai-chat-msg-bubble',_md);if(_fb)_fb.insertAdjacentHTML('beforeend',formCtaHtml({form:String(_fc.form),label:String(_fc.label||'').slice(0,40)||'Open the quiz'}))}
   if(messages[i].comparison&&_md){var _cb=$('.ai-chat-msg-bubble',_md);if(_cb)_cb.insertAdjacentHTML('beforeend',compareHtml(messages[i].comparison))}

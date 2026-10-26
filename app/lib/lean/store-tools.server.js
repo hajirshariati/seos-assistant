@@ -21,7 +21,7 @@ import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js"
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
 import { MAX_RULES_CHARS } from "../knowledge-check.js";
-import { whichOrthoticConfig } from "../feedback-survey.js";
+import { whichOrthoticConfig, storeLocatorConfig } from "../feedback-survey.js";
 
 function parseJson(raw, fallback) {
   if (raw && typeof raw === "object") return raw;
@@ -206,6 +206,22 @@ export async function buildLeanStoreExtras({
       ok: true,
       note: `A "${which.label}" button appears under your reply and opens the quiz in the chat. Say in one short sentence what it does; don't add a link.`,
       _events: [{ type: "form_cta", form: which.form, label: which.label }],
+    }));
+  }
+
+  // The store locator (Storepoint), opened in the chat from a button.
+  const locator = storeLocatorConfig(config);
+  if (locator) {
+    wrap({
+      name: "show_store_locator",
+      description:
+        "Show a button that opens the store locator map (stores and retailers that carry Aetrex, searchable by location) right inside the chat. " +
+        "Use whenever the customer asks where to buy or try on Aetrex in person, for stores, retailers or dealers near them, or for the store locator.",
+      input_schema: { type: "object", properties: {} },
+    }, async () => ({
+      ok: true,
+      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. Say in one short sentence that they can search their area there; don't add the store locator link.`,
+      _events: [{ type: "map_cta", mapId: locator.mapId, label: locator.label, url: locator.url }],
     }));
   }
 
