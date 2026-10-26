@@ -868,10 +868,13 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`store map (${label}): a tall map scrolls inside the sheet`, m.scrolls);
   await page.click(".ai-chat-fbsheet__back");
   await page.waitForTimeout(500);
-  await page.click("[data-feedback]");
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "quizme");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-form-cta[data-form]", { timeout: 5000 });
+  await page.click(".ai-chat-form-cta[data-form]");
   await page.waitForTimeout(700);
   const f = await page.evaluate(() => ({ kind: document.querySelector(".ai-chat-fbsheet").getAttribute("data-kind"), id: window.__tf && window.__tf.id, mapHidden: getComputedStyle(document.querySelector(".ai-chat-fbsheet__map")).visibility === "hidden", formShown: getComputedStyle(document.querySelector(".ai-chat-fbsheet__form")).opacity === "1" }));
-  check(`store map (${label}): the feedback survey then shows in its place`, f.kind === "form" && f.id === "jdXBrXMa" && f.mapHidden && f.formShown, JSON.stringify(f));
+  check(`store map (${label}): a quiz then shows in its place`, f.kind === "form" && f.id === "ojyWbTvZ" && f.mapHidden && f.formShown, JSON.stringify(f));
   await page.click(".ai-chat-fbsheet__back");
   await page.waitForTimeout(500);
   await page.click("[data-map]");
