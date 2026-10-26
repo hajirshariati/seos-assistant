@@ -18,8 +18,10 @@ export async function getTodayMessageCount(shop) {
   });
 }
 
-export async function recordChatUsage({ shop, model, usage, toolCalls, embeddingTokens = 0, embeddingCostUsd = 0, internal = false }) {
-  const costUsd = computeCost(model, usage);
+export async function recordChatUsage({ shop, model, usage, toolCalls, embeddingTokens = 0, embeddingCostUsd = 0, internal = false, checks = null }) {
+  // The engine's quick yes/no checks run on a cheaper model: priced as that
+  // model and added to the turn's cost (the token columns stay the chat model's).
+  const costUsd = computeCost(model, usage) + (checks ? computeCost(checks.model, checks.usage) : 0);
   return prisma.chatUsage.create({
     data: {
       shop,

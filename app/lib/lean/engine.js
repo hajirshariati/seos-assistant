@@ -189,15 +189,31 @@ export function joinContinuation(earlier, said) {
   return `${e}\n\n${t}`;
 }
 
-const OFFERS_NOTE = "(The customer is asking about sales or offers. Start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print). Then the marked-down products: product search with on_sale: true.)";
+// The message has a sales word in it: Claude decides what it means.
+const OFFERS_NOTE = "(If the customer is asking which sales, deals or offers are running, start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print), then the marked-down products: product search with on_sale: true. If they only want marked-down products of one kind (\"boots on sale\"), or use \"offer\" another way (\"styles that offer removable insoles\"), just answer that — no offer list.)";
 
-const OFFERS_LIST_PROMPT = [
-  "You read a store's own notes (store instructions, ACTIVE PROMOTIONS, the promotions page) and list the offers a shopper can get right now.",
-  "Use the \"Right now\" date and time in the notes: skip any offer whose end date and time have passed, or that the notes say has ended. If two lines disagree about an offer, skip it.",
-  "Write one markdown bullet per running offer (\"- \"): a short **bold** name, then a few plain words on what the shopper gets and the end date if it has one — at most 15 words per bullet. Example: \"- **Free gel insert** with any orthotic — ends Oct 24\". Leave out the fine print (item numbers, limits, exclusions, how returns are processed): the shopper gets a link to the full terms.",
-  "Don't add codes, amounts, products or conditions the notes don't state. Follow the store instructions (for example, if they say not to promise free shipping, leave that out).",
-  "Write only the bullets — no intro, no closing line. If nothing is running, write NONE.",
-].join("\n");
+// Yes/no questions for a quick check model. They decide what a message
+// means where a word list can't ("sale" in "boots on sale" vs "any sales?").
+export function offersQuestion(lastAssistantText, message) {
+  return [
+    "A shopper is chatting with a shoe and orthotic store's assistant.",
+    lastAssistantText ? `The assistant last said: """${String(lastAssistantText).slice(0, 600)}"""` : "",
+    `The shopper now wrote: """${String(message).slice(0, 400)}"""`,
+    "Is the shopper asking which promotions, deals, discounts, coupon codes or store-wide offers are running (for example \"any deals?\", \"what's on sale?\", \"do you have a promo code?\")?",
+    "Answer NO if they want marked-down products of one kind (\"boots on sale\", \"more sale sneakers\"), ask about one product's price, or use \"offer\" another way (\"styles that offer removable insoles\").",
+    "Reply with YES or NO only.",
+  ].filter(Boolean).join("\n");
+}
+export function orthoticAnswerQuestion(lastAssistantText, message) {
+  return [
+    "A shopper is chatting with a shoe and orthotic store's assistant.",
+    `The assistant last said: """${String(lastAssistantText).slice(0, 600)}"""`,
+    `The shopper replied: """${String(message).slice(0, 200)}"""`,
+    "Was the assistant helping the shopper choose an orthotic (an insole or insert), and is the reply most likely an answer to that — for example naming the shoes they'll wear the orthotic in — rather than asking to see shoes?",
+    "Answer NO if the chat is about finding shoes (for example shoes that fit the shopper's own orthotics).",
+    "Reply with YES or NO only.",
+  ].join("\n");
+}
 
 export function toCard(p, preselect = null) {
   // Options the shopper has to pick before adding (e.g. Size, Width) — the
@@ -261,6 +277,9 @@ export async function runLeanTurn({
   liveStock = null,
   // The product page the shopper is on, if any (handle from the page URL).
   viewingHandle = "",
+  // Quick yes/no check: async (question) → true / false / null (couldn't
+  // tell). Without it, the word-based checks stand in (tests).
+  askYesNo = null,
 }) {
   const started = Date.now();
   const products = catalog?.products || [];
@@ -283,8 +302,16 @@ export async function runLeanTurn({
   if (viewing) system.push({ type: "text", text: viewingNote(viewing) });
 
   const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
-  const offersAsked = asksAboutOffers(latestUserMessage) && hasRunningOffers(extraSystem) && !offersAlreadyListed(messages.slice(0, -1));
-  if (offersAsked) {
+  const lastAssistantText = [...messages].reverse().find((m) => m?.role === "assistant" && typeof m.content === "string")?.content || "";
+  // A sales word, offers running, not listed yet in this chat → Claude is
+  // told how to answer either meaning, and the check model says which it is.
+  const offersMaybe = (askYesNo ? OFFER_QUESTION.test(latestUserMessage) : asksAboutOffers(latestUserMessage)) &&
+    hasRunningOffers(extraSystem) && !offersAlreadyListed(messages.slice(0, -1));
+  const offersCheck = offersMaybe && askYesNo
+    ? Promise.resolve().then(() => askYesNo(offersQuestion(lastAssistantText, latestUserMessage))).catch(() => null)
+    : Promise.resolve(offersMaybe);
+  let offersAsked = null; // resolved at the first fact check
+  if (offersMaybe) {
     const last = conv[conv.length - 1];
     const note = { type: "text", text: OFFERS_NOTE };
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
@@ -523,8 +550,13 @@ export async function runLeanTurn({
         detail: "Your reply repeated the suggested tap questions — they're written in the customer's voice and are already shown as buttons. Write your own short reply: what you're showing and why it fits what they asked.",
       });
     }
-    const lastAssistantText = [...messages].reverse().find((m) => m?.role === "assistant" && typeof m.content === "string")?.content || "";
-    if (leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) })) {
+    let orthoticAnswer = leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) });
+    if (orthoticAnswer && askYesNo) {
+      const said = await Promise.resolve().then(() => askYesNo(orthoticAnswerQuestion(lastAssistantText, latestUserMessage))).catch(() => null);
+      orthoticAnswer = said === true;
+      log(`[lean] orthotic-answer check: ${said === null ? "unsure" : said ? "yes" : "no"}`);
+    }
+    if (orthoticAnswer) {
       const said = String(latestUserMessage).trim().replace(/[<>]/g, "").slice(0, 40);
       issues.push({
         code: "left_orthotic_chat",
@@ -536,6 +568,10 @@ export async function runLeanTurn({
         code: "sold_out_size",
         detail: `The size you picked is sold out: ${soldOut.map((s) => `${s.title} in ${Object.values(s.wanted).join(" / ")}${s.in_stock.length ? ` (in stock: ${s.in_stock.join(", ")})` : ""}`).join("; ")}. Say so and offer what's in stock — the card can't add a sold-out size.`,
       });
+    }
+    if (offersAsked === null) {
+      offersAsked = (await offersCheck) === true;
+      if (offersMaybe) log(`[lean] offers question: ${offersAsked ? "yes" : "no"}`);
     }
     if (offersAsked && !mentionsOffer(text)) {
       issues.push({
@@ -569,28 +605,7 @@ export async function runLeanTurn({
     break;
   }
 
-  // Still no offer after the rewrite: a narrow call (no tools, no products)
-  // lists the running offers from the promotions text, and they go first.
-  if (offersAsked && text && finalIssues.some((i) => i.code === "missing_offers")) {
-    log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
-    try {
-      const resp = await call({
-        model, max_tokens: 500,
-        system: [{ type: "text", text: OFFERS_LIST_PROMPT }],
-        messages: [{ role: "user", content: String(extraSystem) }],
-      });
-      addUsage(usage, resp.usage);
-      const list = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-      if (list && !/^NONE\b/i.test(list) && mentionsOffer(list)) {
-        const terms = String(extraSystem).match(/PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE \((https:\/\/[^)\s]+)\)/)?.[1];
-        text = `Here's what's running right now:\n${list}${terms ? `\n\n[See full offer details](${terms})` : ""}\n\n${text}`;
-        finalIssues = finalIssues.filter((i) => i.code !== "missing_offers");
-        log("[lean] offers listed by code");
-      }
-    } catch (err) {
-      log(`[lean] offers list failed: ${String(err?.message || err).slice(0, 120)}`);
-    }
-  }
+  if (finalIssues.some((i) => i.code === "missing_offers")) log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
 
   if (!text) {
     log("[lean] no reply text — sent the fallback message");

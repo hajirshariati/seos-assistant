@@ -200,7 +200,8 @@ export async function buildLeanStoreExtras({
         "Show a button that opens a short visual quiz (pictures of the top, color and logo) that tells the customer which Aetrex orthotic they already own. " +
         "Use when the customer wants to reorder or replace an orthotic they have but doesn't know its name or model, or asks which orthotic they have. " +
         "If they're signed in, check their past orders first (get_my_orders) and name the orthotic if it's there; offer the quiz when it isn't, or if they're unsure it's the same pair. " +
-        "If they can name it, don't use this — find that orthotic instead. Not for choosing a new orthotic (use the orthotic recommender for that).",
+        "If they can name it, don't use this — find that orthotic instead. Not for choosing a new orthotic (use the orthotic recommender for that). " +
+        "Not for a customer who has their own orthotics (custom, from a doctor, or another brand) and wants shoes to wear them in — show shoes with a removable footbed instead.",
       input_schema: { type: "object", properties: {} },
     }, async () => ({
       ok: true,

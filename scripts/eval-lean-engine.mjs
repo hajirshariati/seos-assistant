@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -299,39 +299,50 @@ await test("sales question with offers running: the turn says to list offers fir
   ]);
   const logs = [];
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Show me current sales and promotions" }], latestUserMessage: "Show me current sales and promotions", extraSystem: PROMO_SYS, callModel: s.callModel, log: (l) => logs.push(l) });
-  assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /Start your reply with every offer that's running/);
+  assert.match(JSON.stringify(s.requests[0].messages.at(-1)), /start your reply with every offer that's running/);
   assert.equal(r.retried, true);
   assert.ok(logs.some((l) => /rewrite: .*missing_offers/.test(l)));
   assert.match(r.text, /free gel insert/i);
 });
-// The live failure after that: the rewrite still listed no offer.
-await test("rewrite still without offers → the running offers are listed by code, first", async () => {
-  const s = scripted([
-    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sale", on_sale: true })] },
-    { stop_reason: "end_turn", content: [txt("These are just a sample of the sale styles.")] },
-    { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
-    { stop_reason: "end_turn", content: [txt("- **Free Gel Insert** with any Aetrex orthotic, until Oct 24, 11:59 PM EST.")] },
-  ]);
-  const logs = [];
-  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Show me current sales and promotions" }], latestUserMessage: "Show me current sales and promotions", extraSystem: PROMO_SYS, callModel: s.callModel, log: (l) => logs.push(l) });
-  assert.equal(s.requests.length, 4);
-  assert.equal(s.requests[3].tools, undefined, "the list call has no tools");
-  assert.match(s.requests[3].messages[0].content, /Free Gel Insert/);
-  assert.ok(r.text.startsWith("Here's what's running right now:\n- **Free Gel Insert**"));
-  assert.match(r.text, /\[See full offer details\]\(https:\/\/www\.aetrex\.com\/pages\/terms-conditions\)/, "fine print stays behind the link");
-  assert.match(s.requests[3].system[0].text, /at most 15 words/);
-  assert.match(r.text, /marked-down styles/);
-  assert.deepEqual(r.issues.map((i) => i.code), []);
-  assert.ok(logs.some((l) => l.includes("offers listed by code")));
-});
-await test("offers list says NONE → the reply stays as written", async () => {
+// The offers are Claude's to write: a reply that still lists none after the
+// rewrite stays as written — no list is pasted on top of it.
+await test("rewrite still without offers → the reply stays as written", async () => {
   const s = scripted([
     { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
     { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
-    { stop_reason: "end_turn", content: [txt("NONE")] },
   ]);
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: PROMO_SYS, callModel: s.callModel, log: quiet });
+  assert.equal(s.requests.length, 2);
   assert.equal(r.text, "Here are some marked-down styles.");
+  assert.doesNotMatch(r.text, /running right now/);
+});
+// Live store, 2026-10-26: "Any boots on sale?" and "what styles offer removable
+// insoles" got the store-wide offer list. A word list can't tell those from
+// "any deals?" — the quick check model decides.
+await test("the check model decides what a sales word means", async () => {
+  const asked = [];
+  const no = async (q) => { asked.push(q); return false; };
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are the boots on sale.")] }]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "Any boots on sale?" }], latestUserMessage: "Any boots on sale?", extraSystem: PROMO_SYS, callModel: s.callModel, askYesNo: no, log: quiet });
+  assert.equal(r.retried, false, "the check said no → no rewrite");
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /Any boots on sale\?/);
+  assert.match(asked[0], /YES or NO only/);
+  const s2 = scripted([
+    { stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] },
+    { stop_reason: "end_turn", content: [txt("Running now: a free gel insert with any Aetrex orthotic.")] },
+  ]);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: PROMO_SYS, callModel: s2.callModel, askYesNo: async () => true, log: quiet });
+  assert.equal(r2.retried, true, "the check said yes → offers required");
+  assert.match(r2.text, /free gel insert/);
+  const s3 = scripted([{ stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] }]);
+  const r3 = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: PROMO_SYS, callModel: s3.callModel, askYesNo: async () => null, log: quiet });
+  assert.equal(r3.retried, false, "the check couldn't tell → no forced rewrite");
+  let calls = 0;
+  const s4 = scripted([{ stop_reason: "end_turn", content: [txt("Most of our shoes have a removable footbed.")] }]);
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "what sneakers have removable insoles" }], latestUserMessage: "what sneakers have removable insoles", extraSystem: PROMO_SYS, callModel: s4.callModel, askYesNo: async () => { calls++; return true; }, log: quiet });
+  assert.equal(calls, 0, "no sales word → no check");
+  assert.match(offersQuestion("", "what styles offer removable insoles"), /use "offer" another way/);
 });
 await test("offers listed earlier in the chat aren't forced again", async () => {
   const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are more marked-down styles.")] }]);
@@ -342,7 +353,7 @@ await test("offers listed earlier in the chat aren't forced again", async () => 
   ];
   const r = await runLeanTurn({ catalog, model: "m", messages: history, latestUserMessage: "any other deals?", extraSystem: PROMO_SYS, callModel: s.callModel, log: quiet });
   assert.equal(r.retried, false);
-  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /Start your reply with every offer/);
+  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /start your reply with every offer/);
   assert.doesNotMatch(r.text, /running right now/);
 });
 await test("offers check: only general sales questions, only when offers are running", async () => {
@@ -370,7 +381,7 @@ await test("offers check: only general sales questions, only when offers are run
   const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are some marked-down styles.")] }]);
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "what's on sale" }], latestUserMessage: "what's on sale", extraSystem: "ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now.", callModel: s.callModel, log: quiet });
   assert.equal(r.retried, false, "nothing running → no offers to list");
-  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /Start your reply with every offer/);
+  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /start your reply with every offer/);
 });
 // The live failure: "L820" was taken for an order number, "womens L820 insert"
 // started the orthotic quiz, and "is the L820 still available" was answered
@@ -443,6 +454,27 @@ await test('"boots" while choosing an orthotic → shoes get a second look → o
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /You were helping choose an orthotic.*<<Orthotics for boots>><<Show me boots>>/);
   assert.deepEqual(r.cards.map((c) => c.kind), ["orthotic"]);
   assert.deepEqual(r.issues, []);
+});
+await test('"boots" mid-orthotic: the check model confirms before a rewrite', async () => {
+  const history = [
+    { role: "user", content: "which orthotic should I get?" },
+    { role: "assistant", content: "Happy to help you pick an orthotic. What shoes will you wear them in?" },
+    { role: "user", content: "boots" },
+  ];
+  const steps = () => scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "boots", categories: ["boots"] })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Margot Lace-Up Boot - Dark Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Margot lace-up boot has built-in arch support.")] },
+    { stop_reason: "end_turn", content: [txt("Did you want orthotics for boots, or boots?")] },
+  ]);
+  const asked = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: history, latestUserMessage: "boots", callModel: steps().callModel, askYesNo: async (q) => { asked.push(q); return false; }, log: quiet });
+  assert.equal(r.retried, false, "the check said it's a shoe chat → the reply stands");
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /The shopper replied: """boots"""/);
+  const r2 = await runLeanTurn({ catalog, model: "m", messages: history, latestUserMessage: "boots", callModel: steps().callModel, askYesNo: async () => true, log: quiet });
+  assert.equal(r2.retried, true, "the check said yes → rewrite");
+  assert.match(orthoticAnswerQuestion("x", "boots"), /own orthotics/);
 });
 await test("the orthotic-chat check only fires on a short answer that switches to shoes", () => {
   const boot = P("Margot Lace-Up Boot - Dark Red");

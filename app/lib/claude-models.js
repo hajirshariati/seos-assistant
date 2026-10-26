@@ -5,6 +5,9 @@
 export const DEFAULT_MODEL = "claude-sonnet-4-6";
 export const ALLOWED_MODELS = new Set(["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-7"]);
 
+// The fast, cheap model behind the engine's yes/no meaning checks.
+export const CHECK_MODEL = "claude-haiku-4-5-20251001";
+
 const REPLACEMENTS = {
   "claude-sonnet-4-20250514": "claude-sonnet-4-6",
   "claude-sonnet-4-0": "claude-sonnet-4-6",

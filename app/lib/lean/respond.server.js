@@ -17,7 +17,7 @@ import { lexicalStoreKnowledge } from "../store-knowledge/sync.server.js";
 import { runLeanTurn } from "./engine.js";
 import { makeLiveStock } from "./live-stock.server.js";
 import { recordHealth } from "../../models/ChatHealth.server.js";
-import { chatModel } from "../claude-models.js";
+import { chatModel, CHECK_MODEL } from "../claude-models.js";
 import { buildShopAllLink } from "./shop-all.js";
 import { saveRecording } from "../../models/ChatRecording.server.js";
 import { describeExtras } from "../chat-recording.js";
@@ -138,6 +138,21 @@ export function leanChatResponse({
         // No message text in the logs — shoppers type emails, order numbers, health details.
         console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length}`);
         const support = resolveSupport({ adminUrl: config.supportUrl, adminLabel: config.supportLabel, themeUrl: supportUrl, themeLabel: supportLabel });
+        // Quick yes/no meaning checks on the cheap model. A failure or a slow
+        // answer is "can't tell" (null): the engine then doesn't force a rewrite.
+        const checkUsage = {};
+        const askYesNo = async (question) => {
+          if (abort.signal.aborted) return null;
+          let timer;
+          const resp = await Promise.race([
+            anthropic.messages.create({ model: CHECK_MODEL, max_tokens: 5, messages: [{ role: "user", content: question }] }, { signal: abort.signal }),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(null), 6000); }),
+          ]).catch(() => null).finally(() => clearTimeout(timer));
+          if (!resp) return null;
+          for (const k of ["input_tokens", "output_tokens"]) checkUsage[k] = (checkUsage[k] || 0) + (Number(resp.usage?.[k]) || 0);
+          const word = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim().toUpperCase();
+          return word.startsWith("YES") ? true : word.startsWith("NO") ? false : null;
+        };
         const result = await runLeanTurn({
           shop,
           config: { ...config, supportUrl: support.url, supportLabel: support.label },
@@ -151,6 +166,7 @@ export function leanChatResponse({
           similarAttributes: extras.similarAttributes,
           liveStock: makeLiveStock({ shop, accessToken }),
           viewingHandle,
+          askYesNo,
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
             return withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal }));
@@ -189,7 +205,7 @@ export function leanChatResponse({
         keep({ reply: result.text, products: result.cards.map((c) => c.title) });
         health(true);
         // Test chats are recorded for the cost estimate only (internal flag).
-        recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls, internal })
+        recordChatUsage({ shop, model, usage: result.usage, toolCalls: result.toolCalls, internal, checks: checkUsage.input_tokens ? { model: CHECK_MODEL, usage: checkUsage } : null })
           .catch((err) => console.error("[lean] usage log error:", err?.message));
         if (!internal) {
           logMentions(shop, [
