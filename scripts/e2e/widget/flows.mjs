@@ -957,6 +957,8 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   }
   await page.click(".ai-chat-fbsheet__list .ai-chat-atc-panel [data-atc-add]");
   await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-atc-done", { timeout: 5000 });
+  // The widget scrolls the confirmation into view on the next frame.
+  await page.waitForFunction(() => { const d = document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"), l = document.querySelector(".ai-chat-fbsheet__list"); if (!d || !l) return false; const r = d.getBoundingClientRect(), lr = l.getBoundingClientRect(); return r.top >= lr.top - 1 && r.bottom <= lr.bottom + 1; }, null, { timeout: 2000 }).catch(() => {});
   const added = await page.evaluate(() => { const d = document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"), l = document.querySelector(".ai-chat-fbsheet__list"); const r = d.getBoundingClientRect(), lr = l.getBoundingClientRect(); return { inView: r.top >= lr.top - 1 && r.bottom <= lr.bottom + 1 }; });
   check(`view all (${label}): Add to cart works in the list, the confirmation kept in view`, cartLog.length === before + 1 && PRODUCTS["jillian-black"].variants.some((v) => v.id === cartLog.at(-1)) && added.inView, JSON.stringify({ added, n: cartLog.length - before, last: cartLog.at(-1) }));
   await page.screenshot({ path: out(`va-${label}-added`) });
