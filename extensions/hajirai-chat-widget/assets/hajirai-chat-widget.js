@@ -1129,6 +1129,16 @@ function ctaTileHtml(c){
 function fbTileHtml(){
   return '<button type="button" class="ai-chat-welcome__cta-btn is-feedback" data-feedback="1" aria-haspopup="dialog"><span class="ai-chat-welcome__cta-icon">'+WI.feedback+'</span><span class="ai-chat-welcome__cta-label">'+esc(FB_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
+/* A Popular button: sends its message, or, when the message is a Typeform
+   link, opens that form in the chat — that one gets an icon, chosen from
+   its words (insoles for an orthotic quiz). The theme block has no room for
+   more settings (Shopify allows 40), so the icon needs none. */
+function qpHtml(q){
+  var form=formIdOf(q.m);
+  var ic=form?'<span class="ai-chat-welcome__qp-icon">'+ctaIcon(q.l,'').replace(/(width|height)="\d+"/g,'$1="15"')+'</span>':'';
+  var act=form?'data-form="'+esc(form)+'" data-form-label="'+esc(q.l)+'" aria-haspopup="dialog"':'data-message="'+esc(q.m)+'"';
+  return '<button type="button" class="ai-chat-welcome__qp-btn'+(ic?' has-icon':'')+'" '+act+'>'+ic+'<span>'+esc(q.l)+'</span></button>';
+}
 function welcomeCtas(){
   var ctas=[];
   if(CTA1L&&CTA1M)ctas.push({l:CTA1L,m:CTA1M,i:CTA1I});
@@ -1174,9 +1184,7 @@ if(QP3L&&QP3M)qps.push({l:QP3L,m:QP3M});
 if(QP4L&&QP4M)qps.push({l:QP4L,m:QP4M});
 if(qps.length){
   h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Popular</div><div class="ai-chat-welcome__quickpicks">';
-  for(var j=0;j<qps.length;j++){
-    h+='<button type="button" class="ai-chat-welcome__qp-btn" data-message="'+esc(qps[j].m)+'">'+esc(qps[j].l)+'</button>';
-  }
+  for(var j=0;j<qps.length;j++)h+=qpHtml(qps[j]);
   h+='</div></div>';
 }
 if(CUST_LOGGED_IN){
@@ -2026,15 +2034,22 @@ return '<a class="ai-chat-cta-btn" style="display:block;margin-top:12px;padding:
    settings, as the site's Feedback button. Once sent, the button gives its
    place back to Start here button 4 (and the site's button stays hidden
    for this shopper, as it does after sending it there). If the survey
-   can't load here, it opens in a new tab instead. */
+   can't load here, it opens in a new tab instead.
+   The same sheet opens the store's other Typeforms: a Popular button whose
+   message is a Typeform link, and the assistant's quiz button ("which
+   orthotic do I have?"). The sheet holds one form at a time. */
 function fbDoneKey(){return 'hajirai_fb_done_'+FB_FORM}
 var fbSheet=null,fbSdk=null,fbOpener=null,fbSent=false;
+var sheetForm='',sheetTitle='',sheetKind='fb';
+/* A Typeform link in a button's message: the form's ID, else ''. Plain
+   words are never taken for a form. */
+function formIdOf(v){var m=String(v||'').match(/typeform\.com\/to\/([A-Za-z0-9]{4,32})(?![A-Za-z0-9])/);return m?m[1]:''}
 function fbShown(){
   if(!FB_ON||fbSent)return false;
   try{return !((parseInt(localStorage.getItem(fbDoneKey()),10)||0)>Date.now())}catch(e){return true}
 }
-function fbUrl(){return 'https://form.typeform.com/to/'+FB_FORM+location.search}
-function fbTrack(action){if(window.dataLayer)try{window.dataLayer.push({event:'typeform_cta_'+action,typeform_form_id:FB_FORM,typeform_source:'chat'})}catch(e){}}
+function fbUrl(){return 'https://form.typeform.com/to/'+(sheetForm||FB_FORM)+location.search}
+function fbTrack(action){if(window.dataLayer)try{window.dataLayer.push({event:'typeform_cta_'+action,typeform_form_id:sheetForm||FB_FORM,typeform_source:'chat'})}catch(e){}}
 function fbLoadSdk(){
   if(fbSdk)return fbSdk;
   fbSdk=new Promise(function(res,rej){
@@ -2056,7 +2071,7 @@ function fbSheetEl(){
   if(fbSheet)return fbSheet;
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
-  fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title">'+esc(FB_LABEL)+'</div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
+  fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
     '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div></div>';
   fbSheet.addEventListener('click',function(e){if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback()}});
   panel.appendChild(fbSheet);
@@ -2068,24 +2083,43 @@ function fbBehind(on){
 }
 function openFeedback(opener){
   if(!FB_ON)return;
+  openForm(opener,FB_FORM,FB_LABEL,'fb');
+}
+/* Any of the store's Typeforms, in the sheet. kind 'fb' is the feedback
+   survey (sending it retires its button); 'quiz' is any other form. */
+function openForm(opener,form,title,kind){
+  if(!/^[A-Za-z0-9]{4,32}$/.test(String(form||'')))return;
   fbOpener=opener||null;
   var sh=fbSheetEl(),box=$('.ai-chat-fbsheet__form',sh);
+  var same=sheetForm===form&&!!box.firstChild;
+  sheetForm=form;sheetKind=kind==='fb'?'fb':'quiz';
+  sheetTitle=String(title||'').trim().slice(0,40)||(sheetKind==='fb'?'Share feedback':'Quiz');
+  $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
+  sh.setAttribute('aria-label',sheetTitle);
   menu.style.display='none';
   sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
   fbBehind(true);
   setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
   fbTrack('open');
-  if(box.firstChild)return;/* already loaded: pick up where they left off */
+  if(same)return;/* already loaded: pick up where they left off */
+  /* Another form was here: start this one fresh. */
+  box.innerHTML='';
+  var st=$('.ai-chat-fbsheet__state',sh);
+  st.innerHTML='<span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">'+(sheetKind==='fb'?'Loading the survey…':'Loading…')+'</span>';
   sh.classList.remove('is-ready','is-failed');
+  var mine=form,thisKind=sheetKind;
   fbLoadSdk().then(function(tf){
-    tf.createWidget(FB_FORM,{
+    /* They moved on to another form while this one loaded. */
+    if(sheetForm!==mine||box.firstChild)return;
+    tf.createWidget(mine,{
       container:box,
       inlineOnMobile:true,
       transitiveSearchParams:true,
       opacity:100,
-      iframeProps:{title:FB_LABEL},
-      onReady:function(){sh.classList.add('is-ready')},
+      iframeProps:{title:sheetTitle},
+      onReady:function(){if(sheetForm===mine)sh.classList.add('is-ready')},
       onSubmit:function(){
+        if(thisKind!=='fb'){fbTrack('submit');return}
         fbSent=true;
         var year=Date.now()+365*864e5;
         try{localStorage.setItem(fbDoneKey(),String(year));
@@ -2095,10 +2129,11 @@ function openFeedback(opener){
       }
     });
     /* Ready even if Typeform's own signal never comes. */
-    setTimeout(function(){sh.classList.add('is-ready')},4000);
+    setTimeout(function(){if(sheetForm===mine)sh.classList.add('is-ready')},4000);
   },function(){
+    if(sheetForm!==mine)return;
     sh.classList.add('is-failed');
-    $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__msg">The survey couldn’t open here.</span><a class="ai-chat-fbsheet__alt" href="'+esc(fbUrl())+'" target="_blank" rel="noopener">Open it in a new tab</a>';
+    $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__msg">'+(thisKind==='fb'?'The survey couldn’t open here.':'This couldn’t open here.')+'</span><a class="ai-chat-fbsheet__alt" href="'+esc(fbUrl())+'" target="_blank" rel="noopener">Open it in a new tab</a>';
   });
 }
 function closeFeedback(){
@@ -2108,10 +2143,10 @@ function closeFeedback(){
   var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
   if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)gone();else setTimeout(gone,420);
   /* Sent: the button makes way for Start here button 4. */
-  if(fbSent){
+  if(fbSent&&sheetKind==='fb'){
     var t=$('[data-feedback]',panel);
     if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}
-    if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML=''}
+    if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML='';sheetForm=''}
     fbOpener=null;
   }
   var back=fbOpener&&document.body.contains(fbOpener)?fbOpener:inputEl;
@@ -2120,8 +2155,9 @@ function closeFeedback(){
 /* Escape steps back out of the survey first, then closes the chat. */
 panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&fbSheet&&!fbSheet.hidden){e.preventDefault();e.stopPropagation();closeFeedback()}},true);
 /* Start fetching Typeform the moment the button is pointed at. */
-panel.addEventListener('pointerover',function(e){if(FB_ON&&e.target.closest&&e.target.closest('[data-feedback]'))fbLoadSdk().catch(function(){})});
-panel.addEventListener('focusin',function(e){if(FB_ON&&e.target.closest&&e.target.closest('[data-feedback]'))fbLoadSdk().catch(function(){})});
+function wantsForm(t){return t&&t.closest&&(FB_ON&&t.closest('[data-feedback]')||t.closest('[data-form]'))}
+panel.addEventListener('pointerover',function(e){if(wantsForm(e.target))fbLoadSdk().catch(function(){})});
+panel.addEventListener('focusin',function(e){if(wantsForm(e.target))fbLoadSdk().catch(function(){})});
 // Central support-chat opener. Prefer a live-chat provider (Zendesk, Intercom,
 // Gorgias) and only fall back to the Support Hub URL when none is present.
 // Every support path — the dead-end button and the handoff support_cta — calls
@@ -2300,6 +2336,11 @@ function cmpIsPhone(){return !!(PHONE_BAR&&PHONE_BAR.matches)}
 function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
 function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
+/* A button under the reply that opens one of the store's Typeforms. */
+var pendingForm=null;
+function formCtaHtml(f){
+  return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-form="'+esc(f.form)+'" data-form-label="'+esc(f.label)+'" aria-haspopup="dialog">'+esc(f.label)+'</button>';
+}
 var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/><path d="M6 9h2M6 12h2M16 9h2M16 12h2"/></svg>';
 var CMP_STAR='<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>';
 var CMP_CHECK='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -3325,7 +3366,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -3364,6 +3405,7 @@ if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pe
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
+if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
 if(p.type==='klaviyo_form'){
   later(function(){showKlaviyoForm('Stay Connected')},300);
 }
@@ -3479,6 +3521,7 @@ if(cleanText){
   if(pendingOrders){_saved.orders=pendingOrders.slice(0,3);if(RET_METHODS.length)_saved.returnMethods=RET_METHODS}
   /* The comparison table comes back with the chat too. */
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
+  if(pendingForm)_saved.formCta=pendingForm;
   messages.push(_saved);saveH(messages)
 }
 if(vizCta&&vizCta.productHandle&&mDiv){
@@ -3498,6 +3541,11 @@ if(supportCta&&mDiv){
   var scb=$('.ai-chat-msg-bubble',mDiv);
   if(scb)scb.insertAdjacentHTML('beforeend',supportCtaHtml(supportCta));
 }
+if(pendingForm&&mDiv){
+  var fcb=$('.ai-chat-msg-bubble',mDiv);
+  if(fcb)fcb.insertAdjacentHTML('beforeend',formCtaHtml(pendingForm));
+}
+pendingForm=null;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -3731,6 +3779,8 @@ var tfBtn=e.target.closest('[data-truefit]');
 if(tfBtn){e.preventDefault();trueFitFor(tfBtn.getAttribute('data-truefit'),tfBtn.getAttribute('data-title')||'');return;}
 var fbBtn=e.target.closest('[data-feedback]');
 if(fbBtn){e.preventDefault();openFeedback(fbBtn);return;}
+var formBtn=e.target.closest('[data-form]');
+if(formBtn){e.preventDefault();openForm(formBtn,formBtn.getAttribute('data-form'),formBtn.getAttribute('data-form-label'),'quiz');return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');
 if(supportCtaBtn){e.preventDefault();openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
 var deadEnd=e.target.closest('[data-dead-end]');
@@ -3757,6 +3807,8 @@ else for(var i=0;i<messages.length;i++){
   var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
   var _cta=messages[i].linkCTA;
   if(_cta&&_cta.url&&_md){var _lb=$('.ai-chat-msg-bubble',_md);if(_lb)_lb.insertAdjacentHTML('beforeend',ctaHtml(_cta))}
+  var _fc=messages[i].formCta;
+  if(_fc&&/^[A-Za-z0-9]{4,32}$/.test(String(_fc.form||''))&&_md){var _fb=$('.ai-chat-msg-bubble',_md);if(_fb)_fb.insertAdjacentHTML('beforeend',formCtaHtml({form:String(_fc.form),label:String(_fc.label||'').slice(0,40)||'Open the quiz'}))}
   if(messages[i].comparison&&_md){var _cb=$('.ai-chat-msg-bubble',_md);if(_cb)_cb.insertAdjacentHTML('beforeend',compareHtml(messages[i].comparison))}
   var _os=messages[i].orders;
   if(Array.isArray(_os)&&_os.length&&_md){

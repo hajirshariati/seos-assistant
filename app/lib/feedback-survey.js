@@ -17,3 +17,11 @@ export function feedbackSurveyConfig(config = {}) {
     label: String(config.feedbackSurveyLabel || "").trim().slice(0, 40) || "Share feedback",
   };
 }
+
+// The "which orthotic do I have?" Typeform: the assistant offers it when a
+// shopper wants to reorder an orthotic they can't name. Off when empty.
+export function whichOrthoticConfig(config = {}) {
+  const form = typeformId(config.whichOrthotic);
+  if (!form) return null;
+  return { form, label: String(config.whichOrthoticLabel || "").trim().slice(0, 40) || "Identify my orthotic" };
+}

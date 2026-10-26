@@ -21,6 +21,7 @@ import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js"
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
 import { MAX_RULES_CHARS } from "../knowledge-check.js";
+import { whichOrthoticConfig } from "../feedback-survey.js";
 
 function parseJson(raw, fallback) {
   if (raw && typeof raw === "object") return raw;
@@ -187,6 +188,25 @@ export async function buildLeanStoreExtras({
       description: "Show the store's newsletter signup form in the chat. Use when the customer wants deals, discount codes for signing up, restock or launch news.",
       input_schema: { type: "object", properties: {} },
     }, async () => ({ ok: true, note: "The signup form appears under your reply.", _events: [{ type: "klaviyo_form" }] }));
+  }
+
+  // "Which orthotic do I have?" — the store's visual quiz (Typeform), opened
+  // in the chat from a button under the reply.
+  const which = whichOrthoticConfig(config);
+  if (which) {
+    wrap({
+      name: "show_which_orthotic_quiz",
+      description:
+        "Show a button that opens a short visual quiz (pictures of the top, color and logo) that tells the customer which Aetrex orthotic they already own. " +
+        "Use when the customer wants to reorder or replace an orthotic they have but doesn't know its name or model, or asks which orthotic they have. " +
+        "If they're signed in, check their past orders first (get_my_orders) and name the orthotic if it's there; offer the quiz when it isn't, or if they're unsure it's the same pair. " +
+        "If they can name it, don't use this — find that orthotic instead. Not for choosing a new orthotic (use the orthotic recommender for that).",
+      input_schema: { type: "object", properties: {} },
+    }, async () => ({
+      ok: true,
+      note: `A "${which.label}" button appears under your reply and opens the quiz in the chat. Say in one short sentence what it does; don't add a link.`,
+      _events: [{ type: "form_cta", form: which.form, label: which.label }],
+    }));
   }
 
   const trueFit = trueFitTool({ shop, sizeFinder, ...(sizeLookup ? { lookup: sizeLookup } : {}) });

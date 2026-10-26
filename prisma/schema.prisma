@@ -188,6 +188,11 @@ model ShopConfig {
   feedbackSurveyOn    Boolean  @default(false)
   feedbackSurvey      String   @default("")
   feedbackSurveyLabel String   @default("Share feedback")
+  // A Typeform that helps a shopper work out which orthotic they already
+  // own (to reorder it). The assistant offers it when that's what they ask;
+  // a Popular button can open it too. Empty = off.
+  whichOrthotic      String   @default("")
+  whichOrthoticLabel String   @default("Identify my orthotic")
   hideLiveChatButton  Boolean  @default(false)
   appearDelayOn       Boolean  @default(false)
   appearDelaySec      Int      @default(3)

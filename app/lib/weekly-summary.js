@@ -7,6 +7,7 @@ const TOOL_LABELS = {
   get_fit_recommendation: "Size / fit help",
   get_product_reviews: "Reviews",
   show_newsletter_signup: "Newsletter signup",
+  show_which_orthotic_quiz: "Which orthotic do I have",
 };
 
 const label = (v) => String(v || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

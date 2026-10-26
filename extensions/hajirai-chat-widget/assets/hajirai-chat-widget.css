@@ -2597,6 +2597,18 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   line-height: 1.3;
 }
 .ai-chat-panel .ai-chat-truefit-cta svg { flex-shrink: 0; }
+/* A quiz button under the reply (e.g. "Identify my orthotic"): opens the
+   store's Typeform in the chat. */
+.ai-chat-panel .ai-chat-form-cta {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.3;
+  text-align: center;
+}
 .ai-chat-panel .ai-chat-fb-btn {
   border-radius: 999px !important;
   border: 1px solid var(--seos-line) !important;
@@ -3008,6 +3020,19 @@ button.ai-chat-launcher__text {
 @media (hover: hover) {
   .ai-chat-panel .ai-chat-welcome__qp-btn:hover { background: var(--seos-surface); }
 }
+/* A Popular button with an icon (picked in the theme editor). */
+.ai-chat-panel .ai-chat-welcome__qp-btn.has-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+}
+.ai-chat-panel .ai-chat-welcome__qp-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-welcome__qp-icon svg { display: block; width: 15px; height: 15px; }
 .ai-chat-panel .ai-chat-welcome__hint {
   font-size: 12.5px;
   color: var(--seos-text-2);

@@ -66,6 +66,8 @@ export const loader = async ({ request }) => {
     feedbackSurveyOn: config.feedbackSurveyOn === true,
     feedbackSurvey: config.feedbackSurvey || "",
     feedbackSurveyLabel: config.feedbackSurveyLabel || "Share feedback",
+    whichOrthotic: config.whichOrthotic || "",
+    whichOrthoticLabel: config.whichOrthoticLabel || "Identify my orthotic",
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -226,6 +228,14 @@ export const action = async ({ request }) => {
   }
   const surveyLabel = formData.get("feedbackSurveyLabel");
   if (surveyLabel !== null) data.feedbackSurveyLabel = String(surveyLabel).trim().slice(0, 40) || "Share feedback";
+  const which = formData.get("whichOrthotic");
+  if (which !== null) {
+    const raw = String(which).trim();
+    if (raw && !typeformId(raw)) return { error: "The orthotic quiz should be a Typeform form ID (like ojyWbTvZ) or its link." };
+    data.whichOrthotic = raw;
+  }
+  const whichLabel = formData.get("whichOrthoticLabel");
+  if (whichLabel !== null) data.whichOrthoticLabel = String(whichLabel).trim().slice(0, 40) || "Identify my orthotic";
   const hideLiveChat = formData.get("hideLiveChatButton");
   if (hideLiveChat !== null) data.hideLiveChatButton = hideLiveChat === "true";
   const delayOn = formData.get("appearDelayOn");
@@ -558,7 +568,7 @@ function HideUrlsPanel({ initial }) {
 }
 
 export default function ApiKeys() {
-  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
+  const { hasAnthropicKey, anthropicModel, showFollowUps: initFollowUps, showFeedback: initFeedback, hasYotpoKey, hasAftershipKey, hideOnUrls, supportUrl: initSupportUrl, supportLabel: initSupportLabel, trackingPageUrl: initTrackingPageUrl, returnsPageUrl: initReturnsPageUrl, returnsInChat: initReturnsInChat, returnWindowDays: initReturnWindowDays, returnsDeliveredOnly: initReturnsDeliveredOnly, feedbackSurveyOn: initSurveyOn, feedbackSurvey: initSurvey, feedbackSurveyLabel: initSurveyLabel, whichOrthotic: initWhich, whichOrthoticLabel: initWhichLabel, hideLiveChatButton: initHideLiveChat, appearDelayOn: initDelayOn, appearDelaySec: initDelaySec, startTheme: initStartTheme, hideInternational: initHideIntl, homeCountries: initHomeCountries, promoPageUrl: initPromoUrl, promoPageStop: initPromoStop, storefrontSearchUrlPattern: initSearchPattern, referralPageUrl: initReferralPageUrl, klaviyoFormId: initKlaviyoFormId, klaviyoCompanyId: initKlaviyoCompanyId, klaviyoListId: initKlaviyoListId, vipModeEnabled: initVipMode, showLoginPill: initShowLoginPill, hasYotpoLoyaltyKey, yotpoLoyaltyGuid: initYotpoLoyaltyGuid, loyaltyDisplay: initLoyaltyDisplay, loyaltyPointsPerDollar: initLoyaltyPointsPerDollar, loyaltyRounding: initLoyaltyRounding, dailyCapEnabled: initDailyCapEnabled, dailyCapMessages: initDailyCapMessages, embeddingProvider: initEmbeddingProvider, hasVoyageKey, hasOpenaiKey, visualizeLookEnabled: initVizEnabled, imageProvider: initImageProvider, visualizeLookLabel: initVizLabel, hasGeminiKey, plan, welcomeIntroOn, orbColors, orbBackground, voiceInput, recording, shopDomain } = useLoaderData();
   const actionData = useActionData();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -583,6 +593,8 @@ export default function ApiKeys() {
   const [surveyOn, setSurveyOn] = useState(initSurveyOn);
   const [survey, setSurvey] = useState(initSurvey);
   const [surveyLabel, setSurveyLabel] = useState(initSurveyLabel);
+  const [which, setWhich] = useState(initWhich);
+  const [whichLabel, setWhichLabel] = useState(initWhichLabel);
   const [hideLiveChat, setHideLiveChat] = useState(initHideLiveChat);
   const [delayOn, setDelayOn] = useState(initDelayOn);
   const [delaySec, setDelaySec] = useState(String(initDelaySec));
@@ -625,6 +637,8 @@ export default function ApiKeys() {
     surveyOn: initSurveyOn,
     survey: initSurvey,
     surveyLabel: initSurveyLabel,
+    which: initWhich,
+    whichLabel: initWhichLabel,
     hideLiveChat: initHideLiveChat,
     delayOn: initDelayOn,
     delaySec: String(initDelaySec),
@@ -682,6 +696,8 @@ export default function ApiKeys() {
     setSurveyOn(s.surveyOn);
     setSurvey(s.survey);
     setSurveyLabel(s.surveyLabel);
+    setWhich(s.which);
+    setWhichLabel(s.whichLabel);
     setHideLiveChat(s.hideLiveChat);
     setDelayOn(s.delayOn);
     setDelaySec(s.delaySec);
@@ -946,6 +962,34 @@ export default function ApiKeys() {
                     checked={hideLiveChat}
                     onChange={setHideLiveChat}
                     helpText="Removes the separate chat button from the corner of the page. Live chat still opens from the assistant whenever a shopper asks for a person."
+                  />
+                </BlockStack>
+              </Card>
+            </Layout.AnnotatedSection>
+
+            <Layout.AnnotatedSection
+              title="Which orthotic do I have?"
+              description="A short visual quiz that helps customers work out which orthotic they already have, so they can reorder it."
+            >
+              <Card>
+                <BlockStack gap="400">
+                  <TextField
+                    label="Typeform quiz"
+                    value={which}
+                    onChange={setWhich}
+                    placeholder="ojyWbTvZ or https://form.typeform.com/to/ojyWbTvZ"
+                    autoComplete="off"
+                    helpText={which.trim()
+                      ? "On: when a customer wants to reorder an orthotic but isn't sure which one they have, the assistant offers this quiz. It opens right inside the chat. Signed-in customers' past orders are checked first."
+                      : "The form's ID or its link. Leave blank to turn it off."}
+                  />
+                  <TextField
+                    label="Button text"
+                    value={whichLabel}
+                    onChange={setWhichLabel}
+                    maxLength={40}
+                    autoComplete="off"
+                    disabled={!which.trim()}
                   />
                 </BlockStack>
               </Card>
@@ -1460,6 +1504,8 @@ export default function ApiKeys() {
           <input type="hidden" name="feedbackSurveyOn" value={String(surveyOn)} />
           <input type="hidden" name="feedbackSurvey" value={survey} />
           <input type="hidden" name="feedbackSurveyLabel" value={surveyLabel} />
+          <input type="hidden" name="whichOrthotic" value={which} />
+          <input type="hidden" name="whichOrthoticLabel" value={whichLabel} />
           <input type="hidden" name="hideLiveChatButton" value={String(hideLiveChat)} />
           <input type="hidden" name="appearDelayOn" value={String(delayOn)} />
           <input type="hidden" name="appearDelaySec" value={delaySec} />

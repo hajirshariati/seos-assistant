@@ -748,6 +748,60 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`feedback (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The store's other Typeforms in the same sheet: a Popular button whose
+// message is a Typeform link (with its icon), and the assistant's quiz
+// button under a reply. One form at a time; the feedback survey keeps its
+// own state; sending the quiz never retires the feedback button.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".js") ? TF_STUB : "" }));
+  await page.goto("http://localhost:4789/full?fb=2&qp=1");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  const chips = await page.$$eval(".ai-chat-welcome__qp-btn", (bs) => bs.map((b) => ({ t: b.textContent.trim(), form: b.getAttribute("data-form"), msg: b.getAttribute("data-message"), icon: !!b.querySelector(".ai-chat-welcome__qp-icon svg"), w: b.querySelector("svg")?.getAttribute("width") })));
+  check(`quiz (${label}): a Popular button with a Typeform link opens the form, with an icon`, chips[0].t === "Identify my orthotic" && chips[0].form === "ojyWbTvZ" && !chips[0].msg && chips[0].icon && chips[0].w === "15", JSON.stringify(chips[0]));
+  check(`quiz (${label}): other Popular buttons still send their message, without an icon`, chips[1].msg === "heel pain" && !chips[1].icon && chips[2].msg === "wide shoes" && !chips[2].icon, JSON.stringify(chips.slice(1)));
+  const insole = await page.$eval(".ai-chat-welcome__qp-btn[data-form] svg", (s) => s.querySelectorAll("path").length >= 3 && !!s.querySelector("g[transform]"));
+  check(`quiz (${label}): the orthotic quiz gets the insoles icon`, insole);
+  const oneRow = await page.$eval(".ai-chat-welcome__qp-btn", (b) => b.getBoundingClientRect().height);
+  check(`quiz (${label}): the icon keeps the button its usual height`, oneRow <= 34, String(oneRow));
+  await page.click(".ai-chat-welcome__qp-btn[data-form]");
+  await page.waitForTimeout(700);
+  const q = await page.evaluate(() => ({ id: window.__tf && window.__tf.id, title: document.querySelector(".ai-chat-fbsheet__title").textContent, aria: document.querySelector(".ai-chat-fbsheet").getAttribute("aria-label"), ready: document.querySelector(".ai-chat-fbsheet").classList.contains("is-ready"), frames: document.querySelectorAll(".ai-chat-fbsheet__form iframe").length, sent: (document.querySelector(".ai-chat-messages").textContent || "").includes("ojyWbTvZ") }));
+  check(`quiz (${label}): it opens in the chat's sheet, titled with the button's text`, q.id === "ojyWbTvZ" && q.title === "Identify my orthotic" && q.aria === "Identify my orthotic" && q.ready && q.frames === 1 && !q.sent, JSON.stringify(q));
+  await page.evaluate(() => window.__tf.o.onSubmit({ responseId: "q1" }));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  const kept = await page.evaluate(() => ({ tile: !!document.querySelector("[data-feedback]"), done: localStorage.getItem("hajirai_fb_done_jdXBrXMa"), site: localStorage.getItem("tf_cta_hidden_until_jdXBrXMa"), closed: document.querySelector(".ai-chat-fbsheet").hidden }));
+  check(`quiz (${label}): sending the quiz leaves the feedback button in place`, kept.tile && !kept.done && !kept.site && kept.closed, JSON.stringify(kept));
+  await page.click("[data-feedback]");
+  await page.waitForTimeout(700);
+  const f = await page.evaluate(() => ({ id: window.__tf.id, title: document.querySelector(".ai-chat-fbsheet__title").textContent, frames: document.querySelectorAll(".ai-chat-fbsheet__form iframe").length, done: localStorage.getItem("hajirai_fb_done_jdXBrXMa") }));
+  check(`quiz (${label}): the feedback survey then opens in its place`, f.id === "jdXBrXMa" && f.title === "Share feedback" && f.frames === 1 && !f.done, JSON.stringify(f));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(600);
+  // The assistant's own quiz button, under its reply.
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "quizme");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-form-cta", { timeout: 5000 });
+  const btn = await page.$eval(".ai-chat-form-cta", (b) => ({ t: b.textContent.trim(), form: b.getAttribute("data-form"), inBubble: !!b.closest(".ai-chat-msg-bubble") }));
+  check(`quiz (${label}): the assistant's reply carries the quiz button`, btn.t === "Identify my orthotic" && btn.form === "ojyWbTvZ" && btn.inBubble, JSON.stringify(btn));
+  await page.click(".ai-chat-form-cta");
+  await page.waitForTimeout(700);
+  const r = await page.evaluate(() => ({ id: window.__tf.id, open: document.querySelector(".ai-chat-fbsheet").classList.contains("is-open"), title: document.querySelector(".ai-chat-fbsheet__title").textContent }));
+  check(`quiz (${label}): the reply's button opens the quiz in the chat`, r.id === "ojyWbTvZ" && r.open && r.title === "Identify my orthotic", JSON.stringify(r));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.reload();
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(700);
+  check(`quiz (${label}): the button is still under the reply after a reload`, (await page.$$eval(".ai-chat-form-cta[data-form=ojyWbTvZ]", (b) => b.length)) === 1);
+  check(`quiz (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // Typeform can't load: the sheet says so and offers the survey in a new tab.
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });

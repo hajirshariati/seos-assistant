@@ -148,7 +148,7 @@ export function start(port) {
         const send = (code, type, data) => { resp.writeHead(code, { "Content-Type": type }); resp.end(data); };
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
-        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "")));
+        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "") + (u.searchParams.get("qp") ? `quickPick1Label:"Identify my orthotic",quickPick1Message:"https://form.typeform.com/to/ojyWbTvZ",` : "")));
         if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
         if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
         // Sign-in: sets the session cookie and goes back where it was told
@@ -236,6 +236,15 @@ export function start(port) {
           if (parsed.message === "cut") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             resp.write(`data: ${JSON.stringify({ type: "text", text: "Here's what I found before the connection dropped." })}\n\n`);
+            return resp.end();
+          }
+          // The assistant offers the "which orthotic do I have?" quiz.
+          if (parsed.message === "quizme") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "This quick quiz will tell you which orthotic you have." });
+            w({ type: "form_cta", form: "ojyWbTvZ", label: "Identify my orthotic" });
+            w({ type: "done" });
             return resp.end();
           }
           if (/what size/i.test(parsed.message || "")) {

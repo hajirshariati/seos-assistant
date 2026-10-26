@@ -9,7 +9,7 @@ import fs from "node:fs";
 import { sanitizeHistory, withoutTrailingCopy, HISTORY_MAX_TURNS, HISTORY_MAX_TURN_CHARS, HISTORY_MAX_TOTAL_CHARS } from "../app/lib/lean/history.js";
 import { safeExternalUrl } from "../app/lib/external-url.js";
 import { chatModel, ALLOWED_MODELS } from "../app/lib/claude-models.js";
-import { typeformId, feedbackSurveyConfig } from "../app/lib/feedback-survey.js";
+import { typeformId, feedbackSurveyConfig, whichOrthoticConfig } from "../app/lib/feedback-survey.js";
 import { appearDelayConfig, clampDelay, startTheme, parseCountries, internationalConfig } from "../app/lib/appear-delay.js";
 
 let pass = 0;
@@ -83,6 +83,14 @@ test("the chat block's settings stay within Shopify's limits", () => {
 });
 
 console.log("\nfeedback survey setting");
+test("which-orthotic quiz: on only with a valid Typeform, label defaulted and capped", () => {
+  assert.equal(whichOrthoticConfig({}), null);
+  assert.equal(whichOrthoticConfig({ whichOrthotic: "  " }), null);
+  assert.equal(whichOrthoticConfig({ whichOrthotic: "javascript:alert(1)" }), null);
+  assert.deepEqual(whichOrthoticConfig({ whichOrthotic: "https://irle3andv1z.typeform.com/to/ojyWbTvZ", whichOrthoticLabel: "" }), { form: "ojyWbTvZ", label: "Identify my orthotic" });
+  assert.deepEqual(whichOrthoticConfig({ whichOrthotic: "ojyWbTvZ", whichOrthoticLabel: "  Which insole is mine?  " }), { form: "ojyWbTvZ", label: "Which insole is mine?" });
+  assert.equal(whichOrthoticConfig({ whichOrthotic: "ojyWbTvZ", whichOrthoticLabel: "x".repeat(80) }).label.length, 40);
+});
 test("takes a Typeform ID or any of its links, and nothing else", () => {
   assert.equal(typeformId("jdXBrXMa"), "jdXBrXMa");
   assert.equal(typeformId(" https://form.typeform.com/to/jdXBrXMa?utm=x "), "jdXBrXMa");
