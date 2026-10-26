@@ -895,7 +895,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
 // every match in the sheet, as a scrolling list; Add to cart works there (its
 // picker opens inside the card), back returns to the button, and the button
 // comes back after a reload.
-for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width: 1280, height: 800 } }], ["phone", "/showcase", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width: 1280, height: 800 } }], ["phone", "/showcase", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }], ["row cards", "/horizontal", { viewport: { width: 1280, height: 800 } }]]) {
   const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
   const errors = [];
@@ -911,10 +911,13 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   const row = await page.evaluate(() => {
     const b = document.querySelector("[data-viewall]"), bub = b.closest(".ai-chat-msg-bubble"), cards = bub.querySelector(".ai-chat-products-wrap, .ai-chat-products"), cmp = bub.querySelector(".ai-cmp-cta");
     const r = b.getBoundingClientRect(), br = bub.getBoundingClientRect();
-    return { label: b.querySelector(".ai-cmp-cta__label").textContent, hint: b.querySelector(".ai-cmp-cta__hint").textContent, thumbs: b.querySelectorAll(".ai-cmp-cta__thumb").length, afterCards: !!(cards.compareDocumentPosition(b) & 4), beforeCompare: !cmp || !!(b.compareDocumentPosition(cmp) & 4), fits: r.left >= br.left - 0.5 && r.right <= br.right + 0.5, height: Math.round(r.height), popup: b.getAttribute("aria-haspopup") };
+    const cmpBtn = cmp && cmp.querySelector(".ai-cmp-cta__btn");
+    return { label: b.querySelector(".ai-cmp-cta__label").textContent, hint: b.querySelector(".ai-cmp-cta__hint").textContent, thumbs: b.querySelectorAll(".ai-cmp-cta__thumb").length, afterCards: !!(cards.compareDocumentPosition(b) & 4), beforeCompare: !cmp || !!(b.compareDocumentPosition(cmp) & 4), fits: r.left >= br.left - 0.5 && r.right <= br.right + 0.5, height: Math.round(r.height), popup: b.getAttribute("aria-haspopup"),
+      bg: getComputedStyle(b).backgroundColor, cmpBg: cmpBtn ? getComputedStyle(cmpBtn).backgroundColor : "", fg: getComputedStyle(b).color };
   });
   check(`view all (${label}): a row under the cards names the full count`, row.label === "View all 10 women's sale boots" && row.hint === "8 more to browse" && row.thumbs === 3, JSON.stringify(row));
   check(`view all (${label}): right under the cards, above Compare, inside the bubble, easy to tap`, row.afterCards && row.beforeCompare && row.fits && row.height >= 44 && row.popup === "dialog", JSON.stringify(row));
+  check(`view all (${label}): filled, so it stands apart from Compare`, row.bg !== row.cmpBg && row.bg !== "rgba(0, 0, 0, 0)" && row.fg !== row.bg, JSON.stringify(row));
   await page.click("[data-viewall]");
   await page.waitForTimeout(700);
   await page.screenshot({ path: out(`va-${label}-sheet`) });
@@ -922,21 +925,32 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
     const sh = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"), list = document.querySelector(".ai-chat-fbsheet__list");
     const r = sh.getBoundingClientRect(), pr = p.getBoundingClientRect();
     const cards = [...list.querySelectorAll(".ai-chat-product-card")];
-    const c0 = cards[0].getBoundingClientRect(), img = cards[0].querySelector(".ai-chat-product-img").getBoundingClientRect();
-    return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), title: document.querySelector(".ai-chat-fbsheet__title").textContent, inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2,
+    const grid = list.querySelector(".ai-chat-products--grid");
+    const chatRow = document.querySelector(".ai-chat-messages .ai-chat-products");
+    const firstTop = cards[0].offsetTop, perRow = cards.filter((c) => c.offsetTop === firstTop).length;
+    const widths = cards.map((c) => Math.round(c.getBoundingClientRect().width));
+    const showcase = grid.classList.contains("ai-chat-products--showcase");
+    const chatCard = document.querySelector('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"]'), listCard = list.querySelector('.ai-chat-product-card[data-handle="savannah-red"]');
+    return { perRow, widths: [...new Set(widths)], showcase, sameStyle: showcase === chatRow.classList.contains("ai-chat-products--showcase"),
+      noSideways: list.scrollWidth <= list.clientWidth + 1 && grid.scrollWidth <= grid.clientWidth + 1,
+      imgOnTop: showcase ? cards[0].querySelector(".ai-chat-product-img").getBoundingClientRect().bottom <= cards[0].querySelector(".ai-chat-product-title").getBoundingClientRect().top + 1 : true,
+      sameButtons: !!chatCard.querySelector(".ai-chat-card-fit") === !!listCard.querySelector(".ai-chat-card-fit") && !!listCard.querySelector("[data-atc]") && !!listCard.querySelector(".ai-chat-view-link"), kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), title: document.querySelector(".ai-chat-fbsheet__title").textContent, inside: Math.abs(r.top - pr.top) < 2 && Math.abs(r.height - pr.height) < 2,
       count: list.querySelector(".ai-chat-viewall__count").textContent, cards: cards.length, handles: cards.map((c) => c.getAttribute("data-handle")).slice(0, 4).join(","),
-      rowLayout: img.width < c0.width / 2, fitTools: list.querySelectorAll(".ai-chat-card-fit").length, sale: !!list.querySelector(".compare-at"),
+      sale: !!list.querySelector(".compare-at"),
       scrolls: list.scrollHeight > list.clientHeight, focus: document.activeElement && document.activeElement.classList.contains("ai-chat-fbsheet__back"),
       listShown: getComputedStyle(list).visibility === "visible", formHidden: getComputedStyle(document.querySelector(".ai-chat-fbsheet__form")).visibility === "hidden",
       behindInert: document.querySelector(".ai-chat-messages").closest("[inert]") !== null || document.querySelector(".ai-chat-messages").inert === true };
   });
   check(`view all (${label}): the list opens in the chat, titled, with every match`, sh.kind === "list" && sh.open && sh.inside && sh.title === "Women's Sale Boots" && sh.count === "10 results" && sh.cards === 10 && sh.handles === "savannah-red,jillian-black,orthotic-one,carly-white", JSON.stringify(sh));
-  check(`view all (${label}): row cards (image beside the details), sale prices, no fit tools, it scrolls`, sh.rowLayout && sh.sale && sh.fitTools === 0 && sh.scrolls && sh.listShown && sh.formHidden, JSON.stringify(sh));
+  check(`view all (${label}): the chat's own card style and buttons, in a grid — no sideways scrolling`, sh.sameStyle && sh.sameButtons && sh.noSideways && sh.imgOnTop && sh.widths.length === 1 && (sh.showcase ? sh.perRow >= 2 && sh.perRow <= 3 : sh.perRow >= 1), JSON.stringify(sh));
+  check(`view all (${label}): sale prices, it scrolls down`, sh.sale && sh.scrolls && sh.listShown && sh.formHidden, JSON.stringify(sh));
   check(`view all (${label}): focus moves into the sheet; the chat behind is out of reach`, sh.focus && sh.behindInert, JSON.stringify(sh));
-  // Add to cart from the list: the picker opens inside that card.
+  // Add to cart from the list: the picker opens full width under that card's row.
   const before = cartLog.length;
   await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="jillian-black"] [data-atc]');
-  await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-product-card[data-handle=\"jillian-black\"] .ai-chat-atc-panel.is-inline", { timeout: 5000 });
+  await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-products--grid > .ai-chat-atc-panel", { timeout: 5000 });
+  const pick = await page.evaluate(() => { const g = document.querySelector(".ai-chat-fbsheet__list .ai-chat-products--grid"), pn = g.querySelector(":scope > .ai-chat-atc-panel"), c = g.querySelector('.ai-chat-product-card[data-handle="jillian-black"]'); const cr = c.getBoundingClientRect(), pr = pn.getBoundingClientRect(), gr = g.getBoundingClientRect(); const rowBottom = Math.max(...[...g.querySelectorAll(".ai-chat-product-card")].filter((x) => x.offsetTop === c.offsetTop).map((x) => x.getBoundingClientRect().bottom)); return { below: pr.top >= rowBottom - 1, full: Math.abs(pr.width - gr.width) < 2, names: (pn.querySelector(".ai-chat-atc-title") || {}).textContent || "" }; });
+  check(`view all (${label}): the size picker opens full width under the tapped card's row, naming it`, pick.below && pick.full && /Jillian/.test(pick.names), JSON.stringify(pick));
   for (const opt of ["Size", "Width"]) {
     const sel = `.ai-chat-fbsheet__list .ai-chat-atc-panel [data-opt="${opt}"]:not(.is-out):not([aria-disabled="true"])`;
     if (await page.$(sel)) await page.click(sel);
@@ -944,7 +958,7 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   await page.click(".ai-chat-fbsheet__list .ai-chat-atc-panel [data-atc-add]");
   await page.waitForSelector(".ai-chat-fbsheet__list .ai-chat-atc-done", { timeout: 5000 });
   const added = await page.evaluate(() => { const d = document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"), l = document.querySelector(".ai-chat-fbsheet__list"); const r = d.getBoundingClientRect(), lr = l.getBoundingClientRect(); return { inView: r.top >= lr.top - 1 && r.bottom <= lr.bottom + 1 }; });
-  check(`view all (${label}): Add to cart works in the list, picker inside the card, kept in view`, cartLog.length === before + 1 && PRODUCTS["jillian-black"].variants.some((v) => v.id === cartLog.at(-1)) && added.inView, JSON.stringify({ added, n: cartLog.length - before, last: cartLog.at(-1) }));
+  check(`view all (${label}): Add to cart works in the list, the confirmation kept in view`, cartLog.length === before + 1 && PRODUCTS["jillian-black"].variants.some((v) => v.id === cartLog.at(-1)) && added.inView, JSON.stringify({ added, n: cartLog.length - before, last: cartLog.at(-1) }));
   await page.screenshot({ path: out(`va-${label}-added`) });
   await page.click(".ai-chat-fbsheet__back");
   await page.waitForTimeout(600);

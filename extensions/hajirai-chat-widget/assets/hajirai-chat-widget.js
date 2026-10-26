@@ -2088,6 +2088,11 @@ function fbSheetEl(){
     if(!e.target.closest('.ai-chat-fbsheet__list'))return;
     var atc=e.target.closest('[data-atc]');
     if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
+    /* True Fit / FITFinder carry on in the chat: close the list first. */
+    var tf=e.target.closest('[data-truefit]');
+    if(tf){e.preventDefault();e.stopPropagation();closeFeedback();trueFitFor(tf.getAttribute('data-truefit'),tf.getAttribute('data-title')||'');return}
+    var hp=e.target.closest('[data-helper]');
+    if(hp){e.preventDefault();e.stopPropagation();if(isStreaming)return;closeFeedback();startHelper(hp.getAttribute('data-helper'));return}
     if(e.target.closest('.ai-chat-product-card a[href]'))markChatAttributed();
   });
   panel.appendChild(fbSheet);
@@ -2372,7 +2377,7 @@ function cardHelper(p,t){
   if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
   return '';
 }
-function prodCard(p,o){
+function prodCard(p){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
 var u=safeUrl(p.url)||(p.handle?(SHOP_ROOT+'products/'+encodeURIComponent(p.handle)):'#');
@@ -2387,7 +2392,7 @@ var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preK
 var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
 var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
 var buyBtn='<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>';
-var fitBtn=o&&o.noHelper?'':cardHelper(p,t);
+var fitBtn=cardHelper(p,t);
 /* With a fit tool, the buy button and the tool share one row. */
 var buyHtml=fitBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row">'+buyBtn+fitBtn+'</div>':buyBtn;
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
@@ -2412,7 +2417,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-26 view-all'}catch(e){}
+try{window.__hajiraiWidget='2026-10-26 view-all-grid'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2470,8 +2475,9 @@ function openViewAll(opener,id){
   $('.ai-chat-fbsheet__state',sh).innerHTML='';
   sh.classList.remove('is-failed');sh.classList.add('is-ready');
   if(box.getAttribute('data-va')!==id){
-    var h='<p class="ai-chat-viewall__count">'+(va.total>va.products.length?'Showing '+va.products.length+' of '+va.total:va.total+' results')+'</p><div class="ai-chat-products">';
-    for(var i=0;i<va.products.length;i++)h+=prodCard(va.products[i],{noHelper:true});
+    /* The chat's own card style, as a grid (no sideways scrolling). */
+    var h='<p class="ai-chat-viewall__count">'+(va.total>va.products.length?'Showing '+va.products.length+' of '+va.total:va.total+' results')+'</p><div class="ai-chat-products ai-chat-products--grid'+(PRODUCT_CARD_STYLE==='showcase'?' ai-chat-products--showcase':'')+'">';
+    for(var i=0;i<va.products.length;i++)h+=prodCard(va.products[i]);
     h+='</div>';
     if(va.total>va.products.length)h+='<p class="ai-chat-viewall__more">Tell the chat a size, color or style to narrow these down.</p>';
     box.innerHTML=h;box.setAttribute('data-va',id);box.scrollTop=0;
@@ -2801,11 +2807,17 @@ function openAtcPanel(card,product,m,sel,state){
   var img=card.getAttribute('data-image')||'';
   /* A lone card opens its picker inside itself (one tidy unit); with
      several cards it opens under the row, naming the product. */
-  var inline=!!card.closest('.ai-chat-fbsheet__list')||(!card.closest('.ai-chat-viz-host')&&card.parentNode&&card.parentNode.children.length===1);
+  var inGrid=!!card.closest('.ai-chat-products--grid');
+  var inline=!inGrid&&!card.closest('.ai-chat-viz-host')&&card.parentNode&&card.parentNode.children.length===1;
   if(inline){
     panel.classList.add('is-inline');
     card.classList.add('has-inline-picker');
     card.appendChild(panel);
+  }else if(inGrid){
+    /* In the "View all" grid: full width, right under the tapped card's row. */
+    var last=card,nx=card.nextElementSibling;
+    while(nx&&nx.classList.contains('ai-chat-product-card')&&nx.offsetTop===card.offsetTop){last=nx;nx=nx.nextElementSibling}
+    last.parentNode.insertBefore(panel,last.nextSibling);
   }else{
     var anchor=card.closest('.ai-cmp')||card.closest('.ai-chat-viz-host')||card.closest('.ai-chat-products-wrap')||card.closest('.ai-chat-products')||card;
     if(anchor.parentNode)anchor.parentNode.insertBefore(panel,anchor.nextSibling);else bubble.appendChild(panel);
@@ -3149,8 +3161,6 @@ function renderReturn(card,step,info){
 function keepInView(el){requestAnimationFrame(function(){
   if(!el||!msgsEl||!el.isConnected)return;
   var sc=el.closest('.ai-chat-fbsheet__list')||msgsEl;
-  /* In the "View all" list the whole card stays in sight, name included. */
-  if(sc!==msgsEl){var cd=el.closest('.ai-chat-product-card');if(cd)el=cd}
   var m=sc.getBoundingClientRect(),r=el.getBoundingClientRect(),pad=12;
   if(r.bottom>m.bottom-pad)sc.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
   else if(r.top<m.top+pad)sc.scrollTop-=m.top+pad-r.top;
