@@ -29,6 +29,7 @@ const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/ver
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_MAX } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
+const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
 const { resolvePreselect } = await import("../app/lib/lean/variant-choice.js");
@@ -226,6 +227,49 @@ await test("compare: the table comes from the catalog, the reply isn't asked for
   assert.deepEqual(r.issues, [], "naming compared products doesn't trip the cards check");
   assert.equal(r.retried, false);
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Price \(differs\)|Price \(same\)/, "the model gets the table's facts");
+});
+// Live store, 2026-10: "any boots on sale?" led with the cheapest boot — a
+// final-sale style down to one odd size. Best first now means: what was
+// asked, then the most sizes in stock, the best rated, the best sellers.
+await test("merchandising: a well-stocked, well-rated best seller beats a cheap last odd size", () => {
+  const SIZES = ["6 US", "7 US", "8 US", "9 US", "10 US", "11 US"];
+  const mk = (title, { price, compareAt = null, inStock = SIZES, rating, reviews, badge, cat = "Boots" }) => {
+    const r = row(title, { cat, price, compareAt, sizes: SIZES });
+    r.variants = r.variants.map((v, i) => ({ ...v, inventoryQty: inStock.includes(SIZES[i]) ? 4 : 0 }));
+    r.attributesJson = { ...r.attributesJson, ...(rating ? { rating: String(rating), review_count: String(reviews) } : {}), ...(badge ? { badge } : {}) };
+    return r;
+  };
+  const cat = buildLeanCatalog([
+    mk("Oddsize Boot - Black", { price: "59.95", compareAt: "149.95", inStock: ["11 US"], badge: "Sale" }),
+    mk("Steady Boot - Brown", { price: "129.95", compareAt: "179.95", rating: 4.6, reviews: 320 }),
+    mk("Star Boot - Black", { price: "139.95", compareAt: "189.95", inStock: SIZES.slice(0, 5), rating: 4.7, reviews: 210, badge: "Best Seller" }),
+    mk("Fresh Boot - Tan", { price: "119.95", compareAt: "159.95", inStock: SIZES.slice(0, 4), rating: 5, reviews: 2 }),
+  ], { shop: "s.myshopify.com" });
+  const best = leanSearch(cat, { query: "", categories: ["boots"], on_sale: true });
+  assert.deepEqual(best.products.map((p) => p.title), ["Star Boot - Black", "Steady Boot - Brown", "Fresh Boot - Tan", "Oddsize Boot - Black"]);
+  assert.equal(best.products[3].few_sizes_left, true, "the last odd size is flagged for Claude");
+  assert.equal(best.products[0].few_sizes_left, undefined);
+  assert.equal(best.products[0].rating, 4.7);
+  assert.equal(best.products[0].reviews, 210);
+  // The customer's size: the odd-size boot in 11 is a fine pick — no stock penalty.
+  const eleven = leanSearch(cat, { query: "", categories: ["boots"], size: "11" });
+  assert.deepEqual(eleven.products.map((p) => p.title), ["Steady Boot - Brown", "Oddsize Boot - Black"], "only boots in 11; rating leads once the size is settled");
+  assert.equal(eleven.products[1].few_sizes_left, true, "still flagged, so Claude knows it's a last pair");
+  // Asked for the cheapest: price order.
+  assert.equal(leanSearch(cat, { query: "", categories: ["boots"], sort: "price_low" }).products[0].title, "Oddsize Boot - Black");
+  assert.equal(leanSearch(cat, { query: "", categories: ["boots"], sort: "price_high" }).products[0].title, "Star Boot - Black");
+  // Relevance first: a title match beats a better seller that doesn't match the words.
+  const named = leanSearch(cat, { query: "oddsize" });
+  assert.equal(named.products[0].title, "Oddsize Boot - Black");
+});
+await test("merchandising: the rating metafield's JSON and odd values are read safely", () => {
+  assert.equal(ratingOf({ attributes: { rating: '{"scale_min":"1.0","scale_max":"5.0","value":"4.4"}', review_count: "116" } }).rating, 4.4);
+  assert.equal(ratingOf({ attributes: { rating: "4.1", review_count: "41" } }).count, 41);
+  assert.ok(Number.isNaN(ratingOf({ attributes: {} }).rating));
+  assert.ok(Number.isNaN(ratingOf({ attributes: { rating: "9" } }).rating), "out of scale ignored");
+  assert.ok(merchScore({ productType: "Orthotics", options: { Size: ["A", "B", "C", "D"] }, sizes: ["a"], attributes: {} }) > merchScore({ productType: "Footwear", options: { Size: ["A", "B", "C", "D"] }, sizes: ["a"], attributes: {} }), "stock depth counts for shoes only");
+  assert.equal(fewSizesLeft({ productType: "Footwear", options: { Size: ["6", "7", "8", "9"] }, sizes: ["9"] }), true);
+  assert.equal(fewSizesLeft({ productType: "Footwear", options: { Size: ["6", "7"] }, sizes: ["7"] }), false, "too few sizes to tell");
 });
 await test("View all: words from the search filters", () => {
   assert.deepEqual(viewAllWords({ query: "x", gender: "women", on_sale: true, categories: ["Boots"] }, 16), { label: "View all 16 women's sale boots", title: "Women's Sale Boots" });

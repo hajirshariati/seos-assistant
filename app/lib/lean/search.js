@@ -8,6 +8,12 @@
 import { valueOverlap } from "../similar-attributes.js";
 import { matchColorValues } from "../color-match.js";
 import { styleName } from "./catalog.js";
+import { merchScore, fewSizesLeft, ratingOf } from "./merch.js";
+
+// How much merchandising can move a product among equally relevant ones. A
+// product whose title matches the request (+4 per word) still beats a better
+// seller that only mentions it in its description (+1).
+const MERCH_WEIGHT = 2.5;
 
 const STOP = new Set([
   "a", "an", "the", "and", "or", "for", "with", "of", "to", "in", "on", "my", "me", "i", "you", "your",
@@ -147,6 +153,8 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
     activities: p.activities.length ? p.activities : undefined,
     helps_with: p.conditions.length ? p.conditions.slice(0, 8) : undefined,
     badge: p.badge || undefined,
+    ...(() => { const r = ratingOf(p); return Number.isFinite(r.rating) ? { rating: r.rating, reviews: Number.isFinite(r.count) ? r.count : undefined } : {}; })(),
+    ...(fewSizesLeft(p) ? { few_sizes_left: true } : {}),
     ...(Object.keys(shortDetails(p.attributes || {})).length ? { details: shortDetails(p.attributes) } : {}),
     sizes_in_stock: p.sizes.slice(0, 16),
     widths_in_stock: p.widths.length ? p.widths : undefined,
@@ -163,9 +171,16 @@ function rankMatches(catalog, params = {}) {
   const terms = queryTerms(params.query);
 
   const matches = products.filter((p) => passes(p, filters, catalogHasGender));
+  // Best first: what was asked for, then what sells (sizes in stock, rating,
+  // best sellers) — not the cheapest, which is often a last odd size. Price
+  // order only when the customer asks for it.
+  const sizeFiltered = Boolean(filters.size);
+  const sort = String(params.sort || "best");
+  const byPrice = (dir) => (a, b) => b.matched - a.matched || dir * (a.p.price - b.p.price) || b.merch - a.merch;
   let ranked = matches
-    .map((p) => ({ p, ...scoreProduct(p, terms) }))
-    .sort((a, b) => b.matched - a.matched || b.score - a.score || a.p.price - b.p.price);
+    .map((p) => ({ p, ...scoreProduct(p, terms), merch: merchScore(p, { sizeFiltered }) }))
+    .sort(sort === "price_low" ? byPrice(1) : sort === "price_high" ? byPrice(-1)
+      : (a, b) => b.matched - a.matched || (b.score + MERCH_WEIGHT * b.merch) - (a.score + MERCH_WEIGHT * a.merch) || a.p.price - b.p.price);
   // The query narrows too: when some filtered products match its words, only
   // those count. If none do, the structured filters alone define the request.
   const queryMatched = terms.length === 0 || ranked.some((x) => x.matched > 0);

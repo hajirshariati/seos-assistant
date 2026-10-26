@@ -30,6 +30,7 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   props.on_sale = { type: "boolean", description: "Only marked-down products (sale price below the original price). Use for sales, deals, discounts, markdowns or clearance — on its own to show everything on sale, or with other filters." };
   props.max_price = { type: "number", description: "Maximum price in dollars." };
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };
+  props.sort = { type: "string", enum: ["best", "price_low", "price_high"], description: "Result order. \"best\" (default): closest match first, then the styles that sell — most sizes in stock, best rated, best sellers. \"price_low\" / \"price_high\" only when the customer asks for the cheapest or the most premium." };
   props.limit = { type: "integer", description: "How many styles to return (default 6, max 10)." };
 
   const tools = [
