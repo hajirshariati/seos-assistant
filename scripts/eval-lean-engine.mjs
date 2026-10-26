@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts } = await import("../app/lib
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, mentionsOffer, hasRunningOffers, joinContinuation } = await import("../app/lib/lean/engine.js");
 const { buildShopAllLink } = await import("../app/lib/lean/shop-all.js");
 const { summarizeWeek } = await import("../app/lib/weekly-summary.js");
 const { sanitizeHistory } = await import("../app/lib/lean/history.js");
@@ -333,11 +333,35 @@ await test("offers list says NONE → the reply stays as written", async () => {
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "any deals?" }], latestUserMessage: "any deals?", extraSystem: PROMO_SYS, callModel: s.callModel, log: quiet });
   assert.equal(r.text, "Here are some marked-down styles.");
 });
+await test("offers listed earlier in the chat aren't forced again", async () => {
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Here are more marked-down styles.")] }]);
+  const history = [
+    { role: "user", content: "what's on sale" },
+    { role: "assistant", content: "Here's what's running right now:\n- **Free gel insert** with any orthotic\n- **Price Match** — 30 days\n\nHere are some sale styles." },
+    { role: "user", content: "any other deals?" },
+  ];
+  const r = await runLeanTurn({ catalog, model: "m", messages: history, latestUserMessage: "any other deals?", extraSystem: PROMO_SYS, callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, false);
+  assert.doesNotMatch(JSON.stringify(s.requests[0].messages), /Start your reply with every offer/);
+  assert.doesNotMatch(r.text, /running right now/);
+});
 await test("offers check: only general sales questions, only when offers are running", async () => {
   assert.equal(asksAboutOffers("Show me current sales and promotions"), true);
   assert.equal(asksAboutOffers("any deals or coupon codes?"), true);
   assert.equal(asksAboutOffers("is this on sale?"), false, "one product's price isn't a promotions question");
   assert.equal(asksAboutOffers("sneakers for flat feet"), false);
+  // Live store, 2026-10-26: each of these got the store-wide offer list.
+  assert.equal(asksAboutOffers("no what styles offer removable insoles so i can insert my own orthotics"), false, "offer the verb");
+  assert.equal(asksAboutOffers("Any boots on sale?"), false, "marked-down boots, not the offer list");
+  assert.equal(asksAboutOffers("Show me more sale boots"), false);
+  assert.equal(asksAboutOffers("any offers right now?"), true);
+  assert.equal(asksAboutOffers("what offers do you have"), true);
+  assert.equal(asksAboutOffers("are orthotics on sale?"), true, "orthotic offers are about orthotics");
+  const listed = { role: "assistant", content: "Here's what's running right now:\n- **Price Match** — 30 days\n- **Free returns** — first order" };
+  const modelListed = { role: "assistant", content: "Current offers:\n- **Free shipping** on orthotics\n- **Referral** — give $20, get $20 in points\n\nAnything else?" };
+  assert.equal(offersAlreadyListed([listed]), true);
+  assert.equal(offersAlreadyListed([modelListed]), true);
+  assert.equal(offersAlreadyListed([{ role: "assistant", content: "Here are some boots." }]), false);
   assert.equal(hasRunningOffers(PROMO_SYS), true);
   assert.equal(hasRunningOffers("ACTIVE PROMOTIONS\nNo discount codes or store-wide offers right now."), false);
   assert.equal(mentionsOffer("These are just a sample — want me to filter the sale items?"), false);
@@ -435,6 +459,11 @@ await test("the orthotic-chat check only fires on a short answer that switches t
   assert.equal(leftOrthoticChat({ lastAssistantText: "The Milos Orthotic Slide comes in black and army. Which color would you like?", latestUserMessage: "brown", shownProducts: [boot] }), false, "a shoe named orthotic");
   assert.equal(leftOrthoticChat({ lastAssistantText: "The Maui flip flop has a built-in orthotic footbed. Want to see more sandals?", latestUserMessage: "yes", shownProducts: [boot] }), false, "shoe copy mentioning a footbed");
   assert.equal(leftOrthoticChat({ lastAssistantText: "Got it. Do you want the orthotic for sneakers or dress shoes?", latestUserMessage: "sneakers", shownProducts: [boot] }), true, "still fires on a real orthotic question");
+  // Live store, 2026-10-26: shoes for the customer's own orthotics — "Boots"
+  // got "orthotics for boots or browse boots?" though the chat was about shoes.
+  assert.equal(leftOrthoticChat({ lastAssistantText: "The vast majority of Aetrex shoes have a removable footbed, perfect for swapping in your own orthotics! What type of shoe are you looking for?", latestUserMessage: "Boots", shownProducts: [boot] }), false, "shoes for their own orthotics");
+  assert.equal(leftOrthoticChat({ lastAssistantText: "Our orthotics fit most shoes. What type of shoe are you looking for?", latestUserMessage: "Boots", shownProducts: [boot] }), false, "the question is about shoes");
+  assert.equal(leftOrthoticChat({ lastAssistantText: "Happy to help you pick an orthotic. What shoes will you wear them in?", latestUserMessage: "boots", shownProducts: [boot] }), true, "still fires mid-orthotic");
 });
 // Live store, 2026-10: the assistant pre-picked a sold-out size (Blaire in
 // 6 - 6.5 US) and said "just tap Add to cart". A size is only pre-picked when

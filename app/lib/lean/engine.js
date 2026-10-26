@@ -119,10 +119,16 @@ const ORTHOTIC_TALK = /orthotic|insole|insert|footbed|\bfit [abcd]\b/i;
 // Shoes that carry the word in their name or copy ("Milos Orthotic Slide",
 // "built-in orthotic footbed") aren't an orthotic conversation.
 const SHOE_ORTHOTIC = /\b(?:built[- ]in|removable|cushioned|contoured|supportive)\s+(?:orthotic|footbed|insole)s?(?:\s+footbeds?)?|\borthotic\s+(?:slides?|flip[- ]?flops?|sandals?|thongs?|clogs?|sneakers?|shoes?|boots?|loafers?|wedges?|footbeds?)\b/gi;
+// "Shoes that fit your own orthotics" is a shoe chat, not an orthotic one.
+const OWN_ORTHOTIC = /\b(?:your|my|their|her|his)\s+own\s+(?:custom\s+)?(?:orthotics?|insoles?|inserts?)\b/gi;
+// "What type of shoe are you looking for?" asks about shoes, whatever came before it.
+const SHOE_QUESTION = /\b(?:shoes?|styles?|footwear)\b[^?]*\b(?:looking for|shopping for|in the market for)\b/i;
 function askedAboutOrthotic(text) {
   // The last reply talked about an orthotic and asked the shopper something.
-  const t = String(text || "").replace(SHOE_ORTHOTIC, " ");
-  return t.includes("?") && ORTHOTIC_TALK.test(t);
+  const t = String(text || "").replace(SHOE_ORTHOTIC, " ").replace(OWN_ORTHOTIC, " ");
+  if (!t.includes("?") || !ORTHOTIC_TALK.test(t)) return false;
+  const questions = t.match(/[^.!?\n]*\?/g) || [];
+  return !questions.some((q) => SHOE_QUESTION.test(q) && !ORTHOTIC_TALK.test(q));
 }
 export function leftOrthoticChat({ lastAssistantText = "", latestUserMessage = "", shownProducts = [] } = {}) {
   const said = String(latestUserMessage || "").trim();
@@ -137,9 +143,23 @@ export function leftOrthoticChat({ lastAssistantText = "", latestUserMessage = "
 // only — so the turn carries a note, and a reply with no offer is rewritten.
 const OFFER_QUESTION = /\b(sales|deals?|discounts?|promos?|promotions?|offers?|coupons?|specials|promo codes?|on sale)\b|\bsale\b/i;
 const ONE_PRODUCT = /\b(this|these|that|those|it)\b/i;
+// "What styles offer removable insoles?" uses offer as a verb.
+const OFFER_VERB = /\boffers?\s+(?!(?:on|for|codes?|right|today|now|running|available|going|do|are|you|that|this|in|at|with|and|or|to|i|we|is)\b)[a-z]+/gi;
+// "Boots on sale" / "more sale sneakers" asks for marked-down shoes, not the
+// store-wide offer list (orthotics stay: their offers are about orthotics).
+const SHOE_WORD = /\b(boots?|booties?|sneakers?|sandals?|shoes?|loafers?|flats|heels?|wedges?|slippers?|clogs?|mules?|slides?|flip[- ]?flops?|oxfords?|mary janes?|footwear)\b/i;
 export function asksAboutOffers(text) {
-  const t = String(text || "");
-  return OFFER_QUESTION.test(t) && !ONE_PRODUCT.test(t);
+  const t = String(text || "").replace(OFFER_VERB, " ");
+  return OFFER_QUESTION.test(t) && !ONE_PRODUCT.test(t) && !SHOE_WORD.test(t);
+}
+// The offers were already listed earlier in this chat: don't list them again.
+export function offersAlreadyListed(messages = []) {
+  return messages.some((m) => {
+    if (m?.role !== "assistant") return false;
+    const t = typeof m.content === "string" ? m.content : (Array.isArray(m.content) ? m.content.map((b) => b?.text || "").join("\n") : "");
+    if (/Here's what's running right now|See full offer details/i.test(t)) return true;
+    return t.split("\n").filter((l) => /^\s*[-•*]\s+\*\*/.test(l) && OFFER_WORDS.test(l)).length >= 2;
+  });
 }
 export function hasRunningOffers(extraSystem) {
   const s = String(extraSystem || "");
@@ -263,7 +283,7 @@ export async function runLeanTurn({
   if (viewing) system.push({ type: "text", text: viewingNote(viewing) });
 
   const conv = normalizeConversation(messages.slice(-MAX_HISTORY_MESSAGES));
-  const offersAsked = asksAboutOffers(latestUserMessage) && hasRunningOffers(extraSystem);
+  const offersAsked = asksAboutOffers(latestUserMessage) && hasRunningOffers(extraSystem) && !offersAlreadyListed(messages.slice(0, -1));
   if (offersAsked) {
     const last = conv[conv.length - 1];
     const note = { type: "text", text: OFFERS_NOTE };
