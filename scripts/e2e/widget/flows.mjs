@@ -908,13 +908,13 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check("store map: if it can't load, a tappable link to the store locator page", fail && fail.href === "/pages/store-locator" && fail.tappable && /couldn’t open/.test(fail.msg), JSON.stringify(fail));
   // On the store locator page itself: to that page's own map, chat closed.
   await page.goto("http://localhost:4789/full");
-  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div style="height:1500px"></div><div id="storepoint-container" data-map-id="15ecd30bd8acd4" style="height:400px">page map</div>'));
+  await page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<div style="height:1500px"></div><div id="storepoint-container" data-map-id="15ecd30bd8acd4" style="height:400px">page map</div><div style="height:1500px"></div>'));
   await page.click(".ai-chat-launcher__text");
   await page.waitForTimeout(600);
   await page.click("[data-map]");
   await page.waitForTimeout(1200);
   const onPage = await page.evaluate(() => ({ chatOpen: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: !!document.querySelector(".ai-chat-fbsheet:not([hidden]).is-open"), mapTop: Math.round(document.getElementById("storepoint-container").getBoundingClientRect().top) }));
-  check("store map: on the locator page, the button goes to that page's map", !onPage.chatOpen && !onPage.sheet && onPage.mapTop < 300, JSON.stringify(onPage));
+  check("store map: on the locator page, the button goes to that page's map", !onPage.chatOpen && !onPage.sheet && Math.abs(onPage.mapTop) < 40, JSON.stringify(onPage));
   await ctx.close();
 }
 // Typeform can't load: the sheet says so and offers the survey in a new tab.
