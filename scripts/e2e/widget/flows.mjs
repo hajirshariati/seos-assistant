@@ -308,6 +308,53 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`tf intro (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// A chat left alone for a day starts fresh: a shopper back next week sees the
+// chat's home screen, not last week's conversation. A recent chat comes back;
+// a chat saved before the clock existed gets its clock started; a tab left
+// open overnight opens on the home screen too.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  const old = [{ role: "user", content: "boots please" }, { role: "assistant", content: "Here are our warmest boots from last week.", products: [] }];
+  const seed = (at) => page.evaluate(([h, t]) => {
+    localStorage.setItem("hajirai_chat_history", JSON.stringify(h));
+    localStorage.setItem("hajirai_chat_session", "sess_old");
+    if (t) localStorage.setItem("hajirai_chat_at", String(t)); else localStorage.removeItem("hajirai_chat_at");
+  }, [old, at]);
+  const look = () => page.evaluate(() => ({
+    welcome: Boolean(document.querySelector(".ai-chat-welcome")),
+    old: document.querySelector(".ai-chat-messages, .ai-chat-msgs, .ai-chat-panel")?.textContent.includes("warmest boots from last week") || false,
+    history: localStorage.getItem("hajirai_chat_history"),
+    session: localStorage.getItem("hajirai_chat_session"),
+    at: localStorage.getItem("hajirai_chat_at"),
+  }));
+  const reopen = async () => { await page.reload(); await page.click(".ai-chat-launcher__text"); await page.waitForTimeout(500); };
+  await seed(Date.now() - 2 * 864e5);
+  await reopen();
+  const a = await look();
+  check("a day without messages: the chat opens on its home screen, the old chat and session gone", a.welcome && !a.old && !a.history && a.session !== "sess_old", JSON.stringify(a));
+  await seed(Date.now() - 2 * 3600e3);
+  await reopen();
+  const b = await look();
+  check("a chat from two hours ago comes back as it was", b.old && !b.welcome && b.session === "sess_old", JSON.stringify(b));
+  await seed(null);
+  await reopen();
+  const c = await look();
+  check("a chat saved before the clock existed comes back, and its clock starts now", c.old && Math.abs(Date.now() - Number(c.at)) < 60e3, JSON.stringify(c));
+  // Left open in a tab: the next open after a day starts fresh.
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => localStorage.setItem("hajirai_chat_at", String(Date.now() - 2 * 864e5)));
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  const d = await look();
+  check("a tab left open overnight: the next open is the home screen", d.welcome && !d.old, JSON.stringify(d));
+  check("fresh after a day: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // A reopened chat reads the same: everything under a reply comes back with
 // it after a reload — the sign-in / look-up card, True Fit's button, the FIT
 // result, quick replies — and only the last reply's choices stay tappable.

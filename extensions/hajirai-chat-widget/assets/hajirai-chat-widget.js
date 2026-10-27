@@ -273,7 +273,25 @@ function md(t){if(!t)return'';return t.replace(/^\s*\|[\s\-:|]+\|\s*$/gm,'').rep
 var _memSess='';
 function getSess(){var id='';try{id=localStorage.getItem(SK)||''}catch(e){}if(!id)id=_memSess;if(!id){id='sess_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(SK,id)}catch(e){}}_memSess=id;return id}
 /* An order looked up without signing in is never written to the browser. */
-function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.filter(function(x){return !x.guestOrder}).slice(-50)))}catch(e){}}
+function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.filter(function(x){return !x.guestOrder}).slice(-50)));localStorage.setItem(HK_AT,String(Date.now()))}catch(e){}}
+/* A chat left alone for a day starts fresh: a shopper who comes back next
+   week sees the chat's home screen, not last week's conversation. "Alone"
+   is from the last message either way. A chat saved before this was added
+   gets its clock started now. */
+var HK_AT='hajirai_chat_at',CHAT_IDLE_MS=24*3600*1000;
+function chatStale(){
+  try{
+    var at=parseInt(localStorage.getItem(HK_AT),10);
+    if(!at){if(localStorage.getItem(HK))localStorage.setItem(HK_AT,String(Date.now()));return false}
+    return Date.now()-at>CHAT_IDLE_MS;
+  }catch(e){return false}
+}
+function dropStaleChat(){
+  if(!chatStale())return false;
+  try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(HK_AT);localStorage.removeItem('hajirai_ret_progress')}catch(e){}
+  _memSess='';
+  return true;
+}
 function loadH(){try{return JSON.parse(localStorage.getItem(HK))||[]}catch(e){return[]}}
 
 /* Storefront root (Shopify Markets can serve the shop under /en-ca/ etc.). */
@@ -1048,6 +1066,7 @@ function forgetPersonal(){try{localStorage.removeItem(HK);localStorage.removeIte
   if(was&&was!=='guest'&&was!==now)forgetPersonal();
   try{localStorage.setItem(OWNER_KEY,now)}catch(e){}
 })();
+dropStaleChat();
 var isOpen=false,isStreaming=false,messages=loadH(),abortCtrl=null;
 var lastUserMessage='',errorRetryCount=0;
 /* An old "away for a while" marker from earlier versions — not used. */
@@ -1490,6 +1509,8 @@ var want=typeof force==='boolean'?force:!isOpen;
 if(want&&HIDDEN_BY_URL)return;
 isOpen=want;
 if(isOpen){
+  /* Left open in a tab for a day: open on the home screen too. */
+  if(messages.length&&!isStreaming&&chatStale())clearChat();
   revealLauncher();
   focusBeforeOpen=document.activeElement;
   loadFitfinder().then(renderHelpers);
@@ -2624,7 +2645,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 keep-extras'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 fresh-after-a-day'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4937,7 +4958,7 @@ function maybeAskRating(){
 
 function clearChat(){
 chatGen++;clearWatchdog();
-messages=[];_memSess='';try{localStorage.removeItem(HK);localStorage.removeItem(SK)}catch(e){}
+messages=[];_memSess='';try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(HK_AT)}catch(e){}
 msgsEl.innerHTML='';buildWelcome();
 if(isOpen)playWelcomeIntro();
 if(abortCtrl){abortCtrl.abort();abortCtrl=null}
