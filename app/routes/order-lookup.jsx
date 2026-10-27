@@ -38,7 +38,7 @@ export const action = async ({ request }) => {
   if (input.errors) return reply({ error: "invalid", fields: input.errors }, 400);
 
   try {
-    const result = await lookupGuestOrder({ shop, accessToken: session.accessToken, order: input.order, email: input.email, trackingBase: config.trackingPageUrl || "" });
+    const result = await lookupGuestOrder({ shop, accessToken: session.accessToken, order: input.order, email: input.email, trackingBase: config.trackingPageUrl || "", returnsBase: config.returnsPageUrl || "" });
     if (result.notFound) return reply({ error: "not_found", message: NOT_FOUND }, 404);
     return reply({ ok: true, order: result.order });
   } catch (err) {

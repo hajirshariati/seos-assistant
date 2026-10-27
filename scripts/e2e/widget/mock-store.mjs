@@ -3,6 +3,7 @@
 // (/apps/hajirai/*), the cart API and FITFinder.
 import http from "node:http";
 import fs from "node:fs";
+import QRCode from "qrcode";
 const W = new URL("../../../extensions/hajirai-chat-widget/assets/", import.meta.url).pathname;
 export const cartLog = [];
 export const chatBodies = [];
@@ -22,6 +23,14 @@ export const viewAllCardsLog = [];
 export const feedbackBodies = [];
 // Order lookups without signing in (POST /apps/hajirai/order-lookup).
 export const lookupBodies = [];
+// The theme's app block (snippets/app-download-column.liquid), as the live footer renders it.
+export const appQrLog = [];
+export const APP_LINKS = { ios: "https://apps.apple.com/us/app/aetrex/id6789256421", android: "https://play.google.com/store/apps/details?id=com.aetrex.app" };
+const APP_FOOTER = `<footer style="display:none"><div class="column column--app-download"><app-download class="app-dl" data-active="ios">
+<a class="app-dl__qr" href="${APP_LINKS.ios}" data-app-dl-link data-platform="ios" data-surface="qr"><img src="//img.mock.test/app-qr-ios.svg?v=1" width="84" height="84" alt="" loading="lazy"></a>
+<a class="app-dl__qr" href="${APP_LINKS.android}" data-app-dl-link data-platform="android" data-surface="qr"><img src="//img.mock.test/app-qr-android.svg?v=1" width="84" height="84" alt="" loading="lazy"></a></app-download>
+<div class="app-dl-badges"><a class="app-dl-badge app-dl-badge--apple" href="${APP_LINKS.ios}" data-app-dl-link data-platform="ios" data-surface="badge"><img src="//img.mock.test/app-badge-app-store.svg?v=1" alt="Download on the App Store" loading="lazy"></a>
+<a class="app-dl-badge app-dl-badge--google" href="${APP_LINKS.android}" data-app-dl-link data-platform="android" data-surface="badge"><img src="//img.mock.test/app-badge-google-play.png?v=1" alt="Get it on Google Play" loading="lazy"></a></div></div></footer>`;
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
   { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
@@ -30,7 +39,7 @@ let rmaSeq = 1000;
 const { signedInPage } = await import("../../../app/lib/signed-in-page.js");
 // A signed-in shopper's orders, shaped like app/lib/orders.server.js cards.
 const ORDERS = [
-  { id: "5001", number: "1171674", date: "2026-10-14", stage: "delivered", stageLabel: "Delivered", step: 3, shippedAt: "2026-10-15", deliveredAt: "2026-10-18", eta: "", carrier: "UPS", trackUrl: "https://track.example/1Z999", returnStatus: "", canReturn: true,
+  { id: "5001", number: "1171674", date: "2026-10-14", stage: "delivered", stageLabel: "Delivered", step: 3, shippedAt: "2026-10-15", deliveredAt: "2026-10-18", eta: "", carrier: "UPS", trackUrl: "https://track.example/1Z999", returnStatus: "", canReturn: true, returnsUrl: "https://www.example.com/apps/aftership-returns-center?order-number=1171674&email=ann%40example.com",
     items: [
       { lineId: "9001", title: "Savannah Adjustable Quarter Strap Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: "", quantity: 1, returnable: 1, handle: "savannah-red" },
       { lineId: "9002", title: "Women's Casual Orthotics", options: {}, image: "", quantity: 1, returnable: 1, handle: "orthotic-one" },
@@ -196,6 +205,8 @@ export function start(port) {
         const send = (code, type, data) => { resp.writeHead(code, { "Content-Type": type }); resp.end(data); };
         if (u.pathname === "/" || u.pathname === "/showcase") return send(200, "text/html", page("showcase"));
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
+        // ?app=1: the store's footer has its app block (links, QR codes, badges), as on the live theme.
+        if ((u.pathname === "/full" || u.pathname === "/hidden-page") && u.searchParams.get("app")) return send(200, "text/html", fullPage("", "").replace("</body>", `${APP_FOOTER}</body>`));
         if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "") + (u.searchParams.get("qp") ? `quickPick1Label:"Identify my orthotic",quickPick1Message:"https://form.typeform.com/to/ojyWbTvZ",` : "")));
         if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
         if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
@@ -235,7 +246,7 @@ export function start(port) {
           const o = ORDERS[1];
           if ((order === o.number || order.toUpperCase() === "QWERTY123") && email === "pat@example.com") {
             const card = { number: o.number, date: o.date, stage: o.stage, stageLabel: o.stageLabel, step: o.step, shippedAt: o.shippedAt, deliveredAt: o.deliveredAt, eta: o.eta, carrier: o.carrier, trackUrl: o.trackUrl, returnStatus: o.returnStatus };
-            return reply(200, { ok: true, order: { ...card, id: `guest-${o.number}`, items: o.items.map(({ title, options, image, quantity }) => ({ title, options, image, quantity })), guest: true } });
+            return reply(200, { ok: true, order: { ...card, id: `guest-${o.number}`, items: o.items.map(({ title, options, image, quantity }) => ({ title, options, image, quantity })), returnsPage: "https://www.example.com/apps/aftership-returns-center", guest: true } });
           }
           return reply(404, { error: "not_found", message: "We couldn't find an order with those details. Check them against your order confirmation email — orders from the last 60 days can be looked up here." });
         }
@@ -307,9 +318,16 @@ export function start(port) {
           const c = buildComparison(CMP_CATALOG, String(u.searchParams.get("handles") || "").split(","));
           return setTimeout(() => send(c.error ? 404 : 200, "application/json", JSON.stringify(c.error ? { error: "not_found" } : { ok: true, intro: comparisonIntro(c), comparison: c })), 120);
         }
+        // The app's QR code, as routes/app-qr.jsx makes it.
+        if (u.pathname === "/apps/hajirai/app-qr") {
+          appQrLog.push(u.searchParams.get("p"));
+          return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
+        }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
+          // The app mention: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr).
+          appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "" } : { on: false },
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
@@ -419,7 +437,8 @@ export function start(port) {
               w({ type: "products", products: [] });
               // As the server sends it: the lookup on, with a number they mentioned filled in.
               const num = (parsed.message.match(/#?(\d{5,})/) || [])[1];
-              w({ type: "login_prompt", intent, lookup: !/sign-in only/i.test(parsed.message), ...(num ? { order: num } : {}) });
+              const signInOnly = /sign-in only/i.test(parsed.message);
+              w({ type: "login_prompt", intent, lookup: !signInOnly, ...(num ? { order: num } : {}), ...(signInOnly ? {} : { pages: { track: "https://orders.example.com/", returns: "https://www.example.com/apps/aftership-returns-center" } }) });
             }
             w({ type: "done" });
             return resp.end();

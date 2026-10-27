@@ -324,6 +324,26 @@ await test("order status without signing in: signed requests only, JSON only, ma
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { guestOrderLookup: true } });
   await configCacheExpiry();
 });
+await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
+  const cfg = await (await fetch(signed("/widget-config"))).json();
+  assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "" }, "on by default, links from the footer");
+  assert.equal((await fetch(signed("/app-qr", { p: "ios" }))).status, 404, "no link set → no code");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appIosUrl: "https://apps.apple.com/us/app/aetrex/id6789256421" } });
+  await configCacheExpiry();
+  const qr = await fetch(signed("/app-qr", { p: "ios" }));
+  assert.equal(qr.status, 200);
+  assert.equal(qr.headers.get("content-type"), "image/svg+xml");
+  assert.match(await qr.text(), /^<svg[^>]+viewBox=/);
+  assert.equal((await fetch(signed("/app-qr", { p: "android" }))).status, 404, "only the platforms with a link");
+  const unsigned = await fetch(`http://localhost:${APP_PORT}/app-qr?shop=${SHOP}&p=ios`);
+  assert.ok(unsigned.status >= 400 && unsigned.status < 500, `unsigned → ${unsigned.status}`);
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appPromoOn: false } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).appPromo, { on: false });
+  assert.equal((await fetch(signed("/app-qr", { p: "ios" }))).status, 404, "turned off → no code");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appPromoOn: true, appIosUrl: "" } });
+  await configCacheExpiry();
+});
 await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
   const settle = () => new Promise((r) => setTimeout(r, 250));

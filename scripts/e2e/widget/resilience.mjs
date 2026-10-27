@@ -478,6 +478,18 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: True Fit, pick a shoe`);
   await ctx.close();
 }
+// The store's app: the quiet line, opened (QR on computers, badges on phones).
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const { ctx, page } = await open("/full?app=1", { viewport: vp });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "show me 2");
+  await say(page, "show me 3");
+  await page.click("[data-appn]");
+  await page.waitForTimeout(500);
+  await axe(page, `${name}: app mention, opened`);
+  await ctx.close();
+}
 // Order status without signing in: the form (with its errors), and the order found.
 for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
   const { ctx, page } = await open("/full", { viewport: vp });

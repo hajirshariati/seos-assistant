@@ -56,8 +56,9 @@ export function matchGuestOrder(nodes = [], { order, email }) {
 
 // What a guest sees: the order's status and items. No ids, email, address,
 // payment or prices; tracking links never carry the email.
-export function guestOrderCard(o, { trackingBase = "", now = Date.now() } = {}) {
+export function guestOrderCard(o, { trackingBase = "", returnsBase = "", now = Date.now() } = {}) {
   const c = toOrderCard(o, { trackingBase, returnsBase: "", email: "", now });
+  const returnsPage = String(returnsBase || "").trim();
   return {
     id: `guest-${c.number}`,
     number: c.number,
@@ -72,16 +73,18 @@ export function guestOrderCard(o, { trackingBase = "", now = Date.now() } = {}) 
     trackUrl: c.trackUrl,
     returnStatus: c.returnStatus,
     items: c.items.map((i) => ({ title: i.title, options: i.options, image: i.image, quantity: i.quantity })),
+    // The store's returns center as it is — never with the email filled in.
+    ...(/^https:\/\/[^\s"'<>]+$/i.test(returnsPage) && c.stage !== "cancelled" ? { returnsPage } : {}),
     guest: true,
   };
 }
 
-export async function lookupGuestOrder({ shop, accessToken, order, email, trackingBase = "", graphql = adminGraphql }) {
+export async function lookupGuestOrder({ shop, accessToken, order, email, trackingBase = "", returnsBase = "", graphql = adminGraphql }) {
   const data = await graphql({ shop, accessToken, query: GUEST_ORDER_QUERY, variables: { q: guestSearch(order) } });
   const found = matchGuestOrder(data?.orders?.nodes || [], { order, email });
   // Who looked is never logged — only that a lookup happened, and how it went.
   console.log(`[pii-access] shop=${shop} guest_order_lookup result=${found ? "found" : "no_match"} purpose=customer_service source=admin_api`);
-  return found ? { order: guestOrderCard(found, { trackingBase }) } : { notFound: true };
+  return found ? { order: guestOrderCard(found, { trackingBase, returnsBase }) } : { notFound: true };
 }
 
 // Tries allowed, by what's being tried: one device (its IP) a few in ten

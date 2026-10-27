@@ -1,5 +1,6 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
+import { appLinkError } from "../lib/app-promo.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -115,6 +116,9 @@ export const loader = async ({ request }) => {
     storeLocatorMapId: config.storeLocatorMapId || "",
     storeLocatorLabel: config.storeLocatorLabel || "Find a store near you",
     storeLocatorUrl: config.storeLocatorUrl || "",
+    appPromoOn: config.appPromoOn !== false,
+    appIosUrl: config.appIosUrl || "",
+    appAndroidUrl: config.appAndroidUrl || "",
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -321,6 +325,16 @@ export const action = async ({ request }) => {
   const surveyIcon = formData.get("feedbackSurveyIcon");
   if (surveyIcon !== null) data.feedbackSurveyIcon = FEEDBACK_ICONS.includes(surveyIcon) ? surveyIcon : "feedback";
   bool("feedbackSurveyHideAfter");
+  // Your app: only the App Store / Google Play pages themselves.
+  bool("appPromoOn");
+  for (const [field, platform] of [["appIosUrl", "ios"], ["appAndroidUrl", "android"]]) {
+    const v = formData.get(field);
+    if (v === null) continue;
+    const raw = String(v).trim();
+    const err = appLinkError(platform, raw);
+    if (err) return fail(err, "tools");
+    data[field] = raw;
+  }
 
   // Seasonal button
   bool("seasonalCtaOn");
@@ -466,6 +480,7 @@ const FIELDS = {
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
+  appPromoOn: ["tools", "bool"], appIosUrl: ["tools"], appAndroidUrl: ["tools"],
   seasonalCtaOn: ["seasonal", "bool"], seasonalCtaIcon: ["seasonal"], seasonalCtaColor: ["seasonal"],
   seasonalCtaLabel: ["seasonal"], seasonalCtaCollection: ["seasonal"],
   yotpoApiKey: ["integrations", "secret"], yotpoLoyaltyApiKey: ["integrations", "secret"], yotpoLoyaltyGuid: ["integrations"],
@@ -945,6 +960,20 @@ function ToolsSection({ d, values, set }) {
               <Text as="span" variant="bodySm">Hide it once a shopper has sent the form <Text as="span" tone="subdued">(right for a one-time survey)</Text></Text>
             </InlineStack>
           </BlockStack>
+        </Row>
+        <Row
+          title="Your app"
+          help={values.appPromoOn
+            ? "Once a visit, after a couple of replies, the chat quietly mentions your app: a QR code to scan on computers, App Store and Google Play buttons on phones. Links left blank: the ones in your store's footer are used."
+            : "The chat doesn't mention your app."}
+          toggle
+          checked={values.appPromoOn}
+          onChange={set("appPromoOn")}
+        >
+          <div className="set-grid">
+            <TextField label="App Store link" value={values.appIosUrl} onChange={set("appIosUrl")} placeholder="https://apps.apple.com/us/app/…" autoComplete="off" disabled={!values.appPromoOn} />
+            <TextField label="Google Play link" value={values.appAndroidUrl} onChange={set("appAndroidUrl")} placeholder="https://play.google.com/store/apps/details?id=…" autoComplete="off" disabled={!values.appPromoOn} />
+          </div>
         </Row>
       </Group>
       <Group>

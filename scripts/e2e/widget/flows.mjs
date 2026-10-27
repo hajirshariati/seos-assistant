@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -327,9 +327,10 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.waitForSelector(".ai-ordl", { timeout: 6000 });
   const card0 = await page.evaluate(() => {
     const c = document.querySelector(".ai-ordl"), rows = [...c.querySelectorAll(".ai-ordl__opt")];
-    return { title: c.querySelector(".ai-ord__num").textContent, rows: rows.map((r) => r.querySelector("b").textContent), signIn: rows[0].getAttribute("data-ord-login"), expanded: rows[1].getAttribute("aria-expanded"), formHidden: c.querySelector(".ai-ordl__form").hidden, order: c.querySelector("[name=order]").value, overflow: c.scrollWidth - c.clientWidth };
+    return { title: c.querySelector(".ai-ord__num").textContent, rows: rows.map((r) => r.querySelector("b").textContent), signIn: rows[0].getAttribute("data-ord-login"), expanded: rows[1].getAttribute("aria-expanded"), formHidden: c.querySelector(".ai-ordl__form").hidden, order: c.querySelector("[name=order]").value, overflow: c.scrollWidth - c.clientWidth, track: rows[2]?.getAttribute("href"), trackSub: rows[2]?.querySelector(".ai-ordl__ot span")?.textContent, trackTab: rows[2]?.getAttribute("target") };
   });
-  check(`order lookup (${label}): signed out, one card with two ways in — Sign in, or Look up an order`, card0.title === "Check on your order" && card0.rows.join("|") === "Sign in|Look up an order" && card0.signIn === "track" && card0.expanded === "false" && card0.formHidden && card0.overflow <= 1, JSON.stringify(card0));
+  check(`order lookup (${label}): signed out, one card — Sign in, Look up an order, or the store's tracking page`, card0.title === "Check on your order" && card0.rows.join("|") === "Sign in|Look up an order|Tracking page" && card0.signIn === "track" && card0.expanded === "false" && card0.formHidden && card0.overflow <= 1, JSON.stringify(card0));
+  check(`order lookup (${label}): the tracking page opens in a new tab, named by its address`, card0.track === "https://orders.example.com/" && card0.trackSub === "orders.example.com" && card0.trackTab === "_blank", JSON.stringify(card0));
   check(`order lookup (${label}): the order number they mentioned is filled in (never an email)`, card0.order === "1172010", card0.order);
   await page.click("[data-ordl-open]");
   const opened = await page.evaluate(() => ({ expanded: document.querySelector("[data-ordl-open]").getAttribute("aria-expanded"), hidden: document.querySelector(".ai-ordl__form").hidden, focus: document.activeElement?.getAttribute("name"), font: getComputedStyle(document.querySelector("[name=email]")).fontSize, type: document.querySelector("[name=email]").type, auto: document.querySelector("[name=email]").autocomplete }));
@@ -361,6 +362,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   });
   check(`order lookup (${label}): found → the order's card: status, progress, tracking`, found.num === "Order #1172010" && found.pill === "On its way" && found.track === "Track package" && !found.form && found.overflow <= 1, JSON.stringify(found));
   check(`order lookup (${label}): returns still need sign-in`, !found.ret && found.signRet === "return", JSON.stringify(found));
+  check(`order lookup (${label}): the store's returns center is there too (never with the email)`, await page.evaluate(() => { const a = document.querySelector(".ai-ordl-done .ai-ord__alt"); return !!a && a.getAttribute("href") === "https://www.example.com/apps/aftership-returns-center" && /returns center/.test(a.textContent) && a.target === "_blank"; }));
   check(`order lookup (${label}): says it's this order only and not saved; focus moves to the order`, /This order only · not saved/.test(found.note) && /Look up another order/.test(found.note) && /ai-ord__num/.test(found.focus || ""), JSON.stringify(found));
   check(`order lookup (${label}): what they typed was cleaned up before it was sent`, lookupBodies.at(-1).order === "1172010" && lookupBodies.at(-1).email === "Pat@Example.com", JSON.stringify(lookupBodies.at(-1)));
   // Never saved in this browser.
@@ -381,6 +383,12 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   const esc = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-ordl")].pop(); return { hidden: c.querySelector(".ai-ordl__form").hidden, focus: document.activeElement?.hasAttribute("data-ordl-open"), open: document.querySelector(".ai-chat-panel").classList.contains("open") }; });
   check(`order lookup (${label}): Escape folds the form back, the chat stays open`, esc.hidden && esc.focus && esc.open, JSON.stringify(esc));
   if (!phone) {
+    // Wanting a return: sign in, the returns center, or the order's status.
+    await page.fill(".ai-chat-input", "i want to return my shoes");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-msg:last-child .ai-ordl", { timeout: 6000 });
+    const ret = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-chat-msg")].pop().querySelector(".ai-ordl"); return { title: c.querySelector(".ai-ord__num").textContent, rows: [...c.querySelectorAll(".ai-ordl__opt")].map((r) => r.querySelector("b").textContent), signIn: c.querySelector("[data-ord-login]")?.getAttribute("data-ord-login"), returns: c.querySelector('a.ai-ordl__opt')?.getAttribute("href") }; });
+    check(`order lookup (${label}): a return → sign in to do it here, the returns center, or the order's status`, ret.title === "Start a return" && ret.rows.join("|") === "Sign in|Returns center|Order status" && ret.signIn === "return" && ret.returns === "https://www.example.com/apps/aftership-returns-center", JSON.stringify(ret));
     // Too many tries: said plainly, with sign-in as the way forward.
     mockCtl.lookupTries = lookupBodies.length;
     await page.click("[data-ordl-open] >> nth=-1");
@@ -403,6 +411,84 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   }
   check(`order lookup (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
+}
+// The store's app: one quiet line under the second reply of a visit, never
+// again that visit; opened, a QR code (computers) or the phone's own store
+// badge — from the store's footer, or from Settings.
+{
+  const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
+  const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Mobile Safari/537.36";
+  const run = async (label, url, opts, fn) => {
+    const ctx = await browser.newContext(opts);
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789" + url);
+    await page.click(".ai-chat-launcher__text");
+    await page.waitForTimeout(500);
+    const say = async (m) => { await page.fill(".ai-chat-input", m); await page.keyboard.press("Enter"); await page.waitForTimeout(1100); };
+    await fn(page, say);
+    check(`app mention (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  };
+  await run("computer", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    check("app mention: never on the first reply", (await page.$$(".ai-appn")).length === 0);
+    await say("show me 3");
+    const note = await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(), n = m.querySelector(".ai-appn"); return n && { text: n.querySelector(".ai-appn__txt").textContent, beforeFeedback: !!n.nextElementSibling?.classList.contains("ai-chat-feedback"), closed: n.querySelector(".ai-appn__panel").hidden, expanded: n.querySelector("[data-appn]").getAttribute("aria-expanded") }; });
+    check("app mention: one quiet line under the second reply, closed", !!note && note.text === "Our new app is here" && note.beforeFeedback && note.closed && note.expanded === "false", JSON.stringify(note));
+    await page.click("[data-appn]");
+    const qr = await page.evaluate(() => { const b = document.querySelector(".ai-appn__qrbox"); return b && { src: b.querySelector(".ai-appn__qr img").getAttribute("src"), link: b.querySelector(".ai-appn__qr").getAttribute("href"), cap: b.querySelector(".ai-appn__cap").textContent, seg: [...b.querySelectorAll("[data-appn-pf]")].map((x) => `${x.textContent}:${x.getAttribute("aria-pressed")}`), store: b.querySelector(".ai-appn__store").textContent, badges: document.querySelectorAll(".ai-appn__badge").length }; });
+    check("app mention: on a computer, the footer's QR code with an iPhone / Android switch", !!qr && /app-qr-ios\.svg/.test(qr.src) && qr.link === APP_LINKS.ios && qr.cap === "Scan with your iPhone camera" && qr.seg.join("|") === "iPhone:true|Android:false" && /Or open App Store/.test(qr.store) && qr.badges === 0, JSON.stringify(qr));
+    await page.click('[data-appn-pf="android"]');
+    const and = await page.evaluate(() => { const b = document.querySelector(".ai-appn__qrbox"); return { src: b.querySelector(".ai-appn__qr img").getAttribute("src"), link: b.querySelector(".ai-appn__qr").getAttribute("href"), cap: b.querySelector(".ai-appn__cap").textContent, store: b.querySelector(".ai-appn__store").getAttribute("href") }; });
+    check("app mention: Android switches the code, caption and link", /app-qr-android\.svg/.test(and.src) && and.link === APP_LINKS.android && and.store === APP_LINKS.android && /phone.s camera/.test(and.cap), JSON.stringify(and));
+    await page.click("[data-appn]");
+    check("app mention: tapped again, it folds away", await page.evaluate(() => document.querySelector(".ai-appn__panel").hidden));
+    await say("show me 2");
+    check("app mention: only once a visit", (await page.$$(".ai-appn")).length === 1);
+    await page.reload();
+    await page.click(".ai-chat-launcher__text");
+    await page.waitForTimeout(500);
+    await say("show me 3");
+    check("app mention: not again after a reload in the same visit", (await page.$$(".ai-appn")).length === 0);
+  });
+  await run("iPhone", "/full?app=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: IPHONE }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await page.click("[data-appn]");
+    const m = await page.evaluate(() => ({ badges: [...document.querySelectorAll(".ai-appn__badge")].map((b) => `${b.getAttribute("aria-label")}|${b.getAttribute("href")}|${b.querySelector("img")?.getAttribute("src") || ""}`), other: document.querySelector(".ai-appn__other")?.getAttribute("href"), qr: !!document.querySelector(".ai-appn__qrbox"), overflow: document.querySelector(".ai-appn").scrollWidth - document.querySelector(".ai-appn").clientWidth }));
+    check("app mention (iPhone): the App Store badge (the footer's), Google Play as a small link", m.badges.length === 1 && m.badges[0].startsWith(`Download on the App Store|${APP_LINKS.ios}|`) && /app-badge-app-store/.test(m.badges[0]) && m.other === APP_LINKS.android && !m.qr && m.overflow <= 1, JSON.stringify(m));
+  });
+  await run("Android", "/full?app=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: ANDROID }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await page.click("[data-appn]");
+    const m = await page.evaluate(() => ({ badges: [...document.querySelectorAll(".ai-appn__badge")].map((b) => b.getAttribute("href")), cls: document.querySelector(".ai-appn__badge")?.className, other: document.querySelector(".ai-appn__other")?.getAttribute("href") }));
+    check("app mention (Android): the Google Play badge, the App Store as a small link", m.badges.join() === APP_LINKS.android && /is-android/.test(m.cls) && m.other === APP_LINKS.ios, JSON.stringify(m));
+  });
+  await run("Settings links", "/full?app=set", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    const before = appQrLog.length;
+    await say("show me 2");
+    await say("show me 3");
+    await page.click("[data-appn]");
+    await page.waitForTimeout(400);
+    const src = await page.getAttribute(".ai-appn__qr img", "src");
+    check("app mention: links set in Settings → the app makes the QR code", src === "/apps/hajirai/app-qr?p=ios" && appQrLog.length > before, src);
+  });
+  await run("beside an order", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("where is my order?");
+    check("app mention: never beside an order card", (await page.$$(".ai-appn")).length === 0);
+    await say("show me 3");
+    check("app mention: …it waits for the next ordinary reply", (await page.$$(".ai-chat-msg:last-child .ai-appn")).length === 1);
+  });
+  await run("off", "/full", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await say("show me 2");
+    check("app mention: off in Settings → never shown", (await page.$$(".ai-appn")).length === 0);
+  });
 }
 // The two fit tools: featured on the welcome screen, and each only on the
 // products it belongs to — True Fit on shoes, FITFinder on orthotics.

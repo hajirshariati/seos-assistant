@@ -1,5 +1,6 @@
 import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
+import { appPromoConfig } from "../lib/app-promo.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appearDelayConfig, startTheme, internationalConfig } from "../lib/appear-delay.js";
 import { authenticate } from "../shopify.server";
@@ -85,6 +86,8 @@ export const loader = async ({ request }) => {
         hideLiveChatButton: config.hideLiveChatButton === true,
         // Settings → Seasonal button: the first Start here button.
         seasonalCta: seasonalCtaConfig(config),
+        // Settings → Your app: one quiet mention per visit.
+        appPromo: appPromoConfig(config),
         // Settings → Showing the chat: wait this long before it appears.
         appearDelay: appearDelayConfig(config),
         // The look the chat starts in; a shopper's own pick wins.

@@ -78,6 +78,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     applyHostButtons(hb);
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
+  if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||'')};
   if(d.seasonalCta&&typeof d.seasonalCta==='object'){
     var seaWas=[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|');
     try{localStorage.setItem(SEA_KEY,JSON.stringify(d.seasonalCta))}catch(e){}
@@ -2412,6 +2413,85 @@ function tfiShow(btn){
   Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-show]'),function(b){b.setAttribute('aria-checked',String(b===btn))});
   Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-grid]'),function(g){g.hidden=g.getAttribute('data-tfi-grid')!==k});
 }
+/* The store's app, mentioned once a visit — quietly, under a reply, never
+   the first one, never beside an order, a comparison or a form. Tapped, it
+   shows a QR code to scan on computers (iPhone or Android, like the
+   footer) and the App Store / Google Play buttons on phones. Links come from
+   Settings, else from the store's own footer — with its QR codes and badges. */
+var APP_PROMO={on:true,ios:'',android:''},APPN_KEY='hajirai_app_note',APPN_COUNT='hajirai_app_replies',APP_QR_URL='/apps/hajirai/app-qr';
+var APP_RE={ios:/^https:\/\/apps\.apple\.com\/[^\s"'<>]+$/i,android:/^https:\/\/play\.google\.com\/store\/apps\/details\?[^\s"'<>]+$/i};
+var APP_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.8"/><path d="M10.5 18.5h3"/></svg>';
+var APP_LOGO={ios:'<svg viewBox="8 8 18 22" width="18" height="22" aria-hidden="true"><path fill="currentColor" d="M24.77 20.3a4.95 4.95 0 0 1 2.36-4.15 5.07 5.07 0 0 0-3.99-2.16c-1.68-.18-3.31 1-4.16 1-.87 0-2.19-.98-3.61-.96a5.32 5.32 0 0 0-4.47 2.73c-1.93 3.35-.49 8.27 1.36 10.98.93 1.33 2.01 2.81 3.43 2.75 1.39-.06 1.9-.88 3.58-.88 1.66 0 2.14.88 3.59.85 1.49-.02 2.43-1.33 3.32-2.67a10.96 10.96 0 0 0 1.52-3.09 4.78 4.78 0 0 1-2.92-4.4zM22.04 12.21a4.87 4.87 0 0 0 1.11-3.49 4.96 4.96 0 0 0-3.2 1.66 4.64 4.64 0 0 0-1.15 3.36 4.1 4.1 0 0 0 3.24-1.53z"/></svg>',
+  android:'<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#00d7fe" d="M4 2.6 13.2 12 4 21.4c-.3-.2-.5-.6-.5-1.1V3.7c0-.5.2-.9.5-1.1z"/><path fill="#ffce00" d="m16.3 15.1-3.1-3.1 3.1-3.1 3.6 2.1c1 .6 1 1.5 0 2l-3.6 2.1z"/><path fill="#ff3a44" d="M16.3 15.1 13.2 12 4 21.4c.4.4 1 .4 1.7 0l10.6-6.3z"/><path fill="#00f076" d="M16.3 8.9 5.7 2.6c-.7-.4-1.3-.4-1.7 0l9.2 9.4 3.1-3.1z"/></svg>'};
+function appFooter(sel,attr){try{var el=document.querySelector(sel);return el?String(el.getAttribute(attr)||''):''}catch(e){return ''}}
+/* Theme files: //host/cdn/… or https://… only. */
+function appImg(u){u=String(u||'');return /^(https:)?\/\/[^\s"'<>]+$/i.test(u)?u:''}
+function appInfo(){
+  if(!APP_PROMO.on)return null;
+  var out={},any=false;
+  ['ios','android'].forEach(function(pf){
+    var link=APP_PROMO[pf]||appFooter('a[data-app-dl-link][data-platform="'+pf+'"]','href');
+    if(!APP_RE[pf].test(link))return;
+    out[pf]={link:link,qr:APP_PROMO[pf]?APP_QR_URL+'?p='+pf:appImg(appFooter('.app-dl__qr[data-platform="'+pf+'"] img','src')),badge:appImg(appFooter('.app-dl-badge[data-platform="'+pf+'"] img','src'))};
+    any=true;
+  });
+  return any?out:null;
+}
+var appInfoNow=null;
+function appNoteHtml(){
+  var id='ai-appn-'+(++ordlSeq);
+  return '<div class="ai-appn"><button type="button" class="ai-appn__row" data-appn aria-expanded="false" aria-controls="'+id+'"><span class="ai-appn__icon">'+APP_ICON+'</span><span class="ai-appn__txt">Our new app is here</span><span class="ai-appn__go">Get it'+ORD_ICON.chev+'</span></button><div class="ai-appn__panel" id="'+id+'" hidden></div></div>';
+}
+var APPN_CAP={ios:'Scan with your iPhone camera',android:'Scan with your phone\u2019s camera'},APPN_STORE={ios:'App Store',android:'Google Play'};
+function appPanelHtml(info){
+  var pfs=['ios','android'].filter(function(pf){return info[pf]});
+  var desk=false;try{desk=window.matchMedia('(hover: hover) and (pointer: fine)').matches}catch(e){}
+  var qrs=pfs.filter(function(pf){return info[pf].qr});
+  if(desk&&qrs.length){
+    var pf=qrs[0];
+    return '<div class="ai-appn__qrbox" data-appn-on="'+pf+'"><a class="ai-appn__qr" href="'+esc(info[pf].link)+'" target="_blank" rel="noopener"><img src="'+esc(info[pf].qr)+'" alt="'+esc('QR code: the app on '+APPN_STORE[pf]+' (opens in a new tab)')+'" width="96" height="96"></a>'+
+      '<div class="ai-appn__side">'+(qrs.length>1?'<div class="ai-appn__seg" role="group" aria-label="Choose your phone">'+qrs.map(function(p){return '<button type="button" data-appn-pf="'+p+'" aria-pressed="'+(p===pf)+'">'+(p==='ios'?'iPhone':'Android')+'</button>'}).join('')+'</div>':'')+
+      '<p class="ai-appn__cap">'+esc(APPN_CAP[pf])+'</p><a class="ai-appn__store" href="'+esc(info[pf].link)+'" target="_blank" rel="noopener">Or open '+APPN_STORE[pf]+ORD_ICON.ext+'</a></div></div>';
+  }
+  /* Phones: the badge for their own store, the other as a small link;
+     both badges when we can't tell which phone it is. */
+  var ua=navigator.userAgent||'',mine=/android/i.test(ua)?'android':(/iphone|ipad|ipod/i.test(ua)||(/macintosh/i.test(ua)&&navigator.maxTouchPoints>1))?'ios':'';
+  var badge=function(p){
+    var i=info[p],label=p==='ios'?'Download on the App Store':'Get it on Google Play';
+    return '<a class="ai-appn__badge is-'+p+'" href="'+esc(i.link)+'" target="_blank" rel="noopener" aria-label="'+label+'">'+(i.badge?'<img src="'+esc(i.badge)+'" alt="">':'<span class="ai-appn__pill">'+APP_LOGO[p]+'<span><small>'+(p==='ios'?'Download on the':'GET IT ON')+'</small>'+APPN_STORE[p]+'</span></span>')+'</a>';
+  };
+  if(mine&&info[mine]){
+    var other=mine==='ios'?'android':'ios';
+    return '<div class="ai-appn__badges">'+badge(mine)+'</div>'+(info[other]?'<a class="ai-appn__store ai-appn__other" href="'+esc(info[other].link)+'" target="_blank" rel="noopener">'+(other==='ios'?'On an iPhone? App Store':'On Android? Google Play')+ORD_ICON.ext+'</a>':'');
+  }
+  return '<div class="ai-appn__badges">'+pfs.map(badge).join('')+'</div>';
+}
+function appNoteToggle(btn){
+  var panel=document.getElementById(btn.getAttribute('aria-controls'));if(!panel)return;
+  var open=panel.hidden;
+  if(open&&!panel.innerHTML){var info=appInfoNow||appInfo();if(!info)return;panel.__info=info;panel.innerHTML=appPanelHtml(info)}
+  panel.hidden=!open;btn.setAttribute('aria-expanded',String(open));
+}
+function appNoteSwitch(btn){
+  var box=btn.closest('.ai-appn__qrbox'),panel=btn.closest('.ai-appn__panel');if(!box||!panel||!panel.__info)return;
+  var pf=btn.getAttribute('data-appn-pf'),i=panel.__info[pf];if(!i)return;
+  box.setAttribute('data-appn-on',pf);
+  var a=box.querySelector('.ai-appn__qr'),img=a.querySelector('img');a.href=i.link;img.src=i.qr;img.alt='QR code: the app on '+APPN_STORE[pf]+' (opens in a new tab)';
+  box.querySelector('.ai-appn__cap').textContent=APPN_CAP[pf];
+  var st=box.querySelector('.ai-appn__store');st.href=i.link;st.firstChild.textContent='Or open '+APPN_STORE[pf];
+  Array.prototype.forEach.call(box.querySelectorAll('[data-appn-pf]'),function(b){b.setAttribute('aria-pressed',String(b===btn))});
+}
+/* After a reply: the second one this visit (or later), once. */
+function maybeAppNote(bubble){
+  if(!bubble||!APP_PROMO.on)return;
+  try{if(sessionStorage.getItem(APPN_KEY))return;var n=(parseInt(sessionStorage.getItem(APPN_COUNT),10)||0)+1;sessionStorage.setItem(APPN_COUNT,String(n));if(n<2)return}catch(e){return}
+  if(bubble.querySelector('.ai-ordl,.ai-ord,.ai-cmp,.ai-cmp-bar:not([hidden]),.ai-tfi,.ai-chat-klaviyo-form,.ai-chat-atc-panel,.ai-chat-choices'))return;
+  var info=appInfo();if(!info)return;
+  appInfoNow=info;
+  try{sessionStorage.setItem(APPN_KEY,'1')}catch(e){}
+  var fb=bubble.querySelector('.ai-chat-feedback');
+  if(fb)fb.insertAdjacentHTML('beforebegin',appNoteHtml());else bubble.insertAdjacentHTML('beforeend',appNoteHtml());
+}
 function tfNote(text){messages.push({role:'assistant',content:text});saveH(messages);appendMsg('assistant',text);scrollBottom()}
 function trueFitFor(handle,title){
   if(!handle||tfRun)return;
@@ -2544,7 +2624,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 order-lookup'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 store-pages-app'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -3743,7 +3823,14 @@ var ORD_ICON={bag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
   box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
   lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>',
-  chev:'<svg class="ai-ordl__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'};
+  chev:'<svg class="ai-ordl__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
+  ext:'<svg class="ai-ordl__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 16 16 8M10 8h6v6"/></svg>',
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4.5 11.5 9 16"/><path d="M4.5 11.5H15a4.5 4.5 0 0 1 0 9h-2"/></svg>'};
+/* The store's own tracking page and returns center (Settings), offered beside the chat's way. */
+var ordPages={};
+function cleanPages(p){var o={};if(p&&typeof p==='object'){if(/^https:\/\/[^\s"'<>]+$/i.test(String(p.track||'')))o.track=String(p.track);if(/^https:\/\/[^\s"'<>]+$/i.test(String(p.returns||'')))o.returns=String(p.returns)}return o}
+function hostOf(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return ''}}
 /* Returns started for this order: what the server knows plus what this
    browser saw go through (so the card is right even before it asks again). */
 function cardReturns(o){
@@ -3787,13 +3874,17 @@ function orderCardHtml(o){
   h+='<div class="ai-ord__actions">';
   if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
   /* Looked up without signing in: returns need the shopper signed in. */
-  if(o.guest){if(!cancelled)h+='<button type="button" class="ai-ord__btn" data-ord-login="return">Sign in to return</button>'}
+  var alt='';
+  if(o.guest){if(!cancelled)h+='<button type="button" class="ai-ord__btn" data-ord-login="return">Sign in to return</button>';if(safeUrl(o.returnsPage))alt=safeUrl(o.returnsPage)}
   else if(o.canReturn&&returnableItems(o).length){
+    /* The store's returns center is always an option too. */
+    if(o.returnMode!=='page'&&safeUrl(o.returnsUrl))alt=safeUrl(o.returnsUrl);
     /* The store runs returns on its own page: open it with the order filled in. */
     if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))h+='<a class="ai-ord__btn" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
     else h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
   }
   h+='</div>';
+  if(alt)h+='<a class="ai-ord__alt" href="'+alt+'" target="_blank" rel="noopener">Or use our returns center'+ORD_ICON.ext+'</a>';
   for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
   h+='</div>';
   return h;
@@ -3805,11 +3896,12 @@ function ordersHtml(list){
 }
 function loginCardHtml(p){
   if(typeof p==='string')p={intent:p};
-  var intent=p&&p.intent==='return'?'return':'track';
+  var intent=p&&p.intent==='return'?'return':'track',pages=cleanPages(p&&p.pages);
+  if(p&&p.pages)ordPages=pages;
+  if(p&&(p.lookup||pages.track||pages.returns))return lookupCardHtml(intent,p.order||'',false,{lookup:!!p.lookup,pages:pages});
   if(!p||!p.lookup)return '<div class="ai-ord ai-ord--signin"><div class="ai-ord__signin-icon">'+ORD_ICON.user+'</div>'+
     '<div class="ai-ord__signin-text"><div class="ai-ord__num">Sign in to see your orders</div><div class="ai-ord__date">Track packages and start returns right here.</div></div>'+
     '<button type="button" class="ai-ord__btn is-primary" data-ord-login="'+intent+'">Sign in</button></div>';
-  return lookupCardHtml(intent,p.order||'',false);
 }
 /* Order status without signing in. Two ways in, one card: sign in (every
    order, returns), or look one order up with its number (or the
@@ -3818,14 +3910,19 @@ function loginCardHtml(p){
    to match. The order shows here only: it's never saved in this browser. */
 var ORDER_LOOKUP_URL='/apps/hajirai/order-lookup';
 var ordlSeq=0;
-function lookupCardHtml(intent,order,open){
-  var n=++ordlSeq,ret=intent==='return',f='ai-ordl-'+n,hint=/^[A-Za-z0-9-]{3,24}$/.test(order)?order:'';
+function lookupCardHtml(intent,order,open,opt){
+  opt=opt||{lookup:true,pages:ordPages};
+  var n=++ordlSeq,ret=intent==='return',f='ai-ordl-'+n,hint=/^[A-Za-z0-9-]{3,24}$/.test(order)?order:'',pg=opt.pages||{};
+  var pageRow=function(url,icon,title,sub){return '<a class="ai-ordl__opt" href="'+esc(url)+'" target="_blank" rel="noopener"><span class="ai-ordl__oi">'+icon+'</span><span class="ai-ordl__ot"><b>'+title+'</b><span>'+esc(sub)+'</span></span>'+ORD_ICON.ext+'<span class="ai-sr"> (opens in a new tab)</span></a>'};
+  var trackRow=pg.track&&!ret?pageRow(pg.track,ORD_ICON.truck,'Tracking page',hostOf(pg.track)||'Track your package'):'';
+  var returnsRow=pg.returns&&ret?pageRow(pg.returns,ORD_ICON.back,'Returns center','Start your return there'):'';
+  var lookupRow=opt.lookup?'<button type="button" class="ai-ordl__opt" data-ordl-open aria-expanded="'+(open?'true':'false')+'" aria-controls="'+f+'"><span class="ai-ordl__oi">'+ORD_ICON.search+'</span><span class="ai-ordl__ot"><b>'+(ret?'Order status':'Look up an order')+'</b><span>Order number and email</span></span>'+ORD_ICON.chev+'</button>':'';
   return '<div class="ai-ord ai-ordl" data-ordl>'+
-    '<div class="ai-ordl__head"><span class="ai-ordl__icon">'+ORD_ICON.box+'</span><span class="ai-ordl__htxt"><span class="ai-ord__num">'+(ret?'Start a return':'Check on your order')+'</span><span class="ai-ord__date">'+(ret?'Returns start here once you\u2019re signed in.':'Its status, tracking and items.')+'</span></span></div>'+
+    '<div class="ai-ordl__head"><span class="ai-ordl__icon">'+(ret?ORD_ICON.back:ORD_ICON.box)+'</span><span class="ai-ordl__htxt"><span class="ai-ord__num">'+(ret?'Start a return':'Check on your order')+'</span><span class="ai-ord__date">'+(ret?(returnsRow?'Here in the chat, or on our returns center.':'Returns start here once you\u2019re signed in.'):'Its status, tracking and items.')+'</span></span></div>'+
     '<div class="ai-ordl__opts">'+
       '<button type="button" class="ai-ordl__opt" data-ord-login="'+intent+'"><span class="ai-ordl__oi is-ink">'+ORD_ICON.user+'</span><span class="ai-ordl__ot"><b>Sign in</b><span>'+(ret?'Start a return right here':'Every order, plus returns')+'</span></span>'+ORD_ICON.chev+'</button>'+
-      '<button type="button" class="ai-ordl__opt" data-ordl-open aria-expanded="'+(open?'true':'false')+'" aria-controls="'+f+'"><span class="ai-ordl__oi">'+ORD_ICON.search+'</span><span class="ai-ordl__ot"><b>'+(ret?'Check an order\u2019s status':'Look up an order')+'</b><span>Order number and email</span></span>'+ORD_ICON.chev+'</button>'+
-      '<form class="ai-ordl__form" id="'+f+'" novalidate'+(open?'':' hidden')+'>'+
+      returnsRow+lookupRow+
+      (opt.lookup?'<form class="ai-ordl__form" id="'+f+'" novalidate'+(open?'':' hidden')+'>'+
         '<div class="ai-ordl__field"><label for="'+f+'-o">Order or confirmation number</label>'+
           '<input id="'+f+'-o" name="order" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="30" placeholder="e.g. 1234567" value="'+esc(hint)+'" aria-describedby="'+f+'-oh '+f+'-oe">'+
           '<span class="ai-ordl__hint" id="'+f+'-oh">It\u2019s in your order confirmation email.</span><span class="ai-ordl__ferr" id="'+f+'-oe" hidden></span></div>'+
@@ -3835,7 +3932,8 @@ function lookupCardHtml(intent,order,open){
         '<div class="ai-ordl__err" role="alert" hidden></div>'+
         '<button type="submit" class="ai-ord__btn is-primary ai-ordl__go">Find my order</button>'+
         '<p class="ai-ordl__note">'+ORD_ICON.lock+'Used only to find it. Never saved.</p>'+
-      '</form>'+
+      '</form>':'')+
+      trackRow+
     '</div></div>';
 }
 function ordlField(form,name,msg){
@@ -4475,7 +4573,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   fitResult=String(p.key);
 }
 if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods}
-if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:''}}
+if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:'',pages:p.pages||null}}
 if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pendingCompare=p.comparison}
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
@@ -4716,6 +4814,7 @@ if(prods&&prods.length>0&&mDiv){
     });
   }
 }
+if(mDiv&&cleanText)maybeAppNote($('.ai-chat-msg-bubble',mDiv));
 scrollMsgTop(mDiv);
 maybeAskRating();
 }
@@ -4981,6 +5080,9 @@ if(cmpBtn){
   else cmpCancel(cbub);
   return;
 }
+/* The app mention: open it, and switch iPhone / Android. */
+var appBtn=e.target.closest('[data-appn],[data-appn-pf]');
+if(appBtn){e.preventDefault();if(appBtn.hasAttribute('data-appn'))appNoteToggle(appBtn);else appNoteSwitch(appBtn);return}
 /* How True Fit works: the line switch, and a style tile asks for those shoes. */
 var tfiBtn=e.target.closest('[data-tfi-show],[data-tfi-ask]');
 if(tfiBtn){

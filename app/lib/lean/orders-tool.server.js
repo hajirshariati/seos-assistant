@@ -18,12 +18,19 @@ const PAGE_RETURNS =
     "Returns and exchanges aren't started in this chat: tell them to tap \"Start a return\" on the order, which opens the store's returns page with their order filled in (exchanges are chosen there too). " +
     "If there's no such button (has_returns_page false), point them to customer service. Never promise a refund amount or timing.";
 
+// The store's tracking / returns page, when it's a real https link.
+function httpsUrl(u) {
+  const s = String(u || "").trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(s) ? s : "";
+}
+
 export const ORDERS_TOOL = {
   name: "get_my_orders",
   description:
     "The customer's own orders: status, delivery progress, tracking, and the button to start a return or exchange. Use for where is my order, tracking, delivery, an order number, past purchases, or wanting to return or exchange something they bought. " +
     "The orders appear as cards under your reply — keep your reply to one short sentence and don't repeat what the cards show (numbers, dates, tracking). " +
-    "If the customer isn't signed in, a card appears instead where they can sign in, or look up the order with its order number (or confirmation code) and the email they used: point them to it in one sentence. Never ask them to type their email or order details into the chat. " +
+    "If the customer isn't signed in, a card appears instead where they can sign in, look up the order with its order number (or confirmation code) and the email they used, or open the store's tracking page or returns center: point them to it in one sentence. Never ask them to type their email or order details into the chat. " +
+    "Tracking an order and starting a return are handled by these cards and the store's own pages — don't send them to customer service for that unless they've tried and are still stuck, or ask for a person. " +
     IN_CHAT_RETURNS,
 
   input_schema: {
@@ -45,14 +52,19 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
       if (!loggedInCustomerId) {
         // The order number they mentioned fills in the lookup form (never an email).
         const hint = String(input.orderNumber || "").replace(/\s+/g, "").replace(/^#+/, "");
+        // The store's own pages, always offered beside the chat's way.
+        const pages = { ...(httpsUrl(trackingPageUrl) ? { track: httpsUrl(trackingPageUrl) } : {}), ...(httpsUrl(returnsPageUrl) ? { returns: httpsUrl(returnsPageUrl) } : {}) };
+        const offPage = [pages.track ? "the store's tracking page" : "", pages.returns ? "the returns center" : ""].filter(Boolean).join(" and ");
         return {
           signed_in: false,
-          note: guestLookup
+          note: (guestLookup
             ? (intent === "return"
-              ? "A card under your reply lets them sign in to start a return (returns need sign-in), or look up the order's status with its number and email. Point them to it in one sentence. Don't ask for their email or order details in the chat."
-              : "A card under your reply lets them sign in, or look up the order with its order number (or confirmation code) and the email they used. Point them to it in one sentence. Don't ask for their email or order details in the chat.")
-            : "A sign-in button is shown under your reply. Once they sign in, the chat continues with their orders.",
-          _events: [{ type: "login_prompt", intent, ...(guestLookup ? { lookup: true, ...(/^[a-z0-9-]{3,24}$/i.test(hint) ? { order: hint } : {}) } : {}) }],
+              ? "A card under your reply lets them sign in to start a return here (returns in the chat need sign-in), or look up the order's status with its number and email."
+              : "A card under your reply lets them sign in, or look up the order with its order number (or confirmation code) and the email they used.")
+            : "A sign-in button is shown under your reply; once they sign in, the chat continues with their orders.") +
+            (offPage ? ` It also links to ${offPage}, if they'd rather use those.` : "") +
+            " Point them to it in one sentence. Don't ask for their email or order details in the chat, and don't send them to customer service for this.",
+          _events: [{ type: "login_prompt", intent, ...(guestLookup ? { lookup: true, ...(/^[a-z0-9-]{3,24}$/i.test(hint) ? { order: hint } : {}) } : {}), ...(Object.keys(pages).length ? { pages } : {}) }],
         };
       }
       if (!accessToken) return { error: "Orders aren't available right now." };

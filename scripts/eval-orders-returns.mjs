@@ -229,12 +229,25 @@ await test("chat tool: signed out → sign in or look the order up; no order dat
   assert.equal((await t.run({ orderNumber: "<b>x" }))._events[0].order, undefined);
   // Returns still need sign-in; the card says so.
   const ret = await t.run({ intent: "return" });
-  assert.match(ret.note, /sign in to start a return \(returns need sign-in\)/);
+  assert.match(ret.note, /sign in to start a return here \(returns in the chat need sign-in\)/);
+  assert.match(ret.note, /don't send them to customer service for this/);
+  assert.match(t.definition.description, /don't send them to customer service for that unless they've tried and are still stuck/);
   // The store turned the lookup off: sign-in only, as before.
   const off = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null, guestLookup: false }).run({ orderNumber: "1174861" });
   assert.deepEqual(off._events, [{ type: "login_prompt", intent: "track" }]);
 });
 
+await test("chat tool: signed out, the store's tracking page and returns center are always offered too", async () => {
+  const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null, trackingPageUrl: "https://orders.aetrex.com/", returnsPageUrl: "https://www.aetrex.com/apps/aftership-returns-center" });
+  const r = await t.run({ intent: "return" });
+  assert.deepEqual(r._events[0].pages, { track: "https://orders.aetrex.com/", returns: "https://www.aetrex.com/apps/aftership-returns-center" });
+  assert.match(r.note, /It also links to the store's tracking page and the returns center/);
+  // Sign-in only stores get the pages too; a page that isn't https isn't offered.
+  const off = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null, guestLookup: false, returnsPageUrl: "javascript:alert(1)", trackingPageUrl: "https://orders.aetrex.com/" }).run({});
+  assert.deepEqual(off._events[0], { type: "login_prompt", intent: "track", pages: { track: "https://orders.aetrex.com/" } });
+  // No pages set: nothing extra.
+  assert.equal((await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null }).run({}))._events[0].pages, undefined);
+});
 // ── Order status without signing in (routes/order-lookup.jsx) ──
 await test("guest lookup: what's typed is cleaned up; anything else is refused per field", () => {
   assert.deepEqual(cleanLookup({ order: " #1174861 ", email: " Pat@Example.COM " }), { order: "1174861", email: "pat@example.com" });
@@ -273,6 +286,11 @@ await test("guest lookup: the card shows status and items only — no ids, email
   const text = JSON.stringify(c);
   assert.ok(!/@|example\.com|PQYPE1GH8|gid:|Customer/.test(text), text);
   assert.ok(!("canReturn" in c) && !("returnsUrl" in c));
+  // The store's returns center, as it is — never with the email filled in; not for a cancelled order.
+  const withPage = guestOrderCard(guest(), { returnsBase: "https://www.aetrex.com/apps/aftership-returns-center" });
+  assert.equal(withPage.returnsPage, "https://www.aetrex.com/apps/aftership-returns-center");
+  assert.equal(guestOrderCard(guest({ cancelledAt: "2026-10-15T00:00:00Z" }), { returnsBase: "https://r.example" }).returnsPage, undefined);
+  assert.equal(guestOrderCard(guest(), { returnsBase: "http://r.example" }).returnsPage, undefined);
 });
 await test("guest lookup: found → the card; any miss → the same not-found (no hint which detail was wrong)", async () => {
   const seen = [];
