@@ -242,6 +242,72 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("tf: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// "Find my shoe size" with no shoe picked: the server's answer as a card —
+// how True Fit works (one shoe at a time) and the store's kinds of shoes per
+// line; a tile asks for those shoes, and their cards carry True Fit.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const phone = label === "phone";
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForSelector('[data-helper="truefit"]', { timeout: 5000 });
+  await page.click('[data-helper="truefit"]');
+  await page.waitForSelector(".ai-tfi", { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const sent = chatBodies.at(-1);
+  check(`tf intro (${label}): the tap says it's the helper, with no shoe picked`, sent.message === "Help me find my shoe size with True Fit." && sent.size_intro === true && sent.size_finder?.provider === "truefit" && !sent.size_finder.page_handle, JSON.stringify(sent));
+  const card = await page.evaluate(() => {
+    const m = [...document.querySelectorAll(".ai-chat-msg")].pop(), c = m.querySelector(".ai-tfi"), list = document.querySelector(".ai-chat-messages");
+    const grid = c.querySelector(".ai-tfi__grid:not([hidden])");
+    return {
+      text: m.querySelector(".ai-chat-msg-bubble > p").textContent,
+      title: c.querySelector(".ai-tfi__title").textContent,
+      steps: [...c.querySelectorAll(".ai-tfi__step")].map((s) => s.querySelector("b").textContent),
+      now: [...c.querySelectorAll(".ai-tfi__step")].map((s) => s.classList.contains("is-now")),
+      seg: [...c.querySelectorAll("[data-tfi-show]")].map((b) => `${b.textContent}:${b.getAttribute("aria-checked")}`),
+      tiles: [...grid.querySelectorAll(".ai-tfi__tile")].map((t) => `${t.querySelector(".ai-tfi__name").textContent} ${t.querySelector(".ai-tfi__count").textContent}`),
+      asks: [...grid.querySelectorAll("[data-tfi-ask]")].map((t) => t.getAttribute("data-tfi-ask")),
+      imgs: [...grid.querySelectorAll(".ai-tfi__img img")].length,
+      hidden: c.querySelectorAll(".ai-tfi__grid[hidden]").length,
+      cols: getComputedStyle(grid).gridTemplateColumns.split(" ").length,
+      overflow: c.scrollWidth - c.clientWidth,
+      top: Math.round(m.getBoundingClientRect().top - list.getBoundingClientRect().top),
+      note: c.querySelector(".ai-tfi__note").textContent,
+    };
+  });
+  check(`tf intro (${label}): the answer says why — one shoe at a time, the shoe first`, /True Fit sizes one shoe at a time, so pick the shoe first/.test(card.text) && card.title === "How True Fit works", card.text);
+  check(`tf intro (${label}): three steps, the first one is where they are`, card.steps.join("|") === "Pick a shoe|Tap True Fit on it|Get your size for that shoe" && card.now.join() === "true,false,false", JSON.stringify(card));
+  check(`tf intro (${label}): the store's kinds of shoes, women's first, with style counts and photos`, card.seg.join("|") === "Women's:true|Men's:false" && card.tiles.join("|") === "Sneakers 9 styles|Sandals 7 styles|Boots 5 styles|Loafers 4 styles|Wedges 3 styles|Slippers 2 styles" && card.imgs === 6 && card.hidden === 1, JSON.stringify(card));
+  check(`tf intro (${label}): ${phone ? 2 : 3} tiles a row, nothing spills sideways`, card.cols === (phone ? 2 : 3) && card.overflow <= 1, JSON.stringify({ cols: card.cols, overflow: card.overflow }));
+  check(`tf intro (${label}): opens at its top, so the steps are read first`, card.top > -40 && card.top < 120, String(card.top));
+  check(`tf intro (${label}): typing a shoe's name is offered too`, /type its name/.test(card.note));
+  await page.click('[data-tfi-show="men"]');
+  const men = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-tfi")].pop(); return { seg: [...c.querySelectorAll("[data-tfi-show]")].map((b) => b.getAttribute("aria-checked")).join(), shown: c.querySelector(".ai-tfi__grid:not([hidden])").getAttribute("data-tfi-grid"), first: c.querySelector(".ai-tfi__grid:not([hidden]) .ai-tfi__tile").getAttribute("aria-label") }; });
+  check(`tf intro (${label}): Men's switches the tiles`, men.seg === "false,true" && men.shown === "men" && men.first === "Men's Sneakers, 4 styles", JSON.stringify(men));
+  await page.click('.ai-tfi__grid:not([hidden]) [data-tfi-ask]');
+  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-msg:last-child .ai-chat-product-card").length >= 1, null, { timeout: 5000 });
+  const pick = chatBodies.at(-1);
+  check(`tf intro (${label}): a tile asks for those shoes, saying what it's for`, pick.message === "Show me men's sneakers" && pick.size_pick === true && !pick.size_intro, JSON.stringify(pick));
+  check(`tf intro (${label}): the shoes that come back each have True Fit`, (await page.$$eval(".ai-chat-msg:last-child .ai-chat-product-card", (cs) => cs.filter((c) => c.querySelector("[data-truefit]")).length)) >= 2);
+  if (!phone) {
+    // Typing the same words isn't the tap.
+    await page.fill(".ai-chat-input", "Help me find my shoe size with True Fit.");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(900);
+    check(`tf intro (${label}): typed, the words go to the assistant as usual`, chatBodies.at(-1).size_intro === undefined && chatBodies.at(-1).size_pick === undefined);
+    // The card comes back with the chat.
+    await page.reload();
+    await page.click(".ai-chat-launcher__text");
+    await page.waitForSelector(".ai-tfi", { timeout: 5000 });
+    check(`tf intro (${label}): after a reload the card is still there, tiles and all`, (await page.$$eval(".ai-tfi .ai-tfi__tile", (t) => t.length)) === 12);
+  }
+  check(`tf intro (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The two fit tools: featured on the welcome screen, and each only on the
 // products it belongs to — True Fit on shoes, FITFinder on orthotics.
 {

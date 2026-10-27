@@ -1305,7 +1305,7 @@ function startHelper(kind){
   if(kind==='truefit'){
     if(size){var shoe=pageTitle();inputEl.value='True Fit recommends size '+size+' for me'+(shoe?' in the '+shoe:'')+'.'}
     else if(tfHere()&&pageHandle()){runTrueFit(pageTitle());return}
-    else inputEl.value='Help me find my shoe size with True Fit.';
+    else{inputEl.value='Help me find my shoe size with True Fit.';TF_INTRO=inputEl.value}
   }else if(kind==='fitfinder-retake'||(kind==='refit')){
     ffRetake=true;
     inputEl.value='I\'d like to retake my orthotic FIT.';
@@ -2363,6 +2363,54 @@ function trueFitBtnHtml(f){
 return '<button type="button" class="ai-chat-cta-btn ai-chat-truefit-cta" data-truefit="'+esc(f.handle)+'" data-title="'+esc(f.title||'')+'">'+
   tfLogo(20)+'<span>Find my size with True Fit</span></button>';
 }
+/* "Find my shoe size" before a shoe is picked: how True Fit works (it sizes
+   one shoe at a time), then the store's kinds of shoes to start from — per
+   line, each with how many styles and a photo of its best seller. A tile asks
+   for those shoes; every shoe card has its own True Fit button. */
+var TF_INTRO='',TF_PICK='',pendingSizeIntro=null;
+function cleanSizeIntro(p){
+  if(!p||!Array.isArray(p.lines))return null;
+  var lines=[];
+  p.lines.slice(0,3).forEach(function(l){
+    if(!l||!/^[a-z]{1,10}$/.test(String(l.k||''))||!Array.isArray(l.tiles))return;
+    var tiles=[];
+    l.tiles.slice(0,6).forEach(function(t){
+      var name=String(t&&t.l||'').replace(/\s+/g,' ').trim().slice(0,40);if(!name)return;
+      var img=String(t.img||'');
+      tiles.push({l:name,n:Math.max(0,parseInt(t.n,10)||0),img:/^https:\/\/[^\s"'<>]+$/.test(img)?img:''});
+    });
+    if(tiles.length>=2)lines.push({k:String(l.k),l:String(l.l||'').slice(0,20),tiles:tiles});
+  });
+  if(!lines.length)return null;
+  return {line:lines.some(function(l){return l.k===p.line})?String(p.line):lines[0].k,lines:lines};
+}
+var TFI_STEPS=[['Pick a shoe','Every style fits a little differently.'],['Tap True Fit on it','Tell it about a pair you already wear.'],['Get your size for that shoe','Matched with real fit data from shoppers who bought it.']];
+function sizeIntroHtml(d){
+  var known=tfKnown()||tfLast(),steps='';
+  TFI_STEPS.forEach(function(s,i){
+    steps+='<li class="ai-tfi__step'+(i===0?' is-now':'')+'"><span class="ai-tfi__n" aria-hidden="true">'+(i+1)+'</span><span class="ai-tfi__txt"><b>'+esc(s[0])+'</b><span>'+esc(i===1&&known?'True Fit already knows your fit, so it’s quick.':s[1])+'</span></span></li>';
+  });
+  var seg=d.lines.length>1?'<div class="ai-tfi__seg" role="radiogroup" aria-label="Shoes for">'+d.lines.map(function(l){return '<button type="button" role="radio" class="ai-tfi__segbtn" data-tfi-show="'+esc(l.k)+'" aria-checked="'+(l.k===d.line)+'">'+esc(l.l)+'</button>'}).join('')+'</div>':'';
+  var grids=d.lines.map(function(l){
+    var word=l.l?l.l.toLowerCase()+' ':'';
+    return '<div class="ai-tfi__grid" data-tfi-grid="'+esc(l.k)+'"'+(l.k===d.line?'':' hidden')+'>'+l.tiles.map(function(t){
+      var count=t.n?t.n+' style'+(t.n===1?'':'s'):'';
+      return '<button type="button" class="ai-tfi__tile" data-tfi-ask="'+esc('Show me '+word+t.l.toLowerCase())+'" aria-label="'+esc((l.l?l.l+' ':'')+t.l+(count?', '+count:''))+'">'+
+        '<span class="ai-tfi__img">'+(t.img?'<img src="'+esc(t.img)+'" alt="" loading="lazy">':'')+'</span>'+
+        '<span class="ai-tfi__name">'+esc(t.l)+'</span>'+(count?'<span class="ai-tfi__count">'+count+'</span>':'')+'</button>';
+    }).join('')+'</div>';
+  }).join('');
+  return '<div class="ai-tfi" role="group" aria-label="Find your size with True Fit">'+
+    '<div class="ai-tfi__how"><div class="ai-tfi__head"><span class="ai-tfi__logo">'+tfLogo(22)+'</span><span class="ai-tfi__htxt"><span class="ai-tfi__title">How True Fit works</span><span class="ai-tfi__sub">Your size for the exact shoe, not a guess</span></span></div>'+
+    '<ol class="ai-tfi__steps">'+steps+'</ol></div>'+
+    '<div class="ai-tfi__pick"><div class="ai-tfi__pickhead"><span class="ai-tfi__picktitle">Start with a style</span>'+seg+'</div>'+grids+
+    '<p class="ai-tfi__note">Have a shoe in mind? Just type its name.</p></div></div>';
+}
+function tfiShow(btn){
+  var root=btn.closest('.ai-tfi'),k=btn.getAttribute('data-tfi-show');if(!root)return;
+  Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-show]'),function(b){b.setAttribute('aria-checked',String(b===btn))});
+  Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-grid]'),function(g){g.hidden=g.getAttribute('data-tfi-grid')!==k});
+}
 function tfNote(text){messages.push({role:'assistant',content:text});saveH(messages);appendMsg('assistant',text);scrollBottom()}
 function trueFitFor(handle,title){
   if(!handle||tfRun)return;
@@ -2495,7 +2543,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 compare-tray'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 true-fit-intro'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4252,6 +4300,11 @@ if(TESTER)body.tester=TESTER;
 /* Sent by tapping the seasonal button: the chat shows its collection. */
 if(SEA_TAP&&SEA_TAP===msg)body.seasonal=true;
 SEA_TAP='';
+/* "Find my shoe size" with no shoe picked yet, and a style tile from its
+   answer: the server answers the first itself and knows what the second is for. */
+if(TF_INTRO&&TF_INTRO===msg&&tfData)body.size_intro=true;
+if(TF_PICK&&TF_PICK===msg)body.size_pick=true;
+TF_INTRO='';TF_PICK='';
 if(REC_ON&&(REC_SCOPE==='everyone'||TESTER))body.page=location.pathname.slice(0,200);
 /* On a product page, the chat knows which product "this" is. */
 var viewingHandle=pageProductHandle();if(viewingHandle)body.viewing=viewingHandle;
@@ -4283,7 +4336,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -4325,6 +4378,7 @@ if(p.type==='size_finder'&&p.handle){
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
 if(p.type==='map_cta'){pendingMap=cleanMap(p)}
 if(p.type==='view_all'){pendingViewAll=cleanViewAll(p)}
+if(p.type==='size_intro'){pendingSizeIntro=cleanSizeIntro(p)}
 if(p.type==='klaviyo_form'){
   later(function(){showKlaviyoForm('Stay Connected')},300);
 }
@@ -4442,6 +4496,7 @@ if(cleanText){
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
   if(pendingForm)_saved.formCta=pendingForm;
   if(pendingMap)_saved.mapCta=pendingMap;
+  if(pendingSizeIntro)_saved.sizeIntro=pendingSizeIntro;
   if(pendingViewAll&&prods&&prods.length){
     _saved.viewAll=pendingViewAll;
     /* The full lists are big: only the latest three stay with the history. */
@@ -4478,7 +4533,11 @@ if(pendingViewAll&&mDiv&&prods&&prods.length){
   var vab=$('.ai-chat-msg-bubble',mDiv);
   if(vab)placeViewAll(vab,pendingViewAll,prods);
 }
-pendingForm=null;pendingMap=null;pendingViewAll=null;
+if(pendingSizeIntro&&mDiv){
+  var tib=$('.ai-chat-msg-bubble',mDiv);
+  if(tib)tib.insertAdjacentHTML('beforeend',sizeIntroHtml(pendingSizeIntro));
+}
+pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -4815,6 +4874,16 @@ if(cmpBtn){
   else cmpCancel(cbub);
   return;
 }
+/* How True Fit works: the line switch, and a style tile asks for those shoes. */
+var tfiBtn=e.target.closest('[data-tfi-show],[data-tfi-ask]');
+if(tfiBtn){
+  e.preventDefault();
+  if(tfiBtn.hasAttribute('data-tfi-show')){tfiShow(tfiBtn);return}
+  if(isStreaming)return;
+  var tfiAsk=tfiBtn.getAttribute('data-tfi-ask');
+  TF_PICK=tfiAsk;inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=tfiAsk;sendMessage();
+  return;
+}
 /* Picking cards to compare: a tap anywhere on a card picks it. */
 var pickCard=e.target.closest('.is-cmp-picking .ai-chat-product-card[data-handle]');
 if(pickCard){e.preventDefault();e.stopPropagation();cmpToggle(pickCard);return}
@@ -4864,6 +4933,8 @@ else for(var i=0;i<messages.length;i++){
   if(_mc&&_md){var _mb=$('.ai-chat-msg-bubble',_md);if(_mb)_mb.insertAdjacentHTML('beforeend',mapCtaHtml(_mc))}
   var _fc=messages[i].formCta;
   if(_fc&&/^[A-Za-z0-9]{4,32}$/.test(String(_fc.form||''))&&_md){var _fb=$('.ai-chat-msg-bubble',_md);if(_fb)_fb.insertAdjacentHTML('beforeend',formCtaHtml({form:String(_fc.form),label:String(_fc.label||'').slice(0,40)||'Open the quiz'}))}
+  var _ti=cleanSizeIntro(messages[i].sizeIntro);
+  if(_ti&&_md){var _tib=$('.ai-chat-msg-bubble',_md);if(_tib)_tib.insertAdjacentHTML('beforeend',sizeIntroHtml(_ti))}
   var _va=messages[i].viewAll;
   if(_va&&_md&&messages[i].products&&messages[i].products.length){var _vac=cleanViewAll(_va),_vab=$('.ai-chat-msg-bubble',_md);if(_vac&&_vab)placeViewAll(_vab,_vac,messages[i].products)}
   if(messages[i].comparison&&_md){var _cb=$('.ai-chat-msg-bubble',_md);if(_cb)_cb.insertAdjacentHTML('beforeend',compareHtml(messages[i].comparison))}

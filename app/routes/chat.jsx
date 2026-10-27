@@ -144,6 +144,10 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     viewingHandle: cleanHandle(body.viewing),
     // Sent by tapping the seasonal button: the reply shows its collection.
     seasonalTap: body.seasonal === true,
+    // Sent by tapping "Find my shoe size" before a shoe is picked.
+    sizeIntroTap: body.size_intro === true,
+    // A style tile from that answer: they're choosing a shoe to get sized.
+    sizePickTap: body.size_pick === true,
     // Test recordings: only while the store has it on, and (by default) only
     // for testers who opened the store with the tester link.
     record: shouldRecord(config, { tester: body.tester, internal })

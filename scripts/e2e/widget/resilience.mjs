@@ -467,6 +467,17 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: picking to compare`);
   await ctx.close();
 }
+// "Find my shoe size" with no shoe picked: how True Fit works, and the tiles.
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const { ctx, page } = await open("/full", { viewport: vp, init: () => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } } });
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector('[data-helper="truefit"]', { timeout: 6000 });
+  await page.click('[data-helper="truefit"]');
+  await page.waitForSelector(".ai-tfi", { timeout: 6000 });
+  await page.waitForTimeout(500);
+  await axe(page, `${name}: True Fit, pick a shoe`);
+  await ctx.close();
+}
 for (const run of axeRuns) {
   const serious = run.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   check(`axe WCAG 2.2 AA — ${run.label}: no serious/critical violations`, serious.length === 0, serious.map((v) => `${v.id} (${v.nodes}) ${v.target}`).join("; "));

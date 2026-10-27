@@ -108,6 +108,23 @@ export const BOOT_PRODUCTS = Array.from({ length: 60 }, (_, i) => {
 const MANY_BOOTS = BOOT_PRODUCTS.map((p) => ({ title: p.title, handle: p.handle, url: `/products/${p.handle}`, image: img, price: p.price.toFixed(2), price_formatted: `$${p.price.toFixed(2)}`, compare_at_price: Math.round(p.compareAtPrice * 100), choose: ["Size", "Width"], kind: "footwear" }));
 const carly = { title: "Carly Arch Support Sneaker - White", handle: "carly-white", url: "/products/carly-white", image: img, price: "139.95", price_formatted: "$139.95", choose: ["Size", "Width"], kind: "footwear" };
 for (const p of CMP_CATALOG.products) p.image = img;
+// "Find my shoe size" with no shoe picked: the real answer (true-fit-intro.js)
+// from a small store — shoes of several kinds in both lines, an orthotic
+// (never a tile) — with photos on https://img.mock.test (tests serve them).
+const { trueFitIntro, TRUE_FIT_INTRO_TEXT } = await import("../../../app/lib/lean/true-fit-intro.js");
+const INTRO_KINDS = [["Sneakers", 9, 4], ["Sandals", 7, 3], ["Boots", 5, 2], ["Loafers", 4, 2], ["Wedges", 3, 0], ["Slippers", 2, 2], ["Clogs", 1, 1]];
+export const INTRO_CATALOG = { products: [
+  ...INTRO_KINDS.flatMap(([cat, women, men]) => [
+    ...Array.from({ length: women }, (_, i) => ({ cat, line: "women", i })),
+    ...Array.from({ length: men }, (_, i) => ({ cat, line: "men", i })),
+  ]).map(({ cat, line, i }) => normalizeProduct({
+    handle: `${line}-${cat.toLowerCase()}-${i + 1}`, title: `${line === "men" ? "Men's " : ""}${cat.replace(/s$/, "")} ${i + 1} - Black`, productType: "Footwear",
+    featuredImageUrl: `https://img.mock.test/${cat.toLowerCase()}.svg`, tags: [], description: "",
+    attributesJson: { category_for_filter: cat, gender: line, rating: (4 + (i % 9) / 10).toFixed(1), review_count: String(20 + i) },
+    variants: [cv("8 US", "Medium", 129.95)],
+  }, { shop: "aetrex.myshopify.com" })),
+  CMP_CATALOG.products.find((p) => p.handle === "orthotic-one"),
+] };
 const page = (style) => `<!doctype html><script>setTimeout(function(){var d=document.createElement("div");d.id="floater";d.style.cssText="position:fixed;right:16px;bottom:16px;width:48px;height:48px;z-index:999999;pointer-events:none";var f=document.createElement("iframe");f.style.cssText="width:48px;height:48px;border:0;border-radius:50%;background:#333;pointer-events:auto";d.appendChild(f);document.body.appendChild(d)},6000)</script><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
 <script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"The Fit Concierge",greeting:"Hi!",position:"right"};try{localStorage.setItem("hajirai_product_card_style","${style}")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Store page <span class="cart-count">0</span></div><script src="/w.js"></script></body></html>`;
@@ -283,6 +300,16 @@ export function start(port) {
               : code === 503 ? { error: "AI engine API key not configured." }
               : { error: "action_failed", message: "I'm having trouble right now. Please try again in a moment." };
             return send(code, "application/json", JSON.stringify(payload));
+          }
+          // "Find my shoe size" tapped with no shoe picked: answered without the model.
+          if (parsed.size_intro === true) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: TRUE_FIT_INTRO_TEXT });
+            w({ type: "products", products: [] });
+            w(trueFitIntro(INTRO_CATALOG, { primaryLine: "women" }));
+            w({ type: "done" });
+            return resp.end();
           }
           if (parsed.message === "xss") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });

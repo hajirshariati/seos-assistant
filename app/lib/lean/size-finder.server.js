@@ -3,8 +3,12 @@
 // Claude decides when a shopper's question is about size; the tool only puts
 // a "Find my size with True Fit" button under the reply. The widget opens
 // True Fit and sends the recommended size back as the shopper's next message.
+// With no shoe picked yet, the tool shows how True Fit works instead, with
+// the store's kinds of shoes to start from (true-fit-intro.js).
 import prisma from "../../db.server.js";
 import { productKind } from "./catalog.js";
+import { loadLeanCatalog } from "./catalog.server.js";
+import { trueFitIntro } from "./true-fit-intro.js";
 
 const HANDLE = /^[a-z0-9][a-z0-9-]{0,254}$/;
 
@@ -23,7 +27,7 @@ async function findProduct(shop, handle) {
 
 // The tool's text is the same for every shopper (so it stays in the cached
 // part of the prompt); the shoe page they're on comes as `pageNote`.
-export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
+export function trueFitTool({ shop, sizeFinder, lookup = findProduct, loadCatalog = loadLeanCatalog }) {
   if (!sizeFinder) return null;
   return {
     pageNote: sizeFinder.pageHandle
@@ -34,16 +38,25 @@ export function trueFitTool({ shop, sizeFinder, lookup = findProduct }) {
       description:
         "Offer True Fit, the store's personal size finder, for one shoe. Use when the customer asks what size to get in a shoe, how it fits, or whether to size up or down. Shoes only — never for orthotics or accessories (orthotic choice and FITs belong to the orthotic finder). " +
         "It shows a \"Find my size with True Fit\" button under your reply; the customer answers a few quick questions in True Fit and their recommended size comes back to you as their next message. Don't guess a size yourself. " +
+        "True Fit sizes one shoe at a time — every style fits a little differently, and it uses real fit data from shoppers who bought that shoe — so there's no one size for every shoe. When the customer wants their size but hasn't picked a shoe, call it without a handle: it shows how True Fit works and the store's kinds of shoes to start from. When they then look at shoes to get their size, tell them to tap the True Fit button on the one they like (every shoe card has one). " +
         "When the customer then tells you their True Fit size, show that shoe with that size in show_products `options` so it's ready to add to cart, and confirm in one sentence. Many shoes are sold in two-size steps (\"9 - 9.5 US\"), so True Fit's size is often exactly one of the shoe's sizes — pass it as given. If the shoe is sold in single sizes instead, show it without a size and ask which they'd like with taps (e.g. <<Size 9>><<Size 9.5>>). If show_products says the size is sold out, say so and offer the in-stock sizes.",
       input_schema: {
         type: "object",
-        properties: { handle: { type: "string", description: "The shoe's product handle (from a search, a shown card, or the current page)." } },
-        required: ["handle"],
+        properties: { handle: { type: "string", description: "The shoe's product handle (from a search, a shown card, or the current page). Leave it out when they haven't picked a shoe yet." } },
       },
     },
     run: async (input) => {
       const handle = String(input?.handle || "").trim().toLowerCase();
-      if (!HANDLE.test(handle)) return { error: "Pass the shoe's product handle." };
+      if (!handle) {
+        const intro = trueFitIntro(await loadCatalog(shop), { primaryLine: "women" });
+        if (!intro) return { error: "Ask which shoe they'd like sized — True Fit sizes one shoe at a time." };
+        return {
+          ok: true,
+          note: "Under your reply the customer sees how True Fit works and the store's kinds of shoes to tap. In one or two short sentences, say True Fit finds their size for one specific shoe, so they pick the shoe first. Don't list the kinds of shoe, show products or guess a size.",
+          _events: [intro],
+        };
+      }
+      if (!HANDLE.test(handle)) return { error: "Pass the shoe's product handle, or no handle when they haven't picked a shoe." };
       const product = await lookup(shop, handle);
       if (!product) return { error: `No active product "${handle}" — search for the shoe first.` };
       const kind = productKind(product);

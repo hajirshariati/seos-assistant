@@ -36,8 +36,8 @@ export function colorGroupsOf(colors = []) {
   return keys.length ? keys : [OTHER[0]];
 }
 
-const LINE_LABEL = { women: "Women's", men: "Men's", kids: "Kids'" };
-const lineKey = (g) => {
+export const LINE_LABEL = { women: "Women's", men: "Men's", kids: "Kids'" };
+export const lineKey = (g) => {
   const v = String(g || "").toLowerCase();
   if (/^(women|womens|women's|female|ladies)$/.test(v)) return "women";
   if (/^(men|mens|men's|male)$/.test(v)) return "men";

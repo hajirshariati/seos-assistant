@@ -35,6 +35,7 @@ export function describeExtras(events = []) {
     if (e.type === "support_cta") out.push("support button");
     else if (e.type === "visualize_cta") out.push("See It Styled");
     else if (e.type === "size_finder") out.push("True Fit size finder");
+    else if (e.type === "size_intro" && Array.isArray(e.lines)) out.push(`True Fit — pick a shoe: ${(e.lines.find((l) => l.k === e.line) || e.lines[0])?.tiles?.map((t) => t.l).join(", ") || ""}`);
     else if (e.type === "fitfinder_fit") out.push(`FIT ${e.key}`);
     else if (e.type === "fit_report") out.push(`fit report ${e.recommendedSize || ""}`.trim());
     else if (e.type === "klaviyo_form") out.push("sign-up form");

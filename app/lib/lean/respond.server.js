@@ -23,6 +23,7 @@ import { describeExtras } from "../chat-recording.js";
 import { createLimiter } from "../concurrency.js";
 import { seasonalForTurn, seasonalTapNote } from "../seasonal-cta.js";
 import { featuredCollection, collectionView } from "./collections.server.js";
+import { trueFitIntro, TRUE_FIT_INTRO_TEXT, TRUE_FIT_PICK_NOTE } from "./true-fit-intro.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -91,6 +92,10 @@ export function leanChatResponse({
   record = null,
   // The shopper tapped the seasonal button (Settings → Seasonal button).
   seasonalTap = false,
+  // The shopper tapped "Find my shoe size" without a shoe picked yet.
+  sizeIntroTap = false,
+  // A style tile from that answer ("Show me women's sneakers").
+  sizePickTap = false,
 }) {
   const encoder = new TextEncoder();
   // Test recordings: each turn (and anything shown with it) is saved for
@@ -132,9 +137,29 @@ export function leanChatResponse({
           return;
         }
 
+        const model = chatModel(config.anthropicModel);
+        // "Find my shoe size" with no shoe picked yet: the same clear answer
+        // every time, straight from the catalog — True Fit sizes one shoe at
+        // a time, and here are the store's kinds of shoes to start from. No
+        // model call; if the catalog can't offer that, the assistant answers.
+        if (sizeIntroTap && sizeFinder) {
+          const intro = trueFitIntro(await loadLeanCatalog(shop), { primaryLine: "women" });
+          if (intro) {
+            send({ type: "text", text: TRUE_FIT_INTRO_TEXT });
+            send({ type: "products", products: [] });
+            send(intro);
+            send({ type: "done" });
+            keep({ reply: TRUE_FIT_INTRO_TEXT });
+            health(true);
+            // Counted as a message (analytics, the daily limit), at no cost.
+            recordChatUsage({ shop, model, usage: {}, toolCalls: 0, internal })
+              .catch((err) => console.error("[lean] usage log error:", err?.message));
+            return;
+          }
+        }
+
         // Retries happen once, in withAnthropicRetry — not again inside the SDK.
         const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 0 });
-        const model = chatModel(config.anthropicModel);
         // The seasonal button's collection, for the reply to the tap only:
         // its products come from Shopify (kept 10 minutes), so that search
         // can keep to them. Every later message is searched as usual — the
@@ -181,7 +206,7 @@ export function leanChatResponse({
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
           pageSystem: extras.pageBlock,
-          turnNote: [extras.turnNote, seasonalTap && featured ? seasonalTapNote(featured) : ""].filter(Boolean).join("\n"),
+          turnNote: [extras.turnNote, seasonalTap && featured ? seasonalTapNote(featured) : "", sizePickTap && sizeFinder ? TRUE_FIT_PICK_NOTE : ""].filter(Boolean).join("\n"),
           similarAttributes: extras.similarAttributes,
           featured,
           liveStock: makeLiveStock({ shop, accessToken }),

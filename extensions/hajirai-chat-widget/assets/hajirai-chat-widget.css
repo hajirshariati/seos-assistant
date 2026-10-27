@@ -6068,3 +6068,88 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-va-skel__line,
   .ai-chat-panel .ai-va-skel__btn { animation: none; }
 }
+
+/* ── True Fit: "Find my shoe size" before a shoe is picked ─────────────────
+   A card that says how True Fit works — it sizes one shoe at a time, so the
+   shopper picks the shoe first (step 1 is where they are) — then the store's
+   kinds of shoes as photo tiles, per line, each asking for those shoes. */
+.ai-chat-msg-bubble:has(.ai-tfi) { width: 100%; }
+.ai-chat-panel .ai-chat-msg:has(.ai-tfi) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
+.ai-chat-panel .ai-tfi { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.ai-chat-panel .ai-tfi__how {
+  padding: 14px 14px 6px;
+  border-radius: 16px;
+  background: var(--seos-bg-raised, #fff);
+  box-shadow: inset 0 0 0 1px var(--seos-line), 0 1px 2px rgba(13, 13, 18, 0.04);
+}
+.ai-chat-panel .ai-tfi__head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--seos-line); }
+.ai-chat-panel .ai-tfi__logo {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--seos-surface); color: var(--seos-ink);
+}
+.ai-chat-panel .ai-tfi__htxt { display: flex; flex-direction: column; min-width: 0; }
+.ai-chat-panel .ai-tfi__title { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; color: var(--seos-text); }
+.ai-chat-panel .ai-tfi__sub { font-size: 12.5px; line-height: 1.35; color: var(--seos-text-2); }
+/* The steps, joined by a thin line. */
+.ai-chat-panel .ai-tfi__steps { list-style: none; margin: 0; padding: 12px 0 0; }
+.ai-chat-panel .ai-tfi__step { position: relative; display: flex; gap: 12px; padding-bottom: 12px; margin: 0; }
+.ai-chat-panel .ai-tfi__step:not(:last-child)::before {
+  content: ""; position: absolute; left: 11px; top: 26px; bottom: 2px; width: 1.5px;
+  background: var(--seos-line-strong); border-radius: 1px;
+}
+.ai-chat-panel .ai-tfi__n {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--seos-line-strong);
+  color: var(--seos-text-2); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums;
+}
+.ai-chat-panel .ai-tfi__step.is-now .ai-tfi__n { background: var(--seos-ink); box-shadow: none; color: #fff; }
+.ai-chat-panel[data-theme="dark"] .ai-tfi__step.is-now .ai-tfi__n { color: #0d0d12; }
+.ai-chat-panel .ai-tfi__txt { display: flex; flex-direction: column; min-width: 0; padding-top: 2px; }
+.ai-chat-panel .ai-tfi__txt b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; color: var(--seos-text); }
+.ai-chat-panel .ai-tfi__txt span { font-size: 12.5px; line-height: 1.4; color: var(--seos-text-2); }
+/* Start with a style */
+.ai-chat-panel .ai-tfi__pickhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ai-chat-panel .ai-tfi__picktitle { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--seos-text); }
+.ai-chat-panel .ai-tfi__seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); }
+.ai-chat-panel .ai-tfi__segbtn {
+  min-height: 30px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--seos-text-2);
+  font: inherit; font-size: 13px; font-weight: 550; white-space: nowrap; cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.ai-chat-panel .ai-tfi__segbtn[aria-checked="true"] { background: var(--seos-ink); color: #fff; }
+.ai-chat-panel[data-theme="dark"] .ai-tfi__segbtn[aria-checked="true"] { color: #0d0d12; }
+.ai-chat-panel .ai-tfi__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+.ai-chat-panel .ai-tfi__grid[hidden] { display: none; }
+.ai-chat-panel .ai-tfi__grid:not([hidden]) { animation: aiTfiIn 0.28s ease both; }
+@keyframes aiTfiIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.ai-chat-panel .ai-tfi__tile {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  min-width: 0; padding: 0 0 10px; overflow: hidden;
+  border: 1px solid var(--seos-line); border-radius: 14px;
+  background: var(--seos-bg-raised, #fff);
+  box-shadow: 0 1px 2px rgba(13, 13, 18, 0.04);
+  color: var(--seos-text); font: inherit; text-align: left; cursor: pointer;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-tfi__tile:hover { border-color: var(--seos-line-strong); box-shadow: 0 6px 16px rgba(13, 13, 18, 0.08); transform: translateY(-1px); }
+  .ai-chat-panel .ai-tfi__segbtn[aria-checked="false"]:hover { color: var(--seos-text); }
+}
+.ai-chat-panel .ai-tfi__tile:active { transform: scale(0.97); }
+.ai-chat-panel .ai-tfi__tile:focus-visible,
+.ai-chat-panel .ai-tfi__segbtn:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+/* Product photos are on white in every theme. */
+.ai-chat-panel .ai-tfi__img { display: block; aspect-ratio: 4 / 3; background: #fff; margin-bottom: 8px; }
+.ai-chat-panel .ai-tfi__img img { display: block; width: 100%; height: 100%; object-fit: contain; padding: 6px; box-sizing: border-box; }
+.ai-chat-panel .ai-tfi__name { padding: 0 10px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-chat-panel .ai-tfi__count { padding: 1px 10px 0; font-size: 12px; line-height: 1.3; color: var(--seos-text-2); }
+.ai-chat-panel .ai-tfi__note { margin: 10px 2px 0; font-size: 12.5px; line-height: 1.4; color: var(--seos-text-2); }
+.ai-chat-panel[data-theme="dark"] .ai-tfi__how { box-shadow: inset 0 0 0 1px var(--seos-line-strong); }
+.ai-chat-panel[data-theme="dark"] .ai-tfi__tile { border-color: var(--seos-line-strong); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-tfi__tile, .ai-chat-panel .ai-tfi__segbtn { transition: none; }
+  .ai-chat-panel .ai-tfi__grid:not([hidden]) { animation: none; }
+}

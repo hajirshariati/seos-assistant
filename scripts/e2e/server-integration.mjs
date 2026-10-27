@@ -73,8 +73,9 @@ function modelServer() {
     req.on("data", (c) => (body += c));
     req.on("end", async () => {
       const r = JSON.parse(body || "{}");
-      modelCalls.push({ model: r.model, at: Date.now() });
       const msgs = r.messages || [];
+      const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+      modelCalls.push({ model: r.model, at: Date.now(), last: typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content || "") });
       const first = msgs.find((m) => m.role === "user");
       const firstText = typeof first?.content === "string" ? first.content : JSON.stringify(first?.content || "");
       const delay = /SLOW/.test(firstText) ? 6000 : MODEL_DELAY_MS;
@@ -275,6 +276,28 @@ await test("View all pages: the reply sends page 1 and its search; the endpoint 
   assert.deepEqual(cards.products.map((c) => c.handle), pick.slice(0, 2), "asked order; unknown left out");
   assert.ok(cards.products.every((c) => c.title && c.url && c.price_formatted));
   assert.equal((await fetch(signed("/view-all", { handles: "<script>" }))).status, 400, "nothing usable → refused");
+});
+await test("\"Find my shoe size\" with no shoe picked: how True Fit works and the store's kinds of shoes, from the catalog — no model call", async () => {
+  const tf = { provider: "truefit", page_handle: "" };
+  const before = modelCalls.length;
+  const r = await chat("Help me find my shoe size with True Fit.", { ip: "198.51.100.61", extra: { size_intro: true, size_finder: tf } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.events.map((e) => e.type), ["text", "products", "size_intro", "done"]);
+  assert.match(r.events[0].text, /True Fit sizes one shoe at a time, so pick the shoe first/);
+  const intro = r.events[2];
+  assert.equal(intro.line, "women");
+  assert.deepEqual(intro.lines.map((l) => l.k), ["women"]);
+  assert.deepEqual(intro.lines[0].tiles.map((t) => `${t.l}:${t.n}`), ["Boots:60", "Loafers:60", "Sandals:60", "Sneakers:60", "Wedges/Heels:60"], "styles counted once across colors");
+  assert.ok(intro.lines[0].tiles.every((t) => t.img === "https://cdn.example/x.jpg"));
+  assert.equal(modelCalls.length, before, "answered without the model");
+  // A style tile from it goes to the assistant, told what it's for.
+  await chat("Show me women's sandals", { ip: "198.51.100.61", extra: { size_pick: true, size_finder: tf } });
+  assert.ok(modelCalls.length > before);
+  assert.match(modelCalls[before].last, /tap the True Fit button on the shoe they like/);
+  // Without True Fit on the store, the same words go to the assistant as usual.
+  const plain = await chat("Help me find my shoe size with True Fit.", { ip: "198.51.100.61", extra: { size_intro: true } });
+  assert.ok(!plain.events.some((e) => e.type === "size_intro"));
+  assert.match(plain.events[0].text, /sandals/);
 });
 await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
