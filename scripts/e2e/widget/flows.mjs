@@ -362,7 +362,7 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.waitForSelector(".ai-chat-helper--fitfinder.is-known", { timeout: 5000 }).catch(() => {});
   const fitCards = await helperTitles();
   check("known: the saved FIT shows on its card", fitCards.includes("Cushioned Support / Your FIT B"), fitCards.join(" | "));
-  check("known: True Fit off a shoe page remembers the shopper", fitCards.includes("Find my shoe size / True Fit knows your fit"), fitCards.join(" | "));
+  check("known: True Fit off a shoe page says what it does: pick a shoe, get its size", fitCards.includes("Find my shoe size / True Fit \u00b7 pick a shoe, get its size"), fitCards.join(" | "));
   await page.click('.ai-chat-helper__alt[data-helper="fitfinder-retake"]');
   await page.waitForTimeout(600);
   check("known: Retake asks the FIT questions again", /retake my orthotic FIT/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.fitfinder?.saved?.key === "", JSON.stringify(chatBodies.at(-1)?.fitfinder?.saved));

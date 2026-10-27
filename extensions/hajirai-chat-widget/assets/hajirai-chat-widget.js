@@ -1280,7 +1280,7 @@ function renderHelpers(){
     var onShoe=tfHere()&&pageHandle(),size=onShoe?tfSizeHere():'';
     if(size)items+=helperHtml('truefit','Size '+size,'Your True Fit size',tfLogo(24),{kind:'truefit-update',label:'Update',aria:'Update my size with True Fit'});
     else if(onShoe)items+=helperHtml('truefit','Find my size','True Fit \u00b7 for this shoe',tfLogo(24));
-    else items+=helperHtml('truefit','Find my shoe size',tfKnown()||tfLast()?'True Fit knows your fit':'with True Fit',tfLogo(24));
+    else items+=helperHtml('truefit','Find my shoe size','True Fit \u00b7 pick a shoe, get its size',tfLogo(24));
   }
   if(ff){
     var mine=savedFit();
