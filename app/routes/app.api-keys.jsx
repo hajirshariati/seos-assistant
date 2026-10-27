@@ -1,6 +1,7 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
-import { appLinkError } from "../lib/app-promo.js";
+import { appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
+import { getShopName } from "../lib/shop-name.server.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -67,10 +68,11 @@ async function seasonalInfo(admin, handle) {
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
-  const [config, plan, pulse] = await Promise.all([
+  const [config, plan, pulse, shopName] = await Promise.all([
     getShopConfig(session.shop),
     getShopPlan(session.shop),
     getChatPulse(session.shop).catch(() => null),
+    getShopName(admin, session.shop),
   ]);
   const seasonalHandle = collectionHandle(config.seasonalCtaCollection);
   let hideOnUrls = [];
@@ -119,6 +121,9 @@ export const loader = async ({ request }) => {
     appPromoOn: config.appPromoOn !== false,
     appIosUrl: config.appIosUrl || "",
     appAndroidUrl: config.appAndroidUrl || "",
+    appPromoText: config.appPromoText || "",
+    appPromoButton: config.appPromoButton || "",
+    appPromoDefaultText: defaultAppText(shopName),
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -335,6 +340,10 @@ export const action = async ({ request }) => {
     if (err) return fail(err, "tools");
     data[field] = raw;
   }
+  const appText = formData.get("appPromoText");
+  if (appText !== null) data.appPromoText = cleanAppText(appText);
+  const appButton = formData.get("appPromoButton");
+  if (appButton !== null) data.appPromoButton = cleanAppText(appButton, APP_BUTTON_MAX);
 
   // Seasonal button
   bool("seasonalCtaOn");
@@ -480,7 +489,7 @@ const FIELDS = {
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
-  appPromoOn: ["tools", "bool"], appIosUrl: ["tools"], appAndroidUrl: ["tools"],
+  appPromoOn: ["tools", "bool"], appIosUrl: ["tools"], appAndroidUrl: ["tools"], appPromoText: ["tools"], appPromoButton: ["tools"],
   seasonalCtaOn: ["seasonal", "bool"], seasonalCtaIcon: ["seasonal"], seasonalCtaColor: ["seasonal"],
   seasonalCtaLabel: ["seasonal"], seasonalCtaCollection: ["seasonal"],
   yotpoApiKey: ["integrations", "secret"], yotpoLoyaltyApiKey: ["integrations", "secret"], yotpoLoyaltyGuid: ["integrations"],
@@ -964,16 +973,22 @@ function ToolsSection({ d, values, set }) {
         <Row
           title="Your app"
           help={values.appPromoOn
-            ? "Once a visit, after a couple of replies, the chat quietly mentions your app: a QR code to scan on computers, App Store and Google Play buttons on phones. Links left blank: the ones in your store's footer are used."
+            ? "Once a visit, after a couple of replies, your app shows up as its own small message with a button: a QR code to scan on computers, App Store and Google Play buttons on phones. Links left blank: the ones in your store's footer are used."
             : "The chat doesn't mention your app."}
           toggle
           checked={values.appPromoOn}
           onChange={set("appPromoOn")}
         >
-          <div className="set-grid">
-            <TextField label="App Store link" value={values.appIosUrl} onChange={set("appIosUrl")} placeholder="https://apps.apple.com/us/app/…" autoComplete="off" disabled={!values.appPromoOn} />
-            <TextField label="Google Play link" value={values.appAndroidUrl} onChange={set("appAndroidUrl")} placeholder="https://play.google.com/store/apps/details?id=…" autoComplete="off" disabled={!values.appPromoOn} />
-          </div>
+          <BlockStack gap="300">
+            <div className="set-grid set-grid--app">
+              <TextField label="Message" value={values.appPromoText} onChange={set("appPromoText")} placeholder={d.appPromoDefaultText} maxLength={APP_TEXT_MAX} showCharacterCount autoComplete="off" disabled={!values.appPromoOn} helpText="Left blank, the placeholder is used." />
+              <TextField label="Button text" value={values.appPromoButton} onChange={set("appPromoButton")} placeholder="Get it" maxLength={APP_BUTTON_MAX} autoComplete="off" disabled={!values.appPromoOn} />
+            </div>
+            <div className="set-grid">
+              <TextField label="App Store link" value={values.appIosUrl} onChange={set("appIosUrl")} placeholder="https://apps.apple.com/us/app/…" autoComplete="off" disabled={!values.appPromoOn} />
+              <TextField label="Google Play link" value={values.appAndroidUrl} onChange={set("appAndroidUrl")} placeholder="https://play.google.com/store/apps/details?id=…" autoComplete="off" disabled={!values.appPromoOn} />
+            </div>
+          </BlockStack>
         </Row>
       </Group>
       <Group>

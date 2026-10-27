@@ -78,7 +78,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     applyHostButtons(hb);
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
-  if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||'')};
+  if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||''),text:String(d.appPromo.text||'').slice(0,60),button:String(d.appPromo.button||'').slice(0,16)};
   if(d.seasonalCta&&typeof d.seasonalCta==='object'){
     var seaWas=[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|');
     try{localStorage.setItem(SEA_KEY,JSON.stringify(d.seasonalCta))}catch(e){}
@@ -2434,12 +2434,20 @@ function tfiShow(btn){
   Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-show]'),function(b){b.setAttribute('aria-checked',String(b===btn))});
   Array.prototype.forEach.call(root.querySelectorAll('[data-tfi-grid]'),function(g){g.hidden=g.getAttribute('data-tfi-grid')!==k});
 }
-/* The store's app, mentioned once a visit — quietly, under a reply, never
-   the first one, never beside an order, a comparison or a form. Tapped, it
-   shows a QR code to scan on computers (iPhone or Android, like the
-   footer) and the App Store / Google Play buttons on phones. Links come from
+/* The store's app, once a visit, as its own small message under the
+   conversation (like "How's the chat going?") — never after the first
+   reply, never beside an order, a comparison or a form, never in the same
+   turn as the rating question. Its button opens a QR code to scan on
+   computers (iPhone or Android, like the footer) and the App Store /
+   Google Play buttons on phones. Text and button from Settings; links from
    Settings, else from the store's own footer — with its QR codes and badges. */
-var APP_PROMO={on:true,ios:'',android:''},APPN_KEY='hajirai_app_note',APPN_COUNT='hajirai_app_replies',APP_QR_URL='/apps/hajirai/app-qr';
+var APP_PROMO={on:true,ios:'',android:'',text:'',button:''},APPN_KEY='hajirai_app_note',APPN_COUNT='hajirai_app_replies',APP_QR_URL='/apps/hajirai/app-qr',APPN_DELAY=900;
+function appText(){
+  if(APP_PROMO.text)return APP_PROMO.text;
+  var name=String(C.shopName||'').replace(/\s+/g,' ').trim().slice(0,30);
+  return name?'Love '+name+'? You\u2019ll love our app':'You\u2019ll love our app';
+}
+function appButton(){return APP_PROMO.button||'Get it'}
 var APP_RE={ios:/^https:\/\/apps\.apple\.com\/[^\s"'<>]+$/i,android:/^https:\/\/play\.google\.com\/store\/apps\/details\?[^\s"'<>]+$/i};
 var APP_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.8"/><path d="M10.5 18.5h3"/></svg>';
 var APP_LOGO={ios:'<svg viewBox="8 8 18 22" width="18" height="22" aria-hidden="true"><path fill="currentColor" d="M24.77 20.3a4.95 4.95 0 0 1 2.36-4.15 5.07 5.07 0 0 0-3.99-2.16c-1.68-.18-3.31 1-4.16 1-.87 0-2.19-.98-3.61-.96a5.32 5.32 0 0 0-4.47 2.73c-1.93 3.35-.49 8.27 1.36 10.98.93 1.33 2.01 2.81 3.43 2.75 1.39-.06 1.9-.88 3.58-.88 1.66 0 2.14.88 3.59.85 1.49-.02 2.43-1.33 3.32-2.67a10.96 10.96 0 0 0 1.52-3.09 4.78 4.78 0 0 1-2.92-4.4zM22.04 12.21a4.87 4.87 0 0 0 1.11-3.49 4.96 4.96 0 0 0-3.2 1.66 4.64 4.64 0 0 0-1.15 3.36 4.1 4.1 0 0 0 3.24-1.53z"/></svg>',
@@ -2461,7 +2469,10 @@ function appInfo(){
 var appInfoNow=null;
 function appNoteHtml(){
   var id='ai-appn-'+(++ordlSeq);
-  return '<div class="ai-appn"><button type="button" class="ai-appn__row" data-appn aria-expanded="false" aria-controls="'+id+'"><span class="ai-appn__icon">'+APP_ICON+'</span><span class="ai-appn__txt">Our new app is here</span><span class="ai-appn__go">Get it'+ORD_ICON.chev+'</span></button><div class="ai-appn__panel" id="'+id+'" hidden></div></div>';
+  return '<div class="ai-appn"><div class="ai-appn__row"><span class="ai-appn__icon">'+APP_ICON+'</span><span class="ai-appn__txt">'+esc(appText())+'</span>'+
+    '<button type="button" class="ai-appn__go" data-appn aria-expanded="false" aria-controls="'+id+'">'+esc(appButton())+'</button>'+
+    '<button type="button" class="ai-appn__x" data-appn-x aria-label="Not now" title="Not now">'+RATE_ICON.x+'</button></div>'+
+    '<div class="ai-appn__panel" id="'+id+'" hidden></div></div>';
 }
 var APPN_CAP={ios:'Scan with your iPhone camera',android:'Scan with your phone\u2019s camera'},APPN_STORE={ios:'App Store',android:'Google Play'};
 function appPanelHtml(info){
@@ -2502,16 +2513,33 @@ function appNoteSwitch(btn){
   var st=box.querySelector('.ai-appn__store');st.href=i.link;st.firstChild.textContent='Or open '+APPN_STORE[pf];
   Array.prototype.forEach.call(box.querySelectorAll('[data-appn-pf]'),function(b){b.setAttribute('aria-pressed',String(b===btn))});
 }
-/* After a reply: the second one this visit (or later), once. */
+/* After a reply: the second one this visit (or later), once — a moment
+   after it, as long as the shopper hasn't moved on. True when it's coming
+   (the rating question then waits for a later reply). */
 function maybeAppNote(bubble){
-  if(!bubble||!APP_PROMO.on)return;
-  try{if(sessionStorage.getItem(APPN_KEY))return;var n=(parseInt(sessionStorage.getItem(APPN_COUNT),10)||0)+1;sessionStorage.setItem(APPN_COUNT,String(n));if(n<2)return}catch(e){return}
-  if(bubble.querySelector('.ai-ordl,.ai-ord,.ai-cmp,.ai-cmp-bar:not([hidden]),.ai-tfi,.ai-chat-klaviyo-form,.ai-chat-atc-panel,.ai-chat-choices'))return;
-  var info=appInfo();if(!info)return;
-  appInfoNow=info;
-  try{sessionStorage.setItem(APPN_KEY,'1')}catch(e){}
-  var fb=bubble.querySelector('.ai-chat-feedback');
-  if(fb)fb.insertAdjacentHTML('beforebegin',appNoteHtml());else bubble.insertAdjacentHTML('beforeend',appNoteHtml());
+  if(!bubble||!APP_PROMO.on)return false;
+  try{if(sessionStorage.getItem(APPN_KEY))return false;var n=(parseInt(sessionStorage.getItem(APPN_COUNT),10)||0)+1;sessionStorage.setItem(APPN_COUNT,String(n));if(n<2)return false}catch(e){return false}
+  if(bubble.querySelector('.ai-ordl,.ai-ord,.ai-cmp,.ai-cmp-bar:not([hidden]),.ai-tfi,.ai-chat-klaviyo-form,.ai-chat-atc-panel,.ai-chat-choices'))return false;
+  if($('.ai-chat-rate',msgsEl))return false;
+  var info=appInfo();if(!info)return false;
+  var turn=messages.length;
+  later(function(){
+    if(!APP_PROMO.on||isStreaming||messages.length!==turn||$('.ai-chat-app',msgsEl)||$('.ai-chat-rate',msgsEl))return;
+    if(inputEl.value.trim()||(fbSheet&&!fbSheet.hidden))return;
+    try{if(sessionStorage.getItem(APPN_KEY))return;sessionStorage.setItem(APPN_KEY,'1')}catch(e){return}
+    appInfoNow=info;
+    var near=rateNearBottom();
+    var row=el('div','ai-chat-app',appNoteHtml());
+    row.setAttribute('role','group');row.setAttribute('aria-label',appText());
+    msgsEl.appendChild(row);
+    void row.offsetWidth;row.classList.add('is-in');
+    if(near)keepInView(row);
+  },APPN_DELAY);
+  return true;
+}
+function appNoteClose(btn){
+  var row=btn.closest('.ai-chat-app');if(!row)return;
+  foldAway(row);try{inputEl.focus({preventScroll:true})}catch(e){}
 }
 function tfNote(text){messages.push({role:'assistant',content:text});saveH(messages);appendMsg('assistant',text);scrollBottom()}
 function trueFitFor(handle,title){
@@ -2645,7 +2673,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 fresh-after-a-day'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 app-message'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4843,9 +4871,9 @@ if(prods&&prods.length>0&&mDiv){
     });
   }
 }
-if(mDiv&&cleanText)maybeAppNote($('.ai-chat-msg-bubble',mDiv));
+var appSoon=!!(mDiv&&cleanText)&&maybeAppNote($('.ai-chat-msg-bubble',mDiv));
 scrollMsgTop(mDiv);
-maybeAskRating();
+if(!appSoon)maybeAskRating();
 }
 
 /* Delayed UI for the current chat only — "Clear chat" cancels it. */
@@ -4891,7 +4919,7 @@ function ratePost(vote,comment){
 }
 function rateMarkDone(){try{localStorage.setItem(RATE_DONE,String(Date.now()))}catch(e){}}
 /* Fold away: fade, then collapse the space it took. */
-function rateRemove(row){
+function foldAway(row){
   if(!row||!row.isConnected)return;
   row.style.maxHeight=row.offsetHeight+'px';void row.offsetHeight;
   row.classList.add('is-out');
@@ -4900,13 +4928,13 @@ function rateRemove(row){
 function rateFinish(row){
   if(!row||!row.isConnected)return;
   row.innerHTML=rateDoneHtml();row.setAttribute('data-state','done');
-  later(function(){rateRemove(row)},3200);
+  later(function(){foldAway(row)},3200);
 }
 /* A new chat message while the question is still open: it steps aside. */
 function rateStepAside(){
   var row=$('.ai-chat-rate',msgsEl);if(!row)return;
   var st=row.getAttribute('data-state');
-  if(st==='ask')rateRemove(row);
+  if(st==='ask')foldAway(row);
   else if(st==='voted'){var inp=$('.ai-chat-rate__input',row);var c=inp?inp.value.trim():'';if(c)ratePost(row.getAttribute('data-vote'),c);rateFinish(row)}
 }
 function maybeAskRating(){
@@ -4938,7 +4966,7 @@ function maybeAskRating(){
         return;
       }
       if(e.target.closest('[data-rate-x]')){
-        if(row.getAttribute('data-state')==='ask'){rateMarkDone();rateRemove(row);try{inputEl.focus({preventScroll:true})}catch(_){}}
+        if(row.getAttribute('data-state')==='ask'){rateMarkDone();foldAway(row);try{inputEl.focus({preventScroll:true})}catch(_){}}
         else rateFinish(row);
       }
     });
@@ -5110,8 +5138,8 @@ if(cmpBtn){
   return;
 }
 /* The app mention: open it, and switch iPhone / Android. */
-var appBtn=e.target.closest('[data-appn],[data-appn-pf]');
-if(appBtn){e.preventDefault();if(appBtn.hasAttribute('data-appn'))appNoteToggle(appBtn);else appNoteSwitch(appBtn);return}
+var appBtn=e.target.closest('[data-appn],[data-appn-pf],[data-appn-x]');
+if(appBtn){e.preventDefault();if(appBtn.hasAttribute('data-appn'))appNoteToggle(appBtn);else if(appBtn.hasAttribute('data-appn-x'))appNoteClose(appBtn);else appNoteSwitch(appBtn);return}
 /* How True Fit works: the line switch, and a style tile asks for those shoes. */
 var tfiBtn=e.target.closest('[data-tfi-show],[data-tfi-ask]');
 if(tfiBtn){

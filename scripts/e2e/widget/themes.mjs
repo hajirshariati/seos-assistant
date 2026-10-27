@@ -58,7 +58,7 @@ const SCENES = {
   signin: ["signin"], orders: ["orders"], phoneOrders: ["phone", "orders"],
   lookup: ["lookup"], lookupOpen: ["lookup", "lkopen"], lookupErr: ["lookup", "lkopen", "lkbad"], lookupMiss: ["lkmiss", "lookup", "lkopen", "lkfill"],
   lookupFound: ["lkfound", "lookup", "lkopen", "lkfill"], phoneLookup: ["phone", "lookup", "lkopen"], phoneLookupFound: ["phone", "lkfound", "lookup", "lkopen", "lkfill"],
-  appNote: ["url:/full?app=1", "one", "many"], appOpen: ["url:/full?app=1", "one", "many", "appopen"], phoneAppOpen: ["phone", "url:/full?app=1", "one", "many", "appopen"],
+  appNote: ["url:/full?app=1", "one", "many", "appwait"], appOpen: ["url:/full?app=1", "one", "many", "appwait", "appopen"], phoneAppOpen: ["phone", "url:/full?app=1", "one", "many", "appwait", "appopen"],
   retItems: ["orders", "ret"], retReason: ["orders", "ret", "retitem", "retnext"], retConfirm: ["orders", "ret", "retitem", "retnext", "retsmall"],
   retDone: ["retok", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"], retErr: ["retbad", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"],
   compare: ["cmpask"], compareAll: ["cmpask", "cmpall"], phoneCompare: ["phone", "cmpask"], phoneCompareAll: ["phone", "cmpask", "cmpall"],
@@ -178,7 +178,8 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
     if (st === "klgood") { await p.fill(".ai-kl-email", "a@b.co"); await p.click(".ai-kl-submit"); await p.waitForTimeout(800); }
     if (st === "typing") { await p.fill(".ai-chat-input", "hello"); await p.keyboard.press("Enter"); await p.waitForTimeout(900); }
     if (st === "cut" || st === "e429") { await p.fill(".ai-chat-input", st); await p.keyboard.press("Enter"); await p.waitForTimeout(1500); }
-    if (st === "appopen") { await p.click(".ai-chat-msg:last-child [data-appn]"); await p.waitForTimeout(500); }
+    if (st === "appwait") { await p.waitForSelector(".ai-chat-app.is-in", { timeout: 4000 }); await p.waitForTimeout(1900); }
+    if (st === "appopen") { await p.click(".ai-chat-app [data-appn]"); await p.waitForTimeout(500); }
     if (st === "lkopen") { await p.click(".ai-chat-msg:last-child [data-ordl-open]"); await p.waitForTimeout(400); }
     if (st === "lkbad") { await p.click(".ai-chat-msg:last-child .ai-ordl__go"); await p.waitForTimeout(300); }
     if (st === "lkfill") { await p.fill(".ai-chat-msg:last-child [name=order]", "1172010"); await p.fill(".ai-chat-msg:last-child [name=email]", "pat@example.com"); await p.click(".ai-chat-msg:last-child .ai-ordl__go"); await p.waitForTimeout(900); }

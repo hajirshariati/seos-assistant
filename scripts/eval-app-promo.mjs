@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import QRCode from "qrcode";
 
-const { cleanAppLink, appPromoConfig, appLinkError } = await import("../app/lib/app-promo.js");
+const { cleanAppLink, appPromoConfig, appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } = await import("../app/lib/app-promo.js");
 
 let passed = 0;
 let failed = 0;
@@ -30,10 +30,21 @@ await test("only the stores' own app pages count as links", () => {
   assert.equal(cleanAppLink("ios", `https://apps.apple.com/${"x".repeat(400)}`), "", "too long");
 });
 await test("widget-config: on by default with whichever links are set; off when turned off", () => {
-  assert.deepEqual(appPromoConfig({}), { on: true, ios: "", android: "" }, "blank: the widget uses the footer's links");
-  assert.deepEqual(appPromoConfig({ appIosUrl: IOS, appAndroidUrl: ANDROID }), { on: true, ios: IOS, android: ANDROID });
-  assert.deepEqual(appPromoConfig({ appIosUrl: "https://evil.example" }), { on: true, ios: "", android: "" });
+  const blank = { text: "", button: "" };
+  assert.deepEqual(appPromoConfig({}), { on: true, ios: "", android: "", ...blank }, "blank: the widget uses the footer's links");
+  assert.deepEqual(appPromoConfig({ appIosUrl: IOS, appAndroidUrl: ANDROID }), { on: true, ios: IOS, android: ANDROID, ...blank });
+  assert.deepEqual(appPromoConfig({ appIosUrl: "https://evil.example" }), { on: true, ios: "", android: "", ...blank });
   assert.deepEqual(appPromoConfig({ appPromoOn: false, appIosUrl: IOS }), { on: false });
+});
+await test("its message and button: as set, tidied and capped; blank → the widget's defaults", () => {
+  const c = appPromoConfig({ appPromoText: "  Love   Aetrex?\n You’ll love our app ", appPromoButton: " Get it " });
+  assert.equal(c.text, "Love Aetrex? You’ll love our app");
+  assert.equal(c.button, "Get it");
+  assert.equal(appPromoConfig({ appPromoText: "x".repeat(200) }).text.length, APP_TEXT_MAX);
+  assert.equal(appPromoConfig({ appPromoButton: "Download the app today" }).button.length <= APP_BUTTON_MAX, true);
+  assert.equal(cleanAppText(null), "");
+  assert.equal(defaultAppText("Aetrex"), "Love Aetrex? You\u2019ll love our app");
+  assert.equal(defaultAppText(""), "You\u2019ll love our app");
 });
 await test("Settings: a link that isn't the store's page is refused, with why; blank is fine", () => {
   assert.equal(appLinkError("ios", ""), "");

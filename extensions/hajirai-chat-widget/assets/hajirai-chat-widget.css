@@ -2555,8 +2555,10 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
     color: #fff !important;
   }
 }
+/* No rule above the section: its label already draws one. */
 .ai-chat-panel .ai-chat-suggestions {
-  border-top: 1px solid var(--seos-line) !important;
+  border-top: 0 !important;
+  padding-top: 2px !important;
 }
 .ai-chat-panel .ai-chat-suggestions-label {
   color: var(--seos-text-2);
@@ -6275,35 +6277,67 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-ordl__chev, .ai-chat-panel .ai-ordl__opt { transition: none; }
 }
 
-/* ── The store's app: one quiet line under a reply, once a visit ───────────
-   Tapped, a small panel: a QR code with an iPhone / Android switch on
-   computers (like the footer), the App Store and Google Play badges on
-   phones. Never louder than the reply above it. */
-.ai-chat-panel .ai-appn { margin-top: 12px; }
-.ai-chat-panel .ai-appn__row {
-  display: flex; align-items: center; gap: 10px;
-  box-sizing: border-box; width: 100%; min-height: 40px; padding: 6px 8px 6px 6px;
-  border: 0; border-radius: 12px; background: transparent;
-  color: var(--seos-text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+/* ── The store's app: its own small message, once a visit ──────────────────
+   Like "How's the chat going?": centered under the conversation, with a
+   soft glow of color behind it, so it's noticed without shouting. Its
+   button opens a small panel inside the card: a QR code with an iPhone /
+   Android switch on computers (like the footer), the App Store and Google
+   Play badges on phones. */
+.ai-chat-panel .ai-chat-app {
+  align-self: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 8px auto 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), max-height 0.35s ease, margin 0.35s ease;
 }
-@media (hover: hover) { .ai-chat-panel .ai-appn__row:hover { background: var(--seos-bg-raised, #fff); color: var(--seos-text); } }
-.ai-chat-panel .ai-appn__row:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-chat-app.is-in { opacity: 1; transform: none; }
+.ai-chat-panel .ai-chat-app.is-out { opacity: 0; transform: translateY(-4px); max-height: 0 !important; margin: 0 auto; overflow: hidden; }
+.ai-chat-panel .ai-appn {
+  box-sizing: border-box;
+  padding: 6px 6px 6px 7px;
+  border: 1px solid var(--seos-line);
+  border-radius: 22px;
+  background: var(--seos-bg-raised, #fff);
+}
+.ai-chat-panel .ai-appn__row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .ai-chat-panel .ai-appn__icon {
   display: grid; place-items: center; flex: none;
-  width: 28px; height: 28px; border-radius: 9px;
-  background: var(--seos-bg-raised, #fff); color: var(--seos-text);
-  box-shadow: inset 0 0 0 1px var(--seos-line);
+  width: 34px; height: 34px; border-radius: 11px;
+  background: linear-gradient(135deg, #eaf4ff, #f1ecff);
+  color: #3b3486;
+  box-shadow: inset 0 0 0 1px rgba(91, 80, 214, 0.12);
 }
-.ai-chat-panel .ai-appn__icon svg { width: 16px; height: 16px; }
-.ai-chat-panel .ai-appn__txt { flex: 1; min-width: 0; line-height: 1.3; }
-.ai-chat-panel .ai-appn__go { display: inline-flex; align-items: center; gap: 2px; flex: none; font-weight: 600; color: var(--seos-text); }
-.ai-chat-panel .ai-appn__go .ai-ordl__chev { width: 14px; height: 14px; }
-.ai-chat-panel .ai-appn__row[aria-expanded="true"] .ai-ordl__chev { transform: rotate(90deg); }
+.ai-chat-panel[data-theme="dark"] .ai-appn__icon { background: linear-gradient(135deg, rgba(125, 180, 255, 0.16), rgba(167, 139, 250, 0.18)); color: #d9d4ff; box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.22); }
+.ai-chat-panel .ai-appn__icon svg { width: 17px; height: 17px; }
+.ai-chat-panel .ai-appn__txt { flex: 1; min-width: 0; color: var(--seos-text); font-size: 13.5px; font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; text-wrap: balance; }
+/* The button: a real one, filled — and quiet once its panel is open. */
+.ai-chat-panel .ai-appn__go {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  min-height: 34px; padding: 0 16px; border: 0; border-radius: 999px;
+  background: var(--seos-ink); color: #fff;
+  font: inherit; font-size: 13px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+.ai-chat-panel[data-theme="dark"] .ai-appn__go { color: #0d0d12; }
+.ai-chat-panel .ai-appn__go[aria-expanded="true"] { background: var(--seos-surface); color: var(--seos-text); }
+@media (hover: hover) { .ai-chat-panel .ai-appn__go:hover { opacity: 0.88; } }
+.ai-chat-panel .ai-appn__go:active { transform: scale(0.96); }
+.ai-chat-panel .ai-appn__go:focus-visible,
+.ai-chat-panel .ai-appn__x:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-appn__x {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--seos-text-2); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+@media (hover: hover) { .ai-chat-panel .ai-appn__x:hover { background: var(--seos-surface); color: var(--seos-text); } }
 .ai-chat-panel .ai-appn__panel {
-  margin-top: 6px; padding: 14px;
-  border: 1px solid var(--seos-line); border-radius: 14px;
-  background: var(--seos-bg-raised, #fff);
+  margin: 6px 2px 2px; padding: 14px 6px 8px;
+  border-top: 1px solid var(--seos-line);
   animation: aiOrdlIn 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .ai-chat-panel .ai-appn__panel[hidden] { display: none; }
@@ -6352,7 +6386,38 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-appn__pill small { font-size: 9.5px; font-weight: 500; letter-spacing: 0.02em; margin-bottom: 2px; }
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-panel .ai-appn__panel { animation: none; }
-  .ai-chat-panel .ai-appn__row, .ai-chat-panel .ai-appn__seg button { transition: none; }
+  .ai-chat-panel .ai-appn__go, .ai-chat-panel .ai-appn__x, .ai-chat-panel .ai-appn__seg button { transition: none; }
+  .ai-chat-panel .ai-chat-app,
+  .ai-chat-panel .ai-chat-app.is-in,
+  .ai-chat-panel .ai-chat-app.is-out { transform: none; transition: opacity 0.15s ease; }
+}
+
+/* The glow behind the app message (cool) and the rating question (warm):
+   a soft blur of color peeking out around the card — it blooms in once,
+   then settles. Behind the card, never on it. */
+.ai-chat-panel .ai-chat-app,
+.ai-chat-panel .ai-chat-rate { position: relative; isolation: isolate; }
+.ai-chat-panel .ai-chat-app::before,
+.ai-chat-panel .ai-chat-rate::before {
+  content: "";
+  position: absolute;
+  inset: 3px 10px;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--glow);
+  filter: blur(20px);
+  opacity: var(--glow-o, 0.5);
+  pointer-events: none;
+  animation: aiGlowIn 1.8s ease-out both;
+}
+.ai-chat-panel .ai-chat-app { --glow: linear-gradient(90deg, #7cc4ff, #9d8cff 50%, #e6a3ff); --glow-o: 0.55; }
+.ai-chat-panel .ai-chat-rate { --glow: linear-gradient(90deg, #ffd27a, #ffb08a 50%, #ff9fb6); --glow-o: 0.5; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-app { --glow-o: 0.42; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-rate { --glow-o: 0.36; }
+@keyframes aiGlowIn { 0% { opacity: 0; transform: scale(0.92); } 45% { opacity: calc(var(--glow-o, 0.5) * 1.6); } 100% { opacity: var(--glow-o, 0.5); transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-app::before,
+  .ai-chat-panel .ai-chat-rate::before { animation: none; }
 }
 
 /* View all and Compare: side by side when the reply is wide enough (the
@@ -6369,7 +6434,9 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-cta-pair__in > .ai-va-cta { flex: 7 1 0; min-width: 0; display: flex; }
   .ai-chat-panel .ai-cta-pair__in > .ai-cmp-cta { flex: 3 1 0; min-width: 0; margin-top: 0; display: flex; flex-direction: column; container-type: inline-size; }
   .ai-chat-panel .ai-cta-pair__in .ai-cmp-cta__btn { flex: 1 1 auto; }
-  /* Picking to compare: the tray takes the whole row. */
+  /* Picking to compare: View all steps aside (as it does stacked) and the
+     tray takes the whole row; both come back when picking ends. */
+  .ai-chat-panel .is-cmp-picking .ai-cta-pair__in > .ai-va-cta { display: none; }
   .ai-chat-panel .is-cmp-picking .ai-cta-pair__in > .ai-cmp-cta { flex-basis: 100%; }
 }
 @container (max-width: 199px) {

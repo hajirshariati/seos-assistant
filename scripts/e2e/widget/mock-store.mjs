@@ -141,7 +141,7 @@ const page = (style) => `<!doctype html><script>setTimeout(function(){var d=docu
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Store page <span class="cart-count">0</span></div><script src="/w.js"></script></body></html>`;
 const AVATAR = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#d9c7b8"/><circle cx="40" cy="32" r="15" fill="#8c6b55"/><rect x="18" y="52" width="44" height="30" rx="14" fill="#5f8f8a"/></svg>');
 const fullPage = (login = "", extra = "") => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">${themeBlockStyle()}
-<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",avatarUrl:${JSON.stringify(AVATAR)},greeting:"Hi! I'm your personal shopping assistant.",greetingCta:"What can I help you find today?",cta1Label:"Find my orthotic",cta1Message:"which orthotic is right for me?",cta1Icon:"heart",cta2Label:"Shop sneakers",cta2Message:"show me sneakers",quickPick1Label:"Sandals",quickPick1Message:"sandals",quickPick2Label:"Heel pain",quickPick2Message:"heel pain",quickPick3Label:"Wide fit",quickPick3Message:"wide shoes",ctaHint:"Log in for faster checkout",${extra}${login ? `customerLoggedIn:true,customerFirstName:${JSON.stringify(login)},customerId:7,customerLogoutUrl:"/account/logout",` : ""}disclaimerText:"This chatbot uses AI and may make mistakes.",widgetPosition:"bottom-center"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
+<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={shopName:"Aetrex",assistantName:"AI Shopping Assistant",avatarUrl:${JSON.stringify(AVATAR)},greeting:"Hi! I'm your personal shopping assistant.",greetingCta:"What can I help you find today?",cta1Label:"Find my orthotic",cta1Message:"which orthotic is right for me?",cta1Icon:"heart",cta2Label:"Shop sneakers",cta2Message:"show me sneakers",quickPick1Label:"Sandals",quickPick1Message:"sandals",quickPick2Label:"Heel pain",quickPick2Message:"heel pain",quickPick3Label:"Wide fit",quickPick3Message:"wide shoes",ctaHint:"Log in for faster checkout",${extra}${login ? `customerLoggedIn:true,customerFirstName:${JSON.stringify(login)},customerId:7,customerLogoutUrl:"/account/logout",` : ""}disclaimerText:"This chatbot uses AI and may make mistakes.",widgetPosition:"bottom-center"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px;height:2000px;background:linear-gradient(#f3efe9,#e9e4dc)">Store page <span class="cart-count">0</span> <input id="site-search" placeholder="Search"></div><script src="/w.js"></script></body></html>`;
 // The theme block's own inline <style>, read from the liquid file so the
 // test page never drifts from what the storefront renders.
@@ -326,8 +326,8 @@ export function start(port) {
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
-          // The app mention: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr).
-          appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "" } : { on: false },
+          // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
+          appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
@@ -386,6 +386,16 @@ export function start(port) {
             w({ type: "text", text: "Here are two of the boots on sale." });
             w({ type: "products", products: [cards[0], cards[2]] });
             w({ type: "view_all", label: "View all 10 women's sale boots", title: "Women's Sale Boots", total: 10, products: [cards[0], cards[1], cards[2], carly, ...more] });
+            w({ type: "done" });
+            return resp.end();
+          }
+          // Four cards of sixty, with View all and Compare (picking 2 or 3).
+          if (parsed.message === "fourboots") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "Here are four of the boots on sale." });
+            w({ type: "products", products: MANY_BOOTS.slice(0, 4) });
+            w({ type: "view_all", label: "View all 60 women's sale boots", title: "Women's Sale Boots", total: 60, pageSize: 24, search: { gender: "women", on_sale: true, categories: ["Boots"] }, products: MANY_BOOTS.slice(0, 24) });
             w({ type: "done" });
             return resp.end();
           }

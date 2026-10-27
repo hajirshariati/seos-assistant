@@ -7,6 +7,7 @@
 <script>
   window.__AI_CHAT_CONFIG = {
     shopDomain: {{ shop.permanent_domain | json }},
+    shopName: {{ shop.name | json }},
     greeting: {{ block.settings.greeting | json }},
     greetingLoggedIn: {{ block.settings.greeting_logged_in | json }},
     greetingCta: {{ block.settings.greeting_cta | json }},

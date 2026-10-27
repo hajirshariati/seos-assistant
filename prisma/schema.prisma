@@ -184,11 +184,14 @@ model ShopConfig {
   // Signed-out shoppers can check one order's status in the chat with its
   // order number (or confirmation code) and the email it was placed with.
   guestOrderLookup     Boolean  @default(true)
-  // A quiet mention of the store's mobile app, once per visit. Links left
+  // The store's mobile app, once per visit, as its own message. Links left
   // blank: the chat uses the App Store / Google Play links in the store's footer.
   appPromoOn           Boolean  @default(true)
   appIosUrl            String   @default("")
   appAndroidUrl        String   @default("")
+  // Its message and button ("" → "Love {store}? You'll love our app" / "Get it").
+  appPromoText         String   @default("")
+  appPromoButton       String   @default("")
   referralPageUrl     String   @default("")
   // A feedback survey (Typeform ID or link) as Start here button 4 in the
   // chat, opening inside it; and hiding the separate live chat button

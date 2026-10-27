@@ -478,16 +478,19 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: True Fit, pick a shoe`);
   await ctx.close();
 }
-// The store's app: the quiet line, opened (QR on computers, badges on phones).
+// The store's app: its own message, closed and opened (QR on computers, badges on phones).
 for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
   const { ctx, page } = await open("/full?app=1", { viewport: vp });
   await page.click(".ai-chat-launcher");
   await page.waitForTimeout(600);
   await say(page, "show me 2");
   await say(page, "show me 3");
+  await page.waitForSelector(".ai-chat-app.is-in", { timeout: 4000 });
+  await page.waitForTimeout(1900);
+  await axe(page, `${name}: app message`);
   await page.click("[data-appn]");
   await page.waitForTimeout(500);
-  await axe(page, `${name}: app mention, opened`);
+  await axe(page, `${name}: app message, opened`);
   await ctx.close();
 }
 // Order status without signing in: the form (with its errors), and the order found.

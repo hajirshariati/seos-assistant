@@ -86,7 +86,7 @@ export const loader = async ({ request }) => {
         hideLiveChatButton: config.hideLiveChatButton === true,
         // Settings → Seasonal button: the first Start here button.
         seasonalCta: seasonalCtaConfig(config),
-        // Settings → Your app: one quiet mention per visit.
+        // Settings → Your app: its own message, once per visit.
         appPromo: appPromoConfig(config),
         // Settings → Showing the chat: wait this long before it appears.
         appearDelay: appearDelayConfig(config),

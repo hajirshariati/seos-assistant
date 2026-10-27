@@ -32,6 +32,7 @@ export const SETTINGS_CSS = `
   .set-row--stack { grid-template-columns: minmax(0, 1fr); }
   .set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
   .set-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .set-grid--app { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
   .set-switch { all: unset; box-sizing: border-box; position: relative; width: 40px; height: 24px; border-radius: 999px;
     background: #c9cccf; cursor: pointer; transition: background .18s ease; flex: none; }
   .set-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
@@ -56,7 +57,7 @@ export const SETTINGS_CSS = `
     .set-nav::-webkit-scrollbar { display: none; }
     .set-nav__item { width: auto; flex: none; padding: 6px 12px; border: 1px solid rgba(30,27,51,0.10); border-radius: 999px; background: #fff; }
     .set-nav__icon { display: none; }
-    .set-grid, .set-grid--3 { grid-template-columns: minmax(0, 1fr); }
+    .set-grid, .set-grid--3, .set-grid--app { grid-template-columns: minmax(0, 1fr); }
     .set-limits { grid-template-columns: minmax(72px, 1fr) repeat(2, minmax(0, 1.1fr)); }
     .set-peak-top { padding: 14px; }
   }

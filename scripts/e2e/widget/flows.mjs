@@ -375,6 +375,8 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     return n;
   };
   await send("full", ".ai-chat-suggestions");
+  const qr = await page.evaluate(() => { const s = document.querySelector(".ai-chat-suggestions"), l = s.querySelector(".ai-chat-suggestions-label"); return { top: getComputedStyle(s).borderTopWidth, style: getComputedStyle(s).borderTopStyle, rule: getComputedStyle(l, "::after").height }; });
+  check("quick replies: one line beside the label, none above the section", (qr.top === "0px" || qr.style === "none") && qr.rule === "1px", JSON.stringify(qr));
   await send("where is my order #1172010?", ".ai-ordl");
   await send("what size am I", ".ai-chat-truefit-cta");
   await send("fit please");
@@ -504,9 +506,10 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`order lookup (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
-// The store's app: one quiet line under the second reply of a visit, never
-// again that visit; opened, a QR code (computers) or the phone's own store
-// badge — from the store's footer, or from Settings.
+// The store's app: its own small message after the second reply of a visit
+// (like the rating question), never again that visit; its button opens a
+// QR code (computers) or the phone's own store badge — from the store's
+// footer, or from Settings.
 {
   const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
   const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Mobile Safari/537.36";
@@ -520,66 +523,117 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     await page.waitForTimeout(500);
     const say = async (m) => { await page.fill(".ai-chat-input", m); await page.keyboard.press("Enter"); await page.waitForTimeout(1100); };
     await fn(page, say);
-    check(`app mention (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    check(`app message (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
     await ctx.close();
   };
+  const appShown = (page) => page.waitForSelector(".ai-chat-app.is-in", { timeout: 4000 }).then(() => true, () => false);
   await run("computer", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
     await say("show me 2");
-    check("app mention: never on the first reply", (await page.$$(".ai-appn")).length === 0);
+    await page.waitForTimeout(1200);
+    check("app message: never after the first reply", (await page.$$(".ai-chat-app, .ai-appn")).length === 0);
     await say("show me 3");
-    const note = await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(), n = m.querySelector(".ai-appn"); return n && { text: n.querySelector(".ai-appn__txt").textContent, beforeFeedback: !!n.nextElementSibling?.classList.contains("ai-chat-feedback"), closed: n.querySelector(".ai-appn__panel").hidden, expanded: n.querySelector("[data-appn]").getAttribute("aria-expanded") }; });
-    check("app mention: one quiet line under the second reply, closed", !!note && note.text === "Our new app is here" && note.beforeFeedback && note.closed && note.expanded === "false", JSON.stringify(note));
+    const shown = await appShown(page);
+    await page.waitForTimeout(1900);
+    const note = await page.evaluate(() => {
+      const r = document.querySelector(".ai-chat-app"), m = document.querySelector(".ai-chat-messages"), go = r.querySelector("[data-appn]");
+      const rr = r.getBoundingClientRect(), mr = m.getBoundingClientRect(), msgs = [...m.querySelectorAll(".ai-chat-msg")];
+      const glow = getComputedStyle(r, "::before");
+      return { own: r.parentElement === m && !r.closest(".ai-chat-msg-bubble") && !document.querySelector(".ai-chat-msg-bubble .ai-appn"), afterReply: !!(msgs.pop().compareDocumentPosition(r) & 4),
+        text: r.querySelector(".ai-appn__txt").textContent, label: r.getAttribute("aria-label"), button: go.tagName + ":" + go.textContent, expanded: go.getAttribute("aria-expanded"), closed: r.querySelector(".ai-appn__panel").hidden,
+        filled: getComputedStyle(go).backgroundColor !== "rgba(0, 0, 0, 0)" && getComputedStyle(go).backgroundColor !== getComputedStyle(r.querySelector(".ai-appn")).backgroundColor, tall: go.getBoundingClientRect().height >= 32,
+        x: r.querySelector("[data-appn-x]")?.getAttribute("aria-label"), centered: Math.abs((rr.left - mr.left) - (mr.right - rr.right)) < 3,
+        glow: /gradient/.test(glow.backgroundImage) && glow.filter.includes("blur") && +glow.opacity > 0.2 && +glow.opacity < 0.7, glowBehind: glow.zIndex === "-1", rate: !!document.querySelector(".ai-chat-rate") };
+    });
+    check("app message: its own message after the second reply — the store's name, a real button, closed", shown && note.own && note.afterReply && note.text === "Love Aetrex? You\u2019ll love our app" && note.label === note.text && note.button === "BUTTON:Get it" && note.expanded === "false" && note.closed && note.filled && note.tall && note.x === "Not now" && note.centered, JSON.stringify(note));
+    check("app message: a soft glow of color behind it, not on it", note.glow && note.glowBehind, JSON.stringify(note));
     await page.click("[data-appn]");
-    const qr = await page.evaluate(() => { const b = document.querySelector(".ai-appn__qrbox"); return b && { src: b.querySelector(".ai-appn__qr img").getAttribute("src"), link: b.querySelector(".ai-appn__qr").getAttribute("href"), cap: b.querySelector(".ai-appn__cap").textContent, seg: [...b.querySelectorAll("[data-appn-pf]")].map((x) => `${x.textContent}:${x.getAttribute("aria-pressed")}`), store: b.querySelector(".ai-appn__store").textContent, badges: document.querySelectorAll(".ai-appn__badge").length }; });
-    check("app mention: on a computer, the footer's QR code with an iPhone / Android switch", !!qr && /app-qr-ios\.svg/.test(qr.src) && qr.link === APP_LINKS.ios && qr.cap === "Scan with your iPhone camera" && qr.seg.join("|") === "iPhone:true|Android:false" && /Or open App Store/.test(qr.store) && qr.badges === 0, JSON.stringify(qr));
+    const qr = await page.evaluate(() => { const b = document.querySelector(".ai-appn__qrbox"); return b && { src: b.querySelector(".ai-appn__qr img").getAttribute("src"), link: b.querySelector(".ai-appn__qr").getAttribute("href"), cap: b.querySelector(".ai-appn__cap").textContent, seg: [...b.querySelectorAll("[data-appn-pf]")].map((x) => `${x.textContent}:${x.getAttribute("aria-pressed")}`), store: b.querySelector(".ai-appn__store").textContent, badges: document.querySelectorAll(".ai-appn__badge").length, inCard: !!b.closest(".ai-chat-app .ai-appn"), expanded: document.querySelector("[data-appn]").getAttribute("aria-expanded") }; });
+    check("app message: its button opens the footer's QR code with an iPhone / Android switch, in the card", !!qr && /app-qr-ios\.svg/.test(qr.src) && qr.link === APP_LINKS.ios && qr.cap === "Scan with your iPhone camera" && qr.seg.join("|") === "iPhone:true|Android:false" && /Or open App Store/.test(qr.store) && qr.badges === 0 && qr.inCard && qr.expanded === "true", JSON.stringify(qr));
     await page.click('[data-appn-pf="android"]');
     const and = await page.evaluate(() => { const b = document.querySelector(".ai-appn__qrbox"); return { src: b.querySelector(".ai-appn__qr img").getAttribute("src"), link: b.querySelector(".ai-appn__qr").getAttribute("href"), cap: b.querySelector(".ai-appn__cap").textContent, store: b.querySelector(".ai-appn__store").getAttribute("href") }; });
-    check("app mention: Android switches the code, caption and link", /app-qr-android\.svg/.test(and.src) && and.link === APP_LINKS.android && and.store === APP_LINKS.android && /phone.s camera/.test(and.cap), JSON.stringify(and));
+    check("app message: Android switches the code, caption and link", /app-qr-android\.svg/.test(and.src) && and.link === APP_LINKS.android && and.store === APP_LINKS.android && /phone.s camera/.test(and.cap), JSON.stringify(and));
     await page.click("[data-appn]");
-    check("app mention: tapped again, it folds away", await page.evaluate(() => document.querySelector(".ai-appn__panel").hidden));
+    check("app message: tapped again, the panel folds away", await page.evaluate(() => document.querySelector(".ai-appn__panel").hidden));
+    check("app message: the rating question waits for a later reply", !note.rate);
     await say("show me 2");
-    check("app mention: only once a visit", (await page.$$(".ai-appn")).length === 1);
+    await page.waitForTimeout(1200);
+    check("app message: only once a visit — it stays where it was", (await page.$$(".ai-chat-app")).length === 1 && await page.evaluate(() => { const r = document.querySelector(".ai-chat-app"); return !!(r.compareDocumentPosition([...document.querySelectorAll(".ai-chat-msg")].pop()) & 4); }));
     await page.reload();
     await page.click(".ai-chat-launcher__text");
     await page.waitForTimeout(500);
     await say("show me 3");
-    check("app mention: not again after a reload in the same visit", (await page.$$(".ai-appn")).length === 0);
+    await page.waitForTimeout(1200);
+    check("app message: not again after a reload in the same visit", (await page.$$(".ai-chat-app")).length === 0);
+  });
+  await run("Not now", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await appShown(page);
+    await page.click("[data-appn-x]");
+    await page.waitForTimeout(600);
+    check("app message: Not now folds it away, the typing box gets the focus", (await page.$$(".ai-chat-app")).length === 0 && await page.evaluate(() => document.activeElement === document.querySelector(".ai-chat-input")));
+    await say("show me 2");
+    await page.waitForTimeout(1200);
+    check("app message: …and it doesn't come back", (await page.$$(".ai-chat-app")).length === 0);
+  });
+  await run("own text", "/full?app=txt", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await appShown(page);
+    const t = await page.evaluate(() => ({ text: document.querySelector(".ai-appn__txt").textContent, button: document.querySelector("[data-appn]").textContent }));
+    check("app message: the text and button set in Settings", t.text === "Get 15% off your first app order" && t.button === "Download", JSON.stringify(t));
   });
   await run("iPhone", "/full?app=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: IPHONE }, async (page, say) => {
     await say("show me 2");
     await say("show me 3");
+    await appShown(page);
+    const fit = await page.evaluate(() => { const r = document.querySelector(".ai-chat-app"), m = document.querySelector(".ai-chat-messages"), go = r.querySelector("[data-appn]").getBoundingClientRect(), x = r.querySelector("[data-appn-x]").getBoundingClientRect(), rr = r.getBoundingClientRect(), mr = m.getBoundingClientRect(); return { inside: rr.left >= mr.left - 0.5 && rr.right <= mr.right + 0.5, buttons: go.right <= x.left + 0.5 && x.right <= rr.right + 0.5, oneRowButtons: Math.abs((go.top + go.bottom) / 2 - (x.top + x.bottom) / 2) < 2 }; });
+    check("app message (iPhone): fits the phone, button and close side by side", fit.inside && fit.buttons && fit.oneRowButtons, JSON.stringify(fit));
     await page.click("[data-appn]");
     const m = await page.evaluate(() => ({ badges: [...document.querySelectorAll(".ai-appn__badge")].map((b) => `${b.getAttribute("aria-label")}|${b.getAttribute("href")}|${b.querySelector("img")?.getAttribute("src") || ""}`), other: document.querySelector(".ai-appn__other")?.getAttribute("href"), qr: !!document.querySelector(".ai-appn__qrbox"), overflow: document.querySelector(".ai-appn").scrollWidth - document.querySelector(".ai-appn").clientWidth }));
-    check("app mention (iPhone): the App Store badge (the footer's), Google Play as a small link", m.badges.length === 1 && m.badges[0].startsWith(`Download on the App Store|${APP_LINKS.ios}|`) && /app-badge-app-store/.test(m.badges[0]) && m.other === APP_LINKS.android && !m.qr && m.overflow <= 1, JSON.stringify(m));
+    check("app message (iPhone): the App Store badge (the footer's), Google Play as a small link", m.badges.length === 1 && m.badges[0].startsWith(`Download on the App Store|${APP_LINKS.ios}|`) && /app-badge-app-store/.test(m.badges[0]) && m.other === APP_LINKS.android && !m.qr && m.overflow <= 1, JSON.stringify(m));
   });
   await run("Android", "/full?app=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: ANDROID }, async (page, say) => {
     await say("show me 2");
     await say("show me 3");
+    await appShown(page);
     await page.click("[data-appn]");
     const m = await page.evaluate(() => ({ badges: [...document.querySelectorAll(".ai-appn__badge")].map((b) => b.getAttribute("href")), cls: document.querySelector(".ai-appn__badge")?.className, other: document.querySelector(".ai-appn__other")?.getAttribute("href") }));
-    check("app mention (Android): the Google Play badge, the App Store as a small link", m.badges.join() === APP_LINKS.android && /is-android/.test(m.cls) && m.other === APP_LINKS.ios, JSON.stringify(m));
+    check("app message (Android): the Google Play badge, the App Store as a small link", m.badges.join() === APP_LINKS.android && /is-android/.test(m.cls) && m.other === APP_LINKS.ios, JSON.stringify(m));
   });
   await run("Settings links", "/full?app=set", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
     const before = appQrLog.length;
     await say("show me 2");
     await say("show me 3");
+    await appShown(page);
     await page.click("[data-appn]");
     await page.waitForTimeout(400);
     const src = await page.getAttribute(".ai-appn__qr img", "src");
-    check("app mention: links set in Settings → the app makes the QR code", src === "/apps/hajirai/app-qr?p=ios" && appQrLog.length > before, src);
+    check("app message: links set in Settings → the app makes the QR code", src === "/apps/hajirai/app-qr?p=ios" && appQrLog.length > before, src);
   });
   await run("beside an order", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
     await say("show me 2");
     await say("where is my order?");
-    check("app mention: never beside an order card", (await page.$$(".ai-appn")).length === 0);
+    await page.waitForTimeout(1200);
+    check("app message: never after an order card", (await page.$$(".ai-chat-app")).length === 0);
     await say("show me 3");
-    check("app mention: …it waits for the next ordinary reply", (await page.$$(".ai-chat-msg:last-child .ai-appn")).length === 1);
+    check("app message: …it waits for the next ordinary reply", await appShown(page));
+  });
+  await run("moved on", "/full?app=1", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await page.fill(".ai-chat-input", "show me 3");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    await page.fill(".ai-chat-input", "still typing");
+    await page.waitForTimeout(1800);
+    check("app message: not while the shopper is typing", (await page.$$(".ai-chat-app")).length === 0);
   });
   await run("off", "/full", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
     await say("show me 2");
     await say("show me 3");
     await say("show me 2");
-    check("app mention: off in Settings → never shown", (await page.$$(".ai-appn")).length === 0);
+    await page.waitForTimeout(1200);
+    check("app message: off in Settings → never shown", (await page.$$(".ai-chat-app, .ai-appn")).length === 0);
   });
 }
 // The two fit tools: featured on the welcome screen, and each only on the
@@ -1321,8 +1375,6 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   }, w);
   const wide = await pairAt(560), narrow = await pairAt(340);
   check(`view all (${label}): with Compare — side by side 70/30 in a wide reply, stacked in a narrow one`, wide.sameRow && wide.share >= 0.66 && wide.share <= 0.74 && wide.sameHeight && wide.inside && !narrow.sameRow && narrow.inside, JSON.stringify({ wide, narrow }));
-  check(`view all (${label}): right under the cards, above Compare, inside the bubble, easy to tap`, row.afterCards && row.beforeCompare && row.fits && row.height >= 44 && row.popup === "dialog", JSON.stringify(row));
-  check(`view all (${label}): filled, so it stands apart from Compare`, row.bg !== row.cmpBg && row.bg !== "rgba(0, 0, 0, 0)" && row.fg !== row.bg, JSON.stringify(row));
   await page.click("[data-viewall]");
   await page.waitForTimeout(700);
   await page.screenshot({ path: out(`va-${label}-sheet`) });
@@ -1388,6 +1440,33 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   await page.click("[data-viewall]");
   await page.waitForTimeout(600);
   check(`view all (${label}): and still opens the full list`, (await page.$$eval(".ai-chat-fbsheet__list .ai-chat-product-card", (c) => c.length)) === 10);
+  // Picking to compare (four cards): View all steps aside — never squeezed
+  // into a sliver beside the tray — and the tray spans the row; Cancel
+  // brings both back.
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForFunction(() => !document.querySelector(".ai-chat-fbsheet.is-open"), null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fourboots");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1300);
+  await page.evaluate(() => { const prs = document.querySelectorAll(".ai-cta-pair"); prs[prs.length - 1].id = "pick-pair"; });
+  const picking = async (w) => {
+    await page.evaluate((w) => { document.getElementById("pick-pair").style.width = w + "px"; }, w);
+    await page.click("#pick-pair [data-cmp-start]");
+    await page.waitForTimeout(400);
+    const res = await page.evaluate(() => {
+      const pr = document.getElementById("pick-pair"), va = pr.querySelector(".ai-va-cta"), bar = pr.querySelector(".ai-cmp-bar"), r = pr.getBoundingClientRect(), b = bar.getBoundingClientRect();
+      return { picking: !!pr.closest(".is-cmp-picking"), vaHidden: getComputedStyle(va).display === "none", fullRow: Math.abs(b.left - r.left) < 1 && Math.abs(b.right - r.right) < 1 };
+    });
+    await page.screenshot({ path: out(`va-${label}-picking-${w}`) });
+    await page.click("#pick-pair [data-cmp-cancel]");
+    await page.waitForTimeout(300);
+    res.back = await page.evaluate(() => { const pr = document.getElementById("pick-pair"), v = pr.querySelector(".ai-va-cta").getBoundingClientRect(), c = pr.querySelector(".ai-cmp-cta").getBoundingClientRect(); return getComputedStyle(pr.querySelector(".ai-va-cta")).display !== "none" && v.width > 0 && (Math.abs(v.top - c.top) < 2) === (pr.getBoundingClientRect().width >= 420); });
+    await page.evaluate(() => { document.getElementById("pick-pair").style.width = ""; });
+    return res;
+  };
+  const pickWide = await picking(560), pickNarrow = await picking(340);
+  check(`view all (${label}): picking to compare hides View all and the tray spans the row — wide or narrow — and Cancel brings it back`, [pickWide, pickNarrow].every((p) => p.picking && p.vaHidden && p.fullRow && p.back), JSON.stringify({ pickWide, pickNarrow }));
   check(`view all (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
