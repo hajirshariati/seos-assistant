@@ -1442,6 +1442,47 @@ await test("no collection in the catalog (Shopify unreadable) → the tools don'
   await runLeanTurn({ catalog: fallBase, featured, model: "m", messages: [{ role: "user", content: "hi" }], latestUserMessage: "hi", callModel: s.callModel, log: quiet });
   assert.equal(s.requests[0].tools.find((t) => t.name === "search_products").input_schema.properties.collection, undefined);
 });
+await test("a follow-up after the tap isn't tied to the collection (no featured → no collection to search in)", async () => {
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Sure.")] }]);
+  await runLeanTurn({ catalog: fall, featured: null, model: "m", messages: [{ role: "user", content: "do you have any men's styles?" }], latestUserMessage: "do you have any men's styles?", callModel: s.callModel, log: quiet });
+  assert.equal(s.requests[0].tools.find((t) => t.name === "search_products").input_schema.properties.collection, undefined);
+});
+
+console.log("\nsales voice");
+const { opensNegative } = await import("../app/lib/lean/engine.js");
+await test("a reply that opens with what's missing is caught; empathy isn't", () => {
+  assert.equal(opensNegative("Unfortunately, the fall collection is women's only."), true);
+  assert.equal(opensNegative("**Unfortunately** we don't carry that."), true);
+  assert.equal(opensNegative("I'm afraid that style is sold out."), true);
+  assert.equal(opensNegative("Sadly, no men's styles there."), true);
+  assert.equal(opensNegative("Sorry to hear your order is running late — here's where it is."), false);
+  assert.equal(opensNegative("The Danika comes in wide; unfortunately not in red."), false, "only the opening");
+  assert.equal(opensNegative(""), false);
+});
+await test("the prompt asks for a sales associate's voice: lead with the next best option, stay truthful", () => {
+  const p = buildLeanSystemPrompt({ shop: "x" });
+  assert.match(p, /lead with what you can offer/);
+  assert.match(p, /don't open with "Unfortunately"/);
+  assert.match(p, /Never imply something is available when it isn't/);
+  assert.match(p, /never with an apology for what the store doesn't have/);
+});
+await test("\"Unfortunately, no men's styles\" is rewritten: the men's options come first", async () => {
+  const s = scripted([
+    { stop_reason: "end_turn", content: [txt("Unfortunately, our fall collection is women's only — there are no men's styles in it right now. Would you like to see men's shoes?")] },
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sneaker", gender: "men" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Chase Arch Support Sneaker - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("For men, the Chase Arch Support Sneaker in red is a great pick — our fall collection itself is women's styles.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "do you have any men's styles?" }], latestUserMessage: "do you have any men's styles?", callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.ok(logs.some((l) => /rewrite: .*negative_opening/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /lead with the best options you can offer/);
+  assert.equal(r.retried, true);
+  assert.deepEqual(r.cards.map((c) => c.title), ["Chase Arch Support Sneaker - Red"]);
+  assert.match(r.text, /^For men, the Chase/);
+  assert.deepEqual(r.issues, []);
+});
+
 
 console.log("\nView all filters");
 const { buildViewAllIndex, colorGroupsOf } = await import("../app/lib/lean/view-all-index.js");

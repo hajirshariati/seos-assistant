@@ -230,6 +230,14 @@ export function onlyAsksBack(text, latestUserMessage) {
   return onlyQuestions(t);
 }
 
+// A good sales associate leads with what they can offer, not with what's
+// missing: a reply that opens "Unfortunately…" gets one rewrite. ("Sorry"
+// is left alone — it's how a person answers a late order or sore feet.)
+const NEGATIVE_OPENING = /^[\s*_"'“‘(]*(unfortunately|sadly|regrettably|i['’]?m afraid|i am afraid)\b/i;
+export function opensNegative(text) {
+  return NEGATIVE_OPENING.test(String(text || ""));
+}
+
 // The message has a sales word in it: Claude decides what it means.
 const OFFERS_NOTE = "(If the customer is asking which sales, deals or offers are running, start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print), then the marked-down products: product search with on_sale: true. If they only want marked-down products of one kind (\"boots on sale\"), or use \"offer\" another way (\"styles that offer removable insoles\"), just answer that — no offer list.)";
 
@@ -663,6 +671,12 @@ export async function runLeanTurn({
       issues.push({
         code: "unanswered_question",
         detail: `The customer asked "${asked}" and your reply only asks them something back. Answer their question first, in a sentence or two from the facts (look them up if you need to) — then offer a next step if you like. If you truly can't answer without knowing something, ask it with tap choices.`,
+      });
+    }
+    if (opensNegative(text)) {
+      issues.push({
+        code: "negative_opening",
+        detail: "Your reply opens with what's missing (\"Unfortunately…\"). Answer like a great sales associate: lead with the best options you can offer — search for them if you haven't yet — and mention what isn't available briefly, in passing (e.g. \"Our fall collection is women's styles — for men, these are the season's favorites:\"). Keep every fact true.",
       });
     }
     let orthoticAnswer = leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) });

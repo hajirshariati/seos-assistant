@@ -21,7 +21,7 @@ import { chatModel, CHECK_MODEL } from "../claude-models.js";
 import { saveRecording } from "../../models/ChatRecording.server.js";
 import { describeExtras } from "../chat-recording.js";
 import { createLimiter } from "../concurrency.js";
-import { seasonalCollection, seasonalTapNote } from "../seasonal-cta.js";
+import { seasonalForTurn, seasonalTapNote } from "../seasonal-cta.js";
 import { featuredCollection, collectionView } from "./collections.server.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
@@ -135,9 +135,11 @@ export function leanChatResponse({
         // Retries happen once, in withAnthropicRetry — not again inside the SDK.
         const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 0 });
         const model = chatModel(config.anthropicModel);
-        // The seasonal button's collection: its products come from Shopify
-        // (kept 10 minutes), so the search can keep to them.
-        const seasonal = seasonalCollection(config);
+        // The seasonal button's collection, for the reply to the tap only:
+        // its products come from Shopify (kept 10 minutes), so that search
+        // can keep to them. Every later message is searched as usual — the
+        // collection never narrows a follow-up ("any men's styles?").
+        const seasonal = seasonalForTurn(config, { tapped: seasonalTap });
         const [baseCatalog, extras, seasonalRead] = await Promise.all([
           loadLeanCatalog(shop),
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder, sizeFinder })

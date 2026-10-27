@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  SEASONS, collectionHandle, cleanLabel, defaultLabel, tintOf, seasonalCtaConfig, seasonalCollection,
+  SEASONS, collectionHandle, cleanLabel, defaultLabel, tintOf, seasonalCtaConfig, seasonalCollection, seasonalForTurn,
   seasonalTapNote, SEASON_ICON_SVG, SEASON_ICON_COLORS, SEASON_TINTS, LABEL_MAX,
 } from "../app/lib/seasonal-cta.js";
 import { findCollection } from "../app/lib/seasonal-cta.server.js";
@@ -66,6 +66,13 @@ await test("the chat's collection: null when off; the saved title, else the butt
   assert.deepEqual(seasonalCollection({ ...on, seasonalCtaCollectionTitle: "Fall Collection" }), { handle: "fall-collection", title: "Fall Collection", label: "Fall Collection Footwear" });
   assert.equal(seasonalCollection(on).title, "Fall Collection Footwear");
   assert.equal(seasonalCollection({ ...on, seasonalCtaOn: false }), null);
+});
+await test("the collection is for the reply to the tap only — every later message searches the whole store", () => {
+  const on = { seasonalCtaOn: true, seasonalCtaIcon: "fall", seasonalCtaLabel: "New Arrivals", seasonalCtaCollection: "new-arrivals", seasonalCtaCollectionTitle: "New Arrivals" };
+  assert.deepEqual(seasonalForTurn(on, { tapped: true }), { handle: "new-arrivals", title: "New Arrivals", label: "New Arrivals" });
+  assert.equal(seasonalForTurn(on, { tapped: false }), null, "a follow-up (\"any men's styles?\") isn't tied to it");
+  assert.equal(seasonalForTurn(on), null);
+  assert.equal(seasonalForTurn({ ...on, seasonalCtaOn: false }, { tapped: true }), null, "off: never");
 });
 await test("the tap note asks for the collection's colorful footwear straight away, no question first", () => {
   const n = seasonalTapNote({ handle: "fall-collection", title: "Fall Collection", label: "Fall Collection Footwear" });

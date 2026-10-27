@@ -50,6 +50,13 @@ export function seasonalCollection(config = {}) {
   return { handle, title: String(config.seasonalCtaCollectionTitle || "").trim() || cta.label, label: cta.label };
 }
 
+// The collection a chat turn may search in: only the reply to the tap
+// itself. Every later message ("any men's styles?") is searched across the
+// whole store, as usual.
+export function seasonalForTurn(config = {}, { tapped = false } = {}) {
+  return tapped === true ? seasonalCollection(config) : null;
+}
+
 // The note sent with the tap: show the collection's footwear, colorful
 // first, straight away — the button promised exactly that.
 export function seasonalTapNote({ handle, title, label }) {
