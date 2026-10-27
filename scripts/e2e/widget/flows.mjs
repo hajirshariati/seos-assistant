@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -144,7 +144,9 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await ctx.close();
 }
 // True Fit: the shopper asks about size, taps the button, True Fit opens
-// with the chat out of the way, and its size comes back into the chat.
+// with the chat out of the way. Once it has a size the shopper stays on the
+// page (where True Fit marked it): the chat never opens or sends anything by
+// itself — the size is only added to the conversation, quietly.
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
@@ -166,11 +168,16 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await page.waitForFunction(() => window.__tfOpens === 1, null, { timeout: 5000 });
   await page.waitForFunction(() => document.body.classList.contains("tfc-show-modal"), null, { timeout: 5000 });
   check("tf: True Fit opens with the chat out of the way", (await page.evaluate(() => window.__tfChatOpenDuringFinder)) === 0);
-  await page.waitForFunction((n) => window.__chatSent > n || document.querySelectorAll(".ai-chat-msg--user").length >= 2, sent, { timeout: 8000 }).catch(() => {});
-  await page.waitForSelector(".ai-chat-panel.open", { timeout: 8000 });
-  await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 8000 });
-  check("tf: after True Fit closes, the chat comes back with the shopper's size", /^True Fit recommends size 9 - 9\.5 US for me in the Jillian Sandal\.$/.test(chatBodies.at(-1)?.message || ""), chatBodies.at(-1)?.message);
-  check("tf: the shoe comes back ready in that size", /9 US/.test(await page.textContent(".ai-chat-product-card")));
+  // The finder closes and the size appears; give the chat every chance to (wrongly) react.
+  await page.waitForFunction(() => window.AetrexTrueFitTile.state.recommendation, null, { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  const lastAssistant = () => page.evaluate(() => [...document.querySelectorAll(".ai-chat-msg--assistant")].at(-1)?.textContent || "");
+  check("tf: once True Fit has a size, the chat stays closed and sends nothing", !(await page.isVisible(".ai-chat-panel.open")) && chatBodies.length === sent, `open=${await page.isVisible(".ai-chat-panel.open")} sent=${chatBodies.length - sent}`);
+  check("tf: the size is added to the conversation, quietly", /True Fit recommends size 9 - 9\.5 US in the Jillian Sandal\. It’s marked in the size list on this page\./.test(await lastAssistant()), await lastAssistant());
+  await page.click(".ai-chat-launcher");
+  await ask("does it run small?");
+  await waitUntil(() => chatBodies.length > sent);
+  check("tf: the next question carries the size to the assistant", chatBodies.at(-1)?.history?.some((h) => h.role === "assistant" && /True Fit recommends size 9 - 9\.5 US/.test(h.content)), JSON.stringify(chatBodies.at(-1)?.history?.map((h) => h.content).slice(-3)));
 
   // From another page: the button opens the shoe's page and True Fit starts there.
   await page.goto("http://localhost:4789/full");
@@ -179,11 +186,39 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await ask("what size in the Jillian?");
   await page.waitForSelector(".ai-chat-msg--assistant:last-child [data-truefit]");
   check("tf: on other pages the site is remembered as having True Fit", chatBodies.at(-1)?.size_finder?.page_handle === "", JSON.stringify(chatBodies.at(-1)?.size_finder));
+  const away = chatBodies.length;
   await Promise.all([page.waitForURL(/\/products\/jillian-black$/), page.click(".ai-chat-msg--assistant:last-child [data-truefit]")]);
   await page.waitForFunction(() => window.__tfOpens === 1, null, { timeout: 8000 });
-  await page.waitForSelector(".ai-chat-panel.open", { timeout: 10000 });
-  await page.waitForFunction(() => /^True Fit recommends/.test([...document.querySelectorAll(".ai-chat-msg--user")].at(-1)?.textContent || ""), null, { timeout: 8000 }).catch(() => {});
-  check("tf: …and the size comes back into the same conversation", /^True Fit recommends size 9 - 9\.5 US/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.history?.some((h) => /what size in the Jillian/.test(h.content)), chatBodies.at(-1)?.message);
+  await page.waitForFunction(() => window.AetrexTrueFitTile.state.recommendation, null, { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  check("tf: on the shoe's page too, the chat stays closed and sends nothing", !(await page.isVisible(".ai-chat-panel.open")) && chatBodies.length === away, `open=${await page.isVisible(".ai-chat-panel.open")} sent=${chatBodies.length - away}`);
+  check("tf: …and the size joins the same conversation", /True Fit recommends size 9 - 9\.5 US in the Jillian Sandal/.test(await lastAssistant()), await lastAssistant());
+
+  // The page's own "Find my size" tile is the theme's: using it never involves the chat.
+  await page.goto("http://localhost:4789/products/jillian-black");
+  await page.waitForTimeout(400);
+  const quiet = chatBodies.length;
+  const convo = await page.evaluate(() => localStorage.getItem("hajirai_chat_history"));
+  await page.click("[data-tf-size-tile]");
+  await page.waitForFunction(() => window.AetrexTrueFitTile.state.recommendation, null, { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  const convoAfter = await page.evaluate(() => localStorage.getItem("hajirai_chat_history"));
+  check("tf: the page's own tile — the chat doesn't open, send or note anything", !(await page.isVisible(".ai-chat-panel.open")) && chatBodies.length === quiet && convo === convoAfter, `open=${await page.isVisible(".ai-chat-panel.open")} sent=${chatBodies.length - quiet} changed=${convo !== convoAfter}`);
+
+  // A finder the chat started, then the shopper taps the page's tile themselves
+  // while it's still loading: that run is over — nothing reaches the chat.
+  await page.goto("http://localhost:4789/products/jillian-black");
+  await page.waitForTimeout(400);
+  await page.click(".ai-chat-launcher");
+  await ask("what size should I get?");
+  await page.waitForSelector(".ai-chat-msg--assistant:last-child [data-truefit]");
+  const mid = chatBodies.length;
+  const notesBefore = await page.$$eval(".ai-chat-msg--assistant", (m) => m.length);
+  await page.click(".ai-chat-msg--assistant:last-child [data-truefit]");
+  await page.click("[data-tf-size-tile]");
+  await page.waitForFunction(() => window.AetrexTrueFitTile.state.recommendation, null, { timeout: 8000 });
+  await page.waitForTimeout(1500);
+  check("tf: the shopper took over with the page's tile — the chat's run ends, nothing is added", chatBodies.length === mid && (await page.$$eval(".ai-chat-msg--assistant", (m) => m.length)) === notesBefore && !(await page.isVisible(".ai-chat-panel.open")), `sent=${chatBodies.length - mid}`);
 
   // No True Fit data for a style: the theme's size chart opens, the chat stays out of the way.
   await page.goto("http://localhost:4789/products/jillian-black?tf=none");
@@ -252,7 +287,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check("known: with a small Update action", (await page.textContent('.ai-chat-helper__alt[data-helper="truefit-update"]').catch(() => "")) === "Update");
   await page.click(".ai-chat-helper--truefit");
   await page.waitForFunction(() => document.querySelectorAll(".ai-chat-product-card").length >= 1, null, { timeout: 5000 }).catch(() => {});
-  check("known: tapping it shops that size — no second quiz", /^True Fit recommends size 9 - 9\.5 US for me in the /.test(chatBodies.at(-1)?.message || "") && !(await page.evaluate(() => window.__tfOpens)), chatBodies.at(-1)?.message);
+  check("known: tapping it shops that size — no second quiz", /^True Fit recommends size 9 - 9\.5 US for me( in the \S.*)?\.$/.test(chatBodies.at(-1)?.message || "") && !(await page.evaluate(() => window.__tfOpens)), chatBodies.at(-1)?.message);
 
   // A saved FIT: the card shops it, Retake asks the questions again.
   await page.evaluate(() => { sessionStorage.setItem("fitfinder_fit", JSON.stringify({ key: "B", label: "FIT B", code: "00" })); localStorage.removeItem("hajirai_chat_history"); });
@@ -943,7 +978,7 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
       behindInert: document.querySelector(".ai-chat-messages").closest("[inert]") !== null || document.querySelector(".ai-chat-messages").inert === true };
   });
   check(`view all (${label}): the list opens in the chat, titled, with every match`, sh.kind === "list" && sh.open && sh.inside && sh.title === "Women's Sale Boots" && sh.count === "10 results" && sh.cards === 10 && sh.handles === "savannah-red,jillian-black,orthotic-one,carly-white", JSON.stringify(sh));
-  check(`view all (${label}): the chat's own card style and buttons, in a grid — no sideways scrolling`, sh.sameStyle && sh.sameButtons && sh.noSideways && sh.imgOnTop && sh.widths.length === 1 && (sh.showcase ? sh.perRow >= 2 && sh.perRow <= 3 : sh.perRow >= 1), JSON.stringify(sh));
+  check(`view all (${label}): the chat's own card style and buttons, in a grid — no sideways scrolling`, sh.sameStyle && sh.sameButtons && sh.noSideways && sh.imgOnTop && sh.widths.length === 1 && (sh.showcase ? (label === "desktop" ? sh.perRow >= 4 && sh.perRow <= 5 : sh.perRow >= 2 && sh.perRow <= 3) : sh.perRow >= 1), JSON.stringify(sh));
   check(`view all (${label}): sale prices, it scrolls down`, sh.sale && sh.scrolls && sh.listShown && sh.formHidden, JSON.stringify(sh));
   check(`view all (${label}): focus moves into the sheet; the chat behind is out of reach`, sh.focus && sh.behindInert, JSON.stringify(sh));
   // Add to cart from the list: the picker opens full width under that card's row.
@@ -964,7 +999,9 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   check(`view all (${label}): Add to cart works in the list, the confirmation kept in view`, cartLog.length === before + 1 && PRODUCTS["jillian-black"].variants.some((v) => v.id === cartLog.at(-1)) && added.inView, JSON.stringify({ added, n: cartLog.length - before, last: cartLog.at(-1) }));
   await page.screenshot({ path: out(`va-${label}-added`) });
   await page.click(".ai-chat-fbsheet__back");
-  await page.waitForTimeout(600);
+  // On a computer the wide view shrinks back first.
+  await page.waitForFunction(() => document.querySelector(".ai-chat-fbsheet").hidden, null, { timeout: 4000 }).catch(() => {});
+  await page.waitForTimeout(100);
   const back = await page.evaluate(() => ({ closed: document.querySelector(".ai-chat-fbsheet").hidden, focus: document.activeElement && document.activeElement.hasAttribute("data-viewall") }));
   check(`view all (${label}): back closes the list and returns focus to the button`, back.closed && back.focus, JSON.stringify(back));
   await page.click("[data-viewall]");
@@ -972,7 +1009,7 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
   const kept = await page.evaluate(() => !!document.querySelector(".ai-chat-fbsheet__list .ai-chat-atc-done"));
   check(`view all (${label}): reopening shows the same list (not rebuilt)`, kept);
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(600);
+  await page.waitForFunction(() => document.querySelector(".ai-chat-fbsheet").hidden, null, { timeout: 4000 }).catch(() => {});
   check(`view all (${label}): Escape closes it`, await page.evaluate(() => document.querySelector(".ai-chat-fbsheet").hidden));
   await page.reload();
   await page.waitForTimeout(600);
@@ -1079,6 +1116,172 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 
   check(`view all pages (${label}): while a page loads the list dims and Next spins`, busy.dim && busy.busy && busy.aria === "true" && busy.errGone, JSON.stringify(busy));
   check(`view all pages (${label}): Try again loads it — an extra tap while loading doesn't skip a page`, st.label === "Page 2 of 3" && st.first === "boot-25" && viewAllLog.length === asked + 1 && (await page.evaluate(() => document.querySelector(".ai-va-error").hidden && !document.querySelector(".ai-chat-fbsheet__list").classList.contains("is-loading"))), JSON.stringify({ st, extraFetches: viewAllLog.length - asked }));
   check(`view all pages (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+const hasPair = (p, size, width) => p.stock.some((o) => (!size || o.Size === size) && (!width || o.Width === width));
+const bootsWith = (fn) => BOOT_PRODUCTS.filter(fn).map((p) => p.handle);
+const gridState = (page) => page.evaluate(() => ({
+  count: document.querySelector(".ai-chat-viewall__count").textContent,
+  handles: [...document.querySelectorAll(".ai-chat-fbsheet__list .ai-chat-products--grid .ai-chat-product-card")].map((c) => c.getAttribute("data-handle")),
+  prices: [...document.querySelectorAll(".ai-chat-fbsheet__list .ai-chat-products--grid .ai-chat-product-price")].map((p) => parseFloat(p.firstChild.textContent.replace(/[^0-9.]/g, ""))),
+  chips: [...document.querySelectorAll(".ai-vf__chips button")].map((b) => b.textContent.trim()),
+  done: (document.querySelector(".ai-vf-pop__done") || {}).textContent || "",
+}));
+const settled = (page) => page.waitForFunction(() => !document.querySelector("[data-skel]"), null, { timeout: 5000 }).catch(() => {});
+// View all on a computer: the chat grows into a wide view (five cards a row,
+// × at the top right) and back. Filters on top work instantly from the
+// index of every match: sizes and widths paired, colors, sort, chips, Clear
+// all — results and counts exactly as the catalog says; cards not seen yet
+// are fetched once, by handle.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/showcase");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "manyboots");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-viewall]", { timeout: 5000 });
+  const idx0 = viewAllIndexLog.length, cards0 = viewAllCardsLog.length;
+  const before = await page.evaluate(() => { const r = document.querySelector(".ai-chat-panel").getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; });
+  await page.click("[data-viewall]");
+  await page.waitForSelector(".ai-vf:not(.is-loading)", { timeout: 5000 });
+  await page.waitForTimeout(900);
+  const wide = await page.evaluate(() => {
+    const p = document.querySelector(".ai-chat-panel"), r = p.getBoundingClientRect(), g = document.querySelector(".ai-chat-fbsheet__list .ai-chat-products--grid"), x = document.querySelector(".ai-chat-fbsheet__x").getBoundingClientRect();
+    return { w: Math.round(r.width), h: Math.round(r.height), cols: getComputedStyle(g).gridTemplateColumns.split(" ").length, chatHidden: getComputedStyle(document.querySelector(".ai-chat-messages")).display === "none",
+      xTopRight: x.right > r.right - 60 && x.top < r.top + 40, xLabel: document.querySelector(".ai-chat-fbsheet__x").getAttribute("aria-label"),
+      pills: [...document.querySelectorAll(".ai-vf [data-vf-open], .ai-vf [data-vf-toggle]")].map((b) => b.getAttribute("data-vf-open") || b.getAttribute("data-vf-toggle")) };
+  });
+  check("filters: on a computer View all grows almost full width — five a row, × at the top right", wide.w === 1392 && wide.h === 860 && wide.cols === 5 && wide.chatHidden && wide.xTopRight && wide.xLabel === "Close the chat", JSON.stringify({ wide, before }));
+  check("filters: the bar offers what these matches can be filtered by, Sort at the end", wide.pills.join(",") === "all,size,width,color,price,type,needs,sort", wide.pills.join(","));
+  check("filters: the index is asked for once, with the reply's search", viewAllIndexLog.length === idx0 + 1 && viewAllIndexLog.at(-1).search?.on_sale === true, JSON.stringify(viewAllIndexLog.slice(idx0)));
+  await page.screenshot({ path: out("va-wide") });
+
+  // Size: a panel under its button; a size shows only styles with it in stock.
+  await page.click('[data-vf-open="size"]');
+  await page.waitForSelector(".ai-vf-pop.is-open");
+  await page.waitForTimeout(100);
+  const pop = await page.evaluate(() => { const d = document.querySelector(".ai-vf-pop"), b = document.querySelector('[data-vf-open="size"]').getBoundingClientRect(), r = d.getBoundingClientRect(); return { role: d.getAttribute("role"), label: d.getAttribute("aria-label"), focusIn: d.contains(document.activeElement), expanded: document.querySelector('[data-vf-open="size"]').getAttribute("aria-expanded"), under: r.top >= b.bottom && Math.abs(r.left - b.left) < 2, sizes: [...d.querySelectorAll(".ai-vf-size")].map((x) => x.textContent) }; });
+  check("filters: Size opens a panel right under its button, every size in stock in order, focus inside", pop.role === "dialog" && pop.label === "Size (US)" && pop.focusIn && pop.expanded === "true" && pop.under && pop.sizes.join(",") === "6,6.5,7,7.5,8,8.5,9,9.5,10,11", JSON.stringify(pop));
+  await page.click('.ai-vf-size[aria-pressed] >> text="8"');
+  await settled(page);
+  const want8 = bootsWith((p) => hasPair(p, "8 US"));
+  let st = await gridState(page);
+  check("filters: a size shows only the styles with it in stock, at once, with the count", want8.length === 45 && st.count === `1–24 of ${want8.length}` && st.handles.join(",") === want8.slice(0, 24).join(",") && st.done === `Show ${want8.length} results`, JSON.stringify({ count: st.count, done: st.done, first: st.handles.slice(0, 4) }));
+  await page.click('[data-vf-open="width"]');
+  await page.waitForSelector('.ai-vf-pop--width.is-open');
+  await page.click('.ai-vf-opt >> text="Wide"');
+  await settled(page);
+  const want8w = bootsWith((p) => hasPair(p, "8 US", "Wide"));
+  st = await gridState(page);
+  check("filters: size and width are matched on the same pair (8 and Wide = a Wide 8 in stock)", want8w.length > 0 && want8w.length < want8.length && st.count === `${want8w.length} results` && st.handles.join(",") === want8w.join(","), JSON.stringify({ want: want8w.length, count: st.count }));
+  check("filters: what's chosen shows on the buttons and as chips", st.chips.join("|") === "Size 8 US|Wide|Clear all" && (await page.textContent('[data-vf-open="size"]')).includes("8") && (await page.textContent('[data-vf-open="all"]')).includes("2"), st.chips.join("|"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const esc1 = await page.evaluate(() => ({ pop: !!document.querySelector(".ai-vf-pop"), sheet: !document.querySelector(".ai-chat-fbsheet").hidden, focus: document.activeElement && document.activeElement.getAttribute("data-vf-open") }));
+  check("filters: Escape closes the panel first (the list stays), focus back on its button", !esc1.pop && esc1.sheet && esc1.focus === "width", JSON.stringify(esc1));
+  await page.click('.ai-vf__chip >> text="Wide"');
+  await settled(page);
+  st = await gridState(page);
+  check("filters: a chip's × takes that filter off", st.count === `1–24 of ${want8.length}` && st.chips.join("|") === "Size 8 US|Clear all", JSON.stringify(st.chips));
+  await page.click('[data-vf-open="color"]');
+  await page.waitForSelector('.ai-vf-pop--color.is-open');
+  const reds = await page.evaluate(() => { const b = document.querySelector('.ai-vf-sw[data-k="red"]'); return { n: b.querySelector(".ai-vf-n").textContent, label: b.querySelector(".ai-vf-sw__l").textContent }; });
+  const want8r = bootsWith((p) => hasPair(p, "8 US") && /- (Red|Wine)$/.test(p.title));
+  check("filters: each color says how many it would show (red and wine together)", reds.label === "Red" && reds.n === String(want8r.length), JSON.stringify(reds));
+  await page.click('.ai-vf-sw[data-k="red"]');
+  await settled(page);
+  st = await gridState(page);
+  check("filters: a color narrows it further", st.count === `${want8r.length} results` && st.handles.join(",") === want8r.join(","), JSON.stringify({ want: want8r.length, count: st.count }));
+  await page.keyboard.press("Escape");
+  await page.click('[data-vf-open="sort"]');
+  await page.waitForSelector('.ai-vf-pop--sort.is-open');
+  await page.click('[data-vf-sort="price_low"]');
+  await settled(page);
+  st = await gridState(page);
+  check("filters: Sort by price, low to high (and the panel closes)", st.prices.length === want8r.length && st.prices.every((v, i) => i === 0 || v >= st.prices[i - 1]) && !(await page.$(".ai-vf-pop.is-open")) && (await page.textContent(".ai-vf__sort-v")) === "Price: Low to High", JSON.stringify(st.prices));
+  await page.click(".ai-vf__clear");
+  await settled(page);
+  st = await gridState(page);
+  check("filters: Clear all shows every match again (the sort stays)", st.count === "1–24 of 60" && st.chips.length === 0 && st.prices.every((v, i) => i === 0 || v >= st.prices[i - 1]), JSON.stringify({ count: st.count, chips: st.chips }));
+  await page.click('[data-vf-open="sort"]');
+  await page.click('[data-vf-sort="best"]');
+  await page.waitForTimeout(300);
+  st = await gridState(page);
+  check("filters: back to Best match, the list is the reply's pages again", st.count === "1–24 of 60" && st.handles[0] === "boot-1" && st.handles[23] === "boot-24", JSON.stringify(st.handles.slice(0, 3)));
+  const asked = viewAllCardsLog.slice(cards0).flat();
+  check("filters: cards not seen yet are fetched by handle — each just once, never ones already shown", asked.length > 0 && new Set(asked).size === asked.length && !asked.some((h) => /^boot-([1-9]|1\d|2[0-4])$/.test(h)), JSON.stringify(asked.slice(0, 8)));
+  // Pages of a filtered list.
+  await page.click('[data-vf-open="size"]');
+  await page.click('.ai-vf-size[aria-pressed] >> text="8"');
+  await page.keyboard.press("Escape");
+  await settled(page);
+  await page.click('.ai-va-pager [data-va-step="1"]');
+  await settled(page);
+  st = await gridState(page);
+  check("filters: a filtered list has its own pages", st.count === `25–${want8.length} of ${want8.length}` && st.handles.join(",") === want8.slice(24).join(",") && (await page.textContent(".ai-va-pager__label")) === "Page 2 of 2", JSON.stringify({ count: st.count }));
+  // Back: the window shrinks to the chat's size, the conversation is there.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(1500);
+  const narrow = await page.evaluate(() => { const r = document.querySelector(".ai-chat-panel").getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), sheet: document.querySelector(".ai-chat-fbsheet").hidden, chat: getComputedStyle(document.querySelector(".ai-chat-messages")).display !== "none", wide: document.querySelector(".ai-chat-panel").classList.contains("is-wide") }; });
+  check("filters: back to the chat, the window returns to its size with the conversation", narrow.w === before.w && narrow.h === before.h && narrow.sheet && narrow.chat && !narrow.wide, JSON.stringify({ narrow, before }));
+  // Reopened: the filters are as they were left.
+  await page.click("[data-viewall]");
+  await page.waitForTimeout(1000);
+  st = await gridState(page);
+  check("filters: reopening keeps the filters as they were", st.chips.join("|") === "Size 8 US|Clear all" && st.count.endsWith(`of ${want8.length}`), JSON.stringify(st.chips));
+  // × closes the whole chat; opening it again shows the conversation.
+  await page.click(".ai-chat-fbsheet__x");
+  await page.waitForTimeout(900);
+  const closed = await page.evaluate(() => ({ open: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: document.querySelector(".ai-chat-fbsheet").hidden, wide: document.querySelector(".ai-chat-panel").classList.contains("is-wide") }));
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(700);
+  const reopened = await page.evaluate(() => { const r = document.querySelector(".ai-chat-panel").getBoundingClientRect(); return { w: Math.round(r.width), chat: getComputedStyle(document.querySelector(".ai-chat-messages")).display !== "none", sheet: document.querySelector(".ai-chat-fbsheet").hidden }; });
+  check("filters: × closes the chat; it opens again on the conversation, at its usual size", !closed.open && closed.sheet && !closed.wide && reopened.w === before.w && reopened.chat && reopened.sheet, JSON.stringify({ closed, reopened }));
+  check("filters (computer): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// On a phone: the sheet is already full screen. The buttons scroll sideways,
+// Sort is its icon, and a filter opens as a sheet from the bottom.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/showcase");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "manyboots");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector("[data-viewall]", { timeout: 5000 });
+  await page.click("[data-viewall]");
+  await page.waitForSelector(".ai-vf:not(.is-loading)", { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const bar = await page.evaluate(() => { const p = document.querySelector(".ai-chat-panel").getBoundingClientRect(), s = document.querySelector(".ai-vf__sort").getBoundingClientRect(), row = document.querySelector(".ai-vf__pills"); return { w: Math.round(p.width), wide: document.querySelector(".ai-chat-panel").classList.contains("is-wide"), sortW: Math.round(s.width), sortIn: s.right <= p.right, scrolls: row.scrollWidth > row.clientWidth, noSideways: document.documentElement.scrollWidth <= innerWidth }; });
+  check("filters (phone): full screen as before, the buttons scroll sideways, Sort is its icon", bar.w === 390 && !bar.wide && bar.sortW === 36 && bar.sortIn && bar.scrolls && bar.noSideways, JSON.stringify(bar));
+  await page.click('[data-vf-open="size"]');
+  await page.waitForSelector(".ai-vf-pop.is-sheet.is-open");
+  await page.waitForTimeout(500);
+  const sheet = await page.evaluate(() => { const d = document.querySelector(".ai-vf-pop").getBoundingClientRect(); return { bottom: Math.round(d.bottom), left: Math.round(d.left), w: Math.round(d.width), dim: getComputedStyle(document.querySelector(".ai-vf-scrim")).opacity }; });
+  check("filters (phone): a filter opens as a sheet from the bottom, over a dimmed list", Math.abs(sheet.bottom - 844) <= 1 && sheet.left === 0 && sheet.w === 390 && sheet.dim === "1", JSON.stringify(sheet));
+  await page.click('.ai-vf-size[aria-pressed] >> text="9"');
+  await page.waitForTimeout(200);
+  const want9 = bootsWith((p) => hasPair(p, "9 US"));
+  check("filters (phone): the button says how many it will show", (await page.textContent(".ai-vf-pop__done")) === `Show ${want9.length} results`, await page.textContent(".ai-vf-pop__done"));
+  await page.click(".ai-vf-pop__done");
+  await page.waitForTimeout(500);
+  await settled(page);
+  const st = await gridState(page);
+  check("filters (phone): Show closes it; the list and the chip are there", !(await page.$(".ai-vf-pop.is-open")) && st.count === `1–24 of ${want9.length}` && st.chips.join("|") === "Size 9 US|Clear all", JSON.stringify({ count: st.count, chips: st.chips }));
+  await page.click('[data-vf-open="all"]');
+  await page.waitForSelector(".ai-vf-pop--all.is-open");
+  const secs = await page.$$eval(".ai-vf-sec__h", (h) => h.map((x) => x.textContent));
+  check("filters (phone): Filters shows them all in one sheet", secs.join(",") === "Size (US),Width,Color,Price,Type,Helps with", secs.join(","));
+  await page.screenshot({ path: out("va-phone-filters") });
+  check("filters (phone): no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // "How's the chat going?": after the store's number of replies, one quiet

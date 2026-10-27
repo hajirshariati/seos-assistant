@@ -14,8 +14,11 @@ export const startedReturns = {};
 // shopper never hears back), or make the next request slow.
 export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150 };
 export const compareLog = [];
-// "View all" pages the widget asked for ({ page, search }).
+// "View all" pages the widget asked for ({ page, search }), its filter
+// index requests and the cards it asked for by handle.
 export const viewAllLog = [];
+export const viewAllIndexLog = [];
+export const viewAllCardsLog = [];
 export const feedbackBodies = [];
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
@@ -81,8 +84,28 @@ const cards = [
   { title: PRODUCTS["jillian-black"].title, handle: "jillian-black", url: "/products/jillian-black", image: img, price: "119.95", price_formatted: "$119.95", choose: ["Size", "Width"], kind: "footwear" },
   { title: PRODUCTS["orthotic-one"].title, handle: "orthotic-one", url: "/products/orthotic-one", image: img, price: "69.95", price_formatted: "$69.95", kind: "orthotic" },
 ];
-// A big search for "View all" pages: 60 sale boots.
-const MANY_BOOTS = Array.from({ length: 60 }, (_, i) => ({ title: `Boot ${i + 1} - Black`, handle: `boot-${i + 1}`, url: `/products/boot-${i + 1}`, image: img, price: "99.95", price_formatted: "$99.95", compare_at_price: 14995, choose: ["Size"], kind: "footwear" }));
+// A big search for "View all" pages: 60 sale boots, as varied as a real
+// search — colors, boots and booties, sizes and widths in stock (Wide only
+// in some sizes), prices, foot needs and ratings — so the sheet's filters
+// have something to work with. The index comes from the real builder.
+const { buildViewAllIndex } = await import("../../../app/lib/lean/view-all-index.js");
+const BOOT_COLORS = ["Black", "Brown", "Navy", "Red", "Taupe", "Grey", "Black/White", "Wine"];
+const BOOT_SIZES = ["6 US", "6.5 US", "7 US", "7.5 US", "8 US", "8.5 US", "9 US", "9.5 US", "10 US", "11 US"];
+export const BOOT_PRODUCTS = Array.from({ length: 60 }, (_, i) => {
+  const price = 79.95 + (i % 7) * 20;
+  const variants = [];
+  BOOT_SIZES.forEach((size, j) => {
+    const qty = (i + j) % 4 === 0 ? 0 : 4;
+    variants.push({ price: price.toFixed(2), compareAtPrice: (price * 1.5).toFixed(2), inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: "Medium" }]) });
+    if (i % 2 === 0) variants.push({ price: price.toFixed(2), compareAtPrice: (price * 1.5).toFixed(2), inventoryQty: j % 2 === 0 ? qty : 0, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: "Wide" }]) });
+  });
+  return normalizeProduct({
+    handle: `boot-${i + 1}`, title: `Boot ${i + 1} - ${BOOT_COLORS[i % 8]}`, productType: "Footwear", featuredImageUrl: "IMG", tags: [], description: "",
+    attributesJson: { category_for_filter: i % 3 === 0 ? "Booties" : "Boots", gender: "women", color: BOOT_COLORS[i % 8], helps_with: i % 5 === 0 ? ["plantar fasciitis"] : i % 5 === 1 ? ["bunions"] : [], rating: (3.8 + (i % 10) * 0.12).toFixed(1), review_count: String(10 + i * 3) },
+    variants,
+  }, { shop: "aetrex.myshopify.com" });
+});
+const MANY_BOOTS = BOOT_PRODUCTS.map((p) => ({ title: p.title, handle: p.handle, url: `/products/${p.handle}`, image: img, price: p.price.toFixed(2), price_formatted: `$${p.price.toFixed(2)}`, compare_at_price: Math.round(p.compareAtPrice * 100), choose: ["Size", "Width"], kind: "footwear" }));
 const carly = { title: "Carly Arch Support Sneaker - White", handle: "carly-white", url: "/products/carly-white", image: img, price: "139.95", price_formatted: "$139.95", choose: ["Size", "Width"], kind: "footwear" };
 for (const p of CMP_CATALOG.products) p.image = img;
 const page = (style) => `<!doctype html><script>setTimeout(function(){var d=document.createElement("div");d.id="floater";d.style.cssText="position:fixed;right:16px;bottom:16px;width:48px;height:48px;z-index:999999;pointer-events:none";var f=document.createElement("iframe");f.style.cssText="width:48px;height:48px;border:0;border-radius:50%;background:#333;pointer-events:auto";d.appendChild(f);document.body.appendChild(d)},6000)</script><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
@@ -107,8 +130,9 @@ const shoePage = (handle, tf) => `<!doctype html><html><head><meta name="viewpor
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Product ${handle} <span class="cart-count">0</span>
 ${tf === "absent" ? "" : '<button type="button" data-tf-size-tile data-product-id="42">Find my size</button>'}<div id="size-chart" hidden>Size chart</div></div>
 <script>
-${tf === "absent" ? "" : `window.AetrexTrueFitTile={state:{busy:false,finderOpen:false,recommendation:null},open:function(){
-  var s=this.state;window.__tfOpens=(window.__tfOpens||0)+1;
+${tf === "absent" ? "" : `document.addEventListener("click",function(e){var t=e.target.closest("[data-tf-size-tile]");if(t){e.preventDefault();window.AetrexTrueFitTile.open(t)}});
+window.AetrexTrueFitTile={state:{busy:false,finderOpen:false,recommendation:null},open:function(){
+  var s=this.state;if(s.busy)return Promise.resolve();window.__tfOpens=(window.__tfOpens||0)+1;
   if(${JSON.stringify(tf === "none")}){document.getElementById("size-chart").hidden=false;return Promise.resolve()}
   s.busy=true;
   return new Promise(function(r){setTimeout(function(){
@@ -215,6 +239,18 @@ export function start(port) {
         if (u.pathname === "/apps/hajirai/view-all") {
           let search = null;
           try { search = JSON.parse(u.searchParams.get("search") || "null"); } catch { /* bad */ }
+          // The filters' index, and cards by handle (what a filter shows).
+          if (u.searchParams.get("index") === "1") {
+            viewAllIndexLog.push({ search });
+            if (mockCtl.viewAllIndexFail) return setTimeout(() => send(500, "application/json", '{"error":"failed"}'), mockCtl.viewAllDelayMs);
+            return setTimeout(() => send(search?.on_sale === true ? 200 : 400, "application/json", search?.on_sale === true ? JSON.stringify({ ok: true, ...buildViewAllIndex(BOOT_PRODUCTS) }) : '{"error":"bad_search"}'), mockCtl.viewAllDelayMs);
+          }
+          if (u.searchParams.has("handles")) {
+            const asked = String(u.searchParams.get("handles") || "").split(",").filter(Boolean);
+            viewAllCardsLog.push(asked);
+            const all = new Map([...MANY_BOOTS, ...cards, carly].map((c) => [c.handle, c]));
+            return setTimeout(() => send(200, "application/json", JSON.stringify({ ok: true, products: asked.map((h) => all.get(h)).filter(Boolean) })), mockCtl.viewAllCardsDelayMs ?? mockCtl.viewAllDelayMs);
+          }
           const asked = Number(u.searchParams.get("page")) || 1;
           viewAllLog.push({ page: asked, search });
           if (mockCtl.viewAllFail > 0) { mockCtl.viewAllFail -= 1; return setTimeout(() => send(500, "application/json", JSON.stringify({ error: "failed" })), mockCtl.viewAllDelayMs); }

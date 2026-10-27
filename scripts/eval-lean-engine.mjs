@@ -1443,6 +1443,69 @@ await test("no collection in the catalog (Shopify unreadable) → the tools don'
   assert.equal(s.requests[0].tools.find((t) => t.name === "search_products").input_schema.properties.collection, undefined);
 });
 
+console.log("\nView all filters");
+const { buildViewAllIndex, colorGroupsOf } = await import("../app/lib/lean/view-all-index.js");
+const { viewAllIndex, viewAllCards } = await import("../app/lib/lean/engine.js");
+await test("the index lists every match in the search's own order, with the facts the filters need", () => {
+  const ix = viewAllIndex(shoes, { query: "sneaker", gender: "women" });
+  const order = allMatches(shoes, { query: "sneaker", gender: "women" }).map((p) => p.handle);
+  assert.deepEqual(ix.items.map((i) => i.h), order);
+  assert.equal(ix.total, order.length);
+  const F = ix.facets;
+  assert.deepEqual(F.size.values.map((v) => v.l), ["7", "8", "9"], "sizes in size order, ' US' taken off");
+  assert.equal(F.size.unit, "US");
+  assert.deepEqual(F.width.values.map((v) => v.l), ["medium", "wide"], "narrowest first");
+  assert.ok(F.color.values.some((v) => v.k === "black") && F.color.values.some((v) => v.k === "red") && F.color.values.some((v) => v.k === "pink"));
+  assert.equal(F.color.order.length, F.color.values.length);
+  assert.deepEqual(F.price, { min: 149, max: 150 });
+});
+await test("sizes and widths are paired per variant in stock (8 Wide means a pair that's both)", () => {
+  const c = buildLeanCatalog([wrow("Lexa Sneaker - Grey", { widths: ["medium", "wide"], out: ["8 US|wide"] })], { shop: "s" });
+  const ix = buildViewAllIndex(c.products);
+  const S = ix.facets.size.values.map((v) => v.l), W = ix.facets.width.values.map((v) => v.l);
+  const pairs = ix.items[0].sw.map(([s, w]) => `${S[s]}|${W[w]}`).sort();
+  assert.ok(pairs.includes("8|medium") && !pairs.includes("8|wide") && pairs.includes("9|wide"), JSON.stringify(pairs));
+});
+await test("color groups: shopper words, several per colorway, one name for anything else", () => {
+  assert.deepEqual(colorGroupsOf(["Black/White"]), ["black", "white"]);
+  assert.deepEqual(colorGroupsOf(["Navy Coral"]), ["navy", "pink"]);
+  assert.deepEqual(colorGroupsOf(["light blue"]), ["blue"]);
+  assert.deepEqual(colorGroupsOf(["wine"]), ["red"]);
+  assert.deepEqual(colorGroupsOf(["oatmeal"]), ["tan"]);
+  assert.deepEqual(colorGroupsOf(["leopard"]), ["multi"]);
+  assert.deepEqual(colorGroupsOf(["Shredded Wheat"]), ["tan"], "whole words only ('red' isn't in 'Shredded')");
+  assert.deepEqual(colorGroupsOf(["Moonbeam"]), ["other"]);
+  assert.deepEqual(colorGroupsOf([]), []);
+});
+await test("type, gender (unisex counts as both), foot needs, sale and rating", () => {
+  const c = buildLeanCatalog([
+    row("Ava Sandal - Red", { cat: "Sandals", helps: ["plantar fasciitis"], price: "99.95", compareAt: "129.95" }),
+    row("Max Sneaker - Black", { cat: "Sneakers", gender: "Men", price: "149.95" }),
+    { ...row("Flip - Blue", { cat: "Sandals", gender: "Unisex", price: "39.95" }), attributesJson: { category_for_filter: "Sandals", gender: "unisex", rating: "4.6", review_count: "88" } },
+  ], { shop: "s" });
+  const ix = buildViewAllIndex(c.products);
+  const F = ix.facets, by = Object.fromEntries(ix.items.map((i) => [i.h, i]));
+  const lines = (h) => by[h].l.map((i) => F.line.values[i].l).sort();
+  assert.deepEqual(lines("flip-blue"), ["Men's", "Women's"]);
+  assert.deepEqual(lines("max-sneaker-black"), ["Men's"]);
+  assert.equal(F.type.values[by["ava-sandal-red"].t].l, "Sandals");
+  assert.equal(F.needs.values[by["ava-sandal-red"].n[0]].l, "Plantar fasciitis");
+  assert.equal(by["ava-sandal-red"].s, 1);
+  assert.equal(by["max-sneaker-black"].s, undefined);
+  assert.equal(F.sale, 1);
+  assert.equal(by["flip-blue"].r, 46);
+  assert.equal(by["flip-blue"].rc, 88);
+  assert.equal(by["ava-sandal-red"].p, 9995, "price in cents");
+});
+await test("cards by handle: the order asked, unknown ones left out, at most 48", () => {
+  const hs = shoes.products.map((p) => p.handle);
+  const got = viewAllCards(shoes, [hs[2], "nope", hs[0], hs[2]]);
+  assert.deepEqual(got.map((c) => c.handle), [hs[2], hs[0]]);
+  assert.ok(got[0].title && got[0].url && got[0].price_formatted);
+  const many = Array.from({ length: 80 }, (_, i) => hs[i % hs.length]);
+  assert.ok(viewAllCards(shoes, many).length <= 48);
+});
+
 
 console.log("\nguardrails");
 await test("the prompt sets boundaries: no rule changes from customer or tool text, on-topic only, no sensitive data", () => {

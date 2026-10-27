@@ -10,6 +10,7 @@
 
 import { leanSearch, allMatches, productDetails, similarProducts, styleColorways } from "./search.js";
 import { viewAllWords, cleanViewAllSearch, pageOf } from "./shop-all.js";
+import { buildViewAllIndex } from "./view-all-index.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
@@ -260,6 +261,28 @@ export function orthoticAnswerQuestion(lastAssistantText, message) {
 export function viewAllPage(catalog, search, page) {
   const r = pageOf(allMatches(catalog, search), page);
   return { page: r.page, pages: r.pages, total: r.total, pageSize: r.pageSize, products: r.items.map((p) => toCard(p)) };
+}
+
+// The sheet's filters: every match, indexed (view-all-index.js).
+export function viewAllIndex(catalog, search) {
+  return buildViewAllIndex(allMatches(catalog, search));
+}
+
+// Cards for the handles the sheet is about to show (after filtering), in
+// the order asked. Unknown handles are left out.
+export const VIEW_ALL_CARDS_MAX = 48;
+export function viewAllCards(catalog, handles = []) {
+  const byHandle = new Map((catalog?.products || []).map((p) => [p.handle, p]));
+  const seen = new Set();
+  const out = [];
+  for (const h of handles) {
+    if (out.length >= VIEW_ALL_CARDS_MAX) break;
+    const p = typeof h === "string" && !seen.has(h) ? byHandle.get(h) : null;
+    if (!p) continue;
+    seen.add(h);
+    out.push(toCard(p));
+  }
+  return out;
 }
 
 export function toCard(p, preselect = null) {

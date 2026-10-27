@@ -1303,7 +1303,7 @@ function startHelper(kind){
   var mine=savedFit(),size=tfHere()&&pageHandle()?tfSizeHere():'';
   if(kind==='truefit-update'){runTrueFit(pageTitle());return}
   if(kind==='truefit'){
-    if(size)inputEl.value='True Fit recommends size '+size+' for me in the '+pageTitle()+'.';
+    if(size){var shoe=pageTitle();inputEl.value='True Fit recommends size '+size+' for me'+(shoe?' in the '+shoe:'')+'.'}
     else if(tfHere()&&pageHandle()){runTrueFit(pageTitle());return}
     else inputEl.value='Help me find my shoe size with True Fit.';
   }else if(kind==='fitfinder-retake'||(kind==='refit')){
@@ -1406,7 +1406,9 @@ function fitToKeyboard(){
     /* The home screen starts at its top; a conversation shows its latest. */
     if(!was){if(msgsEl&&msgsEl.classList.contains('is-welcome'))msgsEl.scrollTop=0;else scrollBottom()}
   }else{
-    panel.style.removeProperty('height');panel.style.removeProperty('max-height');panel.style.removeProperty('top');
+    /* The wide View all view keeps the height it set. */
+    if(!vaWide)panel.style.removeProperty('height');
+    panel.style.removeProperty('max-height');panel.style.removeProperty('top');
   }
 }
 if(window.visualViewport){
@@ -2108,18 +2110,22 @@ function fbSheetEl(){
   if(fbSheet)return fbSheet;
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
-  fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end" aria-hidden="true"></span></div>'+
+  fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end"><button type="button" class="ai-chat-fbsheet__x" data-sheet-x="1" aria-label="Close the chat" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></span></div>'+
     '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div></div>';
   fbSheet.addEventListener('click',function(e){
     if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback();return}
+    /* × closes the whole chat. */
+    if(e.target.closest('[data-sheet-x]')){e.preventDefault();sheetCloseAll();return}
+    /* The filters' panel and anything in it. */
+    if(vfClick(e))return;
     /* The "View all" list: its cards work like the ones in the chat. */
     var vaBox=e.target.closest('.ai-chat-fbsheet__list');
     if(!vaBox)return;
     /* Page buttons, and Try again on a page that didn't load. */
     var step=e.target.closest('[data-va-step]');
-    if(step){e.preventDefault();var cur=viewAllStore[vaBox.getAttribute('data-va')];if(cur)vaGo(vaBox,(cur.page||1)+(parseInt(step.getAttribute('data-va-step'),10)||0),step);return}
+    if(step){e.preventDefault();vaStep(vaBox,parseInt(step.getAttribute('data-va-step'),10)||0,step);return}
     var retry=e.target.closest('[data-va-retry]');
-    if(retry){e.preventDefault();var nb=$('[data-va-step="1"]',vaBox);vaGo(vaBox,parseInt(retry.getAttribute('data-va-retry'),10)||1,nb);return}
+    if(retry){e.preventDefault();var nb=$('[data-va-step="1"]',vaBox);var rc=viewAllStore[vaBox.getAttribute('data-va')];if(rc&&vaFiltered(rc)){vaShowF(rc,vaBox,rc.fpage||1);return}vaGo(vaBox,parseInt(retry.getAttribute('data-va-retry'),10)||1,nb);return}
     var atc=e.target.closest('[data-atc]');
     if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
     /* True Fit / FITFinder carry on in the chat: close the list first. */
@@ -2129,6 +2135,13 @@ function fbSheetEl(){
     if(hp){e.preventDefault();e.stopPropagation();if(isStreaming)return;closeFeedback();startHelper(hp.getAttribute('data-helper'));return}
     if(e.target.closest('.ai-chat-product-card a[href]'))markChatAttributed();
   });
+  /* The price slider, live. */
+  fbSheet.addEventListener('input',function(e){var r=e.target&&e.target.closest&&e.target.closest('[data-vf-range]');if(r)vfRange(r)});
+  /* A tap anywhere else closes a filter panel (a sheet has its own backdrop). */
+  fbSheet.addEventListener('pointerdown',function(e){
+    if(!vfOpen||vfOpen.pop.classList.contains('is-sheet')||!e.target||!e.target.closest)return;
+    if(!e.target.closest('.ai-vf-pop')&&!e.target.closest('[data-vf-open]'))vfClose(false);
+  },true);
   panel.appendChild(fbSheet);
   return fbSheet;
 }
@@ -2258,6 +2271,20 @@ function openLocator(opener,mapId,title,url){
 }
 function closeFeedback(){
   if(!fbSheet||fbSheet.hidden)return;
+  vfClose(false);
+  /* The wide View all view shrinks back to the chat first. */
+  if(vaWide){vaNarrow(function(){closeSheetNow(false)});return}
+  closeSheetNow(false);
+}
+/* × on a sheet: the chat closes; the sheet (and the wide view) are put
+   away once it has faded, so the chat opens on the conversation next time. */
+function sheetCloseAll(){
+  vfClose(false);
+  toggle(false);
+  setTimeout(function(){if(isOpen)return;vaNarrowNow();if(fbSheet&&!fbSheet.hidden){closeSheetNow(true);fbSheet.hidden=true}},480);
+}
+function closeSheetNow(quiet){
+  if(!fbSheet||fbSheet.hidden)return;
   var sh=fbSheet;
   sh.classList.remove('is-open');fbBehind(false);
   var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
@@ -2272,11 +2299,17 @@ function closeFeedback(){
     if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML='';sheetForm=''}
     fbOpener=null;
   }
+  if(quiet)return;
   var back=fbOpener&&document.body.contains(fbOpener)?fbOpener:inputEl;
   try{back.focus({preventScroll:true})}catch(e){}
 }
-/* Escape steps back out of the survey first, then closes the chat. */
-panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&fbSheet&&!fbSheet.hidden){e.preventDefault();e.stopPropagation();closeFeedback()}},true);
+/* Escape steps back out of a filter panel, then the sheet, then closes the chat. */
+panel.addEventListener('keydown',function(e){
+  if(e.key!=='Escape'||!fbSheet||fbSheet.hidden)return;
+  e.preventDefault();e.stopPropagation();
+  if(vfOpen){vfClose(true);return}
+  closeFeedback();
+},true);
 /* Start fetching Typeform the moment the button is pointed at. */
 function wantsForm(t){return t&&t.closest&&(FB_ON&&t.closest('[data-feedback]')||t.closest('[data-form]'))}
 panel.addEventListener('pointerover',function(e){if(wantsForm(e.target))fbLoadSdk().catch(function(){})});
@@ -2303,10 +2336,14 @@ return '<button type="button" class="ai-chat-cta-btn ai-chat-support-cta" data-s
    On shoe pages the theme's "Find my size" tile drives True Fit
    (window.AetrexTrueFitTile). When a shopper asks about size, the assistant
    offers a button; it opens that same finder (the chat steps aside so the
-   finder is visible), then brings True Fit's size back into the chat, where
-   the shoe comes back ready to add in that size. For another shoe, the button
-   opens that shoe's page and the finder starts there. */
-var TF_PENDING='hajirai_tf_pending',TF_SITE='hajirai_tf_site',tfRun=null;
+   finder is visible). For another shoe, the button opens that shoe's page
+   and the finder starts there. Once True Fit has a size, the shopper stays
+   on the page where True Fit marked it: the chat never opens or sends
+   anything by itself. A conversation already under way just gets the size
+   added (quietly), so the assistant knows it if they come back.
+   The page's own tile is the theme's alone: a shopper who taps it ends any
+   finder the chat started, so the chat can't pick up that result. */
+var TF_PENDING='hajirai_tf_pending',TF_SITE='hajirai_tf_site',tfRun=null,tfTimer=null;
 function tfTile(){return document.querySelector('[data-tf-size-tile]')}
 function pageHandle(){var m=location.pathname.match(/\/products\/([^/?#]+)/);try{return m?decodeURIComponent(m[1]):''}catch(e){return ''}}
 function tfHere(){return !!(window.AetrexTrueFitTile&&window.AetrexTrueFitTile.state&&tfTile())}
@@ -2333,40 +2370,47 @@ function trueFitFor(handle,title){
   try{sessionStorage.setItem(TF_PENDING,JSON.stringify({handle:handle,title:title,at:Date.now()}))}catch(e){}
   location.href=SHOP_ROOT+'products/'+encodeURIComponent(handle);
 }
+function tfStop(){if(tfTimer){clearInterval(tfTimer);tfTimer=null}tfRun=null}
 function runTrueFit(title){
   var api=window.AetrexTrueFitTile,tile=tfTile();
   if(!api||!tile||tfRun)return;
-  tfRun={title:title,started:Date.now()};
+  var run=tfRun={title:title,started:Date.now()};
   toggle(false);
   Promise.resolve().then(function(){return api.open(tile)}).catch(function(){}).then(function(){
-    var st=api.state,seen=false,closedAt=0;
-    var timer=setInterval(function(){
-      var open=document.body.classList.contains('tfc-show-modal')||st.finderOpen||st.busy;
-      if(open&&Date.now()-tfRun.started<30*60*1000){seen=true;closedAt=0;return}
+    if(tfRun!==run)return;
+    var st=api.state,seen=false,closedAt=0,id=0;
+    id=tfTimer=setInterval(function(){
+      if(tfRun!==run){clearInterval(id);return}
+      var age=Date.now()-run.started;
+      /* Only True Fit's finder on screen counts — not the tile loading. */
+      var open=document.body.classList.contains('tfc-show-modal')||st.finderOpen;
+      if(open&&age<30*60*1000){seen=true;closedAt=0;return}
+      /* Still loading: wait, but not for ever. */
+      if(!seen&&st.busy&&age<45000)return;
       if(!closedAt)closedAt=Date.now();
       /* True Fit redraws its answer a moment after the finder closes. */
       if(!st.recommendation&&seen&&Date.now()-closedAt<4000)return;
-      clearInterval(timer);
-      var run=tfRun;tfRun=null;
-      var size=st.recommendation;
-      /* No finder and no size: True Fit has no data for this style and the
-         theme opened its size chart instead — leave the shopper there. */
-      if(!seen&&!size)return;
-      toggle(true);
-      if(size){
-        tfRemember(size,run.title);
-        inputEl.disabled=false;inputEl.placeholder=IPLACE;
-        inputEl.value='True Fit recommends size '+size+' for me'+(run.title?' in the '+run.title:'')+'.';
-        sendMessage();
-      }else tfNote('True Fit didn\'t give a size this time. Tap Find my size to try again, or tell me your usual size and I\'ll help from there.');
+      tfStop();
+      /* The finder never opened (no data for this style: the theme showed
+         its size chart), or closed without a size: nothing to add. */
+      var size=seen&&typeof st.recommendation==='string'?st.recommendation.trim().slice(0,40):'';
+      if(!size)return;
+      tfRemember(size,run.title);
+      if(messages.length)tfNote('True Fit recommends size '+size+(run.title?' in the '+run.title:'')+'. It’s marked in the size list on this page.');
     },400);
   });
 }
+/* The shopper used the page's own "Find my size" tile: that's the theme's
+   finder, not the chat's — any run the chat started ends here. */
+document.addEventListener('click',function(e){if(tfRun&&e.isTrusted&&e.target&&e.target.closest&&e.target.closest('[data-tf-size-tile]'))tfStop()},true);
+/* Back to a page kept in the browser's memory: whatever was waiting is over. */
+window.addEventListener('pageshow',function(e){if(e.persisted)tfStop()});
 /* Arrived from the chat's True Fit button on another page: start the finder here. */
 function tfResume(){
   var p=null;
   try{p=JSON.parse(sessionStorage.getItem(TF_PENDING)||'null');sessionStorage.removeItem(TF_PENDING)}catch(e){}
-  if(!p||!p.handle||Date.now()-p.at>10*60*1000||p.handle!==pageHandle())return;
+  /* Only straight after the chat's button sent the shopper here. */
+  if(!p||!p.handle||Date.now()-p.at>2*60*1000||p.handle!==pageHandle())return;
   var tries=0;
   (function wait(){
     if(tfHere()){runTrueFit(p.title||'');return}
@@ -2451,7 +2495,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 seasonal-button'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 view-all-filters'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2505,15 +2549,24 @@ function vaPagerHtml(){
 function vaShow(va,box,n){
   va.page=n;
   var items=va.cache[n]||[],h='';
-  for(var i=0;i<items.length;i++)h+=prodCard(items[i]);
+  va.cards=va.cards||{};
+  for(var i=0;i<items.length;i++){h+=prodCard(items[i]);va.cards[items[i].handle]=items[i]}
   var grid=$('.ai-chat-products--grid',box);if(grid)grid.innerHTML=h;
+  var empty=$('.ai-va-empty',box);if(empty)empty.hidden=true;
   var cnt=$('.ai-chat-viewall__count',box);if(cnt)cnt.textContent=vaCountText(va);
+  vaPagerShow(box,n,vaPages(va));
+}
+function vaPagerShow(box,n,last){
   var pager=$('.ai-va-pager',box);
   if(pager){
-    var last=vaPages(va),lab=$('.ai-va-pager__label',pager),prev=$('[data-va-step="-1"]',pager),next=$('[data-va-step="1"]',pager);
+    pager.hidden=last<=1;
+    var lab=$('.ai-va-pager__label',pager),prev=$('[data-va-step="-1"]',pager),next=$('[data-va-step="1"]',pager);
     if(lab)lab.textContent='Page '+n+' of '+last;
+    /* A page button that's just been switched off hands focus to the other. */
+    var had=document.activeElement;
     if(prev)prev.disabled=n<=1;
     if(next)next.disabled=n>=last;
+    if(had&&had.disabled&&(had===prev||had===next)){var other=had===next?prev:next;try{(other&&!other.disabled?other:box).focus({preventScroll:true})}catch(e){}}
     if(next)next.setAttribute('aria-label',n<last?'Next page, '+(n+1)+' of '+last:'Next page');
     if(prev)prev.setAttribute('aria-label',n>1?'Previous page, '+(n-1)+' of '+last:'Previous page');
   }
@@ -2546,7 +2599,7 @@ function vaGo(box,n,btn){
   if(va.cache[n]){done(n);return}
   va.loading=true;box.classList.add('is-loading');box.setAttribute('aria-busy','true');if(btn)btn.classList.add('is-busy');
   var finish=function(){va.loading=false;box.classList.remove('is-loading');box.removeAttribute('aria-busy');if(btn)btn.classList.remove('is-busy')};
-  vaFetch(va,n).then(function(page){finish();if(box.getAttribute('data-va')===va.id)done(page)},function(){
+  vaFetch(va,n).then(function(page){finish();if(box.getAttribute('data-va')===va.id&&!vaFiltered(va))done(page)},function(){
     finish();
     if(err&&box.getAttribute('data-va')===va.id){err.innerHTML='<span>Page '+n+' couldn\u2019t load.</span><button type="button" data-va-retry="'+n+'">Try again</button>';err.hidden=false}
   });
@@ -2584,19 +2637,565 @@ function openViewAll(opener,id){
   sh.classList.remove('is-failed');sh.classList.add('is-ready');
   if(box.getAttribute('data-va')!==id){
     /* The chat's own card style, as a grid (no sideways scrolling), a page
-       at a time with the page buttons floating at the bottom. */
-    var h='<p class="ai-chat-viewall__count" aria-live="polite"></p><div class="ai-chat-products ai-chat-products--grid'+(PRODUCT_CARD_STYLE==='showcase'?' ai-chat-products--showcase':'')+'"></div>';
+       at a time with the page buttons floating at the bottom. The filters
+       go on top once their index is in (a placeholder holds their place). */
+    var h=(va.search?'<div class="ai-vf is-loading" aria-hidden="true"><div class="ai-vf__row"><span class="ai-vf__ph"></span><span class="ai-vf__ph"></span><span class="ai-vf__ph"></span><span class="ai-vf__ph is-short"></span></div></div>':'')+
+      '<p class="ai-chat-viewall__count" aria-live="polite"></p><div class="ai-chat-products ai-chat-products--grid'+(PRODUCT_CARD_STYLE==='showcase'?' ai-chat-products--showcase':'')+'"></div>'+
+      '<div class="ai-va-empty" hidden><p>No styles match these filters.</p><button type="button" data-vf-clear="1">Clear filters</button></div>';
     if(va.total>va.products.length)h+='<p class="ai-chat-viewall__more">Tell the chat a size, color or style to narrow these down.</p>';
-    if(vaPaged(va))h+=vaPagerHtml();
+    if(vaPaged(va)||va.search)h+=vaPagerHtml();
     box.innerHTML=h;box.setAttribute('data-va',id);box.classList.toggle('is-paged',vaPaged(va));
     vaShow(va,box,va.page||1);box.scrollTop=0;
     vaPrefetch(va,(va.page||1)+1);
-  }
+    if(va.search)vaLoadIndex(va,box);
+  }else if(va.ix){vfRenderBar(va,box)}
   menu.style.display='none';
+  /* On a computer the chat grows into a wide view for browsing. */
+  vaWiden();
   sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
   fbBehind(true);
   setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
   if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_open',chat_view_all_count:va.total})}catch(e){}
+}
+/* ── View all: the wide view ───────────────────────────────────────────────
+   On a computer, View all grows the chat into a wide browsing view (four or
+   five cards a row) in one smooth resize, and shrinks it back the same way
+   on the way out; on a phone the sheet is already full screen. Nothing
+   reflows while the window moves: the list is laid out at its final size
+   from the start (and fades in as the window settles), and the conversation
+   steps out of the layout once the list covers it. */
+var vaWide=false,vaFrom=null,vaKeepScroll=0,vaTimers=[],VA_MORPH_MS=560;
+function vaReduce(){return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)}
+function vaCanWiden(){return window.innerWidth>=900&&window.innerHeight>=520&&!(window.matchMedia&&window.matchMedia('(max-width: 767px)').matches)}
+function vaTarget(){return{w:Math.round(Math.max(Math.min(panelW,window.innerWidth-16),Math.min(1440,window.innerWidth-48))),h:Math.round(Math.max(360,window.innerHeight-40))}}
+function vaNarrowSize(){return{w:Math.round(Math.min(panelW,window.innerWidth-16)),h:Math.round(Math.min(window.innerHeight*0.85,window.innerHeight-40))}}
+function vaLater(ms,fn){vaTimers.push(setTimeout(fn,ms))}
+function vaClearTimers(){while(vaTimers.length)clearTimeout(vaTimers.pop())}
+function vaSetSize(w,h){panel.style.width=w+'px';panel.style.height=h+'px'}
+function vaWiden(){
+  if(vaWide||!vaCanWiden())return false;
+  vaClearTimers();
+  var r=panel.getBoundingClientRect(),t=vaTarget();
+  vaWide=true;vaFrom={w:Math.round(r.width),h:Math.round(r.height)};
+  vaKeepScroll=msgsEl.scrollTop;
+  panel.style.setProperty('--va-w',t.w+'px');panel.style.setProperty('--va-h',t.h+'px');
+  panel.classList.remove('is-va-out');
+  vaSetSize(vaFrom.w,vaFrom.h);
+  panel.classList.add('is-wide','is-va-morph');
+  if(vaReduce()||!isOpen){vaSetSize(t.w,t.h);panel.classList.add('is-va-full','is-va-in');panel.classList.remove('is-va-morph');return true}
+  void panel.offsetWidth;
+  panel.classList.add('is-va-anim');
+  vaSetSize(t.w,t.h);
+  vaLater(170,function(){panel.classList.add('is-va-full')});
+  vaLater(Math.round(VA_MORPH_MS*0.42),function(){panel.classList.add('is-va-in')});
+  vaLater(VA_MORPH_MS+40,function(){panel.classList.remove('is-va-morph','is-va-anim')});
+  return true;
+}
+/* Back to the chat's size: the list fades out, the window shrinks, the
+   conversation is back underneath, then after() lets the sheet fade away. */
+function vaNarrow(after){
+  if(!vaWide){if(after)after();return}
+  vaClearTimers();
+  var r=panel.getBoundingClientRect(),t=vaFrom||vaNarrowSize();
+  if(vaReduce()||!isOpen){vaNarrowNow();if(after)after();return}
+  panel.style.setProperty('--va-w',Math.round(r.width)+'px');panel.style.setProperty('--va-h',Math.round(r.height)+'px');
+  panel.classList.remove('is-va-in');
+  panel.classList.add('is-va-morph','is-va-out');
+  vaLater(130,function(){panel.classList.add('is-va-anim');vaSetSize(t.w,t.h)});
+  vaLater(130+VA_MORPH_MS,function(){
+    vaWide=false;
+    panel.classList.remove('is-va-full','is-va-morph','is-va-anim');
+    panel.style.width=panelW+'px';panel.style.height='';
+    try{msgsEl.scrollTop=vaKeepScroll}catch(e){}
+    /* The conversation is laid out again in this frame; the sheet starts
+       to fade in the next one, so the fade gets every frame. */
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      if(vaWide)return;
+      if(after)after();
+      /* The sheet fades out in the wide style; once it's gone, it's an
+         ordinary sheet again. */
+      vaLater(480,function(){if(vaWide)return;panel.classList.remove('is-wide','is-va-out');panel.style.removeProperty('--va-w');panel.style.removeProperty('--va-h')});
+    })});
+  });
+}
+function vaNarrowNow(){
+  vaClearTimers();
+  if(!vaWide&&!panel.classList.contains('is-wide'))return;
+  vaWide=false;
+  panel.classList.remove('is-wide','is-va-morph','is-va-anim','is-va-full','is-va-in','is-va-out');
+  panel.style.width=panelW+'px';panel.style.height='';
+  panel.style.removeProperty('--va-w');panel.style.removeProperty('--va-h');
+  try{msgsEl.scrollTop=vaKeepScroll}catch(e){}
+}
+window.addEventListener('resize',function(){
+  if(!vaWide)return;
+  if(!vaCanWiden()){vaNarrowNow();return}
+  if(panel.classList.contains('is-va-anim'))return;
+  var t=vaTarget();vaSetSize(t.w,t.h);
+  panel.style.setProperty('--va-w',t.w+'px');panel.style.setProperty('--va-h',t.h+'px');
+  vaFrom=vaNarrowSize();
+  vfPlace();
+});
+
+/* ── View all: filters ─────────────────────────────────────────────────────
+   Sticky on top of the list, built from an index of every match
+   (/apps/hajirai/view-all?index=1: sizes and widths in stock — paired, so
+   "8, Wide" means a pair that's both — colors, type, gender, foot needs,
+   price, sale, rating; the same catalog facts the assistant searches). The
+   browser filters, counts and sorts with it, so results change the moment
+   a filter is tapped. Cards a filter brings up that haven't been seen yet
+   come from the server by handle, and are kept. With no filter (and the
+   best-match order) the pages come from the server exactly as before.
+   On a wide list each filter opens as a panel under its button; on a
+   narrow one, as a sheet from the bottom. */
+var VF_KEYS=['size','width','color','price','type','line','needs'];
+var VF_NAME={size:'Size',width:'Width',color:'Color',price:'Price',type:'Type',line:'Gender',needs:'Helps with',sale:'On sale',sort:'Sort',all:'Filters'};
+var VF_SORTS=[['best','Best match'],['price_low','Price: Low to High'],['price_high','Price: High to Low'],['rating','Top rated']];
+/* Swatches for the color groups (the server names the groups). */
+var VF_SW={black:'#1d1d1f',white:'#ffffff',grey:'#a1a1a6',navy:'#26365c',blue:'#3b7ddd',red:'#cf3a3f',pink:'#f0a3c2',purple:'#8d5fd0',green:'#4f8f61',yellow:'#f4cc3f',orange:'#ee8a35',brown:'#7d5134',tan:'#d9c29e',
+  metallic:'linear-gradient(135deg,#f7e9bd 0%,#caa74c 45%,#f4e8c8 62%,#b48f33 100%)',multi:'conic-gradient(#e2574c,#f2c53d,#4fb06c,#3d7bd9,#9c5fcb,#e2574c)',other:'repeating-linear-gradient(135deg,#cfcfd4 0 3px,#f2f2f5 3px 6px)'};
+var VF_CHEV='<svg class="ai-vf__chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg>';
+var VF_TUNE='<svg class="ai-vf__ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 7.5h9.5M17.5 7.5H20M4 16.5h3M11 16.5h9"/><circle cx="15.5" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/></svg>';
+var VF_SORTI='<svg class="ai-vf__ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5v14M4.5 8.5L8 5l3.5 3.5M16 19V5M12.5 15.5L16 19l3.5-3.5"/></svg>';
+var VF_TAG='<svg class="ai-vf__ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12.6V5a1.5 1.5 0 011.5-1.5h7.6a1.5 1.5 0 011.06.44l6.9 6.9a1.5 1.5 0 010 2.12l-7.6 7.6a1.5 1.5 0 01-2.12 0l-6.9-6.9a1.5 1.5 0 01-.44-1.06z"/><circle cx="8.2" cy="8.2" r="1.4"/></svg>';
+var VF_XS='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+var VF_XL='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+var VF_SKEL='<div class="ai-va-skel__img"></div><div class="ai-va-skel__line"></div><div class="ai-va-skel__line is-short"></div><div class="ai-va-skel__btn"></div>';
+var vfOpen=null,vfRaf=0;
+
+function vfEmpty(){return{sel:{size:{},width:{},color:{},type:{},line:{},needs:{}},sale:false,pmin:null,pmax:null}}
+/* The index as the server sent it, checked and bounded. */
+function vfClean(d){
+  var f=d.facets||{};
+  var vals=function(x){return x&&Array.isArray(x.values)?x.values.slice(0,300).map(function(v){return{k:String(v&&v.k||'').slice(0,40),l:String(v&&v.l||'').slice(0,40),n:parseInt(v&&v.n,10)||0}}):[]};
+  var ord=function(x,n){var o=x&&Array.isArray(x.order)?x.order.filter(function(i){return typeof i==='number'&&i>=0&&i<n}):[];if(o.length!==n){o=[];for(var i=0;i<n;i++)o.push(i)}return o};
+  var F={size:{unit:String(f.size&&f.size.unit||'').slice(0,6),values:vals(f.size)},width:{values:vals(f.width)},color:{values:vals(f.color)},type:{values:vals(f.type)},line:{values:vals(f.line)},needs:{values:vals(f.needs)},
+    price:f.price&&isFinite(f.price.min)&&isFinite(f.price.max)&&+f.price.max>=+f.price.min?{min:Math.floor(+f.price.min),max:Math.ceil(+f.price.max)}:null,sale:parseInt(f.sale,10)||0,rated:parseInt(f.rated,10)||0};
+  ['size','width'].forEach(function(k){F[k].order=ord(null,F[k].values.length)});
+  ['color','type','line','needs'].forEach(function(k){F[k].order=ord(f[k],F[k].values.length)});
+  var nums=function(a){return Array.isArray(a)?a.filter(function(x){return typeof x==='number'}):[]};
+  var items=[];
+  for(var i=0;i<d.items.length&&items.length<2000;i++){
+    var it=d.items[i];if(!it||typeof it.h!=='string'||!it.h)continue;
+    items.push({h:it.h,sw:Array.isArray(it.sw)?it.sw.filter(function(p){return Array.isArray(p)&&p.length===2}):[],c:nums(it.c),t:typeof it.t==='number'?it.t:null,l:nums(it.l),n:nums(it.n),
+      p:typeof it.p==='number'?it.p:null,s:it.s===1,r:typeof it.r==='number'?it.r:null,rc:typeof it.rc==='number'?it.rc:0,i:items.length});
+  }
+  return items.length>1?{facets:F,items:items}:null;
+}
+function vaLoadIndex(va,box){
+  if(va.ix||va.ixLoading)return;
+  va.ixLoading=true;
+  retFetch(VIEW_ALL_URL+'?search='+encodeURIComponent(JSON.stringify(va.search))+'&index=1',{},12000).then(function(r){
+    var d=r.d||{};
+    if(r.status!==200||!d.ok||!Array.isArray(d.items)||!d.facets)throw new Error('index');
+    var ix=vfClean(d);if(!ix)throw new Error('index');
+    va.ix=ix;va.f=va.f||vfEmpty();va.sort=va.sort||'best';
+    if(box.getAttribute('data-va')===va.id)vfRenderBar(va,box);
+  }).catch(function(){
+    /* No filters this time: the list works as before. */
+    if(box.getAttribute('data-va')===va.id){var ph=$('.ai-vf.is-loading',box);if(ph)ph.remove()}
+  }).then(function(){va.ixLoading=false});
+}
+
+function vfAny(o){for(var k in o)if(o[k])return true;return false}
+function vfHasAny(arr,o){for(var i=0;i<arr.length;i++)if(o[arr[i]])return true;return false}
+function vfOn(va){if(!va.f)return false;var s=va.f.sel;for(var k in s)if(vfAny(s[k]))return true;return va.f.sale||va.f.pmin!=null||va.f.pmax!=null}
+function vaFiltered(va){return !!(va&&va.ix&&(vfOn(va)||(va.sort&&va.sort!=='best')))}
+function vfActiveCount(va){var n=0,s=va.f.sel;for(var k in s)for(var v in s[k])if(s[k][v])n++;if(va.f.sale)n++;if(va.f.pmin!=null||va.f.pmax!=null)n++;return n}
+function vfHas(va,k){
+  var F=va.ix.facets,total=va.ix.items.length;
+  if(k==='price')return !!(F.price&&F.price.max-F.price.min>=10);
+  if(k==='sale')return F.sale>0&&F.sale<total;
+  if(k==='needs')return F.needs.values.length>1||(F.needs.values.length===1&&F.needs.values[0].n<total);
+  return !!(F[k]&&F[k].values.length>1);
+}
+/* Does a product pass every filter (but `skip`)? Size and width are
+   checked on the same pair. */
+function vfPass(va,it,skip){
+  var f=va.f,s=f.sel;
+  var sz=skip!=='size'&&vfAny(s.size),wd=skip!=='width'&&vfAny(s.width);
+  if(sz||wd){
+    var ok=false;
+    for(var i=0;i<it.sw.length&&!ok;i++){var p=it.sw[i];if((!sz||s.size[p[0]])&&(!wd||s.width[p[1]]))ok=true}
+    if(!ok)return false;
+  }
+  if(skip!=='color'&&vfAny(s.color)&&!vfHasAny(it.c,s.color))return false;
+  if(skip!=='type'&&vfAny(s.type)&&!(it.t!=null&&s.type[it.t]))return false;
+  if(skip!=='line'&&vfAny(s.line)&&!vfHasAny(it.l,s.line))return false;
+  if(skip!=='needs'&&vfAny(s.needs)&&!vfHasAny(it.n,s.needs))return false;
+  if(skip!=='sale'&&f.sale&&!it.s)return false;
+  if(skip!=='price'&&(f.pmin!=null||f.pmax!=null)){
+    if(it.p==null)return false;
+    if(f.pmin!=null&&it.p<Math.round(f.pmin*100))return false;
+    if(f.pmax!=null&&it.p>Math.round(f.pmax*100))return false;
+  }
+  return true;
+}
+/* How many products each value of a filter would show, with the others as set. */
+function vfCounts(va,key){
+  var out={},items=va.ix.items,s=va.f.sel,pick={color:'c',line:'l',needs:'n'}[key];
+  for(var i=0;i<items.length;i++){
+    var it=items[i];if(!vfPass(va,it,key))continue;
+    if(key==='size'||key==='width'){
+      var other=key==='size'?s.width:s.size,oa=vfAny(other),seen={};
+      for(var j=0;j<it.sw.length;j++){var p=it.sw[j],v=key==='size'?p[0]:p[1],o=key==='size'?p[1]:p[0];if(v<0||seen[v]||(oa&&!other[o]))continue;seen[v]=1;out[v]=(out[v]||0)+1}
+    }else{
+      var vals=key==='type'?(it.t!=null?[it.t]:[]):(it[pick]||[]);
+      for(var q=0;q<vals.length;q++)out[vals[q]]=(out[vals[q]]||0)+1;
+    }
+  }
+  return out;
+}
+function vfList(va){
+  var items=va.ix.items,out=[];
+  for(var i=0;i<items.length;i++)if(vfPass(va,items[i],''))out.push(items[i]);
+  var sort=va.sort||'best',big=1e12;
+  if(sort==='price_low')out.sort(function(a,b){return (a.p==null?big:a.p)-(b.p==null?big:b.p)||a.i-b.i});
+  else if(sort==='price_high')out.sort(function(a,b){return (b.p==null?-1:b.p)-(a.p==null?-1:a.p)||a.i-b.i});
+  else if(sort==='rating')out.sort(function(a,b){return (b.r==null?-1:b.r)-(a.r==null?-1:a.r)||b.rc-a.rc||a.i-b.i});
+  return out;
+}
+function vfSig(va){return JSON.stringify([va.f,va.sort])}
+
+/* Cards by handle, a request per 48, each handle asked for once. */
+function vaCardsFor(va,handles){
+  va.cards=va.cards||{};va.cardReq=va.cardReq||{};va.gone=va.gone||{};
+  var need=[],wait=[];
+  handles.forEach(function(h){if(va.cards[h]||va.gone[h])return;if(va.cardReq[h])wait.push(va.cardReq[h]);else need.push(h)});
+  for(var i=0;i<need.length;i+=48)(function(chunk){
+    var req=retFetch(VIEW_ALL_URL+'?handles='+chunk.map(encodeURIComponent).join(','),{},12000).then(function(r){
+      var d=r.d||{};
+      if(r.status!==200||!d.ok||!Array.isArray(d.products))throw new Error('cards');
+      var got={};
+      d.products.forEach(function(c){var x=vaCard(c);if(x){va.cards[x.handle]=x;got[x.handle]=1}});
+      chunk.forEach(function(h){if(!got[h])va.gone[h]=1});
+    });
+    chunk.forEach(function(h){va.cardReq[h]=req});
+    var drop=function(){chunk.forEach(function(h){if(va.cardReq[h]===req)delete va.cardReq[h]})};
+    req.then(drop,drop);
+    wait.push(req);
+  })(need.slice(i,i+48));
+  return Promise.all(wait);
+}
+/* A filtered page: the cards already here at once, the rest as soft
+   placeholders until they arrive. */
+function vaShowF(va,box,n){
+  var list=vfList(va),total=list.length,size=va.pageSize||24,last=Math.max(1,Math.ceil(total/size));
+  n=Math.min(Math.max(n||1,1),last);va.fpage=n;
+  var slice=list.slice((n-1)*size,n*size),h='',miss=[];
+  va.cards=va.cards||{};va.gone=va.gone||{};
+  for(var i=0;i<slice.length;i++){
+    var hd=slice[i].h,c=va.cards[hd];
+    if(c)h+=prodCard(c);
+    else if(!va.gone[hd]){h+='<div class="ai-chat-product-card is-skel" data-skel="'+esc(hd)+'" aria-hidden="true">'+VF_SKEL+'</div>';miss.push(hd)}
+  }
+  var grid=$('.ai-chat-products--grid',box);if(grid)grid.innerHTML=h;
+  var empty=$('.ai-va-empty',box);if(empty)empty.hidden=total>0;
+  var cnt=$('.ai-chat-viewall__count',box);
+  if(cnt)cnt.textContent=!total?'No matches':total>size?((n-1)*size+1)+'–'+Math.min(n*size,total)+' of '+total:total+(total===1?' result':' results');
+  var err=$('.ai-va-error',box);if(err){err.hidden=true;err.innerHTML=''}
+  vaPagerShow(box,n,last);
+  var sig=vfSig(va)+'|'+n;va.fsig=sig;
+  var still=function(){return va.fsig===sig&&box.getAttribute('data-va')===va.id};
+  if(miss.length){
+    box.setAttribute('aria-busy','true');
+    vaCardsFor(va,miss).then(function(){if(still()){box.removeAttribute('aria-busy');vfFill(va,box)}},function(){
+      if(!still())return;
+      box.removeAttribute('aria-busy');vfFill(va,box);
+      if(err&&$('[data-skel]',box)){err.innerHTML='<span>Some styles couldn’t load.</span><button type="button" data-va-retry="'+n+'">Try again</button>';err.hidden=false}
+    });
+  }else box.removeAttribute('aria-busy');
+  /* The next page's cards, quietly, so Next is instant. */
+  if(n<last){var nx=list.slice(n*size,(n+1)*size).map(function(x){return x.h}).filter(function(x){return !va.cards[x]&&!va.gone[x]});if(nx.length)vaCardsFor(va,nx).catch(function(){})}
+}
+function vfFill(va,box){
+  var sk=box.querySelectorAll('[data-skel]');
+  for(var i=0;i<sk.length;i++){
+    var h=sk[i].getAttribute('data-skel'),c=va.cards[h];
+    if(c){var tmp=document.createElement('div');tmp.innerHTML=prodCard(c);var card=tmp.firstChild;card.classList.add('is-in');sk[i].replaceWith(card)}
+    else if(va.gone[h])sk[i].remove();
+  }
+}
+function vaStep(box,d,btn){
+  var va=viewAllStore[box.getAttribute('data-va')];if(!va||!d)return;
+  if(vaFiltered(va)){
+    var last=Math.max(1,Math.ceil(vfList(va).length/(va.pageSize||24))),n=(va.fpage||1)+d;
+    if(n<1||n>last)return;
+    vaShowF(va,box,n);box.scrollTop=0;
+    if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_page',chat_view_all_page:n})}catch(e){}
+    return;
+  }
+  vaGo(box,(va.page||1)+d,btn);
+}
+
+/* The filter bar: one button per filter the matches can use, Sort at the
+   end, and the chosen values as chips underneath. */
+function vfRenderBar(va,box){
+  /* "Filters" (all of them at once) only when there's something to filter by. */
+  var any=VF_KEYS.some(function(k){return vfHas(va,k)})||vfHas(va,'sale');
+  var pills=any?'<button type="button" class="ai-vf__pill ai-vf__all" data-vf-open="all" aria-haspopup="dialog" aria-expanded="false">'+VF_TUNE+'<span class="ai-vf__pill-t">Filters</span><span class="ai-vf__badge" hidden></span></button>':'';
+  VF_KEYS.forEach(function(k){
+    if(vfHas(va,k))pills+='<button type="button" class="ai-vf__pill" data-vf-open="'+k+'" aria-haspopup="dialog" aria-expanded="false"><span class="ai-vf__pill-t">'+VF_NAME[k]+'</span><span class="ai-vf__pill-v" hidden></span>'+VF_CHEV+'</button>';
+  });
+  if(vfHas(va,'sale'))pills+='<button type="button" class="ai-vf__pill ai-vf__toggle" data-vf-toggle="sale" aria-pressed="false">'+VF_TAG+'<span class="ai-vf__pill-t">On sale</span></button>';
+  var html='<div class="ai-vf" role="group" aria-label="Filter and sort"><div class="ai-vf__row"><div class="ai-vf__pills">'+pills+'</div>'+
+    '<button type="button" class="ai-vf__sort" data-vf-open="sort" aria-haspopup="dialog" aria-expanded="false">'+VF_SORTI+'<span class="ai-vf__sort-t">Sort:</span><span class="ai-vf__sort-v"></span>'+VF_CHEV+'</button></div>'+
+    '<div class="ai-vf__chips" hidden></div></div>';
+  var old=$('.ai-vf',box);
+  if(old)old.outerHTML=html;else box.insertAdjacentHTML('afterbegin',html);
+  vfSync(va,box);
+}
+function vfMoney(n){return '$'+Math.round(n)}
+function vfPriceText(va){
+  var f=va.f;if(f.pmin==null&&f.pmax==null)return '';
+  if(f.pmin!=null&&f.pmax!=null)return vfMoney(f.pmin)+'–'+vfMoney(f.pmax);
+  return f.pmax!=null?'Under '+vfMoney(f.pmax):vfMoney(f.pmin)+'+';
+}
+function vfValueLabel(va,k,v){var x=va.ix.facets[k].values[v];return x?x.l:''}
+function vfPillText(va,k){
+  if(k==='price')return vfPriceText(va);
+  var sel=va.f.sel[k],on=[];for(var v in sel)if(sel[v])on.push(+v);
+  if(!on.length)return '';
+  return on.length>1?String(on.length):vfValueLabel(va,k,on[0]);
+}
+function vfSortName(s){for(var i=0;i<VF_SORTS.length;i++)if(VF_SORTS[i][0]===s)return VF_SORTS[i][1];return VF_SORTS[0][1]}
+function vfChipsHtml(va){
+  var h='',F=va.ix.facets,unit=F.size.unit;
+  VF_KEYS.forEach(function(k){
+    if(k==='price'){var pt=vfPriceText(va);if(pt)h+='<button type="button" class="ai-vf__chip" data-vf-rm="price" aria-label="Remove price '+esc(pt)+'">'+esc(pt)+VF_XS+'</button>';return}
+    var sel=va.f.sel[k];
+    F[k].order.forEach(function(i){
+      if(!sel[i])return;
+      var l=vfValueLabel(va,k,i),shown=k==='size'?'Size '+l+(unit?' '+unit:''):l;
+      h+='<button type="button" class="ai-vf__chip" data-vf-rm="'+k+':'+i+'" aria-label="Remove '+esc(shown)+'">'+esc(shown)+VF_XS+'</button>';
+    });
+  });
+  if(va.f.sale)h+='<button type="button" class="ai-vf__chip" data-vf-rm="sale" aria-label="Remove On sale">On sale'+VF_XS+'</button>';
+  return h?h+'<button type="button" class="ai-vf__clear" data-vf-clear="1">Clear all</button>':'';
+}
+/* The bar shows what's chosen. */
+function vfSync(va,box){
+  var bar=$('.ai-vf',box);if(!bar||!va.ix)return;
+  var pills=bar.querySelectorAll('[data-vf-open]');
+  for(var i=0;i<pills.length;i++){
+    var p=pills[i],k=p.getAttribute('data-vf-open');
+    if(k==='sort'){$('.ai-vf__sort-v',p).textContent=vfSortName(va.sort);p.classList.toggle('is-on',va.sort!=='best');p.setAttribute('aria-label','Sort: '+vfSortName(va.sort));continue}
+    if(k==='all'){var n=vfActiveCount(va),b=$('.ai-vf__badge',p);b.textContent=n;b.hidden=!n;p.classList.toggle('is-on',n>0);p.setAttribute('aria-label',n?'Filters, '+n+' on':'Filters');continue}
+    var v=vfPillText(va,k),ve=$('.ai-vf__pill-v',p);
+    ve.textContent=v;ve.hidden=!v;p.classList.toggle('is-on',!!v);
+    p.setAttribute('aria-label',VF_NAME[k]+(v?', '+(/^\d+$/.test(v)&&k!=='size'?v+' chosen':v):''));
+  }
+  var sale=$('[data-vf-toggle="sale"]',bar);
+  if(sale){sale.setAttribute('aria-pressed',va.f.sale?'true':'false');sale.classList.toggle('is-on',va.f.sale)}
+  var chips=$('.ai-vf__chips',bar),ch=vfChipsHtml(va);
+  if(chips){chips.innerHTML=ch;chips.hidden=!ch}
+}
+/* A filter changed: back to page 1 of what now matches. */
+function vfApply(va,box,src){
+  vfSync(va,box);
+  if(vaFiltered(va))vaShowF(va,box,1);
+  else{va.fsig='';vaShow(va,box,1);vaPrefetch(va,2)}
+  box.scrollTop=0;
+  vfPopSync(src);
+}
+function vfReset(va,k){
+  if(k==='all'){var keep=va.sort;va.f=vfEmpty();va.sort=keep;return}
+  if(k==='price'){va.f.pmin=null;va.f.pmax=null;return}
+  if(k==='sale'){va.f.sale=false;return}
+  if(va.f.sel[k])va.f.sel[k]={};
+}
+
+/* The panel for one filter (or all of them, or Sort). */
+function vfShowText(va){var n=vfList(va).length;return n?'Show '+n+(n===1?' result':' results'):'No matches'}
+function vfTitle(va,k){var u=va.ix.facets.size.unit;return k==='size'&&u?'Size ('+u+')':VF_NAME[k]}
+function vfPriceStep(P){var span=P.max-P.min;return span<=100?5:span<=400?10:25}
+function vfPresets(P){
+  var cuts=[],i,c;
+  for(c=50;c<P.max;c+=50)if(c>P.min+5&&c<P.max-5)cuts.push(c);
+  if(!cuts.length)for(c=25;c<P.max;c+=25)if(c>P.min+5&&c<P.max-5)cuts.push(c);
+  cuts=cuts.slice(0,3);
+  if(!cuts.length)return [];
+  var out=[[null,cuts[0]-0.01,'Under '+vfMoney(cuts[0])]];
+  for(i=1;i<cuts.length;i++)out.push([cuts[i-1],cuts[i]-0.01,vfMoney(cuts[i-1])+'–'+vfMoney(cuts[i])]);
+  out.push([cuts[cuts.length-1],null,vfMoney(cuts[cuts.length-1])+'+']);
+  return out;
+}
+function vfPct(P,v){return P.max>P.min?Math.round((v-P.min)/(P.max-P.min)*1000)/10:0}
+function vfPriceHtml(va){
+  var P=va.ix.facets.price,step=vfPriceStep(P);
+  var lo=va.f.pmin!=null?Math.max(P.min,Math.round(va.f.pmin)):P.min,hi=va.f.pmax!=null?Math.min(P.max,Math.round(va.f.pmax)):P.max;
+  var pre=vfPresets(P).map(function(p){
+    var on=va.f.pmin===p[0]&&va.f.pmax===p[1];
+    return '<button type="button" class="ai-vf-preset" data-vf-preset="'+(p[0]==null?'':p[0])+'_'+(p[1]==null?'':p[1])+'" aria-pressed="'+on+'">'+esc(p[2])+'</button>';
+  }).join('');
+  return '<div class="ai-vf-price"><div class="ai-vf-price__vals" aria-hidden="true"><span class="ai-vf-price__v" data-vf-plo>'+vfMoney(lo)+'</span><span class="ai-vf-price__to">to</span><span class="ai-vf-price__v" data-vf-phi>'+vfMoney(hi)+'</span></div>'+
+    '<div class="ai-vf-range" style="--lo:'+vfPct(P,lo)+'%;--hi:'+vfPct(P,hi)+'%"><div class="ai-vf-range__track"><div class="ai-vf-range__fill"></div></div>'+
+    '<input type="range" min="'+P.min+'" max="'+P.max+'" step="'+step+'" value="'+lo+'" data-vf-range="lo" aria-label="Lowest price" aria-valuetext="'+vfMoney(lo)+'">'+
+    '<input type="range" min="'+P.min+'" max="'+P.max+'" step="'+step+'" value="'+hi+'" data-vf-range="hi" aria-label="Highest price" aria-valuetext="'+vfMoney(hi)+'"></div>'+
+    (pre?'<div class="ai-vf-presets" role="group" aria-label="Price ranges">'+pre+'</div>':'')+'</div>';
+}
+function vfBody(va,kind){
+  var F=va.ix.facets,h='';
+  if(kind==='all'){
+    VF_KEYS.forEach(function(k){if(vfHas(va,k))h+='<section class="ai-vf-sec"><h3 class="ai-vf-sec__h">'+esc(vfTitle(va,k))+'</h3>'+vfBody(va,k)+'</section>'});
+    if(vfHas(va,'sale'))h+='<section class="ai-vf-sec"><button type="button" class="ai-vf-switchrow" role="switch" data-vf-toggle="sale" aria-checked="'+(va.f.sale?'true':'false')+'"><span>On sale only</span><span class="ai-vf-switch" aria-hidden="true"></span></button></section>';
+    return h;
+  }
+  if(kind==='sort'){
+    h='<div class="ai-vf-list" role="radiogroup" aria-label="Sort by">';
+    VF_SORTS.forEach(function(s){
+      if(s[0]==='rating'&&F.rated<3)return;
+      var on=(va.sort||'best')===s[0];
+      h+='<button type="button" class="ai-vf-opt is-radio" role="radio" aria-checked="'+on+'" data-vf-sort="'+s[0]+'"><span class="ai-vf-mark" aria-hidden="true"></span><span class="ai-vf-opt__l">'+s[1]+'</span></button>';
+    });
+    return h+'</div>';
+  }
+  if(kind==='price')return vfPriceHtml(va);
+  var X=F[kind],counts=vfCounts(va,kind),sel=va.f.sel[kind];
+  if(kind==='size'){
+    h='<div class="ai-vf-sizes" role="group" aria-label="'+esc(vfTitle(va,'size'))+'">';
+    X.order.forEach(function(i){var v=X.values[i],n=counts[i]||0,on=!!sel[i];h+='<button type="button" class="ai-vf-size" data-vf="size" data-v="'+i+'" aria-pressed="'+on+'"'+(!n&&!on?' disabled':'')+'>'+esc(v.l)+'</button>'});
+    return h+'</div>';
+  }
+  if(kind==='color'){
+    h='<div class="ai-vf-colors" role="group" aria-label="Colors">';
+    X.order.forEach(function(i){var v=X.values[i],n=counts[i]||0,on=!!sel[i];h+='<button type="button" class="ai-vf-sw" data-vf="color" data-v="'+i+'" data-k="'+esc(v.k)+'" aria-pressed="'+on+'"'+(!n&&!on?' disabled':'')+'><span class="ai-vf-sw__dot" style="background:'+(VF_SW[v.k]||VF_SW.other)+'"></span><span class="ai-vf-sw__l">'+esc(v.l)+'</span><span class="ai-vf-n">'+n+'</span></button>'});
+    return h+'</div>';
+  }
+  h='<div class="ai-vf-list" role="group" aria-label="'+esc(VF_NAME[kind])+'">';
+  X.order.forEach(function(i){var v=X.values[i],n=counts[i]||0,on=!!sel[i];h+='<button type="button" class="ai-vf-opt" role="checkbox" aria-checked="'+on+'" data-vf="'+kind+'" data-v="'+i+'"'+(!n&&!on?' disabled':'')+'><span class="ai-vf-mark" aria-hidden="true"></span><span class="ai-vf-opt__l">'+esc(v.l)+'</span><span class="ai-vf-n">'+n+'</span></button>'});
+  return h+'</div>';
+}
+function vfCompact(box){return (box.clientWidth||0)<640}
+function vfOpenPanel(va,box,kind,pill){
+  vfClose(false);
+  var sh=fbSheetEl(),compact=vfCompact(box);
+  var pop=el('div','ai-vf-pop ai-vf-pop--'+kind+(compact?' is-sheet':''));
+  pop.setAttribute('role','dialog');pop.setAttribute('aria-label',kind==='all'?'Filters':vfTitle(va,kind));pop.tabIndex=-1;
+  var foot=kind==='sort'?'':'<div class="ai-vf-pop__foot"><button type="button" class="ai-vf-pop__reset" data-vf-reset="'+kind+'">'+(kind==='all'?'Clear all':'Clear')+'</button><button type="button" class="ai-vf-pop__done" data-vf-close="1">'+vfShowText(va)+'</button></div>';
+  pop.innerHTML=(compact?'<div class="ai-vf-pop__grab" aria-hidden="true"></div>':'')+
+    '<div class="ai-vf-pop__head"><span class="ai-vf-pop__title">'+esc(kind==='all'?'Filters':vfTitle(va,kind))+'</span><button type="button" class="ai-vf-pop__x" data-vf-close="1" aria-label="Close">'+VF_XL+'</button></div>'+
+    '<div class="ai-vf-pop__body">'+vfBody(va,kind)+'</div>'+foot;
+  var scrim=el('div','ai-vf-scrim'+(compact?' is-dim':''));scrim.setAttribute('data-vf-close','1');
+  sh.appendChild(scrim);sh.appendChild(pop);
+  vfOpen={va:va,box:box,kind:kind,pill:pill,pop:pop,scrim:scrim};
+  if(pill)pill.setAttribute('aria-expanded','true');
+  vfPlace();
+  void pop.offsetWidth;
+  pop.classList.add('is-open');scrim.classList.add('is-open');
+  var first=pop.querySelector('.ai-vf-pop__body [aria-pressed="true"],.ai-vf-pop__body [aria-checked="true"],.ai-vf-pop__body button:not([disabled]),.ai-vf-pop__body input');
+  setTimeout(function(){if(vfOpen&&vfOpen.pop===pop)try{(first||pop).focus({preventScroll:true})}catch(e){}},compact?200:20);
+  if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_filter_open',chat_view_all_filter:kind})}catch(e){}
+}
+function vfClose(refocus){
+  if(!vfOpen)return;
+  var o=vfOpen;vfOpen=null;
+  if(o.pill)o.pill.setAttribute('aria-expanded','false');
+  o.pop.classList.remove('is-open');o.scrim.classList.remove('is-open');
+  var gone=function(){o.pop.remove();o.scrim.remove()};
+  if(vaReduce())gone();else setTimeout(gone,260);
+  if(refocus&&o.pill&&document.body.contains(o.pill))try{o.pill.focus({preventScroll:true})}catch(e){}
+}
+/* Under its button (kept inside the sheet), or a sheet from the bottom. */
+function vfPlace(){
+  if(!vfOpen||!fbSheet)return;
+  var o=vfOpen,pop=o.pop;
+  if(pop.classList.contains('is-sheet')){pop.style.left='';pop.style.top='';pop.style.maxHeight='';return}
+  var sr=fbSheet.getBoundingClientRect(),pr=o.pill&&o.pill.getBoundingClientRect?o.pill.getBoundingClientRect():sr;
+  var w=pop.offsetWidth||320,left=o.kind==='sort'?pr.right-sr.left-w:pr.left-sr.left;
+  left=Math.max(12,Math.min(left,sr.width-w-12));
+  var top=Math.round(pr.bottom-sr.top+8);
+  pop.style.left=Math.round(left)+'px';pop.style.top=top+'px';pop.style.maxHeight=Math.max(220,Math.round(sr.height-top-16))+'px';
+}
+/* The open panel shows what's chosen and the new counts, in place (focus
+   and a slider being dragged stay put). */
+function vfPopSync(src){
+  if(!vfOpen)return;
+  var o=vfOpen,va=o.va,pop=o.pop,cache={};
+  var btns=pop.querySelectorAll('[data-vf][data-v]');
+  for(var i=0;i<btns.length;i++){
+    var b=btns[i],k=b.getAttribute('data-vf'),v=+b.getAttribute('data-v');
+    var counts=cache[k]||(cache[k]=vfCounts(va,k)),n=counts[v]||0,on=!!va.f.sel[k][v];
+    b.setAttribute(b.getAttribute('role')==='checkbox'?'aria-checked':'aria-pressed',on?'true':'false');
+    b.disabled=!n&&!on;
+    var ne=$('.ai-vf-n',b);if(ne)ne.textContent=n;
+  }
+  var srt=pop.querySelectorAll('[data-vf-sort]');
+  for(var s=0;s<srt.length;s++)srt[s].setAttribute('aria-checked',srt[s].getAttribute('data-vf-sort')===(va.sort||'best')?'true':'false');
+  var sw=$('[data-vf-toggle="sale"]',pop);if(sw)sw.setAttribute('aria-checked',va.f.sale?'true':'false');
+  var pres=pop.querySelectorAll('[data-vf-preset]');
+  for(var q=0;q<pres.length;q++){var pp=vfPresetOf(pres[q]);pres[q].setAttribute('aria-pressed',va.f.pmin===pp[0]&&va.f.pmax===pp[1]?'true':'false')}
+  if(src!=='range'){var rg=$('.ai-vf-range',pop);if(rg)vfRangeSet(va,rg)}
+  var done=$('.ai-vf-pop__done',pop);if(done)done.textContent=vfShowText(va);
+}
+function vfPresetOf(b){var p=String(b.getAttribute('data-vf-preset')||'').split('_');return[p[0]===''?null:+p[0],p[1]===''?null:+p[1]]}
+/* Put the slider where the price filter is. */
+function vfRangeSet(va,wrap){
+  var P=va.ix.facets.price,lo=$('[data-vf-range="lo"]',wrap),hi=$('[data-vf-range="hi"]',wrap);
+  var a=va.f.pmin!=null?Math.max(P.min,Math.round(va.f.pmin)):P.min,b=va.f.pmax!=null?Math.min(P.max,Math.round(va.f.pmax)):P.max;
+  lo.value=a;hi.value=b;vfRangePaint(wrap,P,+lo.value,+hi.value);
+}
+function vfRangePaint(wrap,P,a,b){
+  wrap.style.setProperty('--lo',vfPct(P,a)+'%');wrap.style.setProperty('--hi',vfPct(P,b)+'%');
+  var lo=$('[data-vf-range="lo"]',wrap),hi=$('[data-vf-range="hi"]',wrap);
+  lo.setAttribute('aria-valuetext',vfMoney(a));hi.setAttribute('aria-valuetext',vfMoney(b));
+  /* The thumb nearer the middle stays on top, so neither gets stuck. */
+  lo.style.zIndex=a>P.min+(P.max-P.min)/2?4:3;
+  var box=wrap.closest('.ai-vf-price');if(box){$('[data-vf-plo]',box).textContent=vfMoney(a);$('[data-vf-phi]',box).textContent=vfMoney(b)}
+}
+function vfRange(input){
+  if(!vfOpen)return;
+  var o=vfOpen,va=o.va,P=va.ix.facets.price,wrap=input.closest('.ai-vf-range');
+  var lo=$('[data-vf-range="lo"]',wrap),hi=$('[data-vf-range="hi"]',wrap),step=+lo.step||5;
+  var a=+lo.value,b=+hi.value;
+  if(a>b-step){if(input===lo){a=Math.max(P.min,b-step);lo.value=a}else{b=Math.min(P.max,a+step);hi.value=b}}
+  va.f.pmin=a<=P.min?null:a;va.f.pmax=b>=P.max?null:b;
+  vfRangePaint(wrap,P,a,b);
+  if(vfRaf)return;
+  vfRaf=requestAnimationFrame(function(){vfRaf=0;if(vfOpen&&vfOpen.va===va)vfApply(va,o.box,'range')});
+}
+/* Every tap in the bar, a panel or the empty state. True when handled. */
+function vfClick(e){
+  var t=e.target;if(!t||!t.closest)return false;
+  if(t.closest('[data-vf-close]')){e.preventDefault();vfClose(true);return true}
+  var o=vfOpen,box=t.closest('.ai-chat-fbsheet__list')||(o&&t.closest('.ai-vf-pop')?o.box:null);
+  var va=box&&viewAllStore[box.getAttribute('data-va')];
+  if(!va||!va.ix)return false;
+  var track=function(k){if(window.dataLayer)try{window.dataLayer.push({event:'chat_view_all_filter',chat_view_all_filter:k})}catch(x){}};
+  var op=t.closest('[data-vf-open]');
+  if(op){e.preventDefault();var k=op.getAttribute('data-vf-open');if(o&&o.kind===k&&o.pill===op)vfClose(true);else vfOpenPanel(va,box,k,op);return true}
+  if(t.closest('[data-vf-toggle]')){e.preventDefault();va.f.sale=!va.f.sale;track('sale');vfApply(va,box);return true}
+  var opt=t.closest('[data-vf][data-v]');
+  if(opt){
+    e.preventDefault();if(opt.disabled)return true;
+    var fk=opt.getAttribute('data-vf'),fv=opt.getAttribute('data-v'),sel=va.f.sel[fk];
+    if(sel[fv])delete sel[fv];else sel[fv]=1;
+    track(fk);vfApply(va,box);return true;
+  }
+  var so=t.closest('[data-vf-sort]');
+  if(so){e.preventDefault();va.sort=so.getAttribute('data-vf-sort');track('sort');vfApply(va,box);vfClose(true);return true}
+  var pre=t.closest('[data-vf-preset]');
+  if(pre){
+    e.preventDefault();var pp=vfPresetOf(pre);
+    if(va.f.pmin===pp[0]&&va.f.pmax===pp[1]){va.f.pmin=null;va.f.pmax=null}else{va.f.pmin=pp[0];va.f.pmax=pp[1]}
+    track('price');vfApply(va,box);return true;
+  }
+  var rm=t.closest('[data-vf-rm]');
+  if(rm){
+    e.preventDefault();var part=rm.getAttribute('data-vf-rm').split(':');
+    if(part[0]==='sale')va.f.sale=false;else if(part[0]==='price'){va.f.pmin=null;va.f.pmax=null}else if(va.f.sel[part[0]])delete va.f.sel[part[0]][part[1]];
+    vfApply(va,box);
+    var next=$('.ai-vf__chip',box)||$('.ai-vf__pill',box);if(next)try{next.focus({preventScroll:true})}catch(x){}
+    return true;
+  }
+  var rs=t.closest('[data-vf-reset]');
+  if(rs){e.preventDefault();vfReset(va,rs.getAttribute('data-vf-reset'));vfApply(va,box);return true}
+  if(t.closest('[data-vf-clear]')){
+    e.preventDefault();vfReset(va,'all');vfApply(va,box);
+    var first=$('.ai-vf__pill',box);if(first)try{first.focus({preventScroll:true})}catch(x){}
+    return true;
+  }
+  return false;
 }
 function mapCtaHtml(m){
   return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-map="'+esc(m.mapId)+'" data-map-label="'+esc(m.label)+'" data-map-url="'+esc(m.url||'')+'" aria-haspopup="dialog">'+esc(m.label)+'</button>';
@@ -4122,7 +4721,13 @@ closeBtn.addEventListener('click',cancelVoice);
 showMic();
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 inputEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'});
-document.addEventListener('keydown',function(e){if(e.key==='Escape'&&isOpen)toggle(false)});
+/* Escape steps back one level wherever focus is: a filter panel, then a
+   sheet (View all, a survey, the map), then the chat itself. */
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape'||!isOpen)return;
+  if(fbSheet&&!fbSheet.hidden){if(vfOpen)vfClose(true);else closeFeedback();return}
+  toggle(false);
+});
 menuBtn.setAttribute('aria-haspopup','true');menuBtn.setAttribute('aria-expanded','false');
 menuBtn.addEventListener('click',function(e){e.stopPropagation();var show=menu.style.display==='none';if(show)menu.innerHTML=menuHtml();menu.style.display=show?'block':'none';menuBtn.setAttribute('aria-expanded',show?'true':'false');if(show){var first=menu.querySelector('.ai-chat-menu-item');if(first)first.focus({preventScroll:true})}});
 menu.addEventListener('click',function(e){

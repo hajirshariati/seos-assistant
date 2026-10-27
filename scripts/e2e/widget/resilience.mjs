@@ -435,6 +435,26 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: bubble`);
   await ctx.close();
 }
+// View all with its filters, and a filter's panel open.
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const { ctx, page } = await open("/showcase", { viewport: vp });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "manyboots");
+  await page.waitForSelector("[data-viewall]", { timeout: 6000 });
+  await page.click("[data-viewall]");
+  await page.waitForSelector(".ai-vf:not(.is-loading)", { timeout: 6000 });
+  await page.waitForTimeout(1000);
+  await axe(page, `${name}: view all`);
+  await page.click('[data-vf-open="color"]');
+  await page.waitForTimeout(600);
+  await axe(page, `${name}: view all, color filter`);
+  await page.keyboard.press("Escape");
+  await page.click('[data-vf-open="price"]');
+  await page.waitForTimeout(600);
+  await axe(page, `${name}: view all, price filter`);
+  await ctx.close();
+}
 for (const run of axeRuns) {
   const serious = run.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   check(`axe WCAG 2.2 AA — ${run.label}: no serious/critical violations`, serious.length === 0, serious.map((v) => `${v.id} (${v.nodes}) ${v.target}`).join("; "));

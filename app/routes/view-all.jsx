@@ -3,24 +3,47 @@
 // others, sending the same search back. No model is involved — the same
 // in-memory catalog search the assistant used, ranked the same way.
 //
+// Three asks, all for the same search:
+//   ?search=…&page=N    a page of cards
+//   ?search=…&index=1   every match, indexed for the sheet's filters
+//   ?handles=a,b,…      the cards for these products (what a filter shows)
+//
 // Reached through the Shopify app proxy (/apps/hajirai/view-all); the proxy
 // signature is checked before anything is read.
 import { authenticate } from "../shopify.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { loadLeanCatalog } from "../lib/lean/catalog.server.js";
 import { cleanViewAllSearch } from "../lib/lean/shop-all.js";
-import { viewAllPage } from "../lib/lean/engine.js";
+import { viewAllPage, viewAllIndex, viewAllCards, VIEW_ALL_CARDS_MAX } from "../lib/lean/engine.js";
 import { getShopConfigCached } from "../models/ShopConfig.server";
 import { seasonalCollection } from "../lib/seasonal-cta.js";
 import { featuredCollection, collectionView } from "../lib/lean/collections.server.js";
 
+const HANDLE = /^[a-z0-9][a-z0-9_-]{0,254}$/i;
+
 export const loader = async ({ request }) => {
   const { session } = await authenticate.public.appProxy(request);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  if (!checkIpShopRate(session.shop, clientIp(request), { scope: "view-all", limit: 60 }).ok) {
+  // Filtering fetches cards as the shopper taps, so the limit is generous —
+  // everything here is an in-memory lookup.
+  if (!checkIpShopRate(session.shop, clientIp(request), { scope: "view-all", limit: 120 }).ok) {
     return Response.json({ error: "rate_limited", message: "Please wait a moment and try again." }, { status: 429 });
   }
   const params = new URL(request.url).searchParams;
+  const headers = { "Cache-Control": "no-store" };
+
+  if (params.has("handles")) {
+    const handles = String(params.get("handles") || "").slice(0, 8000).split(",").map((h) => h.trim()).filter((h) => HANDLE.test(h)).slice(0, VIEW_ALL_CARDS_MAX);
+    if (!handles.length) return Response.json({ error: "bad_handles", message: "These products can't be loaded." }, { status: 400 });
+    try {
+      const catalog = await loadLeanCatalog(session.shop);
+      return Response.json({ ok: true, products: viewAllCards(catalog, handles) }, { headers });
+    } catch (err) {
+      console.error(`[view-all] shop=${session.shop} cards failed: ${err?.message || err}`);
+      return Response.json({ error: "failed", message: "These products couldn't load right now." }, { status: 500 });
+    }
+  }
+
   let raw = null;
   try { raw = JSON.parse(String(params.get("search") || "").slice(0, 2000)); } catch { /* handled below */ }
   const search = cleanViewAllSearch(raw);
@@ -37,8 +60,9 @@ export const loader = async ({ request }) => {
         if (view) catalog = { ...catalog, collections: new Map([[seasonal.handle, view]]) };
       }
     }
+    if (params.get("index") === "1") return Response.json({ ok: true, ...viewAllIndex(catalog, search) }, { headers });
     const result = viewAllPage(catalog, search, params.get("page"));
-    return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ok: true, ...result }, { headers });
   } catch (err) {
     console.error(`[view-all] shop=${session.shop} failed: ${err?.message || err}`);
     return Response.json({ error: "failed", message: "This page couldn't load right now." }, { status: 500 });

@@ -261,6 +261,20 @@ await test("View all pages: the reply sends page 1 and its search; the endpoint 
   assert.equal((await get(2, { evil: "x" })).status, 400, "a search with nothing usable is refused");
   const unsigned = await fetch(`http://localhost:${APP_PORT}/view-all?shop=${SHOP}&search=%7B%7D&page=2`);
   assert.ok(unsigned.status >= 400 && unsigned.status < 500, `unsigned → ${unsigned.status}`);
+
+  // The sheet's filters: every match indexed, in the same order as the pages…
+  const ix = await (await fetch(signed("/view-all", { search: JSON.stringify(va.search), index: "1" }))).json();
+  assert.equal(ix.ok, true);
+  assert.equal(ix.total, va.total);
+  assert.deepEqual(ix.items.slice(0, 48).map((i) => i.h), [...p1.products, ...p2.products].map((c) => c.handle), "index order = page order");
+  assert.ok(ix.items.every((i) => typeof i.p === "number"), "every match has its price");
+  assert.ok(ix.facets && Array.isArray(ix.facets.size.values), "facets come with it");
+  // …and cards by handle, for what a filter brings up.
+  const pick = [ix.items[60].h, ix.items[5].h, "no-such-product"];
+  const cards = await (await fetch(signed("/view-all", { handles: pick.join(",") }))).json();
+  assert.deepEqual(cards.products.map((c) => c.handle), pick.slice(0, 2), "asked order; unknown left out");
+  assert.ok(cards.products.every((c) => c.title && c.url && c.price_formatted));
+  assert.equal((await fetch(signed("/view-all", { handles: "<script>" }))).status, 400, "nothing usable → refused");
 });
 await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
