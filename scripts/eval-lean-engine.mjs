@@ -22,11 +22,11 @@ const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefine
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
 const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes } = await import("../app/lib/lean/catalog.js");
-const { leanSearch, productDetails, similarProducts } = await import("../app/lib/lean/search.js");
+const { leanSearch, productDetails, similarProducts, styleColorways } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
 const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
@@ -88,13 +88,13 @@ console.log("\nsearch does exactly what it's asked");
 await test("color filter = product color; one card per style; other colors listed", () => {
   const r = leanSearch(catalog, { query: "sandal", colors: ["red"], gender: "women" });
   assert.deepEqual(r.products.map((p) => p.title), ["Savannah Adjustable Quarter Strap Sandal - Red"]);
-  assert.deepEqual(r.products[0].same_style_other_colors, ["black"]);
+  assert.deepEqual(r.products[0].same_style_other_colors, ["Black"], "the colorway names as the store writes them");
 });
 await test("no color requested → no color filter (outfit colors are Claude's call, not code's)", () => {
   const r = leanSearch(catalog, { query: "dressy wedge", categories: ["wedges/heels"], gender: "women" });
   assert.equal(r.filters_applied.colors, undefined);
   assert.deepEqual(r.products.map((p) => p.title), ["Ashley Arch Support Wedge - Navy"]);
-  assert.deepEqual(r.products[0].same_style_other_colors, ["champagne"]);
+  assert.deepEqual(r.products[0].same_style_other_colors, ["Champagne"]);
 });
 await test('"red wedges to go with my blue dress" → the red wedge, never other colors or thong sandals', () => {
   // Live store, 2026-10: the one red wedge is the Sydney espadrille; the old
@@ -138,6 +138,101 @@ await test("product details include sizes and colorways", () => {
   const d = productDetails(catalog, H["Ashley Arch Support Wedge - Navy"]);
   assert.deepEqual(d.sizes_in_stock, ["7 us", "8 us"]);
   assert.equal(d.style_colorways.length, 2);
+});
+
+console.log("\ncolors and widths");
+// One product per colorway, like Aetrex: sizes × widths, each with its own stock.
+const wrow = (title, { widths = ["medium"], sizes = ["7 US", "8 US", "9 US"], out = [], badge, cat = "Sneakers", gender = "Women", price = "149.95" } = {}) => ({
+  handle: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, ""),
+  title, productType: "Footwear", tags: [], description: "Arch support sneaker for all-day comfort.", status: "ACTIVE", featuredImageUrl: "https://img/x.jpg",
+  attributesJson: { category_for_filter: cat, gender: gender.toLowerCase(), ...(badge ? { badge } : {}) },
+  variants: widths.flatMap((w) => sizes.map((sz) => ({
+    price, inventoryQty: out.includes(`${sz}|${w}`) || out.includes(sz) ? 0 : 4,
+    optionsJson: JSON.stringify([{ name: "Width", value: w }, { name: "Size", value: sz }]),
+  }))),
+});
+const SNEAKERS = [
+  wrow("Carly Arch Support Sneaker - Black", { widths: ["medium", "wide"], badge: "Best Seller" }),
+  wrow("Carly Arch Support Sneaker - Red"),
+  wrow("Carly Arch Support Sneaker - White"),
+  wrow("Danika Arch Support Sneaker - Black", { widths: ["medium", "wide"], badge: "Best Seller" }),
+  wrow("Danika Arch Support Sneaker - Navy", { widths: ["medium", "wide"] }),
+  wrow("Danika Arch Support Sneaker - Pink", { sizes: ["7 US", "8 US", "9 US", "10 US", "11 US", "12 US"], out: ["8 US", "9 US", "10 US", "11 US", "12 US"] }),
+  wrow("Kinsley Arch Support Sneaker - Black", { widths: ["medium", "wide"], badge: "Best Seller" }),
+  wrow("Kinsley Arch Support Sneaker - Black/White"),
+  wrow("Sadie Arch Support Sneaker - Black", { badge: "Best Seller" }),
+  wrow("Sadie Arch Support Sneaker - Oatmeal", { out: ["7 US"] }),
+];
+const shoes = buildLeanCatalog(SNEAKERS, { shop: "s.myshopify.com" });
+const SH = Object.fromEntries(shoes.products.map((p) => [p.title, p.handle]));
+
+await test("cards don't all come out black: each style shows a color not already shown, when one matches as well", () => {
+  const r = leanSearch(shoes, { query: "arch support sneaker", gender: "women" });
+  const titles = r.products.map((p) => p.title);
+  assert.equal(titles[0], "Carly Arch Support Sneaker - Black", "the top style keeps its best colorway");
+  assert.ok(titles.includes("Danika Arch Support Sneaker - Navy"), JSON.stringify(titles));
+  assert.ok(titles.includes("Sadie Arch Support Sneaker - Oatmeal"), JSON.stringify(titles));
+  assert.ok(titles.includes("Kinsley Arch Support Sneaker - Black"), "every Kinsley has black in it, so its best stays");
+  assert.ok(!titles.includes("Danika Arch Support Sneaker - Pink"), "a colorway down to its last sizes never stands in");
+  assert.equal(r.products.filter((p) => /- Black$/.test(p.title)).length, 2, JSON.stringify(titles));
+});
+await test("color variety never overrides what was asked: a color filter, a color in the query, or price order", () => {
+  const black = leanSearch(shoes, { query: "sneaker", colors: ["black"], gender: "women" });
+  assert.ok(black.products.every((p) => /Black/.test(p.title)), JSON.stringify(black.products.map((p) => p.title)));
+  const worded = leanSearch(shoes, { query: "black sneaker", gender: "women" });
+  assert.ok(worded.products.every((p) => /Black/.test(p.title)), JSON.stringify(worded.products.map((p) => p.title)));
+  const cheap = leanSearch(shoes, { query: "sneaker", gender: "women", sort: "price_low" });
+  assert.equal(cheap.products.length, 4, "one card per style");
+});
+await test("the other colors listed fit the same filters (width, size), by the store's colorway names", () => {
+  const all = leanSearch(shoes, { query: "carly", gender: "women" });
+  assert.deepEqual(all.products[0].same_style_other_colors.sort(), ["Red", "White"]);
+  const wide = leanSearch(shoes, { query: "sneaker", gender: "women", width: "wide" });
+  const titles = wide.products.map((p) => p.title);
+  assert.ok(titles.every((t) => /Carly.*Black|Danika.*(Black|Navy)|Kinsley.*Black$/.test(t)), JSON.stringify(titles));
+  const carly = wide.products.find((p) => p.title.startsWith("Carly"));
+  assert.equal(carly.same_style_other_colors, undefined, "in wide, the Carly comes in black only");
+  assert.equal(wide.filters_applied.width, "wide");
+});
+await test("width + size: one variant must have both in stock", () => {
+  const custom = buildLeanCatalog([
+    wrow("Lexa Sneaker - Grey", { widths: ["medium", "wide"], out: ["8 US|wide"] }),
+    wrow("Lexa Sneaker - Blue", { widths: ["medium", "wide"] }),
+  ], { shop: "s.myshopify.com" });
+  const r = leanSearch(custom, { query: "sneaker", width: "wide", size: "8" });
+  assert.deepEqual(r.products.map((p) => p.title), ["Lexa Sneaker - Blue"]);
+  assert.equal(leanSearch(custom, { query: "sneaker", width: "wide", size: "9" }).total_matches, 2);
+  const none = leanSearch(buildLeanCatalog([wrow("Mira Sneaker - Tan", { widths: ["medium"] })], { shop: "s" }), { query: "sneaker", width: "wide", size: "8" });
+  assert.equal(none.products.length, 0);
+  assert.equal(none.if_relaxed.without_width, 1, "dropping the width brings the medium back");
+});
+await test("get_colorways: every color of the styles as showable products; with a width, the rest listed apart", () => {
+  const r = styleColorways(shoes, { handles: [SH["Carly Arch Support Sneaker - Black"], SH["Danika Arch Support Sneaker - Pink"]] });
+  assert.deepEqual(r.styles.map((st) => st.style), ["Carly Arch Support Sneaker", "Danika Arch Support Sneaker"]);
+  assert.deepEqual(r.styles[0].colors.map((c) => c.color), ["Black", "Red", "White"]);
+  assert.equal(r.styles[0].colors[1].handle, SH["Carly Arch Support Sneaker - Red"]);
+  assert.ok(r.styles[1].colors.find((c) => c.color === "Pink").few_sizes_left);
+  const wide = styleColorways(shoes, { handles: [SH["Carly Arch Support Sneaker - Red"]], width: "wide" });
+  assert.deepEqual(wide.styles[0].colors.map((c) => c.color), ["Black"]);
+  assert.deepEqual(wide.styles[0].colors_not_in_that_size_or_width, ["Red", "White"]);
+  assert.deepEqual(wide.filters_applied, { width: "wide" });
+  assert.deepEqual(styleColorways(shoes, { handles: ["nope"] }).unknown_handles, ["nope"]);
+});
+await test("the width filter and get_colorways are offered; the width only where the store sells widths", () => {
+  const t = buildLeanTools(shoes.vocab);
+  assert.deepEqual(t.find((x) => x.name === "search_products").input_schema.properties.width.enum.sort(), ["medium", "wide"]);
+  assert.ok(t.find((x) => x.name === "get_colorways").input_schema.properties.width);
+  assert.match(buildLeanSystemPrompt({ vocab: shoes.vocab }), /width filter/);
+  const plain = buildLeanTools(catalog.vocab);
+  assert.equal(plain.find((x) => x.name === "search_products").input_schema.properties.width, undefined);
+  assert.ok(plain.find((x) => x.name === "get_colorways"));
+  assert.doesNotMatch(buildLeanSystemPrompt({ vocab: catalog.vocab }), /width filter/);
+  assert.match(buildLeanSystemPrompt({ vocab: catalog.vocab }), /never tell them to tap a card to see the colors/);
+});
+await test("View all keeps the width and says it", () => {
+  assert.deepEqual(cleanViewAllSearch({ query: "sneaker", width: "wide", gender: "women" }), { query: "sneaker", gender: "women", width: "wide" });
+  assert.equal(viewAllWords({ gender: "women", width: "wide", categories: ["sneakers"] }, 12).label, "View all 12 women's wide sneakers");
+  assert.equal(allMatches(shoes, { query: "sneaker", width: "wide" }).length, 4);
 });
 
 console.log("\ntools + prompt");
@@ -805,6 +900,59 @@ await test("the shared prompt reads the same for every shopper: page and time no
   assert.equal(last.role, "user");
   assert.match(JSON.stringify(last.content), /Right now it's Sat, Oct 24/);
   assert.match(JSON.stringify(last.content), /"hi"/);
+});
+
+await test('"show me more colors": get_colorways makes every color showable as a card', async () => {
+  const carly = SH["Carly Arch Support Sneaker - Black"], danika = SH["Danika Arch Support Sneaker - Black"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("c1", "get_colorways", { handles: [carly, danika] })] },
+    { stop_reason: "tool_use", content: [txt("Here they are in more colors — the Carly in red and white, and the Danika in navy and pink."), tu("c2", "show_products", { handles: [SH["Carly Arch Support Sneaker - Red"], SH["Carly Arch Support Sneaker - White"], SH["Danika Arch Support Sneaker - Navy"], SH["Danika Arch Support Sneaker - Pink"]] })] },
+    { stop_reason: "end_turn", content: [] },
+  ]);
+  const history = [
+    { role: "user", content: "women's sneakers" },
+    { role: "assistant", content: "Here are two favorites.\n\n[Product cards displayed with this reply: 1. Carly Arch Support Sneaker - Black ($149.95); 2. Danika Arch Support Sneaker - Black ($149.95)]" },
+    { role: "user", content: "show me more colors" },
+  ];
+  const r = await runLeanTurn({ catalog: shoes, model: "m", messages: history, latestUserMessage: "show me more colors", callModel: s.callModel, log: quiet });
+  assert.deepEqual(r.cards.map((c) => c.title), ["Carly Arch Support Sneaker - Red", "Carly Arch Support Sneaker - White", "Danika Arch Support Sneaker - Navy", "Danika Arch Support Sneaker - Pink"]);
+  assert.deepEqual(r.issues, []);
+  const result = JSON.parse(s.requests[1].messages.at(-1).content.find((b) => b.type === "tool_result").content);
+  assert.match(result.note, /show_products/);
+});
+await test("a reply written with the cards keeps its answer when the next step only adds a closing question", async () => {
+  const p = shoes.products[0];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("d1", "get_product_details", { handle: p.handle })] },
+    { stop_reason: "tool_use", content: [txt("It's made for everyday walking — the arch support and cushioning suit sneakers you wear all day."), tu("d2", "show_products", { handles: [p.handle] })] },
+    { stop_reason: "end_turn", content: [txt("Would you like help finding your size?")] },
+  ]);
+  const r = await runLeanTurn({ catalog: shoes, model: "m", messages: [{ role: "user", content: "what is this good for?" }], latestUserMessage: "what is this good for?", callModel: s.callModel, log: quiet });
+  assert.equal(r.text, "It's made for everyday walking — the arch support and cushioning suit sneakers you wear all day.\n\nWould you like help finding your size?");
+  assert.equal(r.retried, false);
+});
+await test("a question answered only with a question back is sent back to be answered", async () => {
+  const p = shoes.products[0];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("q1", "show_products", { handles: [p.handle] })] },
+    { stop_reason: "end_turn", content: [txt("Would you like help finding a pair of supportive everyday shoes to go along with this?")] },
+    { stop_reason: "end_turn", content: [txt("It works best in everyday sneakers and casual shoes. Want help finding a pair?")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog: shoes, model: "m", messages: [{ role: "user", content: "What shoes does this work best in?" }], latestUserMessage: "What shoes does this work best in?", callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.ok(logs.some((l) => /rewrite: unanswered_question/.test(l)), logs.join("\n"));
+  assert.match(r.text, /^It works best in everyday sneakers/);
+  assert.match(JSON.stringify(s.requests[2].messages.at(-1).content), /only asks them something back/);
+});
+await test("closing-question join and the ask-back check, on their own", () => {
+  assert.equal(joinClosingQuestion("It fits most sneakers.", "Want to see some?"), "It fits most sneakers.\n\nWant to see some?");
+  assert.equal(joinClosingQuestion("Great question — let me check its details.", "Want to see some?"), "Want to see some?", "a 'let me check' line isn't an answer");
+  assert.equal(joinClosingQuestion("It fits most sneakers.", "It fits most sneakers and casual shoes, and here it is in your size."), "It fits most sneakers and casual shoes, and here it is in your size.", "a full new reply replaces it");
+  assert.equal(joinClosingQuestion("It fits most sneakers.", "Want to see some? <<Yes>><<No>>"), "It fits most sneakers.\n\nWant to see some? <<Yes>><<No>>");
+  assert.equal(onlyAsksBack("Would you like help finding shoes?", "What shoes does this work best in?"), true);
+  assert.equal(onlyAsksBack("Who's it for? <<Women's>><<Men's>>", "Which orthotic should I get?"), false, "a clarifying question with choices is fine");
+  assert.equal(onlyAsksBack("Of course! What will you wear them for?", "Can you help me find shoes?"), false);
+  assert.equal(onlyAsksBack("Want to see more colors?", "show me sneakers"), false, "not a question");
 });
 
 console.log("\nplumbing");

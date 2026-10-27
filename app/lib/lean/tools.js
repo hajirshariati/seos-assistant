@@ -30,6 +30,9 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   props.on_sale = { type: "boolean", description: "Only marked-down products (sale price below the original price). Use for sales, deals, discounts, markdowns or clearance — on its own to show everything on sale, or with other filters." };
   props.max_price = { type: "number", description: "Maximum price in dollars." };
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };
+  // Only when the store sells shoes in more than one width.
+  const widths = values(vocab.widths || []);
+  if (widths.length > 1) props.width = { type: "string", enum: widths, description: "Only products with this width in stock — e.g. the wide width for wide feet. With size, that size in that width." };
   props.sort = { type: "string", enum: ["best", "price_low", "price_high"], description: "Result order. \"best\" (default): closest match first, then the styles that sell — most sizes in stock, best rated, best sellers. \"price_low\" / \"price_high\" only when the customer asks for the cheapest or the most premium." };
   props.limit = { type: "integer", description: "How many styles to return (default 6, max 10)." };
 
@@ -47,6 +50,20 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
         type: "object",
         properties: { handle: { type: "string", description: "Product handle from a search result or a shown card." } },
         required: ["handle"],
+      },
+    },
+    {
+      name: "get_colorways",
+      description:
+        "Every color a style comes in, each its own product you can show as a card. Use it when the customer asks what colors something comes in, wants other or more colors of products shown, or asks about a color in a size or width (\"does the Carly come in red in wide?\"). Any handle of a style works.",
+      input_schema: {
+        type: "object",
+        properties: {
+          handles: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 6, description: "Handles of the styles (from a search or a shown card)." },
+          size: { type: "string", description: "Optional: only colors with this size in stock." },
+          ...(widths.length > 1 ? { width: { type: "string", enum: widths, description: "Optional: only colors with this width in stock." } } : {}),
+        },
+        required: ["handles"],
       },
     },
     {

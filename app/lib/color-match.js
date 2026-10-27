@@ -48,6 +48,18 @@ export function colorFamilyOf(word) {
   return COLOR_FAMILIES.find((fam) => fam.includes(w)) || null;
 }
 
+// The color families a value reads as ("Black Sparkle" → black, "Navy/White"
+// → navy and white), by each family's first word. A name no family knows
+// ("Oatmeal", "Army") stands for itself — so two cards can be told apart.
+export function colorFamiliesIn(value) {
+  const v = norm(value);
+  if (!v) return [];
+  const out = COLOR_FAMILIES
+    .filter((fam) => fam.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(v)))
+    .map((fam) => fam[0]);
+  return out.length ? out : [v];
+}
+
 // Does the value contain a known color word? Used to keep non-color title
 // suffixes ("- Insole for Athletic Footwear") out of the color vocabulary.
 export function containsColorWord(value) {

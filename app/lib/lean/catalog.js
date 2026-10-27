@@ -232,6 +232,7 @@ export function buildVocabulary(products = []) {
     productTypes: tally(live, (p) => [p.productType], { max: 20 }),
     categories: tally(live, (p) => [p.category, p.subcategory].filter(Boolean).map((s) => s.toLowerCase()), { max: 40 }),
     colors: tally(live, (p) => p.colors, { max: 80, min: 2 }),
+    widths: tally(live, (p) => p.widths, { max: 8 }),
     genders: tally(live, (p) => p.gender, { max: 6 }),
     activities: tally(live, (p) => p.activities, { max: 30, min: 2 }),
     conditions: tally(live, (p) => p.conditions, { max: 40, min: 2 }),

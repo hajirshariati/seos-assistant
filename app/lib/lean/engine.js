@@ -8,7 +8,7 @@
 // `anthropic` client and `lookupStoreInfo` function, so it runs in tests with
 // stubs.
 
-import { leanSearch, allMatches, productDetails, similarProducts } from "./search.js";
+import { leanSearch, allMatches, productDetails, similarProducts, styleColorways } from "./search.js";
 import { viewAllWords, cleanViewAllSearch, pageOf } from "./shop-all.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
@@ -195,6 +195,38 @@ export function joinContinuation(earlier, said) {
   const t = String(said || "").trim();
   if (!e || !t || FILLER.test(e) || !CONTINUES.test(t) || t.includes(e)) return t;
   return `${e}\n\n${t}`;
+}
+
+// Only questions (tap choices allowed at the end): "Want help finding shoes
+// for it?" — a closing line, not an answer.
+const sentencesOf = (t) => String(t || "").replace(/<<[^>]*>>/g, " ").trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+const onlyQuestions = (t) => { const s = sentencesOf(t); return s.length > 0 && s.every((x) => /\?["'”’)]*$/.test(x.trim())); };
+// Text that says a lookup is coming ("Great question — let me check").
+const ANNOUNCES = /\b(let me|i'?ll (check|look|pull|find|search|grab|see)|one (moment|sec)|just a (moment|sec)|give me a (moment|sec)|checking|looking (that|this|it|those|these) up)\b/i;
+
+// The reply written with the cards ("It works in everyday shoes and
+// sneakers…") is often followed by one more step's short closing question
+// ("Want help finding shoes to go with it?"). That question alone would drop
+// the answer, so the two are kept together. A full new reply replaces it.
+export function joinClosingQuestion(prior, said) {
+  const p = String(prior || "").trim();
+  const t = String(said || "").trim();
+  if (!p || !t || p === t || p.includes(t) || t.includes(p)) return t;
+  if (FILLER.test(p) || ANNOUNCES.test(p) || onlyQuestions(p)) return t;
+  if (t.length > 220 || !onlyQuestions(t)) return t;
+  return `${p}\n\n${t}`;
+}
+
+// The customer asked something and the reply only asks back, with no tap
+// choices ("Would you like help finding shoes?" to "What shoes does this
+// work in?"). A real clarifying question comes with choices to tap.
+const ASKED = /\?\s*$|^(what|which|how|does|do|is|are|can|could|will|would|should|where|when|why|who)\b/i;
+export function onlyAsksBack(text, latestUserMessage) {
+  const t = String(text || "").trim();
+  const u = String(latestUserMessage || "").trim();
+  if (!ASKED.test(u) || u.split(/\s+/).length < 3) return false;
+  if (/<<[^>]+>>/.test(t) || t.length > 220) return false;
+  return onlyQuestions(t);
 }
 
 // The message has a sales word in it: Claude decides what it means.
@@ -426,6 +458,16 @@ export async function runLeanTurn({
       log(`[lean] details ${input.handle}`);
       return d;
     }
+    if (name === "get_colorways") {
+      const r = styleColorways(catalog, input);
+      markSeen(r.styles.flatMap((st) => st.colors.map((c) => c.handle)));
+      for (const st of r.styles) topic("product", st.style);
+      log(`[lean] colorways ${JSON.stringify(input)} → ${r.styles.map((st) => `${st.style}: ${st.colors.length}`).join("; ") || "none"}`);
+      return {
+        ...r,
+        note: "Each color is its own product: show the ones the customer wants with show_products (up to 4 cards). For other or more colors, show colors they haven't seen yet.",
+      };
+    }
     if (name === "find_similar_products") {
       const r = similarProducts(catalog, { ...input, attributes: similarAttributes });
       if (!r.error) markSeen(r.products.map((p) => p.handle));
@@ -551,6 +593,10 @@ export async function runLeanTurn({
     conv.push({ role: "assistant", content });
     const said = content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
     const toolUses = content.filter((b) => b.type === "tool_use");
+    // The reply written in an earlier step — with the cards, or alongside a
+    // lookup when cards came after it — kept if this step only adds a
+    // closing question.
+    const before = draft || (shown.length ? earlier : "");
     if (toolUses.some((t) => !PRESENTING.has(t.name))) { draft = ""; if (said) earlier = said; }
     else if (said) draft = said;
     if (toolUses.length > 0) {
@@ -566,7 +612,7 @@ export async function runLeanTurn({
       if (resp.stop_reason === "tool_use" && !mustAnswer) continue;
     }
 
-    text = said ? joinContinuation(earlier, said) : draft;
+    text = said ? joinClosingQuestion(before, joinContinuation(earlier, said)) : draft;
     if (!text && !askedForText && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       // Ended without a word for the customer: ask once for the reply.
       askedForText = true;
@@ -583,6 +629,13 @@ export async function runLeanTurn({
       issues.push({
         code: "echoed_follow_ups",
         detail: "Your reply repeated the suggested tap questions — they're written in the customer's voice and are already shown as buttons. Write your own short reply: what you're showing and why it fits what they asked.",
+      });
+    }
+    if (onlyAsksBack(text, latestUserMessage)) {
+      const asked = String(latestUserMessage).trim().replace(/[<>]/g, "").slice(0, 120);
+      issues.push({
+        code: "unanswered_question",
+        detail: `The customer asked "${asked}" and your reply only asks them something back. Answer their question first, in a sentence or two from the facts (look them up if you need to) — then offer a next step if you like. If you truly can't answer without knowing something, ask it with tap choices.`,
       });
     }
     let orthoticAnswer = leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) });

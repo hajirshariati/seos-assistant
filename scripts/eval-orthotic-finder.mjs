@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder, defaultLineRules, cleanLineRules, lineRulesOf, lineAllowed, catalogForConversation } from "../app/lib/orthotic-finder.js";
+import { buildOrthoticCatalog, pickOrthotic, productFromNode, skuParts, describeLine, sanitizeFitfinder, defaultLineRules, cleanLineRules, lineRulesOf, lineAllowed, catalogForConversation, shoeSupport } from "../app/lib/orthotic-finder.js";
 import { finderToolDef, runFinderTool, savedFitNote } from "../app/lib/orthotic-finder.server.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/aetrex-orthotics.json", import.meta.url), "utf8"));
@@ -233,6 +233,52 @@ test("the merchant's own rules replace the defaults; bad input is dropped", () =
   assert.ok(lineIds(d).includes("active") && lineIds(d).includes("conform") && !lineIds(d).includes("speed"), "saved rules (even empty ones) mean no defaults");
   assert.equal(lineAllowed({ mode: "only_when", when: ["diabetes"] }, "DIABETIC feet"), true);
   assert.equal(lineAllowed({ mode: "only_when", when: ["diabetes"] }, "flat feet"), false);
+});
+
+console.log("\nan insert like a shoe's built-in support");
+// The live Maui flips' own copy (2026-10-27): most say "Metatarsal support",
+// the Glossy White says "Support pod to help relieve forefoot pressure".
+const MAUI = {
+  title: "Maui Orthotic Men's Flips - Black",
+  description: "The Aetrex Orthotic System is Built-In to every pair: Arch support helps to stabilize and align feet. Details: Metatarsal support to help reduce ball-of-foot discomfort. Soft toe post for extra comfort.",
+  attributes: { comfort_details: "<ul><li>Metatarsal support to help reduce ball-of-foot discomfort</li><li>Removable Insole: No</li></ul>" },
+};
+const MAUI_WHITE = {
+  title: "Maui Orthotic Women's Flips - Glossy White",
+  description: "The Aetrex Cobra Orthotic System is Built-In to every pair: Arch support helps to stabilize and align feet. Support pod to help relieve forefoot pressure.",
+  attributes: {},
+};
+test("the shoe's own copy says whether its footbed has a metatarsal pad", () => {
+  assert.deepEqual(shoeSupport(MAUI), { title: "Maui Orthotic Men's Flips - Black", metSupport: true });
+  assert.equal(shoeSupport(MAUI_WHITE).metSupport, true);
+  assert.equal(shoeSupport({ title: "Jillian Sandal", description: "Arch support and memory foam." }).metSupport, false);
+});
+test('"an insert like my Maui": the version with the shoe\'s metatarsal pad, and never a FIT for the shopper', () => {
+  const r = pickOrthotic(catalog, { line: "premium-memory-foam", gender: "men", arch: "not_sure" }, { fits: FF.fits, likeShoe: shoeSupport(MAUI) });
+  assert.ok(r.pick.metatarsalPad, r.pick.title);
+  assert.ok(/Metatarsal/.test(r.pick.title) && !/Posted/.test(r.pick.title), r.pick.title);
+  assert.equal(r.fit, undefined, "the shoe's features aren't their feet: no FIT to save");
+  assert.deepEqual(r.like_shoe, { title: "Maui Orthotic Men's Flips - Black", metatarsal_pad: true });
+  assert.match(r.instruction, /don't call it their FIT/);
+  assert.ok(r.notes.some((n) => /posted version is for low arches/.test(n)), "arch unknown → the posted version is mentioned");
+});
+test("even a guessed arch and pad don't turn into a saved FIT when matching a shoe", () => {
+  const r = pickOrthotic(catalog, { line: "premium-memory-foam", gender: "men", arch: "medium_high", ball_of_foot_pain: "no" }, { fits: FF.fits, likeShoe: shoeSupport(MAUI) });
+  assert.equal(r.fit, undefined);
+  assert.ok(r.pick.metatarsalPad, "the Maui has a metatarsal pad, so the insert does too");
+});
+test("their own arch answer still decides posted or not", () => {
+  const r = pickOrthotic(catalog, { line: "premium-memory-foam", gender: "women", arch: "flat_low" }, { fits: FF.fits, likeShoe: shoeSupport(MAUI_WHITE) });
+  assert.ok(/Posted/.test(r.pick.title) && /Metatarsal/.test(r.pick.title), r.pick.title);
+});
+test("matching a shoe still needs the line for the shoes they'll wear it in", () => {
+  assert.match(pickOrthotic(catalog, { gender: "men" }, { fits: FF.fits, likeShoe: shoeSupport(MAUI) }).error, /Choose the line/);
+});
+test("the tool offers like_shoe and says a shoe's features aren't the customer's answers", () => {
+  const def = finderToolDef({ intent: "orthotic", definition: { finder: catalog } }, { fitfinder: FF });
+  assert.ok(def.input_schema.properties.like_shoe);
+  assert.match(def.description, /call this tool with like_shoe/);
+  assert.match(def.description, /Never call the result their FIT/);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

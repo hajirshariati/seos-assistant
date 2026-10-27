@@ -4,7 +4,7 @@
 // the real catalog in scripts/fixtures/aetrex-orthotics.json).
 
 import prisma from "../db.server.js";
-import { buildOrthoticCatalog, catalogForConversation, describeLine, lineAllowed, lineRulesOf, pickOrthotic, productFromNode, ruleNote } from "./orthotic-finder.js";
+import { buildOrthoticCatalog, catalogForConversation, describeLine, lineAllowed, lineRulesOf, pickOrthotic, productFromNode, ruleNote, shoeSupport } from "./orthotic-finder.js";
 import { getDecisionTreeByIntent, incrementCompletedCount, saveDecisionTree } from "../models/DecisionTree.server.js";
 
 export const FINDER_KIND = "catalog_finder";
@@ -151,6 +151,8 @@ export function finderToolDef(tree, { fitfinder = null, shopperText = "" } = {})
       "without a removable insole, heels or slim dress shoes → the dress, fashion or thin lines; extra cushioning → memory foam — " +
       "and call this tool. It picks the exact version for their arch and ball-of-foot pain and checks it's for sale; show what it returns. " +
       "Plantar fasciitis or heel pain doesn't change the line — answer the four questions as usual. " +
+      "An insert like the support a shoe has built in (\"which orthotic is like my Maui flip flops?\"): find that shoe, then call this tool with like_shoe — it copies the shoe's support (its metatarsal pad, if it has one). " +
+      "The shoe's features are not the customer's answers: still ask who it's for and the shoes they'll wear it in, and their arch type if they want to tell you (otherwise not_sure). Never call the result their FIT.\n\n" +
       "Orthotic inserts can't be worn in sandals or other open shoes. Never suggest, offer or pair an orthotic with sandals; when the customer asks for one, say so kindly and offer sandals with built-in arch support instead. When you're showing sandals, don't bring up orthotics at all." +
       fitSection(fitfinder) +
       (leads.length ? `\n\nThe store team leads with ${leads.join(" and ")}: when it suits the customer as well as another line, recommend it first.` : "") +
@@ -163,6 +165,7 @@ export function finderToolDef(tree, { fitfinder = null, shopperText = "" } = {})
         arch: { type: "string", enum: ["flat_low", "medium_high", "not_sure"] },
         ball_of_foot_pain: { type: "string", enum: ["yes", "no"] },
         ...(fits.length ? { fit: { type: "string", enum: fits.map((f) => f.key), description: "Their FIT, when they already know it (stands in for arch and ball-of-foot pain)." } } : {}),
+        like_shoe: { type: "string", description: "Handle of a shoe whose built-in support the insert should match, when that's what they ask for (its metatarsal pad decides ball-of-foot support)." },
       },
       required: fits.length ? [] : ["line", "gender", "arch", "ball_of_foot_pain"],
     },
@@ -192,8 +195,21 @@ export async function runFinderTool({ tree, shop, input, fitfinder = null, shopp
         : `The store doesn't recommend that line. Choose the line that fits their shoes from: ${catalog.lines.map((l) => l.id).join(", ")}.`,
     };
   }
+  // "An insert like my Maui flips": the shoe's own copy says what its
+  // built-in support has.
+  let likeShoe = null;
+  if (input?.like_shoe) {
+    const shoe = await prisma.product.findFirst({
+      where: { shop, handle: String(input.like_shoe) },
+      select: { title: true, description: true, attributesJson: true },
+    });
+    if (!shoe) return { error: "No product with that handle — search for the shoe first." };
+    let attributes = shoe.attributesJson;
+    if (typeof attributes === "string") { try { attributes = JSON.parse(attributes); } catch { attributes = {}; } }
+    likeShoe = shoeSupport({ title: shoe.title, description: shoe.description, attributes: attributes || {} });
+  }
   const forSale = await availableHandles(shop, catalog.items.map((i) => i.handle));
-  const result = pickOrthotic(catalog, input || {}, { available: (h) => forSale.has(h), fits: fitfinder?.fits || null });
+  const result = pickOrthotic(catalog, input || {}, { available: (h) => forSale.has(h), fits: fitfinder?.fits || null, likeShoe });
   if (result.pick) await incrementCompletedCount(shop, tree.id);
   // A FIT worked out in the chat is saved to FITFinder by the widget, so
   // product pages open on it too.

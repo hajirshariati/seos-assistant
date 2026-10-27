@@ -317,8 +317,25 @@ function fitInfo(fits, code) {
 // fits: the store's FITs (sanitizeFitfinder) — picks then carry their FIT, a
 // known FIT stands in for arch + ball-of-foot, and with no line yet the
 // answer is just the shopper's FIT.
-export function pickOrthotic(catalog, answers = {}, { available = () => true, fits = null } = {}) {
+// An insert like a shoe's built-in support ("like my Maui flips"): what that
+// shoe's footbed has, read from its own copy. Aetrex calls the metatarsal
+// pad "metatarsal support" or a "support pod" for forefoot pressure.
+const MET_PAD = /metatarsal|ball[- ]of[- ](?:the[- ])?foot|support pod|forefoot (?:pressure|pad|support)/i;
+export function shoeSupport(product) {
+  if (!product) return null;
+  const text = [product.title, product.description, ...Object.values(product.attributes || {})].map(clean).join(" ");
+  return { title: clean(product.title), metSupport: MET_PAD.test(text) };
+}
+
+// likeShoe: shoeSupport() of a shoe whose built-in support the insert should
+// copy — its metatarsal pad decides that part, and the result is the shoe's
+// match, never the shopper's FIT.
+export function pickOrthotic(catalog, answers = {}, { available = () => true, fits = null, likeShoe = null } = {}) {
   const lines = catalog?.lines || [];
+  if (likeShoe) {
+    answers = { ...answers, ball_of_foot_pain: likeShoe.metSupport || answers.ball_of_foot_pain === "yes" ? "yes" : "no" };
+    if (!answers.line) return { error: "Choose the line for the shoes they'll wear the insert in (ask if you don't know), then call again with like_shoe." };
+  }
   const givenFit = fits && answers.fit ? fits.find((f) => f.key === String(answers.fit).toUpperCase()) : null;
   if (givenFit) {
     const implied = fromCode(givenFit.code);
@@ -392,16 +409,20 @@ export function pickOrthotic(catalog, answers = {}, { available = () => true, fi
   });
   // The shopper's FIT from their answers (not the product's — those differ
   // only when a version doesn't exist, which the notes already say).
-  const theirFit = fits && archKnown && metKnown
+  // Matching a shoe's support describes the shoe, not their feet: no FIT.
+  const theirFit = fits && archKnown && metKnown && !likeShoe
     ? fitInfo(fits, fitCode({ arch: answers.arch, metSupport: wantMet }))
     : null;
   return {
     line: line.name,
     ...(theirFit ? { fit: theirFit } : {}),
+    ...(likeShoe ? { like_shoe: { title: likeShoe.title, metatarsal_pad: likeShoe.metSupport } } : {}),
     pick: fmt(pick),
     otherVersions: ranked.slice(1).filter((i) => i.gender === pick.gender || i.gender === "Unisex").slice(0, 3).map(fmt),
     notes,
-    instruction: "Show the pick with show_products. Explain in one or two sentences why it fits (their shoes, arch, ball-of-foot). Mention another version only if a note asks you to.",
+    instruction: likeShoe
+      ? `Show the pick with show_products. Say in a sentence or two that it gives the kind of support the ${likeShoe.title} has built in (arch support${likeShoe.metSupport ? " and a metatarsal pad for the ball of the foot" : ""}) for the shoes they'll wear it in. It matches that shoe, not a FIT worked out for them — don't call it their FIT. Mention another version only if a note asks you to.`
+      : "Show the pick with show_products. Explain in one or two sentences why it fits (their shoes, arch, ball-of-foot). Mention another version only if a note asks you to.",
   };
 }
 

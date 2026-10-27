@@ -32,6 +32,8 @@ export function cleanViewAllSearch(raw) {
   if (Number.isFinite(maxPrice) && maxPrice > 0) out.max_price = Math.min(maxPrice, 100000);
   const size = str(String(raw.size ?? ""), 12);
   if (size) out.size = size;
+  const width = str(String(raw.width ?? ""), 20);
+  if (width) out.width = width;
   if (SORTS.has(raw.sort)) out.sort = raw.sort;
   return Object.keys(out).length ? out : null;
 }
@@ -60,7 +62,8 @@ const cap = (s) => s.replace(/(^|\s|&\s)([a-z])/g, (m, pre, c) => pre + c.toUppe
 export function viewAllWords(search, total) {
   const s = search && typeof search === "object" ? search : {};
   const one = (list) => (Array.isArray(list) && list.length === 1 ? clean(list[0]) : "");
-  const words = [genderWord(s.gender), one(s.colors), s.on_sale ? "sale" : "", one(s.categories)].filter(Boolean);
+  const width = clean(typeof s.width === "string" ? s.width : "").slice(0, 20);
+  const words = [genderWord(s.gender), width, one(s.colors), s.on_sale ? "sale" : "", one(s.categories)].filter(Boolean);
   const noun = one(s.categories) ? "" : (words.length ? "styles" : "matches");
   const phrase = [...words, noun].filter(Boolean).join(" ");
   const size = String(s.size || "").trim().slice(0, 12);
