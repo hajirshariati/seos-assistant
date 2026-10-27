@@ -27,18 +27,20 @@ function top(rows, kind, limit, fmt = label) {
     .map(([value, count]) => ({ label: fmt(value), count }));
 }
 
-export function summarizeWeek(rows = []) {
+// `all`: every topic, not just the top few (the CSV export).
+export function summarizeWeek(rows = [], { all = false } = {}) {
+  const n = (limit) => (all ? Infinity : limit);
   const count = (kind) => rows.filter((r) => r.kind === kind).length;
-  const tools = top(rows, "tool", 6, (v) => TOOL_LABELS[v] || (v.startsWith("recommend") ? "Guided finder" : label(v)));
+  const tools = top(rows, "tool", n(6), (v) => TOOL_LABELS[v] || (v.startsWith("recommend") ? "Guided finder" : label(v)));
   const merged = new Map();
   for (const t of tools) merged.set(t.label, (merged.get(t.label) || 0) + t.count);
   return {
-    categories: top(rows, "category", 5),
-    conditions: top(rows, "condition", 5),
-    colors: top(rows, "color", 5),
-    products: top(rows, "product", 5, (v) => v.replace(/\b\w/g, (c) => c.toUpperCase())),
-    storeQuestions: top(rows, "store_question", 5, (v) => v.charAt(0).toUpperCase() + v.slice(1)),
-    unanswered: top(rows, "unanswered", 8, (v) => v.charAt(0).toUpperCase() + v.slice(1)),
+    categories: top(rows, "category", n(5)),
+    conditions: top(rows, "condition", n(5)),
+    colors: top(rows, "color", n(5)),
+    products: top(rows, "product", n(5), (v) => v.replace(/\b\w/g, (c) => c.toUpperCase())),
+    storeQuestions: top(rows, "store_question", n(5), (v) => v.charAt(0).toUpperCase() + v.slice(1)),
+    unanswered: top(rows, "unanswered", n(8), (v) => v.charAt(0).toUpperCase() + v.slice(1)),
     supportHandoffs: count("support"),
     saleSearches: count("sale"),
     tools: [...merged.entries()].map(([l, c]) => ({ label: l, count: c })).sort((a, b) => b.count - a.count),

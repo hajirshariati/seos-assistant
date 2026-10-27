@@ -7,15 +7,11 @@ import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.
 import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
 import { listRecordings } from "../models/ChatRecording.server";
-
-const MODEL_LABELS = {
-  "claude-sonnet-4-6": "Standard",
-  "claude-opus-4-7": "Advanced",
-  "claude-sonnet-4-20250514": "Standard",
-  "claude-haiku-4-5-20251001": "Fast",
-  "claude-opus-4-20250514": "Advanced",
-};
-const modelLabel = (m) => MODEL_LABELS[m] || m;
+import { getConversionSummary } from "../models/ChatConversion.server";
+import { getInterestBreakdown } from "../models/ChatProductMention.server";
+import { getTopicRows } from "../models/ChatTopic.server";
+import { summarizeWeek } from "../lib/weekly-summary";
+import { modelLabel, summaryRows, topicRows } from "../lib/analytics-export.js";
 
 function parseRange(searchParams) {
   const preset = searchParams.get("range") || "30d";
@@ -57,6 +53,22 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
       ["Time", "Chat", "Tester", "Page", "Shopper", "Assistant", "Products shown", "Also shown", "OK"],
       rows.map((r) => [new Date(r.createdAt).toISOString(), r.sessionId, r.tester, r.page, r.message, r.reply, (r.products || []).join(" | "), r.extras, r.ok ? "yes" : "no"]),
     );
+  }
+  // Every number for the range in one file — what the page leaves off.
+  if (section === "summary") {
+    const [usage, feedback, conversions, interest, daily] = await Promise.all([
+      getUsageSummary(shop, rangeArg),
+      getFeedbackSummary(shop, rangeArg),
+      getConversionSummary(shop, rangeArg),
+      getInterestBreakdown(shop, rangeArg),
+      getDailySeries(shop, rangeArg, { timeZone }),
+    ]);
+    return toCsv(["Metric", "Value", "Notes"], summaryRows({ range: rangeArg, usage, feedback, conversions, interest, daily }));
+  }
+  // What customers asked about in the last 7 days, every topic.
+  if (section === "topics") {
+    const rows = await getTopicRows(shop, { days: 7 });
+    return toCsv(["List", "Topic", "Count"], topicRows(summarizeWeek(rows, { all: true })));
   }
   if (section === "daily") {
     const daily = await getDailySeries(shop, rangeArg, { timeZone });
@@ -164,13 +176,16 @@ export const loader = async ({ request }) => {
   const rangeArg = { startDate, endDate };
 
   const vote = url.searchParams.get("vote") || "";
-  const timeZone = section === "daily" ? await getShopTimeZone(admin, session.shop) : "";
+  const timeZone = section === "daily" || section === "summary" ? await getShopTimeZone(admin, session.shop) : "";
   const csv = await buildCsv(session.shop, section, rangeArg, vote, timeZone);
   if (!csv) {
     return new Response(`Unknown export section: ${section}`, { status: 400 });
   }
 
   const voteSlug = vote === "down" ? "not-helpful" : vote === "up" ? "helpful" : vote === "unrated" ? "no-vote" : vote === "comments" ? "with-comments" : "";
-  const fname = `${section}${voteSlug ? `-${voteSlug}` : ""}_${startDate.toISOString().slice(0, 10)}_to_${endDate.toISOString().slice(0, 10)}.csv`;
+  // Topics are always the last 7 days, whatever range is picked.
+  const fname = section === "topics"
+    ? `topics_last-7-days_to_${new Date().toISOString().slice(0, 10)}.csv`
+    : `${section}${voteSlug ? `-${voteSlug}` : ""}_${startDate.toISOString().slice(0, 10)}_to_${endDate.toISOString().slice(0, 10)}.csv`;
   return csvResponse(fname, csv);
 };
