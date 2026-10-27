@@ -17,6 +17,7 @@ import { buildLeanSystemPrompt } from "./prompt.js";
 import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { productKind, codesInText } from "./catalog.js";
+import { containsColorWord } from "../color-match.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown, footConditionQuestion } from "../medical-disclaimer.js";
 
 const MAX_HOPS = 8;
@@ -238,6 +239,32 @@ export function opensNegative(text) {
   return NEGATIVE_OPENING.test(String(text || ""));
 }
 
+// Colors the shopper named this turn ("the Rebecca in size 10 burgundy") that
+// the reply neither mentions nor shows — swapped for other colors in their
+// size without a word about the one they asked for. Live store, 2026-10-27:
+// Burgundy was sold out in 10; the reply showed Black, Dark Brown and Leopard
+// "ready in size 10" and never said so. The store's own color names, longest
+// first ("dark brown" before "brown"); "not black", "other than black" and
+// "Black Friday" don't count.
+const normWords = (s) => String(s || "").toLowerCase().replace(/[_\-–—/]+/g, " ").replace(/\s+/g, " ").trim();
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordRe = (w) => new RegExp(`(^|[^a-z])${escRe(w).replace(/ /g, "\\s+")}([^a-z]|$)`);
+export function missedColors({ message, text, shownColors = [], colorNames = [] }) {
+  let rest = normWords(message).replace(/\bblack friday\b/g, " ");
+  if (!rest) return [];
+  const names = [...new Set(colorNames.map(normWords).filter((c) => c.length >= 3 && containsColorWord(c)))].sort((a, b) => b.length - a.length);
+  const asked = [];
+  for (const c of names) {
+    if (!wordRe(c).test(rest)) continue;
+    const negated = new RegExp(`\\b(?:not|no|except|besides|without|other than|anything but|instead of)\\s+(?:the\\s+|a\\s+|in\\s+)?${escRe(c).replace(/ /g, "\\s+")}\\b`).test(rest);
+    if (!negated) asked.push(c);
+    rest = rest.replace(new RegExp(wordRe(c).source, "g"), " ");
+  }
+  const said = normWords(text);
+  const shown = shownColors.map(normWords).join(" | ");
+  return asked.filter((c) => !wordRe(c).test(said) && !wordRe(c).test(shown));
+}
+
 // The message has a sales word in it: Claude decides what it means.
 const OFFERS_NOTE = "(If the customer is asking which sales, deals or offers are running, start your reply with every offer that's running from ACTIVE PROMOTIONS and the store's promotions page — check each one's end date against right now and skip ended ones — one short line each (a bold name and a few words, no fine print), then the marked-down products: product search with on_sale: true. If they only want marked-down products of one kind (\"boots on sale\"), or use \"offer\" another way (\"styles that offer removable insoles\"), just answer that — no offer list.)";
 
@@ -448,6 +475,8 @@ export async function runLeanTurn({
   const usage = {};
   let toolCalls = 0;
   let retried = false;
+  let firstCodes = new Set();
+  let rewroteAgain = false;
   let text = "";
   let finalIssues = [];
   const searches = [];
@@ -676,7 +705,23 @@ export async function runLeanTurn({
     if (opensNegative(text)) {
       issues.push({
         code: "negative_opening",
-        detail: "Your reply opens with what's missing (\"Unfortunately…\"). Answer like a great sales associate: lead with the best options you can offer — search for them if you haven't yet — and mention what isn't available briefly, in passing (e.g. \"Our fall collection is women's styles — for men, these are the season's favorites:\"). Keep every fact true.",
+        detail: "Your reply opens with what's missing (\"Unfortunately…\"). Change the tone, not the answer: keep answering exactly what the customer asked, with every fact — if what they asked for (a color, a size, a style) is sold out or not carried, still say so plainly — but put it the way a great sales associate would, with what you can offer in the same breath (e.g. \"The Burgundy is sold out in 10 — it's still in 9–9.5 and 11.5–12, and in size 10 the Rebecca comes in Black, Dark Brown and Leopard:\", or \"Our fall collection is women's styles — for men, these are the season's favorites:\"). Search only if you have nothing to offer yet. Never swap what they asked for without saying so.",
+      });
+    }
+    // Only colors the shown styles are made in: the shopper asked for this
+    // style in that color, and the reply went to its other colors.
+    const shownStyles = new Set(shown.map((h) => String(byHandle.get(h)?.style || "").toLowerCase()).filter(Boolean));
+    const missed = shownStyles.size ? missedColors({
+      message: latestUserMessage,
+      text,
+      shownColors: shown.flatMap((h) => byHandle.get(h)?.colors || []),
+      colorNames: (catalog?.products || []).filter((p) => shownStyles.has(String(p.style || "").toLowerCase())).flatMap((p) => p.colors || []),
+    }) : [];
+    if (missed.length) {
+      const c = missed.join(" / ");
+      issues.push({
+        code: "missed_color",
+        detail: `The customer asked for ${c}, but your reply doesn't mention ${c} and none of the cards is ${c}. If they want ${c}: look it up (get_product_details, or get_colorways with their size) and say plainly in your first sentence whether it comes in their size — if it's sold out in their size, say so and name the sizes it does have in stock — and show it; then offer other colors in their size. Don't swap their color for others without saying so. If they didn't mean the color (e.g. "not ${c}"), keep your reply.`,
       });
     }
     let orthoticAnswer = leftOrthoticChat({ lastAssistantText, latestUserMessage, shownProducts: shown.map((h) => byHandle.get(h)).filter(Boolean) });
@@ -718,8 +763,14 @@ export async function runLeanTurn({
       familyIndex,
       knowledgeText,
     }));
-    // A rewrite needs a step left to happen in; on the last step the issues stand.
-    if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
+    // A rewrite needs a step left to happen in; on the last step the issues
+    // stand. One rewrite per reply — and one more when the first was asked to
+    // fix the tone ("Unfortunately…") and came back with a new problem, so
+    // fixing the tone can never cost a fact.
+    const canRewrite = !retried || (firstCodes.has("negative_opening") && !rewroteAgain && issues.some((i) => !firstCodes.has(i.code)));
+    if (issues.length > 0 && canRewrite && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
+      if (retried) rewroteAgain = true;
+      else firstCodes = new Set(issues.map((i) => i.code));
       retried = true;
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";

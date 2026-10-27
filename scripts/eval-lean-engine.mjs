@@ -1489,13 +1489,87 @@ await test("\"Unfortunately, no men's styles\" is rewritten: the men's options c
   const logs = [];
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "do you have any men's styles?" }], latestUserMessage: "do you have any men's styles?", callModel: s.callModel, log: (l) => logs.push(l) });
   assert.ok(logs.some((l) => /rewrite: .*negative_opening/.test(l)), logs.join("\n"));
-  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /lead with the best options you can offer/);
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /Change the tone, not the answer/);
+  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /Never swap what they asked for without saying so/);
   assert.equal(r.retried, true);
   assert.deepEqual(r.cards.map((c) => c.title), ["Chase Arch Support Sneaker - Red"]);
   assert.match(r.text, /^For men, the Chase/);
   assert.deepEqual(r.issues, []);
 });
 
+
+// Live store, 2026-10-27: "I want the rebecca in size 10 burgundy" — Burgundy
+// was sold out in 10. The first draft said so ("Unfortunately…"), the tone
+// rewrite went to the other colors in size 10, and Burgundy was never
+// mentioned; "What sizes are left in burgundy?" got the same three cards.
+const { missedColors } = await import("../app/lib/lean/engine.js");
+await test("a color the shopper named that the reply drops is caught; 'not black', Black Friday and shown colors aren't", () => {
+  const names = ["Burgundy", "Black", "Dark Brown", "Leopard", "Cognac", "Stone"];
+  const m = (message, text, shownColors) => missedColors({ message, text, shownColors, colorNames: names });
+  assert.deepEqual(m("I want the rebecca in size 10 burgundy", "Each is ready to add to cart in size 10 — just tap the one you love!", ["Leopard", "Dark Brown", "Black"]), ["burgundy"]);
+  assert.deepEqual(m("What sizes are left in burgundy?", "All three are ready to add to cart in size 10!", ["Leopard", "Dark Brown", "Black"]), ["burgundy"]);
+  assert.deepEqual(m("I want the rebecca in size 10 burgundy", "The Burgundy is sold out in 10 — it's still in 9–9.5 and 11.5–12.", ["Black"]), []);
+  assert.deepEqual(m("the dark brown one please", "Here you go!", ["Dark Brown"]), [], "shown as a card");
+  assert.deepEqual(m("anything but black please", "Here are some warmer colors.", ["Cognac"]), [], "not black");
+  assert.deepEqual(m("any black friday deals on boots?", "Here are boots on sale.", ["Cognac"]), [], "Black Friday");
+  assert.deepEqual(m("dark brown in 9?", "Here it is in 9.", ["Black"]), ["dark brown"], "the longer name, not brown");
+});
+const BOOTS = [
+  wrow("Rebecca Heel Boot - Burgundy", { cat: "Boots", sizes: ["7 US", "8 US", "9 US", "10 US"], out: ["10 US"] }),
+  wrow("Rebecca Heel Boot - Black", { cat: "Boots", sizes: ["7 US", "8 US", "9 US", "10 US"] }),
+  wrow("Rebecca Heel Boot - Dark Brown", { cat: "Boots", sizes: ["7 US", "8 US", "9 US", "10 US"] }),
+  wrow("Rebecca Heel Boot - Leopard", { cat: "Boots", sizes: ["7 US", "8 US", "9 US", "10 US"] }),
+];
+const boots = buildLeanCatalog(BOOTS, { shop: "s.myshopify.com" });
+const BH = Object.fromEntries(boots.products.map((p) => [p.title, p.handle]));
+const others = [BH["Rebecca Heel Boot - Black"], BH["Rebecca Heel Boot - Dark Brown"], BH["Rebecca Heel Boot - Leopard"]];
+const in10 = (hs) => Object.fromEntries(hs.map((h) => [h, { size: "10" }]));
+await test("burgundy sold out in 10: fixing the tone can't drop the color — a second rewrite brings Burgundy back", async () => {
+  const burgundy = BH["Rebecca Heel Boot - Burgundy"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("d1", "get_product_details", { handle: burgundy })] },
+    { stop_reason: "end_turn", content: [txt("Unfortunately, the Rebecca in Burgundy is sold out in size 10.")] },
+    // The tone rewrite goes to the other colors and forgets Burgundy…
+    { stop_reason: "tool_use", content: [tu("c1", "get_colorways", { handles: [burgundy], size: "10" })] },
+    { stop_reason: "tool_use", content: [tu("s1", "show_products", { handles: others, options: in10(others) })] },
+    { stop_reason: "end_turn", content: [txt("Each is ready to add to cart in size 10 — just tap the one you love!")] },
+    // …so it's sent back once more, about the color.
+    { stop_reason: "tool_use", content: [tu("s2", "show_products", { handles: [burgundy, ...others], options: in10([burgundy, ...others]) })] },
+    { stop_reason: "end_turn", content: [txt("The Burgundy is sold out in 10 — it's still in 7, 8 and 9. In size 10 the Rebecca comes in Black, Dark Brown and Leopard:")] },
+  ]);
+  const logs = [];
+  const msg = "I want the rebecca in size 10 burgundy";
+  const r = await runLeanTurn({ catalog: boots, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: (l) => logs.push(l) });
+  const rewrites = logs.filter((l) => /fact-check failed → rewrite/.test(l));
+  assert.deepEqual(rewrites.map((l) => l.split("rewrite: ")[1]), ["negative_opening,missing_cards", "missed_color"], logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /Change the tone, not the answer/);
+  assert.match(JSON.stringify(s.requests[5].messages.at(-1)), /The customer asked for burgundy/);
+  assert.match(r.text, /^The Burgundy is sold out in 10/);
+  assert.deepEqual(r.cards.map((c) => c.title), ["Rebecca Heel Boot - Burgundy", "Rebecca Heel Boot - Black", "Rebecca Heel Boot - Dark Brown", "Rebecca Heel Boot - Leopard"]);
+  assert.equal(r.cards[0].preselect, undefined, "the sold-out size isn't pre-picked on the Burgundy card");
+  assert.deepEqual(r.issues, []);
+});
+await test("\"What sizes are left in burgundy?\" answered with other colors is sent back to answer it (one rewrite)", async () => {
+  const burgundy = BH["Rebecca Heel Boot - Burgundy"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("d1", "get_product_details", { handle: burgundy })] },
+    { stop_reason: "tool_use", content: [tu("s1", "show_products", { handles: others, options: in10(others) })] },
+    { stop_reason: "end_turn", content: [txt("All three are ready to add to cart in size 10!")] },
+    { stop_reason: "end_turn", content: [txt("Burgundy is left in 7, 8 and 9 US — 10 is sold out in that color. In 10, these three are ready to add.")] },
+  ]);
+  const logs = [];
+  const msg = "What sizes are left in burgundy?";
+  const r = await runLeanTurn({ catalog: boots, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.deepEqual(logs.filter((l) => /rewrite: /.test(l)).map((l) => l.split("rewrite: ")[1]), ["missed_color"]);
+  assert.match(r.text, /^Burgundy is left in 7, 8 and 9 US/);
+  assert.deepEqual(r.issues, []);
+});
+await test("the prompt: a sold-out color in their size is said first, with the sizes it has, then the colors that fit", () => {
+  const p = buildLeanSystemPrompt({ shop: "x" });
+  assert.match(p, /If that color is sold out in their size, say so in your first sentence and name the sizes it still has/);
+  assert.match(p, /When they ask which sizes or colors are left, list them — that is the answer/);
+  assert.match(p, /never swap what they asked for without saying so/);
+});
 
 console.log("\nView all filters");
 const { buildViewAllIndex, colorGroupsOf } = await import("../app/lib/lean/view-all-index.js");
