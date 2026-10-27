@@ -34,6 +34,9 @@ export function cleanViewAllSearch(raw) {
   if (size) out.size = size;
   const width = str(String(raw.width ?? ""), 20);
   if (width) out.width = width;
+  const collection = str(String(raw.collection ?? ""), 255);
+  if (collection) out.collection = collection;
+  if (raw.colorful === true) out.colorful = true;
   if (SORTS.has(raw.sort)) out.sort = raw.sort;
   return Object.keys(out).length ? out : null;
 }
@@ -57,10 +60,16 @@ function genderWord(g) {
 const clean = (s) => String(s || "").toLowerCase().replace(/\s*\/\s*/g, " & ").replace(/\s+/g, " ").trim();
 const cap = (s) => s.replace(/(^|\s|&\s)([a-z])/g, (m, pre, c) => pre + c.toUpperCase());
 
-// search: the search_products input; total: how many products it matched.
+// search: the search_products input; total: how many products it matched;
+// collectionTitle: the seasonal collection's name, when the search is in it.
 // Returns { label, title } — the button's words and the sheet's heading.
-export function viewAllWords(search, total) {
+export function viewAllWords(search, total, { collectionTitle = "" } = {}) {
   const s = search && typeof search === "object" ? search : {};
+  const size0 = String(s.size || "").trim().slice(0, 12);
+  if (collectionTitle) {
+    const name = String(collectionTitle).trim().slice(0, 40);
+    return { label: `View all ${total} in ${name}`, title: `${name}${size0 ? ` · Size ${size0}` : ""}`.slice(0, 48) };
+  }
   const one = (list) => (Array.isArray(list) && list.length === 1 ? clean(list[0]) : "");
   const width = clean(typeof s.width === "string" ? s.width : "").slice(0, 20);
   const words = [genderWord(s.gender), width, one(s.colors), s.on_sale ? "sale" : "", one(s.categories)].filter(Boolean);

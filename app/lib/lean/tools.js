@@ -10,7 +10,9 @@ function arrayEnum(rows, description) {
   return { type: "array", items: { type: "string", enum: vals }, description };
 }
 
-export function buildLeanTools(vocab = {}, { similar = false } = {}) {
+// collection: the seasonal button's { handle, title, label } (seasonal-cta.js),
+// or null. It reads the same for every shopper, so the tools stay cached.
+export function buildLeanTools(vocab = {}, { similar = false, collection = null } = {}) {
   const props = {
     query: {
       type: "string",
@@ -27,6 +29,10 @@ export function buildLeanTools(vocab = {}, { similar = false } = {}) {
   if (activities) props.activities = activities;
   const conditions = arrayEnum(vocab.conditions || [], "Foot conditions the product is designed to help with.");
   if (conditions) props.conditions = conditions;
+  if (collection?.handle) {
+    props.collection = { type: "string", enum: [collection.handle], description: `Only products in the store's "${collection.title}" collection — what the "${collection.label}" button on the chat's welcome screen shows (its footwear).` };
+  }
+  props.colorful = { type: "boolean", description: "Colorful colorways first (reds, pinks, greens, blues, yellows…) before black, white and neutrals — for the seasonal collection and whenever the customer wants color." };
   props.on_sale = { type: "boolean", description: "Only marked-down products (sale price below the original price). Use for sales, deals, discounts, markdowns or clearance — on its own to show everything on sale, or with other filters." };
   props.max_price = { type: "number", description: "Maximum price in dollars." };
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };

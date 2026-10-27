@@ -10,6 +10,7 @@ const browser = await chromium.launch();
 const results = [];
 const check = (name, ok, extra = "") => { results.push(`${ok ? "PASS" : "FAIL"} ${name}${extra ? " — " + extra : ""}`); };
 const vidFor = (h, s, w) => PRODUCTS[h].variants.find((v) => v.option1 === s && v.option2 === w).id;
+const waitUntil = async (fn, ms = 8000) => { const t0 = Date.now(); while (!fn() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 50)); return fn(); };
 
 async function session(path, viewport, label, nCards = 3) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2 });
@@ -1387,6 +1388,78 @@ for (const coop of ["1", "2"]) {
   await page.waitForSelector(".ai-ord[data-ord]", { timeout: 10000 });
   check("sign-in without pop-ups: back on the same page, chat open with the orders", page.url().endsWith("/full") && await page.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open")), page.url());
   await page.screenshot({ path: out("orders-phone") });
+  await ctx.close();
+}
+// Seasonal button (Settings → Seasonal button): the first Start here button
+// features a collection, with the season's icon in color and a soft tint; a
+// tap asks for that collection. Off (or switched off later) → the usual first.
+{
+  const tilesOf = (page) => page.$$eval(".ai-chat-welcome__cta-btn", (bs) => bs.map((b) => b.textContent.trim()));
+  const withSeasonal = (page, seasonalCta, startTheme) => page.route("**/apps/hajirai/widget-config**", async (r) => {
+    const res = await r.fetch(); const j = await res.json();
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...j, ...(startTheme ? { startTheme } : {}), seasonalCta }) });
+  });
+  const plainCtx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const plainPage = await plainCtx.newPage();
+  await plainPage.goto("http://localhost:4789/full");
+  await plainPage.click(".ai-chat-launcher");
+  await plainPage.waitForSelector(".ai-chat-welcome__cta-btn");
+  const usual = await tilesOf(plainPage);
+  check("seasonal: off by default — the usual buttons", usual.length >= 2 && !(await plainPage.$(".is-season")), usual.join(" | "));
+  await plainCtx.close();
+
+  for (const [theme, season, label, stroke] of [["light", "fall", "Fall Collection Footwear", "rgb(201, 83, 26)"], ["dark", "winter", "Winter Boots & More", "rgb(140, 198, 255)"]]) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await withSeasonal(page, { on: true, icon: season, color: season, label }, theme);
+    await page.goto("http://localhost:4789/full");
+    await page.click(".ai-chat-launcher");
+    await page.waitForSelector(".ai-chat-welcome__cta-btn.is-season", { timeout: 8000 });
+    await page.waitForFunction((t) => document.querySelector(".ai-chat-panel").getAttribute("data-theme") === t, theme);
+    await page.waitForTimeout(400);
+    const tiles = await tilesOf(page);
+    check(`seasonal (${theme}): takes the place of the first button, the others stay`, tiles[0] === label && tiles.length === usual.length && tiles.slice(1).join("|") === usual.slice(1).join("|"), tiles.join(" | "));
+    const look = await page.$eval(".ai-chat-welcome__cta-btn.is-season", (b) => {
+      const plain = document.querySelectorAll(".ai-chat-welcome__cta-btn")[1];
+      const svg = b.querySelector(".ai-chat-welcome__cta-icon svg");
+      return { cls: b.className, icon: svg.getAttribute("class"), w: svg.getBoundingClientRect().width, stroke: getComputedStyle(svg.querySelector(".sx-o")).stroke,
+        bg: getComputedStyle(b).backgroundImage, plainBg: getComputedStyle(plain).backgroundImage + getComputedStyle(plain).backgroundColor, msg: b.getAttribute("data-message") };
+    });
+    check(`seasonal (${theme}): the ${season} icon in its own color, on a soft ${season} tint`,
+      look.cls.includes(`sea-${season}`) && look.icon.includes(`ai-sea-ic--${season}`) && look.stroke === stroke && /linear-gradient/.test(look.bg) && !/linear-gradient/.test(look.plainBg) && look.w === 20, JSON.stringify(look));
+    await page.screenshot({ path: out(`seasonal-${season}-${theme}`) });
+    const before = chatBodies.length;
+    await page.click(".ai-chat-welcome__cta-btn.is-season");
+    await waitUntil(() => chatBodies.length > before);
+    await page.waitForTimeout(300);
+    const sent = chatBodies.slice(before);
+    check(`seasonal (${theme}): a tap sends its words, marked as the seasonal button`, sent.length === 1 && sent[0].message === label && sent[0].seasonal === true, JSON.stringify(sent.map((b) => ({ m: b.message, s: b.seasonal }))));
+    if (theme === "light") {
+      await page.waitForSelector(".ai-chat-input-area textarea:not([disabled])", { timeout: 8000 });
+      const n = chatBodies.length;
+      await page.fill(".ai-chat-input-area textarea", label);
+      await page.keyboard.press("Enter");
+      await waitUntil(() => chatBodies.length > n);
+      check("seasonal: the same words typed aren't marked as a tap", chatBodies.length === n + 1 && chatBodies.at(-1).seasonal === undefined, JSON.stringify(chatBodies.at(-1)?.seasonal));
+    }
+    check(`seasonal (${theme}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Switched off in Settings: the next visit has the usual first button,
+  // even though the last settings (on) were remembered.
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  await ctx.addInitScript(() => localStorage.setItem("hajirai_seasonal_cta", JSON.stringify({ on: true, icon: "fall", color: "fall", label: "Fall Collection Footwear" })));
+  const page = await ctx.newPage();
+  await withSeasonal(page, { on: false, icon: "fall", color: "fall", label: "Fall Collection" });
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(600);
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector(".ai-chat-welcome__cta-btn");
+  await page.waitForTimeout(300);
+  const offTiles = await tilesOf(page);
+  check("seasonal: switched off, the usual first button comes back", !(await page.$(".is-season")) && offTiles.join("|") === usual.join("|"), offTiles.join(" | "));
   await ctx.close();
 }
 await browser.close();

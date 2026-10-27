@@ -142,6 +142,8 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     sizeFinder: sanitizeSizeFinder(body.size_finder),
     // The product page the shopper is on (its handle, from the page URL).
     viewingHandle: cleanHandle(body.viewing),
+    // Sent by tapping the seasonal button: the reply shows its collection.
+    seasonalTap: body.seasonal === true,
     // Test recordings: only while the store has it on, and (by default) only
     // for testers who opened the store with the tester link.
     record: shouldRecord(config, { tester: body.tester, internal })

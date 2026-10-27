@@ -60,6 +60,23 @@ export function colorFamiliesIn(value) {
   return out.length ? out : [v];
 }
 
+// Colorful: a red, pink, orange, yellow, green, blue or purple (or a print),
+// as against black, white, grey, navy and the browns and tans.
+const BRIGHT_WORDS = [
+  "red", "burgundy", "wine", "cherry", "ruby", "scarlet", "crimson", "raspberry", "berry",
+  "pink", "rose", "blush", "fuchsia", "magenta", "coral", "salmon", "peach",
+  "orange", "rust", "terracotta", "tangerine", "papaya",
+  "yellow", "mustard", "lemon", "sunflower", "marigold",
+  "green", "olive", "sage", "mint", "emerald", "lime", "jade", "forest",
+  "teal", "turquoise", "aqua", "blue", "cobalt", "denim", "sky", "royal", "periwinkle", "ocean",
+  "purple", "plum", "lavender", "violet", "lilac", "orchid", "grape",
+  "multi", "multicolor", "rainbow", "floral", "leopard", "print",
+];
+export function isColorful(colorValues = []) {
+  const values = (Array.isArray(colorValues) ? colorValues : [colorValues]).map(norm).filter(Boolean);
+  return values.some((v) => BRIGHT_WORDS.some((w) => new RegExp(`\\b${escapeRe(w)}\\b`).test(v)));
+}
+
 // Does the value contain a known color word? Used to keep non-color title
 // suffixes ("- Insole for Athletic Footwear") out of the color vocabulary.
 export function containsColorWord(value) {

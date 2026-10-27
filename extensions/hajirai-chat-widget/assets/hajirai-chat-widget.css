@@ -5382,3 +5382,53 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-rate.is-in,
   .ai-chat-panel .ai-chat-rate.is-out { transform: none; transition: opacity 0.15s ease; }
 }
+
+/* ── Seasonal button ───────────────────────────────────────────────────────
+   Settings → Seasonal button: the first Start here button features a
+   collection, with the season's icon in color and a soft tint (the values
+   match app/lib/seasonal-cta.js — the Settings preview uses them too). */
+.ai-chat-panel .ai-sea-ic .sx-o { stroke: var(--sx-o); }
+.ai-chat-panel .ai-sea-ic .sx-f { fill: var(--sx-f); }
+.ai-chat-panel .ai-sea-ic .sx-d { stroke: var(--sx-d); }
+.ai-chat-panel .ai-sea-ic .sx-a { fill: var(--sx-a); }
+.ai-chat-panel .ai-sea-ic--fall { --sx-o: #C9531A; --sx-f: #FCC88A; --sx-d: #A8431B; --sx-a: none; }
+.ai-chat-panel .ai-sea-ic--winter { --sx-o: #2B78C2; --sx-f: #C4E2FA; --sx-d: #2B78C2; --sx-a: none; }
+.ai-chat-panel .ai-sea-ic--spring { --sx-o: #D0437A; --sx-f: #FBD5E3; --sx-d: #D0437A; --sx-a: #F2B035; }
+.ai-chat-panel .ai-sea-ic--summer { --sx-o: #E07A0B; --sx-f: none; --sx-d: #F0950F; --sx-a: #FFD24D; }
+.ai-chat-panel[data-theme="dark"] .ai-sea-ic--fall { --sx-o: #FF9B57; --sx-f: rgba(255, 150, 70, 0.32); --sx-d: #FFB27A; --sx-a: none; }
+.ai-chat-panel[data-theme="dark"] .ai-sea-ic--winter { --sx-o: #8CC6FF; --sx-f: rgba(120, 185, 255, 0.28); --sx-d: #8CC6FF; --sx-a: none; }
+.ai-chat-panel[data-theme="dark"] .ai-sea-ic--spring { --sx-o: #FF8EB6; --sx-f: rgba(255, 130, 175, 0.28); --sx-d: #FF8EB6; --sx-a: #FFC94D; }
+.ai-chat-panel[data-theme="dark"] .ai-sea-ic--summer { --sx-o: #FFB347; --sx-f: none; --sx-d: #FFB347; --sx-a: #FFD45C; }
+/* A touch larger than the other icons, so it stands out a little. */
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season .ai-chat-welcome__cta-icon svg { width: 20px; height: 20px; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season { --sea-bg: var(--seos-surface); --sea-bg-h: #ececf0; --sea-ring: transparent; background: var(--sea-bg); box-shadow: inset 0 0 0 1px var(--sea-ring); }
+@media (hover: hover) {
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season:hover { background: var(--sea-bg-h); }
+  .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season:hover { background: var(--sea-bg-h) !important; }
+}
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season { --sea-bg: var(--seos-surface); --sea-bg-h: #2a2a31; background: var(--sea-bg); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-fall { --sea-bg: linear-gradient(115deg, #FFF4E9, #FDEADB); --sea-bg-h: linear-gradient(115deg, #FFEEDD, #FBE1CC); --sea-ring: rgba(201, 83, 26, 0.12); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-fall .ai-chat-welcome__cta-go { color: #C9531A; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-winter { --sea-bg: linear-gradient(115deg, #F0F7FE, #E5EFFB); --sea-bg-h: linear-gradient(115deg, #E6F1FD, #DAE8F9); --sea-ring: rgba(43, 120, 194, 0.12); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-winter .ai-chat-welcome__cta-go { color: #2B78C2; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-spring { --sea-bg: linear-gradient(115deg, #FEF0F5, #EEF8EE); --sea-bg-h: linear-gradient(115deg, #FDE6EF, #E4F4E4); --sea-ring: rgba(208, 67, 122, 0.12); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-spring .ai-chat-welcome__cta-go { color: #D0437A; }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-summer { --sea-bg: linear-gradient(115deg, #FFF8E1, #FFEDD9); --sea-bg-h: linear-gradient(115deg, #FFF2CF, #FFE4C9); --sea-ring: rgba(224, 122, 11, 0.14); }
+.ai-chat-panel .ai-chat-welcome__cta-btn.is-season.sea-summer .ai-chat-welcome__cta-go { color: #E07A0B; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-fall { --sea-bg: linear-gradient(115deg, rgba(255, 140, 60, 0.17), rgba(230, 90, 40, 0.09)); --sea-bg-h: linear-gradient(115deg, rgba(255, 140, 60, 0.24), rgba(230, 90, 40, 0.14)); --sea-ring: rgba(255, 155, 87, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-fall .ai-chat-welcome__cta-go { color: #FF9B57; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-winter { --sea-bg: linear-gradient(115deg, rgba(110, 175, 255, 0.16), rgba(110, 175, 255, 0.07)); --sea-bg-h: linear-gradient(115deg, rgba(110, 175, 255, 0.23), rgba(110, 175, 255, 0.12)); --sea-ring: rgba(140, 198, 255, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-winter .ai-chat-welcome__cta-go { color: #8CC6FF; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-spring { --sea-bg: linear-gradient(115deg, rgba(255, 130, 175, 0.16), rgba(120, 210, 150, 0.08)); --sea-bg-h: linear-gradient(115deg, rgba(255, 130, 175, 0.23), rgba(120, 210, 150, 0.13)); --sea-ring: rgba(255, 142, 182, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-spring .ai-chat-welcome__cta-go { color: #FF8EB6; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-summer { --sea-bg: linear-gradient(115deg, rgba(255, 195, 70, 0.17), rgba(255, 140, 60, 0.09)); --sea-bg-h: linear-gradient(115deg, rgba(255, 195, 70, 0.24), rgba(255, 140, 60, 0.14)); --sea-ring: rgba(255, 179, 71, 0.2); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-welcome__cta-btn.is-season.sea-summer .ai-chat-welcome__cta-go { color: #FFB347; }
+/* On hover the icon moves a little: the leaf sways, the snowflake turns,
+   the blossom opens, the sun's rays turn. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season .ai-sea-ic { transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1); }
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season:hover .ai-sea-ic--fall { transform: rotate(-12deg) translateY(-1px); }
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season:hover .ai-sea-ic--winter { transform: rotate(60deg); }
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season:hover .ai-sea-ic--spring { transform: rotate(36deg) scale(1.06); }
+  .ai-chat-panel .ai-chat-welcome__cta-btn.is-season:hover .ai-sea-ic--summer { transform: rotate(45deg); }
+}

@@ -192,6 +192,15 @@ model ShopConfig {
   feedbackSurveyColor String   @default("teal")
   feedbackSurveyIcon  String   @default("feedback")
   feedbackSurveyHideAfter Boolean @default(true)
+  // The seasonal button (Settings → Seasonal button): the first Start here
+  // button features one collection, with a season icon, a tint and its own
+  // words; tapping it shows that collection's footwear, colorful first.
+  seasonalCtaOn              Boolean @default(false)
+  seasonalCtaIcon            String  @default("fall")
+  seasonalCtaColor           String  @default("auto")
+  seasonalCtaLabel           String  @default("")
+  seasonalCtaCollection      String  @default("")
+  seasonalCtaCollectionTitle String  @default("")
   // A Typeform that helps a shopper work out which orthotic they already
   // own (to reorder it). The assistant offers it when that's what they ask;
   // a Popular button can open it too. Empty = off.

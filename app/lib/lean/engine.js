@@ -322,6 +322,9 @@ export async function runLeanTurn({
   turnNote = "",
   // Qualities "similar" means for this store; empty → no similar tool.
   similarAttributes = [],
+  // The seasonal button's collection { handle, title, label } when its
+  // products are known (catalog.collections), else null.
+  featured = null,
   deadlineMs = TURN_DEADLINE_MS,
   log = (line) => console.log(line),
   callModel = null, // test seam: (request) => response
@@ -339,7 +342,8 @@ export async function runLeanTurn({
   const byTitle = new Map(products.map((p) => [p.title.toLowerCase(), p]));
   const familyIndex = buildFamilyIndex(products);
 
-  const baseTools = buildLeanTools(catalog?.vocab || {}, { similar: similarAttributes.length > 0 });
+  const featuredOn = Boolean(featured?.handle && catalog?.collections?.has(featured.handle));
+  const baseTools = buildLeanTools(catalog?.vocab || {}, { similar: similarAttributes.length > 0, collection: featuredOn ? featured : null });
   baseTools[baseTools.length - 1] = { ...baseTools[baseTools.length - 1], cache_control: { type: "ephemeral" } };
   const extraByName = new Map(extraTools.filter((t) => t?.definition?.name && typeof t.run === "function").map((t) => [t.definition.name, t]));
   const tools = [...baseTools, ...[...extraByName.values()].map((t) => t.definition)];
@@ -736,7 +740,7 @@ export async function runLeanTurn({
     if (all.length > cards.length && all.some((p) => !shownSet.has(p.handle))) {
       const first = pageOf(all, 1);
       viewAll = {
-        ...viewAllWords(shopAllSearch, all.length),
+        ...viewAllWords(shopAllSearch, all.length, { collectionTitle: shopAllSearch.collection ? catalog.collections?.get(shopAllSearch.collection)?.title || "" : "" }),
         total: all.length,
         pageSize: first.pageSize,
         search: cleanViewAllSearch(shopAllSearch),

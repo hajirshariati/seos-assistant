@@ -6,8 +6,8 @@
 // (`if_relaxed`), so Claude decides how to broaden, honestly. Pure.
 
 import { valueOverlap } from "../similar-attributes.js";
-import { matchColorValues, colorFamiliesIn } from "../color-match.js";
-import { styleName, closeCodes } from "./catalog.js";
+import { matchColorValues, colorFamiliesIn, isColorful } from "../color-match.js";
+import { styleName, closeCodes, productKind } from "./catalog.js";
 import { merchScore, fewSizesLeft, ratingOf } from "./merch.js";
 
 // How much merchandising can move a product among equally relevant ones. A
@@ -99,8 +99,10 @@ function sizeAndWidthInStock(p, size, width) {
   return (p.stock || []).some((o) => lc(optionOf(o, "width")) === width && sizeMatches([lc(optionOf(o, "size"))], size));
 }
 
-// Each filter: (product, wanted values, { catalogHasGender, filters }) →
-// boolean. With both a size and a width, one variant must have both.
+// Each filter: (product, wanted values, { catalogHasGender, collections,
+// filters }) → boolean. With both a size and a width, one variant must have
+// both. A collection is the seasonal button's (collections.server.js): its
+// footwear, unless it has none.
 const FILTERS = {
   categories: (p, want) => {
     const fields = [p.category, p.subcategory, p.productType].map(lc);
@@ -117,6 +119,10 @@ const FILTERS = {
   max_price: (p, want) => !Number.isFinite(Number(want[0])) || p.price <= Number(want[0]),
   size: (p, want, { filters }) => (filters.width ? sizeAndWidthInStock(p, want[0], filters.width[0]) : sizeMatches(p.sizes, want[0])),
   width: (p, want, { filters }) => (filters.size ? sizeAndWidthInStock(p, filters.size[0], want[0]) : p.widths.includes(want[0])),
+  collection: (p, want, { collections }) => {
+    const c = collections?.get(want[0]);
+    return Boolean(c && c.order.has(p.handle) && (!c.footwearOnly || productKind(p) === "footwear"));
+  },
 };
 
 function activeFilters(params = {}) {
@@ -131,13 +137,25 @@ function activeFilters(params = {}) {
   return out;
 }
 
-function passes(p, filters, catalogHasGender, skip = null) {
+// ctx: { catalogHasGender, collections }.
+function passes(p, filters, ctx, skip = null) {
   const kept = skip ? Object.fromEntries(Object.entries(filters).filter(([k]) => k !== skip)) : filters;
   for (const [key, want] of Object.entries(kept)) {
-    if (!FILTERS[key](p, want, { catalogHasGender, filters: kept })) return false;
+    if (!FILTERS[key](p, want, { ...ctx, filters: kept })) return false;
   }
   return true;
 }
+const filterContext = (catalog, products) => ({
+  catalogHasGender: products.some((p) => p.gender.length > 0),
+  collections: catalog?.collections || null,
+});
+
+// The collection's own name, the season's words and the button's usual
+// words ("fall collection footwear", "new autumn styles") describe the
+// collection, not what's in it: with the collection filter on they aren't
+// searched for, so they can't narrow it.
+const SEASON_WORDS = new Set(["fall", "autumn", "winter", "spring", "summer", "holiday", "season", "seasonal", "collection", "collections",
+  "new", "arrivals", "featured", "trending", "styles", "style", "looks", "shoes", "footwear"]);
 
 // Search results stay small (fast, cheap): only the short fields. Long text
 // comes with get_product_details, when Claude needs it for one product.
@@ -177,11 +195,13 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
 // the search tool and the "View all" list use.
 function rankMatches(catalog, params = {}) {
   const products = (catalog?.products || []).filter((p) => p.inStock);
-  const catalogHasGender = products.some((p) => p.gender.length > 0);
+  const ctx = filterContext(catalog, products);
   const filters = activeFilters(params);
-  const terms = queryTerms(params.query);
+  const coll = filters.collection ? ctx.collections?.get(filters.collection[0]) || null : null;
+  const collWords = new Set(coll ? queryTerms(coll.title) : []);
+  const terms = queryTerms(params.query).filter((t) => !coll || (!SEASON_WORDS.has(t) && !collWords.has(t)));
 
-  const matches = products.filter((p) => passes(p, filters, catalogHasGender));
+  const matches = products.filter((p) => passes(p, filters, ctx));
   // A typed code that isn't the store's but is one typo from some ("l2400" →
   // "ll2400"): those products count as a match.
   const close = new Map();
@@ -196,16 +216,26 @@ function rankMatches(catalog, params = {}) {
   const sizeFiltered = Boolean(filters.size);
   const sort = String(params.sort || "best");
   const byPrice = (dir) => (a, b) => b.matched - a.matched || dir * (a.p.price - b.p.price) || b.merch - a.merch;
+  // colorful: reds, greens, blues, pinks… before black, white and neutrals
+  // (a colorway down to its last sizes doesn't jump ahead). In the seasonal
+  // collection, the collection's own order comes next — the store's pick.
+  const colorful = params.colorful === true;
+  const place = (x) => coll.order.get(x.p.handle) ?? Number.MAX_SAFE_INTEGER;
+  const best = (a, b) => b.matched - a.matched || b.bright - a.bright ||
+    (coll ? b.score - a.score || place(a) - place(b) : 0) ||
+    (b.score + MERCH_WEIGHT * b.merch) - (a.score + MERCH_WEIGHT * a.merch) || a.p.price - b.p.price;
   let ranked = matches
-    .map((p) => ({ p, ...scoreProduct(p, terms, close), merch: merchScore(p, { sizeFiltered }) }))
-    .sort(sort === "price_low" ? byPrice(1) : sort === "price_high" ? byPrice(-1)
-      : (a, b) => b.matched - a.matched || (b.score + MERCH_WEIGHT * b.merch) - (a.score + MERCH_WEIGHT * a.merch) || a.p.price - b.p.price);
+    .map((p) => ({
+      p, ...scoreProduct(p, terms, close), merch: merchScore(p, { sizeFiltered }),
+      bright: colorful && isColorful(p.colors) && !fewSizesLeft(p) ? 1 : 0,
+    }))
+    .sort(sort === "price_low" ? byPrice(1) : sort === "price_high" ? byPrice(-1) : best);
   // The query narrows too: when some filtered products match its words, only
   // those count. If none do, the structured filters alone define the request.
   const queryMatched = terms.length === 0 || ranked.some((x) => x.matched > 0);
   if (terms.length > 0 && queryMatched) ranked = ranked.filter((x) => x.matched > 0);
   else if (terms.length > 0 && Object.keys(filters).length === 0) ranked = [];
-  return { products, catalogHasGender, filters, terms, ranked, queryMatched };
+  return { products, ctx, filters, terms, ranked, queryMatched };
 }
 
 // All the products a search matched (each colorway is its own product, as on
@@ -231,7 +261,7 @@ const sharesColor = (keys, used) => [...keys].some((k) => used.has(k));
 const COLOR_SWAP_SLACK = 0.3;
 
 export function leanSearch(catalog, params = {}) {
-  const { products, catalogHasGender, filters, ranked, queryMatched } = rankMatches(catalog, params);
+  const { products, ctx, filters, ranked, queryMatched } = rankMatches(catalog, params);
   const limit = Math.min(Math.max(Number(params.limit) || 6, 1), 10);
   const byPrice = String(params.sort || "best") !== "best";
 
@@ -245,20 +275,20 @@ export function leanSearch(catalog, params = {}) {
   // The style's best colorway, unless an earlier card already shows that
   // color: then another colorway that matches just as well and sells nearly
   // as well (black, white, navy, red… rather than black four times). Price
-  // order keeps the cheapest colorway.
+  // order keeps the cheapest colorway; colorful never swaps in a neutral.
   const used = new Set();
   const picked = [];
   for (const [k, list] of styles) {
     const best = list[0];
     let pick = best;
     if (!byPrice && sharesColor(colorKeys(best.p), used)) {
-      pick = list.find((x) => x !== best && x.matched === best.matched && x.score === best.score &&
+      pick = list.find((x) => x !== best && x.matched === best.matched && x.score === best.score && x.bright >= best.bright &&
         best.merch - x.merch <= COLOR_SWAP_SLACK && !fewSizesLeft(x.p) && !sharesColor(colorKeys(x.p), used)) || best;
     }
     for (const c of colorKeys(pick.p)) used.add(c);
     // The style's other colors that fit the same filters (size, width, price…).
     const others = products
-      .filter((p) => p !== pick.p && p.style.toLowerCase() === k && passes(p, filters, catalogHasGender, "colors"))
+      .filter((p) => p !== pick.p && p.style.toLowerCase() === k && passes(p, filters, ctx, "colors"))
       .map(colorwayName)
       .filter(Boolean);
     picked.push(toModelProduct(pick.p, { otherColors: [...new Set(others)] }));
@@ -267,7 +297,7 @@ export function leanSearch(catalog, params = {}) {
 
   const result = {
     total_matches: ranked.length,
-    filters_applied: Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, k === "on_sale" || k === "max_price" || k === "size" || k === "width" ? v[0] : v])),
+    filters_applied: Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, k === "on_sale" || k === "max_price" || k === "size" || k === "width" || k === "collection" ? v[0] : v])),
     products: picked,
     ...(!queryMatched && picked.length > 0
       ? { note: `No product matched the words "${params.query}"; these match the filters only — check they fit before recommending, or search differently.` }
@@ -279,7 +309,7 @@ export function leanSearch(catalog, params = {}) {
     result.if_relaxed = Object.fromEntries(
       Object.keys(filters).map((key) => [
         `without_${key}`,
-        products.filter((p) => passes(p, filters, catalogHasGender, key)).length,
+        products.filter((p) => passes(p, filters, ctx, key)).length,
       ]),
     );
   }
@@ -294,7 +324,7 @@ export function styleColorways(catalog, { handles = [], size, width } = {}) {
   const all = catalog?.products || [];
   const products = all.filter((p) => p.inStock);
   const byHandle = new Map(all.map((p) => [p.handle, p]));
-  const catalogHasGender = products.some((p) => p.gender.length > 0);
+  const ctx = filterContext(catalog, products);
   const filters = activeFilters({ size, width });
   const asked = Object.keys(filters).length > 0;
   const seenStyles = new Set();
@@ -308,7 +338,7 @@ export function styleColorways(catalog, { handles = [], size, width } = {}) {
     seenStyles.add(k);
     const sameLine = (p) => !ref.gender.length || !p.gender.length || p.gender.some((g) => ref.gender.includes(g) || g === "unisex");
     const ways = products.filter((p) => p.style.toLowerCase() === k && sameLine(p));
-    const fits = ways.filter((p) => passes(p, filters, catalogHasGender));
+    const fits = ways.filter((p) => passes(p, filters, ctx));
     styles.push({
       style: ref.style,
       colors: fits.map((p) => ({

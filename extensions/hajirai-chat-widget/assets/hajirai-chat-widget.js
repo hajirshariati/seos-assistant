@@ -78,6 +78,12 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     applyHostButtons(hb);
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
+  if(d.seasonalCta&&typeof d.seasonalCta==='object'){
+    var seaWas=[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|');
+    try{localStorage.setItem(SEA_KEY,JSON.stringify(d.seasonalCta))}catch(e){}
+    applySeasonal(d.seasonalCta);
+    if(seaWas!==[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
+  }
   appearConfig(d.appearDelay);
   if(d.startTheme==='light'||d.startTheme==='dark'){
     try{localStorage.setItem(THEME_START_KEY,d.startTheme)}catch(e){}
@@ -168,6 +174,18 @@ function applyHostButtons(cfg){
   if(st)st.textContent=css;
 }
 try{applyHostButtons(JSON.parse(localStorage.getItem(HOST_KEY)||'null'))}catch(e){applyHostButtons(null)}
+/* Settings → Seasonal button: the first Start here button features one of
+   the store's collections, with a season icon and tint. Remembered from the
+   last visit so the welcome draws it straight away. */
+var SEA_KEY='hajirai_seasonal_cta',SEA_ON=false,SEA_ICON='fall',SEA_COLOR='fall',SEA_LABEL='',SEA_TAP='';
+function applySeasonal(s){
+  s=s&&typeof s==='object'?s:{};
+  SEA_ICON=/^(fall|winter|spring|summer)$/.test(String(s.icon||''))?String(s.icon):'fall';
+  SEA_COLOR=/^(fall|winter|spring|summer|plain)$/.test(String(s.color||''))?String(s.color):SEA_ICON;
+  SEA_LABEL=String(s.label||'').replace(/\s+/g,' ').trim().slice(0,40);
+  SEA_ON=s.on===true&&!!SEA_LABEL;
+}
+try{applySeasonal(JSON.parse(localStorage.getItem(SEA_KEY)||'null'))}catch(e){applySeasonal(null)}
 /* The button's text comes from the app's Settings → Support link (widget-config). */
 var SUPPORT_LABEL='Chat with Aetrex Support';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
@@ -1132,6 +1150,13 @@ function ctaIcon(label,pick){
 function ctaTileHtml(c){
   return '<button type="button" class="ai-chat-welcome__cta-btn" data-message="'+esc(c.m)+'"><span class="ai-chat-welcome__cta-icon">'+ctaIcon(c.l,c.i)+'</span><span class="ai-chat-welcome__cta-label">'+esc(c.l)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
+var SEASON_ICONS={fall:"<svg class=\"ai-sea-ic ai-sea-ic--fall\" viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path class=\"sx-f sx-o\" stroke-width=\"1.5\" d=\"M12 2.6l1.6 3.3 2.2-1-.6 4.1 3.1-2.3.9 1.9 2.4-.4-1 3.2 1.3 1-4.4 3.4.6 1.7-4.5-.8-1.6.9-1.6-.9-4.5.8.6-1.7-4.4-3.4 1.3-1-1-3.2 2.4.4.9-1.9 3.1 2.3-.6-4.1 2.2 1z\"/><path class=\"sx-d\" stroke-width=\"1.15\" d=\"M12 16.4V8.3M12 12.8l4-2.6M12 12.8l-4-2.6\"/><path class=\"sx-o\" stroke-width=\"1.5\" d=\"M12 17.6c0 1.5-.2 2.8-.8 3.9\"/></svg>",winter:"<svg class=\"ai-sea-ic ai-sea-ic--winter\" viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path class=\"sx-f\" d=\"M12 9.5l2.2 1.25v2.5L12 14.5l-2.2-1.25v-2.5z\"/><g transform=\"rotate(0 12 12)\"><path class=\"sx-o\" stroke-width=\"1.5\" d=\"M12 2.7v18.6M9.7 4.8L12 7l2.3-2.2M9.7 19.2L12 17l2.3 2.2\"/></g><g transform=\"rotate(60 12 12)\"><path class=\"sx-o\" stroke-width=\"1.5\" d=\"M12 2.7v18.6M9.7 4.8L12 7l2.3-2.2M9.7 19.2L12 17l2.3 2.2\"/></g><g transform=\"rotate(120 12 12)\"><path class=\"sx-o\" stroke-width=\"1.5\" d=\"M12 2.7v18.6M9.7 4.8L12 7l2.3-2.2M9.7 19.2L12 17l2.3 2.2\"/></g></svg>",spring:"<svg class=\"ai-sea-ic ai-sea-ic--spring\" viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path class=\"sx-f sx-o\" stroke-width=\"1.35\" transform=\"rotate(0 12 12)\" d=\"M12 10.3C9.7 9.4 8.7 6.8 9.6 4.8 10.2 3.6 11.2 3.6 12 4.6 12.8 3.6 13.8 3.6 14.4 4.8 15.3 6.8 14.3 9.4 12 10.3z\"/><path class=\"sx-f sx-o\" stroke-width=\"1.35\" transform=\"rotate(72 12 12)\" d=\"M12 10.3C9.7 9.4 8.7 6.8 9.6 4.8 10.2 3.6 11.2 3.6 12 4.6 12.8 3.6 13.8 3.6 14.4 4.8 15.3 6.8 14.3 9.4 12 10.3z\"/><path class=\"sx-f sx-o\" stroke-width=\"1.35\" transform=\"rotate(144 12 12)\" d=\"M12 10.3C9.7 9.4 8.7 6.8 9.6 4.8 10.2 3.6 11.2 3.6 12 4.6 12.8 3.6 13.8 3.6 14.4 4.8 15.3 6.8 14.3 9.4 12 10.3z\"/><path class=\"sx-f sx-o\" stroke-width=\"1.35\" transform=\"rotate(216 12 12)\" d=\"M12 10.3C9.7 9.4 8.7 6.8 9.6 4.8 10.2 3.6 11.2 3.6 12 4.6 12.8 3.6 13.8 3.6 14.4 4.8 15.3 6.8 14.3 9.4 12 10.3z\"/><path class=\"sx-f sx-o\" stroke-width=\"1.35\" transform=\"rotate(288 12 12)\" d=\"M12 10.3C9.7 9.4 8.7 6.8 9.6 4.8 10.2 3.6 11.2 3.6 12 4.6 12.8 3.6 13.8 3.6 14.4 4.8 15.3 6.8 14.3 9.4 12 10.3z\"/><circle class=\"sx-a\" cx=\"12\" cy=\"12\" r=\"2.1\"/></svg>",summer:"<svg class=\"ai-sea-ic ai-sea-ic--summer\" viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><circle class=\"sx-a sx-o\" stroke-width=\"1.5\" cx=\"12\" cy=\"12\" r=\"4.1\"/><path class=\"sx-d\" stroke-width=\"1.6\" d=\"M12 2.6v2.4M12 19v2.4M2.6 12H5M19 12h2.4M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7\"/></svg>"};
+/* The seasonal tile: the season's icon in color and a soft tint. Tapping it
+   sends its words, marked so the chat shows the collection behind it. */
+function seaTileHtml(){
+  var tint=SEA_COLOR!=='plain'?' sea-'+SEA_COLOR:'';
+  return '<button type="button" class="ai-chat-welcome__cta-btn is-season'+tint+'" data-message="'+esc(SEA_LABEL)+'" data-seasonal="1"><span class="ai-chat-welcome__cta-icon">'+(SEASON_ICONS[SEA_ICON]||SEASON_ICONS.fall)+'</span><span class="ai-chat-welcome__cta-label">'+esc(SEA_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
+}
 function fbTileHtml(){
   var key=FB_ICON==='feedback'?'feedback':CTA_ICONS[FB_ICON];
   var ic=!key?WI.feedback:key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
@@ -1155,10 +1180,12 @@ function welcomeCtas(){
   if(CTA4L&&CTA4M)ctas.push({l:CTA4L,m:CTA4M,i:CTA4I});
   /* Feedback takes the fourth place, until this shopper has sent it. */
   if(fbShown())ctas.splice(3,1,{fb:true});
+  /* The seasonal button takes the first. */
+  if(SEA_ON){if(ctas.length&&!ctas[0].fb)ctas[0]={sea:true};else ctas.unshift({sea:true})}
   return ctas;
 }
 function welcomeCtasHtml(ctas){
-  var h='';for(var i=0;i<ctas.length;i++)h+=ctas[i].fb?fbTileHtml():ctaTileHtml(ctas[i]);return h;
+  var h='';for(var i=0;i<ctas.length;i++)h+=ctas[i].sea?seaTileHtml():ctas[i].fb?fbTileHtml():ctaTileHtml(ctas[i]);return h;
 }
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
@@ -2424,7 +2451,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 view-all-pages'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 seasonal-button'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -3584,6 +3611,9 @@ var ffData=ffPayload();
 var tfData=tfPayload();
 if(tfData)body.size_finder=tfData;
 if(TESTER)body.tester=TESTER;
+/* Sent by tapping the seasonal button: the chat shows its collection. */
+if(SEA_TAP&&SEA_TAP===msg)body.seasonal=true;
+SEA_TAP='';
 if(REC_ON&&(REC_SCOPE==='everyone'||TESTER))body.page=location.pathname.slice(0,200);
 /* On a product page, the chat knows which product "this" is. */
 var viewingHandle=pageProductHandle();if(viewingHandle)body.viewing=viewingHandle;
@@ -4166,7 +4196,7 @@ if(deadEnd){
   return;
 }
 var cta=e.target.closest('[data-message]');
-if(cta){var t=cta.getAttribute('data-message');if(t){inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=t;sendMessage()}}
+if(cta){var t=cta.getAttribute('data-message');if(t){SEA_TAP=cta.hasAttribute('data-seasonal')?t:'';inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=t;sendMessage()}}
 /* Chat product link clicks → set a cart attribute so the orders/create
    webhook can tag the resulting order "SEoS". keepalive lets the POST
    complete even though the browser is navigating away. Best-effort —

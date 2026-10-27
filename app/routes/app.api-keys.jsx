@@ -27,6 +27,7 @@ import {
   GaugeIcon,
   PlayCircleIcon,
   CheckCircleIcon,
+  FlowerIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -45,16 +46,32 @@ import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBac
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
+import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
+import { findCollection } from "../lib/seasonal-cta.server.js";
+import { SeasonalSection } from "../components/SeasonalButton";
 
 const iso = (d) => (d ? new Date(d).toISOString() : "");
 
+// The seasonal button's collection as the store has it now (title, size),
+// or { missing } when it's gone; null when it can't be checked.
+async function seasonalInfo(admin, handle) {
+  if (!handle) return null;
+  try {
+    const c = await findCollection(admin, handle);
+    return c || { handle, missing: true };
+  } catch {
+    return null;
+  }
+}
+
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const [config, plan, pulse] = await Promise.all([
     getShopConfig(session.shop),
     getShopPlan(session.shop),
     getChatPulse(session.shop).catch(() => null),
   ]);
+  const seasonalHandle = collectionHandle(config.seasonalCtaCollection);
   let hideOnUrls = [];
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
@@ -86,6 +103,12 @@ export const loader = async ({ request }) => {
     feedbackSurveyColor: FEEDBACK_COLORS.includes(config.feedbackSurveyColor) ? config.feedbackSurveyColor : "teal",
     feedbackSurveyIcon: FEEDBACK_ICONS.includes(config.feedbackSurveyIcon) ? config.feedbackSurveyIcon : "feedback",
     feedbackSurveyHideAfter: config.feedbackSurveyHideAfter !== false,
+    seasonalCtaOn: config.seasonalCtaOn === true,
+    seasonalCtaIcon: seasonOf(config.seasonalCtaIcon),
+    seasonalCtaColor: colorOf(config.seasonalCtaColor),
+    seasonalCtaLabel: config.seasonalCtaLabel || "",
+    seasonalCtaCollection: seasonalHandle,
+    seasonalInfo: await seasonalInfo(admin, seasonalHandle),
     whichOrthotic: config.whichOrthotic || "",
     whichOrthoticLabel: config.whichOrthoticLabel || "Identify my orthotic",
     storeLocatorMapId: config.storeLocatorMapId || "",
@@ -135,7 +158,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
 
   // Cards that save on their own (orb colors, test recordings, See It
@@ -297,6 +320,35 @@ export const action = async ({ request }) => {
   if (surveyIcon !== null) data.feedbackSurveyIcon = FEEDBACK_ICONS.includes(surveyIcon) ? surveyIcon : "feedback";
   bool("feedbackSurveyHideAfter");
 
+  // Seasonal button
+  bool("seasonalCtaOn");
+  const seaIcon = formData.get("seasonalCtaIcon");
+  if (seaIcon !== null) data.seasonalCtaIcon = seasonOf(String(seaIcon));
+  const seaColor = formData.get("seasonalCtaColor");
+  if (seaColor !== null) data.seasonalCtaColor = colorOf(String(seaColor));
+  const seaLabel = formData.get("seasonalCtaLabel");
+  if (seaLabel !== null) data.seasonalCtaLabel = String(seaLabel).replace(/\s+/g, " ").trim().slice(0, LABEL_MAX);
+  const seaCollection = formData.get("seasonalCtaCollection");
+  if (seaCollection !== null) {
+    const raw = String(seaCollection).trim();
+    const handle = collectionHandle(raw);
+    if (raw && !handle) return fail("The collection should be its handle (like fall-collection) or its link.", "seasonal");
+    const current = await getShopConfig(session.shop);
+    if (!handle) {
+      data.seasonalCtaCollection = "";
+      data.seasonalCtaCollectionTitle = "";
+    } else if (handle !== current.seasonalCtaCollection || !current.seasonalCtaCollectionTitle) {
+      // Checked against the store when it changes. If Shopify can't be
+      // reached, the handle is kept and checked again on the next save.
+      let found;
+      try { found = await findCollection(admin, handle); } catch { found = undefined; }
+      if (found === null) return fail(`There's no collection "${handle}" on your store. Use Browse to pick one.`, "seasonal");
+      data.seasonalCtaCollection = found?.handle || handle;
+      data.seasonalCtaCollectionTitle = found?.title || "";
+    }
+  }
+  if (data.seasonalCtaOn && !collectionHandle(seaCollection ?? "")) return fail("Choose the collection the seasonal button shows.", "seasonal");
+
   // Integrations
   secret("yotpoApiKey");
   secret("aftershipApiKey");
@@ -389,6 +441,7 @@ export const action = async ({ request }) => {
 const SECTIONS = [
   { id: "assistant", label: "Assistant", icon: MagicIcon },
   { id: "look", label: "Look & feel", icon: PaintBrushFlatIcon },
+  { id: "seasonal", label: "Seasonal button", icon: FlowerIcon },
   { id: "visibility", label: "Where it shows", icon: ViewIcon },
   { id: "care", label: "Customer care", icon: ChatIcon },
   { id: "tools", label: "Shopping tools", icon: CartIcon },
@@ -411,6 +464,8 @@ const FIELDS = {
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
+  seasonalCtaOn: ["seasonal", "bool"], seasonalCtaIcon: ["seasonal"], seasonalCtaColor: ["seasonal"],
+  seasonalCtaLabel: ["seasonal"], seasonalCtaCollection: ["seasonal"],
   yotpoApiKey: ["integrations", "secret"], yotpoLoyaltyApiKey: ["integrations", "secret"], yotpoLoyaltyGuid: ["integrations"],
   loyaltyDisplay: ["integrations"], loyaltyPointsPerDollar: ["integrations"], loyaltyRounding: ["integrations"],
   referralPageUrl: ["integrations"], aftershipApiKey: ["integrations", "secret"], klaviyoCompanyId: ["integrations"],
@@ -677,6 +732,7 @@ export default function Settings() {
             <div className="set-links" style={{ minWidth: 0 }}>
               <div hidden={section !== "assistant"}><AssistantSection d={d} values={values} set={set} /></div>
               <div hidden={section !== "look"}><LookSection d={d} values={values} set={set} /></div>
+              <div hidden={section !== "seasonal"}><SeasonalSection values={values} set={set} info={d.seasonalInfo} /></div>
               <div hidden={section !== "visibility"}><VisibilitySection values={values} set={set} /></div>
               <div hidden={section !== "care"}><CareSection values={values} set={set} /></div>
               <div hidden={section !== "tools"}><ToolsSection d={d} values={values} set={set} /></div>

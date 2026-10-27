@@ -10,6 +10,9 @@ import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { loadLeanCatalog } from "../lib/lean/catalog.server.js";
 import { cleanViewAllSearch } from "../lib/lean/shop-all.js";
 import { viewAllPage } from "../lib/lean/engine.js";
+import { getShopConfigCached } from "../models/ShopConfig.server";
+import { seasonalCollection } from "../lib/seasonal-cta.js";
+import { featuredCollection, collectionView } from "../lib/lean/collections.server.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.public.appProxy(request);
@@ -23,7 +26,17 @@ export const loader = async ({ request }) => {
   const search = cleanViewAllSearch(raw);
   if (!search) return Response.json({ error: "bad_search", message: "This list can't be loaded." }, { status: 400 });
   try {
-    const catalog = await loadLeanCatalog(session.shop);
+    let catalog = await loadLeanCatalog(session.shop);
+    // A list from the seasonal button: its collection's products (only the
+    // collection the store has on the button is ever read).
+    if (search.collection) {
+      const seasonal = seasonalCollection(await getShopConfigCached(session.shop));
+      if (seasonal?.handle === search.collection) {
+        const read = await featuredCollection({ shop: session.shop, accessToken: session.accessToken, handle: seasonal.handle }).catch(() => null);
+        const view = collectionView(read, catalog);
+        if (view) catalog = { ...catalog, collections: new Map([[seasonal.handle, view]]) };
+      }
+    }
     const result = viewAllPage(catalog, search, params.get("page"));
     return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {

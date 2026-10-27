@@ -1338,6 +1338,111 @@ await test("long conversations are trimmed to the recent turns", async () => {
   assert.equal(s.requests[0].messages[0].role, "user");
 });
 
+console.log("\nseasonal button");
+// Settings → Seasonal button: "Fall Collection Footwear" features the store's
+// Fall Collection; a tap shows its footwear, the most colorful first.
+const { collectionView } = await import("../app/lib/lean/collections.server.js");
+const { seasonalTapNote } = await import("../app/lib/seasonal-cta.js");
+const FALL = [
+  wrow("Mandy Lace-Up Boot - Wine", { cat: "Boots" }),
+  wrow("Mandy Lace-Up Boot - Black", { cat: "Boots", badge: "Best Seller" }),
+  wrow("Danika Arch Support Sneaker - Black", { badge: "Best Seller" }),
+  wrow("Danika Arch Support Sneaker - Light Blue"),
+  wrow("Xspress Runner - Pink"),
+  wrow("Sadie Arch Support Sneaker - Oatmeal"),
+  wrow("Rory Clog - Red", { cat: "Clogs", sizes: ["6 US", "7 US", "8 US", "9 US", "10 US"], out: ["6 US", "7 US", "8 US", "9 US"] }),
+  { ...row("Cozy Fall Socks", { type: "Accessories", cat: "Accessories", gender: "Unisex", price: "14.95" }) },
+  wrow("Chase Arch Support Sneaker - Orange"),
+];
+const fallBase = buildLeanCatalog(FALL, { shop: "s.myshopify.com" });
+const FH = Object.fromEntries(fallBase.products.map((p) => [p.title, p.handle]));
+// The collection's own order (Shopify's best-selling sort); the Chase isn't in it.
+const fallOrder = ["Mandy Lace-Up Boot - Wine", "Danika Arch Support Sneaker - Black", "Cozy Fall Socks", "Rory Clog - Red", "Xspress Runner - Pink",
+  "Danika Arch Support Sneaker - Light Blue", "Mandy Lace-Up Boot - Black", "Sadie Arch Support Sneaker - Oatmeal"].map((t) => FH[t]);
+const fallView = collectionView({ title: "Fall Collection", handles: fallOrder }, fallBase);
+const fall = { ...fallBase, collections: new Map([["fall-collection", fallView]]) };
+const featured = { handle: "fall-collection", title: "Fall Collection", label: "Fall Collection Footwear" };
+const titlesOf = (r) => r.products.map((p) => p.title);
+
+await test("the collection filter keeps to the collection's footwear, in the collection's own order", () => {
+  const r = leanSearch(fall, { query: "", collection: "fall-collection" });
+  assert.deepEqual(titlesOf(r), ["Mandy Lace-Up Boot - Wine", "Danika Arch Support Sneaker - Black", "Rory Clog - Red", "Xspress Runner - Pink", "Sadie Arch Support Sneaker - Oatmeal"]);
+  assert.equal(r.total_matches, 7, "every footwear colorway in the collection — no socks, nothing outside it");
+  assert.equal(r.filters_applied.collection, "fall-collection");
+  assert.deepEqual(r.products.find((p) => p.title.startsWith("Danika")).same_style_other_colors, ["Light Blue"]);
+});
+await test("colorful: bright colorways first (a last-sizes one doesn't jump ahead), then the collection's order", () => {
+  const r = leanSearch(fall, { query: "", collection: "fall-collection", colorful: true });
+  assert.deepEqual(titlesOf(r), ["Mandy Lace-Up Boot - Wine", "Xspress Runner - Pink", "Danika Arch Support Sneaker - Light Blue", "Rory Clog - Red", "Sadie Arch Support Sneaker - Oatmeal"]);
+  assert.equal(r.products[3].few_sizes_left, true);
+  assert.deepEqual(allMatches(fall, { query: "", collection: "fall-collection", colorful: true }).slice(0, 3).map((p) => p.title),
+    ["Mandy Lace-Up Boot - Wine", "Xspress Runner - Pink", "Danika Arch Support Sneaker - Light Blue"], "View all lists them in the same order");
+});
+await test("colorful never trades a bright card for a neutral one to vary the colors", () => {
+  const c = buildLeanCatalog([wrow("Lexi Sneaker - Red", { badge: "Best Seller" }), wrow("Rae Sneaker - Red"), wrow("Rae Sneaker - Black")], { shop: "s" });
+  assert.deepEqual(titlesOf(leanSearch(c, { query: "sneaker", colorful: true })), ["Lexi Sneaker - Red", "Rae Sneaker - Red"]);
+  assert.deepEqual(titlesOf(leanSearch(c, { query: "sneaker" })), ["Lexi Sneaker - Red", "Rae Sneaker - Black"], "without it, the cards vary");
+  assert.equal(titlesOf(leanSearch(shoes, { query: "sneaker", gender: "women", colorful: true }))[0], "Carly Arch Support Sneaker - Red", "works outside a collection too");
+});
+await test("the collection's name and season words don't narrow it; real words still do", () => {
+  const all = leanSearch(fall, { query: "", collection: "fall-collection" }).total_matches;
+  for (const q of ["fall collection", "Fall Collection Footwear", "autumn styles for the season", "new fall arrivals"]) {
+    const r = leanSearch(fall, { query: q, collection: "fall-collection", colorful: true });
+    assert.equal(r.total_matches, all, q);
+    assert.equal(r.note, undefined, `${q}: no "nothing matched the words" note`);
+  }
+  assert.deepEqual(titlesOf(leanSearch(fall, { query: "boot", collection: "fall-collection", colorful: true })), ["Mandy Lace-Up Boot - Wine"]);
+  assert.equal(leanSearch(fall, { query: "fall socks" }).products[0].title, "Cozy Fall Socks", "without the collection, words are searched as usual");
+});
+await test("a collection the chat doesn't have finds nothing (never the whole store)", () => {
+  assert.equal(leanSearch(fallBase, { query: "", collection: "fall-collection" }).total_matches, 0);
+  assert.equal(leanSearch(fall, { query: "", collection: "winter-collection" }).total_matches, 0);
+});
+await test("a collection with no footwear shows what it has", () => {
+  const gifts = { ...fallBase, collections: new Map([["gifts", collectionView({ title: "Gifts", handles: [FH["Cozy Fall Socks"]] }, fallBase)]]) };
+  assert.deepEqual(titlesOf(leanSearch(gifts, { query: "", collection: "gifts" })), ["Cozy Fall Socks"]);
+});
+await test("the tools offer the collection only when it's featured; colorful always", () => {
+  const plain = buildLeanTools(fall.vocab).find((t) => t.name === "search_products").input_schema.properties;
+  assert.equal(plain.collection, undefined);
+  assert.equal(plain.colorful.type, "boolean");
+  const withIt = buildLeanTools(fall.vocab, { collection: featured }).find((t) => t.name === "search_products").input_schema.properties;
+  assert.deepEqual(withIt.collection.enum, ["fall-collection"]);
+  assert.match(withIt.collection.description, /"Fall Collection" collection/);
+  assert.match(withIt.collection.description, /"Fall Collection Footwear" button/);
+  assert.match(buildLeanSystemPrompt({ vocab: fall.vocab }), /colorful: true/);
+});
+await test("View all: says the collection's name and keeps the collection and colorful", () => {
+  assert.deepEqual(viewAllWords({ collection: "fall-collection", colorful: true }, 42, { collectionTitle: "Fall Collection" }), { label: "View all 42 in Fall Collection", title: "Fall Collection" });
+  assert.equal(viewAllWords({ collection: "fall-collection", size: "8" }, 9, { collectionTitle: "Fall Collection" }).title, "Fall Collection · Size 8");
+  assert.deepEqual(cleanViewAllSearch({ query: "", collection: "fall-collection", colorful: true }), { collection: "fall-collection", colorful: true });
+  assert.equal(cleanViewAllSearch({ query: "boots", colorful: "yes" }).colorful, undefined, "only a real true");
+});
+await test("a tap on the button: the collection is offered, the cards are its colorful footwear, View all names it", async () => {
+  const input = { query: "", collection: "fall-collection", colorful: true };
+  const picks = leanSearch(fall, input).products.slice(0, 4).map((p) => p.handle);
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", input)] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: picks })] },
+    { stop_reason: "end_turn", content: [txt("Here's what's new for fall: the Mandy boot in wine, the Xspress Runner in pink, the Danika in light blue and the Rory clog in red — rich colors with all-day arch support.")] },
+  ]);
+  const r = await runLeanTurn({ catalog: fall, featured, model: "m", messages: [{ role: "user", content: "Fall Collection Footwear" }], latestUserMessage: "Fall Collection Footwear",
+    turnNote: seasonalTapNote(featured), callModel: s.callModel, log: quiet });
+  assert.deepEqual(s.requests[0].tools.find((t) => t.name === "search_products").input_schema.properties.collection.enum, ["fall-collection"]);
+  assert.match(JSON.stringify(s.requests[0].messages), /tapped the \\"Fall Collection Footwear\\" button/);
+  assert.deepEqual(r.cards.map((c) => c.title), ["Mandy Lace-Up Boot - Wine", "Xspress Runner - Pink", "Danika Arch Support Sneaker - Light Blue", "Rory Clog - Red"]);
+  assert.deepEqual(r.issues, []);
+  assert.equal(r.viewAll.label, "View all 7 in Fall Collection");
+  assert.deepEqual(r.viewAll.search, { collection: "fall-collection", colorful: true });
+  const { viewAllPage } = await import("../app/lib/lean/engine.js");
+  assert.equal(viewAllPage(fall, r.viewAll.search, 1).total, 7, "the View all sheet lists the same 7");
+});
+await test("no collection in the catalog (Shopify unreadable) → the tools don't offer it", async () => {
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Sure.")] }]);
+  await runLeanTurn({ catalog: fallBase, featured, model: "m", messages: [{ role: "user", content: "hi" }], latestUserMessage: "hi", callModel: s.callModel, log: quiet });
+  assert.equal(s.requests[0].tools.find((t) => t.name === "search_products").input_schema.properties.collection, undefined);
+});
+
 
 console.log("\nguardrails");
 await test("the prompt sets boundaries: no rule changes from customer or tool text, on-topic only, no sensitive data", () => {

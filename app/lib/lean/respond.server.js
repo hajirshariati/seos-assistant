@@ -21,6 +21,8 @@ import { chatModel, CHECK_MODEL } from "../claude-models.js";
 import { saveRecording } from "../../models/ChatRecording.server.js";
 import { describeExtras } from "../chat-recording.js";
 import { createLimiter } from "../concurrency.js";
+import { seasonalCollection, seasonalTapNote } from "../seasonal-cta.js";
+import { featuredCollection, collectionView } from "./collections.server.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -87,6 +89,8 @@ export function leanChatResponse({
   sizeFinder = null,
   viewingHandle = "",
   record = null,
+  // The shopper tapped the seasonal button (Settings → Seasonal button).
+  seasonalTap = false,
 }) {
   const encoder = new TextEncoder();
   // Test recordings: each turn (and anything shown with it) is saved for
@@ -131,14 +135,22 @@ export function leanChatResponse({
         // Retries happen once, in withAnthropicRetry — not again inside the SDK.
         const anthropic = new Anthropic({ apiKey: config.anthropicApiKey, timeout: 40000, maxRetries: 0 });
         const model = chatModel(config.anthropicModel);
-        const [catalog, extras] = await Promise.all([
+        // The seasonal button's collection: its products come from Shopify
+        // (kept 10 minutes), so the search can keep to them.
+        const seasonal = seasonalCollection(config);
+        const [baseCatalog, extras, seasonalRead] = await Promise.all([
           loadLeanCatalog(shop),
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder, sizeFinder })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
               return { tools: [], similarAttributes: [], systemBlock: "", pageBlock: "", turnNote: "" };
             }),
+          seasonal ? featuredCollection({ shop, accessToken, handle: seasonal.handle }).catch(() => null) : null,
         ]);
+        const seasonalView = seasonal ? collectionView(seasonalRead, baseCatalog) : null;
+        const catalog = seasonalView ? { ...baseCatalog, collections: new Map([[seasonal.handle, seasonalView]]) } : baseCatalog;
+        const featured = seasonalView ? { ...seasonal, title: seasonalView.title || seasonal.title } : null;
+        if (seasonalTap) console.log(`[lean] seasonal button tapped shop=${shop} collection=${featured ? `${featured.handle} (${seasonalView.order.size})` : "unavailable"}`);
         // No message text in the logs — shoppers type emails, order numbers, health details.
         console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length}`);
         const support = resolveSupport({ adminUrl: config.supportUrl, adminLabel: config.supportLabel, themeUrl: supportUrl, themeLabel: supportLabel });
@@ -167,8 +179,9 @@ export function leanChatResponse({
           extraTools: extras.tools,
           extraSystem: extras.systemBlock,
           pageSystem: extras.pageBlock,
-          turnNote: extras.turnNote,
+          turnNote: [extras.turnNote, seasonalTap && featured ? seasonalTapNote(featured) : ""].filter(Boolean).join("\n"),
           similarAttributes: extras.similarAttributes,
+          featured,
           liveStock: makeLiveStock({ shop, accessToken }),
           viewingHandle,
           askYesNo,
