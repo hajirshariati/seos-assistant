@@ -2407,11 +2407,15 @@ function cleanSizeIntro(p){
   if(!lines.length)return null;
   return {line:lines.some(function(l){return l.k===p.line})?String(p.line):lines[0].k,lines:lines};
 }
-var TFI_STEPS=[['Pick a shoe','Every style fits a little differently.'],['Tap True Fit on it','Tell it about a pair you already wear.'],['Get your size for that shoe','Matched with real fit data from shoppers who bought it.']];
+/* Three steps anyone can follow: a dot, then the True Fit button itself —
+   the same round logo the shoe cards carry, so they know what to look
+   for — then a dot. */
+var TFI_STEPS=[['Pick a shoe','Every style fits a little differently.'],['Tap this button on the shoe','The round button on each shoe’s card. Tell it about a pair you already wear.'],['Get your size for that shoe','Matched with real fit data from shoppers who bought it.']];
 function sizeIntroHtml(d){
   var known=tfKnown()||tfLast(),steps='';
   TFI_STEPS.forEach(function(s,i){
-    steps+='<li class="ai-tfi__step'+(i===0?' is-now':'')+'"><span class="ai-tfi__n" aria-hidden="true">'+(i+1)+'</span><span class="ai-tfi__txt"><b>'+esc(s[0])+'</b><span>'+esc(i===1&&known?'True Fit already knows your fit, so it’s quick.':s[1])+'</span></span></li>';
+    var mark=i===1?'<span class="ai-tfi__fit">'+tfLogo(20)+'</span>':'<span class="ai-tfi__dot"></span>';
+    steps+='<li class="ai-tfi__step'+(i===0?' is-now':'')+(i===1?' is-tap':'')+'"><span class="ai-tfi__n" aria-hidden="true">'+mark+'</span><span class="ai-tfi__txt"><b>'+esc(s[0])+'</b><span>'+esc(i===1&&known?'The round button on each shoe’s card. True Fit already knows your fit, so it’s quick.':s[1])+'</span></span></li>';
   });
   var seg=d.lines.length>1?'<div class="ai-tfi__seg" role="radiogroup" aria-label="Shoes for">'+d.lines.map(function(l){return '<button type="button" role="radio" class="ai-tfi__segbtn" data-tfi-show="'+esc(l.k)+'" aria-checked="'+(l.k===d.line)+'">'+esc(l.l)+'</button>'}).join('')+'</div>':'';
   var grids=d.lines.map(function(l){
@@ -2673,7 +2677,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 app-message'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 truefit-steps'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */

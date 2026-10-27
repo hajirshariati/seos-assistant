@@ -268,6 +268,9 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
       title: c.querySelector(".ai-tfi__title").textContent,
       steps: [...c.querySelectorAll(".ai-tfi__step")].map((s) => s.querySelector("b").textContent),
       now: [...c.querySelectorAll(".ai-tfi__step")].map((s) => s.classList.contains("is-now")),
+      marks: [...c.querySelectorAll(".ai-tfi__n")].map((n) => (n.querySelector(".ai-tfi__fit") ? "fit" : n.querySelector(".ai-tfi__dot") ? "dot" : "?") + (/\d/.test(n.textContent) ? "#" : "")),
+      fitLook: (() => { const f = c.querySelector(".ai-tfi__fit"), fs = getComputedStyle(f), r = f.getBoundingClientRect();
+        return { size: `${Math.round(r.width)}x${Math.round(r.height)}`, round: fs.borderRadius, border: fs.borderTopWidth, notAButton: f.tagName === "SPAN" && !f.closest("button") }; })(),
       seg: [...c.querySelectorAll("[data-tfi-show]")].map((b) => `${b.textContent}:${b.getAttribute("aria-checked")}`),
       tiles: [...grid.querySelectorAll(".ai-tfi__tile")].map((t) => `${t.querySelector(".ai-tfi__name").textContent} ${t.querySelector(".ai-tfi__count").textContent}`),
       asks: [...grid.querySelectorAll("[data-tfi-ask]")].map((t) => t.getAttribute("data-tfi-ask")),
@@ -280,7 +283,8 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     };
   });
   check(`tf intro (${label}): the answer says why — one shoe at a time, the shoe first`, /True Fit sizes one shoe at a time, so pick the shoe first/.test(card.text) && card.title === "How True Fit works", card.text);
-  check(`tf intro (${label}): three steps, the first one is where they are`, card.steps.join("|") === "Pick a shoe|Tap True Fit on it|Get your size for that shoe" && card.now.join() === "true,false,false", JSON.stringify(card));
+  check(`tf intro (${label}): three steps, the first one is where they are`, card.steps.join("|") === "Pick a shoe|Tap this button on the shoe|Get your size for that shoe" && card.now.join() === "true,false,false", JSON.stringify(card));
+  check(`tf intro (${label}): no numbers — a dot, the True Fit button as the cards show it, a dot`, card.marks.join() === "dot,fit,dot" && card.fitLook.size === "38x38" && card.fitLook.border === "1px" && card.fitLook.notAButton, JSON.stringify({ marks: card.marks, fit: card.fitLook }));
   check(`tf intro (${label}): the store's kinds of shoes, women's first, with style counts and photos`, card.seg.join("|") === "Women's:true|Men's:false" && card.tiles.join("|") === "Sneakers 9 styles|Sandals 7 styles|Boots 5 styles|Loafers 4 styles|Wedges 3 styles|Slippers 2 styles" && card.imgs === 6 && card.hidden === 1, JSON.stringify(card));
   check(`tf intro (${label}): ${phone ? 2 : 3} tiles a row, nothing spills sideways`, card.cols === (phone ? 2 : 3) && card.overflow <= 1, JSON.stringify({ cols: card.cols, overflow: card.overflow }));
   check(`tf intro (${label}): opens at its top, so the steps are read first`, card.top > -40 && card.top < 120, String(card.top));
