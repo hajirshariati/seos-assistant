@@ -9,7 +9,6 @@ import {
 } from "react-router";
 import {
   Page,
-  Layout,
   Card,
   BlockStack,
   InlineStack,
@@ -17,18 +16,13 @@ import {
   Button,
   Badge,
   Banner,
-  Box,
-  Divider,
-  FormLayout,
+  Icon,
   TextField,
   Select,
-  DataTable,
   DropZone,
-  EmptyState,
-  Tabs,
   Pagination,
 } from "@shopify/polaris";
-import { DeleteIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, SearchIcon, GlobeIcon, NoteIcon, DiscountIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -56,6 +50,7 @@ import {
   countEnrichmentsBySourceFile,
 } from "../models/ProductEnrichment.server";
 import BrandHeader from "../components/BrandHeader";
+import { SETTINGS_CSS, Row, Group, SectionHead } from "../components/SettingsUI";
 import { checkKnowledge } from "../lib/knowledge-check.js";
 
 function isCsv(fileName) {
@@ -425,12 +420,102 @@ holiday return-window extensions, restock schedules, etc.]
 ];
 
 
+// Same look as Settings (compact cards of rows, title and help on the left,
+// the action on the right), plus a few pieces of this page's own.
+const KNOWLEDGE_CSS = `
+  .kn .set-row__title { overflow-wrap: anywhere; }
+  .kn-sec { scroll-margin-top: 16px; }
+  .kn-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .kn-stat { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px;
+    border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.07); cursor: pointer;
+    transition: box-shadow .16s ease, transform .16s ease; }
+  .kn-stat:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .kn-stat:active { transform: none; }
+  .kn-stat:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; }
+  .kn-stat__mark { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; background: rgba(45,107,79,0.09); }
+  .kn-stat__mark .Polaris-Icon svg { fill: #2D6B4F; }
+  .kn-stat__body { display: grid; gap: 1px; min-width: 0; }
+  .kn-stat__label, .kn-stat__hint { font-size: 12px; line-height: 16px; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kn-stat__value { font-size: 17px; line-height: 22px; font-weight: 650; color: #1a1a1a; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kn-stat__hint--bad { color: #8e1f0b; font-weight: 550; }
+  .kn-stat__hint--good { color: #2D6B4F; }
+  .kn-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 0 16px 12px; }
+  .kn-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); flex: none; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .kn-seg::-webkit-scrollbar { display: none; }
+  .kn-seg__btn { all: unset; box-sizing: border-box; padding: 5px 11px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550;
+    color: #4a4a4a; white-space: nowrap; cursor: pointer; transition: background .15s ease, color .15s ease; }
+  .kn-seg__btn:hover { color: #1a1a1a; }
+  .kn-seg__btn[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
+  .kn-seg__btn:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 1px; }
+  .kn-seg__n { margin-left: 5px; color: #8a8a8a; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .kn-search { flex: 1 1 240px; min-width: 0; }
+  .kn-docs { list-style: none; margin: 0; padding: 0; border-top: 1px solid rgba(30,27,51,0.07); }
+  .kn-doc { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 36px; padding: 7px 16px; box-sizing: border-box; }
+  .kn-doc + .kn-doc { border-top: 1px solid rgba(30,27,51,0.05); }
+  .kn-doc:hover { background: rgba(26,46,38,0.025); }
+  .kn-doc__title { min-width: 0; font-size: 13px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kn .kn-doc__title a { text-decoration: none; }
+  .kn .kn-doc__title a:hover { text-decoration: underline; }
+  .kn-doc__size { font-size: 12px; color: #8a8a8a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kn-kind { justify-self: start; padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 18px; font-weight: 600; white-space: nowrap; }
+  .kn-kind--Policy { background: #eaf4ff; color: #00527c; }
+  .kn-kind--Page { background: rgba(26,46,38,0.07); color: #4a4a4a; }
+  .kn-kind--Article { background: #e6f4ec; color: #1f6b44; }
+  .kn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px 8px 16px; border-top: 1px solid rgba(30,27,51,0.07);
+    font-size: 12.5px; color: #616161; font-variant-numeric: tabular-nums; }
+  .kn-empty { padding: 22px 16px; border-top: 1px solid rgba(30,27,51,0.07); text-align: center; font-size: 13px; color: #616161; }
+  .kn-notes { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .kn-good { color: #2D6B4F; font-weight: 550; white-space: nowrap; }
+  .kn-finds { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); }
+  .kn-find { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .kn-find__line { font-size: 12.5px; line-height: 18px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
+  .kn-find__msg { font-size: 12px; line-height: 17px; color: #616161; }
+  .kn-tpl { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); }
+  .kn-tpl__text { flex: 1; min-width: 0; }
+  .kn-tpl__name { font-size: 12.5px; line-height: 18px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kn-tpl__hint { font-size: 12px; line-height: 17px; color: #616161; overflow-wrap: anywhere; }
+  .kn-tpl__hint code { font-size: 11.5px; }
+  .kn-drop .Polaris-DropZone { min-height: 0; }
+  .kn-drop .Polaris-DropZone-FileUpload { padding: 16px; }
+  .kn-inbanner { padding: 10px 16px 0; }
+  .kn-chosen { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+  .kn-note { font-size: 12px; line-height: 17px; color: #616161; }
+  .kn-pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff; white-space: pre-wrap; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .kn-banner { padding: 0 16px 13px; }
+  .kn-promos-body { border-top: 1px solid rgba(30,27,51,0.07); }
+  .kn-promos-body > .kn-banner { padding-top: 13px; }
+  @media (prefers-reduced-motion: reduce) { .kn-stat, .kn-seg__btn { transition: none; } .kn-stat:hover { transform: none; } }
+  @media (max-width: 760px) {
+    .kn-overview { gap: 8px; }
+    .kn-stat { padding: 11px 12px; }
+    .kn-stat__mark { display: none; }
+    .kn-stat__value { font-size: 15px; line-height: 20px; }
+    .kn-notes { grid-template-columns: minmax(0, 1fr); }
+    .kn-search { flex-basis: 100%; }
+  }
+  @media (max-width: 560px) {
+    .kn-overview { grid-template-columns: minmax(0, 1fr); }
+    .kn-stat__mark { display: grid; width: 32px; height: 32px; border-radius: 9px; }
+    .kn-doc { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; padding: 7px 14px; }
+  }
+`;
+
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+// Dates read the browser's clock and time zone, so they're shown once the
+// page runs in the browser (the server's render then matches the browser's).
+function useMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+const dayLabel = (iso) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const timeLabel = (iso) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 const LEVEL = {
   critical: { tone: "critical", label: "Fix" },
@@ -438,16 +523,12 @@ const LEVEL = {
   notice: { tone: "info", label: "Tip" },
 };
 
+// Shown only when a line could steer answers wrong; a clean check is the
+// "Check passed" badge on the Files card.
 function KnowledgeCheckSummary({ counts }) {
   const c = counts || { critical: 0, warning: 0, notice: 0 };
-  if (c.critical + c.warning === 0) {
-    return (
-      <Banner tone="success" title="Knowledge check: nothing in your notes looks likely to steer answers wrong.">
-        {c.notice > 0 && <Text as="p" variant="bodySm">{c.notice} small {c.notice === 1 ? "tip" : "tips"} below.</Text>}
-      </Banner>
-    );
-  }
   const n = c.critical + c.warning;
+  if (n === 0) return null;
   return (
     <Banner tone={c.critical ? "critical" : "warning"} title={`Knowledge check: ${n} ${n === 1 ? "line" : "lines"} in your notes could steer answers wrong`}>
       <Text as="p" variant="bodySm">
@@ -464,27 +545,24 @@ function FileFindings({ findings }) {
   const list = open ? findings : (important.length ? important : findings).slice(0, 3);
   const hidden = findings.length - list.length;
   return (
-    <BlockStack gap="150">
-      <Divider />
+    <div className="kn-finds">
       {list.map((x, i) => (
-        <InlineStack key={`${x.code}-${x.line}-${i}`} gap="200" wrap={false} blockAlign="start">
-          <Box minWidth="44px"><Badge tone={LEVEL[x.level]?.tone}>{LEVEL[x.level]?.label || x.level}</Badge></Box>
-          <BlockStack gap="050">
-            {x.line != null && (
-              <Text as="p" variant="bodySm" fontWeight="semibold" breakWord>{`Line ${x.line}: “${x.excerpt}”`}</Text>
-            )}
-            <Text as="p" variant="bodySm" tone="subdued">{x.message}</Text>
-          </BlockStack>
-        </InlineStack>
+        <div className="kn-find" key={`${x.code}-${x.line}-${i}`}>
+          <span><Badge tone={LEVEL[x.level]?.tone} size="small">{LEVEL[x.level]?.label || x.level}</Badge></span>
+          <div>
+            {x.line != null && <div className="kn-find__line">{`Line ${x.line}: “${x.excerpt}”`}</div>}
+            <div className="kn-find__msg">{x.message}</div>
+          </div>
+        </div>
       ))}
       {(hidden > 0 || open) && (
-        <InlineStack>
+        <div>
           <Button variant="plain" size="slim" onClick={() => setOpen(!open)}>
             {open ? "Show less" : `Show ${hidden} more`}
           </Button>
-        </InlineStack>
+        </div>
       )}
-    </BlockStack>
+    </div>
   );
 }
 
@@ -493,14 +571,19 @@ function KnowledgeFilesCard({ files, check }) {
   const nav = useNavigation();
   const submit = useSubmit();
   const downloadFetcher = useFetcher();
-  const saving = nav.state === "submitting" &&
-    (nav.formData?.get("intent") === "upload" || nav.formData?.get("intent") === "delete_file");
+  const mounted = useMounted();
+  const navIntent = nav.state === "submitting" ? nav.formData?.get("intent") : null;
+  const uploading = navIntent === "upload";
+  const deletingId = navIntent === "delete_file" ? String(nav.formData?.get("fileId") || "") : null;
 
   const [selectedType, setSelectedType] = useState("faqs");
   const [uploadFile, setUploadFile] = useState(null);
   const [dismissed, setDismissed] = useState(null);
 
   const currentType = FILE_TYPES.find((t) => t.value === selectedType);
+  // One file per category: uploading into a category that has one replaces it.
+  const replaces = files.find((f) => f.fileType === selectedType);
+  const issues = (check?.counts?.critical || 0) + (check?.counts?.warning || 0);
 
   const triggerBrowserDownload = useCallback((fileName, content) => {
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -553,10 +636,11 @@ function KnowledgeFilesCard({ files, check }) {
     setUploadFile(null);
   };
 
-  const handleDelete = (fileId) => {
+  const handleDelete = (file) => {
+    if (!window.confirm(`Delete ${file.fileName}? The assistant stops using it right away.`)) return;
     const fd = new FormData();
     fd.set("intent", "delete_file");
-    fd.set("fileId", fileId);
+    fd.set("fileId", file.id);
     submit(fd, { method: "post" });
   };
 
@@ -571,48 +655,78 @@ function KnowledgeFilesCard({ files, check }) {
     ? String(downloadFetcher.formData.get("fileId") || "")
     : null;
 
+  // What the last upload or delete said, shown in the "Add" card.
+  const notices = [
+    actionData?.uploaded && dismissed !== actionData.message
+      ? <Banner key="up" title={actionData.message} tone={actionData.skuWarning ? "warning" : "success"} onDismiss={() => setDismissed(actionData.message)} />
+      : null,
+    actionData?.error && dismissed !== actionData.error
+      ? <Banner key="err" title={actionData.error} tone="critical" onDismiss={() => setDismissed(actionData.error)} />
+      : null,
+  ].filter(Boolean);
+
   return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Your team's notes</Text>
-          </InlineStack>
-          <Text as="p" tone="subdued">
-            Anything the website doesn't say, or says differently — FAQs, sizing advice, brand voice. The assistant looks things up here when customers ask, and these notes win over the website.
-            A <strong>Rules &amp; Guidelines</strong> file is different: the assistant follows it on every chat (e.g. "never promise delivery dates"). One file per category; uploading again replaces it.
-          </Text>
-        </BlockStack>
-
-
-        {files.length > 0 && <KnowledgeCheckSummary counts={check?.counts} />}
-
-        {actionData?.uploaded && dismissed !== actionData.message && (
-          <Banner title={actionData.message} tone={actionData.skuWarning ? "warning" : "success"} onDismiss={() => setDismissed(actionData.message)} />
-        )}
-        {actionData?.error && dismissed !== actionData.error && (
-          <Banner title={actionData.error} tone="critical" onDismiss={() => setDismissed(actionData.error)} />
-        )}
-
-        <Layout>
-          <Layout.Section variant="oneHalf">
-            <BlockStack gap="300">
-              <Select label="Category" options={FILE_TYPES.map((t) => ({ label: t.label, value: t.value }))}
-                value={selectedType} onChange={setSelectedType} helpText={currentType?.description} />
-              <Box padding="300" background="bg-surface-secondary" borderRadius="200">
-                <BlockStack gap="200">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="p" variant="bodySm" fontWeight="semibold">Template: {currentType?.templateName}</Text>
-                    <Button size="slim" onClick={downloadTemplate}>Download</Button>
+    <div className="kn-notes">
+      <Group
+        title={files.length ? `Files (${files.length})` : "Files"}
+        badge={files.length > 0 ? (issues > 0 ? <Badge tone="critical">{`${issues} to check`}</Badge> : <Badge tone="success">Check passed</Badge>) : null}
+      >
+        {files.length > 0 && issues > 0 ? <div className="kn-inbanner"><KnowledgeCheckSummary counts={check?.counts} /></div> : null}
+        {files.length === 0 ? (
+          <Row help="No files yet. Pick a category, start from its template, and upload it." />
+        ) : (
+          files.map((f) => {
+            const catLabel = FILE_TYPES.find((t) => t.value === f.fileType)?.label || f.fileType;
+            const findings = check?.byFile?.[f.id] || [];
+            return (
+              <Row
+                key={f.id}
+                title={f.fileName}
+                help={
+                  <>
+                    {catLabel} · {formatSize(f.fileSize)}{mounted ? ` · Updated ${dayLabel(f.updatedAt)}` : ""}
+                    {f.enrichedSkus > 0 && <> · <span className="kn-good">{f.enrichedSkus} SKUs linked</span></>}
+                  </>
+                }
+                control={
+                  <InlineStack gap="100" blockAlign="center" wrap={false}>
+                    <Button size="slim" onClick={() => handleDownload(f.id)} loading={isDownloadingId === f.id}>Download</Button>
+                    <Button
+                      icon={DeleteIcon}
+                      tone="critical"
+                      variant="plain"
+                      onClick={() => handleDelete(f)}
+                      loading={deletingId === f.id}
+                      accessibilityLabel={`Delete ${f.fileName}`}
+                    />
                   </InlineStack>
-                  {currentType?.columns && <Text as="p" tone="subdued" variant="bodySm">Columns: <code>{currentType.columns}</code></Text>}
-                  {!currentType?.columns && (
-                    <Text as="p" tone="subdued" variant="bodySm">
-                      Sections are separated by <code>═══</code> dividers. Keep this format — when RAG is on, each section becomes a retrievable chunk, so a clean divider = a focused chunk the AI can pull on demand.
-                    </Text>
-                  )}
-                </BlockStack>
-              </Box>
+                }
+              >
+                {findings.length > 0 ? <FileFindings findings={findings} /> : null}
+              </Row>
+            );
+          })
+        )}
+      </Group>
+
+      <Group title="Add or replace a file">
+        <Row stack>
+          <BlockStack gap="300">
+            {notices}
+            <Select label="Category" options={FILE_TYPES.map((t) => ({ label: t.label, value: t.value }))}
+              value={selectedType} onChange={setSelectedType} helpText={currentType?.description} />
+            <div className="kn-tpl">
+              <div className="kn-tpl__text">
+                <div className="kn-tpl__name">{currentType?.templateName}</div>
+                <div className="kn-tpl__hint">
+                  {currentType?.columns
+                    ? <>Columns: <code>{currentType.columns}</code></>
+                    : "Keep the ═══ dividers — each section becomes its own piece the assistant can look up."}
+                </div>
+              </div>
+              <Button size="slim" onClick={downloadTemplate} accessibilityLabel={`Download ${currentType?.templateName}`}>Download</Button>
+            </div>
+            <div className="kn-drop">
               <DropZone
                 accept=".csv,.txt,text/plain,text/csv"
                 type="file"
@@ -621,83 +735,31 @@ function KnowledgeFilesCard({ files, check }) {
                 customValidator={(file) => /\.(csv|txt)$/i.test(file.name)}
               >
                 {uploadFile ? (
-                  <Box padding="400">
+                  <div className="kn-chosen">
                     <BlockStack gap="050">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">{uploadFile.name}</Text>
+                      <Text as="p" variant="bodyMd" fontWeight="semibold" breakWord>{uploadFile.name}</Text>
                       <Text as="p" tone="subdued" variant="bodySm">{formatSize(uploadFile.size)}</Text>
                     </BlockStack>
-                  </Box>
+                  </div>
                 ) : (
-                  <DropZone.FileUpload actionHint="Accepts .csv and .txt files" />
+                  <DropZone.FileUpload actionHint="A .txt or .csv file" />
                 )}
               </DropZone>
-              {uploadFile && (
-                <InlineStack gap="300">
-                  <Button variant="primary" onClick={handleUpload} loading={saving}>Upload as {currentType?.label}</Button>
-                  <Button onClick={() => setUploadFile(null)}>Cancel</Button>
-                </InlineStack>
-              )}
-            </BlockStack>
-          </Layout.Section>
-
-          <Layout.Section variant="oneHalf">
-            {files.length === 0 ? (
-              <EmptyState heading="No knowledge files yet" image="">
-                <Text as="p" tone="subdued">Upload a CSV or text file to enrich the AI with store-specific context.</Text>
-              </EmptyState>
-            ) : (
-              <BlockStack gap="200">
-                {files.map((f) => {
-                  const catLabel = FILE_TYPES.find((t) => t.value === f.fileType)?.label || f.fileType;
-                  return (
-                    <Box key={f.id} padding="300" background="bg-surface-secondary" borderRadius="200">
-                      <BlockStack gap="200">
-                        <InlineStack align="space-between" blockAlign="center" wrap gap="200">
-                          <BlockStack gap="050">
-                            <Text as="span" variant="bodyMd" fontWeight="semibold" breakWord>{f.fileName}</Text>
-                            <InlineStack gap="200" blockAlign="center" wrap>
-                              <Badge>{catLabel}</Badge>
-                              <Text as="span" tone="subdued" variant="bodySm">{formatSize(f.fileSize)}</Text>
-                              <Text as="span" tone="subdued" variant="bodySm">· Updated {new Date(f.updatedAt).toLocaleDateString()}</Text>
-                              {f.enrichedSkus > 0 && <Badge tone="success">{`${f.enrichedSkus} SKUs linked`}</Badge>}
-                            </InlineStack>
-                          </BlockStack>
-                          <InlineStack gap="200" blockAlign="center">
-                            <Button
-                              size="slim"
-                              onClick={() => handleDownload(f.id)}
-                              loading={isDownloadingId === f.id}
-                            >
-                              Download
-                            </Button>
-                            <Button
-                              icon={DeleteIcon}
-                              tone="critical"
-                              variant="plain"
-                              onClick={() => handleDelete(f.id)}
-                              accessibilityLabel="Delete file"
-                            />
-                          </InlineStack>
-                        </InlineStack>
-                        <FileFindings findings={check?.byFile?.[f.id] || []} />
-                      </BlockStack>
-                    </Box>
-                  );
-                })}
-              </BlockStack>
+            </div>
+            {replaces && <div className="kn-note">{`Uploading replaces ${replaces.fileName}.`}</div>}
+            {uploadFile && (
+              <InlineStack gap="200">
+                <Button variant="primary" onClick={handleUpload}>{`Upload as ${currentType?.label}`}</Button>
+                <Button onClick={() => setUploadFile(null)}>Cancel</Button>
+              </InlineStack>
             )}
-          </Layout.Section>
-        </Layout>
-      </BlockStack>
-    </Card>
+            {uploading && <Text as="p" variant="bodySm" tone="subdued">Uploading…</Text>}
+          </BlockStack>
+        </Row>
+      </Group>
+    </div>
   );
 }
-
-
-
-
-
-
 
 function campaignStatus(now, startsAt, endsAt) {
   if (now < startsAt) return { label: "Scheduled", tone: "info" };
@@ -725,9 +787,11 @@ function localTodayAt(hour) {
 const DEFAULT_START_VALUE = () => localTodayAt(0);
 const DEFAULT_END_VALUE = () => localTodayAt(3);
 
+// The promotions manager: rows under the "Promotions" header, inside its card.
 function CampaignsCard({ initial, template, initialCheatCode }) {
   const fetcher = useFetcher();
   const cheatFetcher = useFetcher();
+  const mounted = useMounted();
   const [campaigns, setCampaigns] = useState(initial || []);
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState("");
@@ -764,7 +828,7 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
 
   const reset = () => {
     setEditingId(null);
-    setName(""); setContent(""); setStartsAt(""); setEndsAt("");
+    setName(""); setContent(""); setStartsAt(DEFAULT_START_VALUE()); setEndsAt(DEFAULT_END_VALUE());
     setError("");
   };
 
@@ -815,191 +879,105 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
   const validForm = name.trim() && content.trim() && startsAt && endsAt && new Date(endsAt) > new Date(startsAt);
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Active promotions</Text>
-            <Badge tone="info">Auto-expires by date</Badge>
-          </InlineStack>
-          <Text as="p" tone="subdued">
-            Schedule each campaign with start and end dates and times. Only campaigns currently within their window appear in the chat — expired ones disappear automatically with no manual cleanup.
-          </Text>
-        </BlockStack>
-
-        {error ? <Banner tone="critical">{error}</Banner> : null}
-
-        {unknownSkus.length > 0 ? (
-          <Banner tone="warning" onDismiss={() => setUnknownSkus([])} title={`${unknownSkus.length} SKU${unknownSkus.length === 1 ? "" : "s"} not found in your catalog`}>
-            <BlockStack gap="100">
-              <Text as="p" variant="bodySm">
-                Saved. The campaign content references these SKU-shaped values that don't match any synced product or variant: <strong>{unknownSkus.join(", ")}</strong>. Verify these are correct (a typo like "L5OO" with the letter O instead of zero is a common one) or re-sync your catalog if these are new.
-              </Text>
-            </BlockStack>
-          </Banner>
-        ) : null}
-
-        <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+    <>
+      {error || unknownSkus.length > 0 ? (
+        <div className="kn-banner">
           <BlockStack gap="200">
-            <InlineStack gap="200" blockAlign="center">
-              <Text as="h3" variant="headingSm">CS team cheat code</Text>
-              <Badge tone="info">Optional</Badge>
-            </InlineStack>
-            <Text as="p" tone="subdued" variant="bodySm">
-              Set a phrase that, when typed in the chat, returns every currently-active campaign in one reply. Bypasses the AI for determinism — your CS team always sees the exact same dump. Leave blank to disable. Pick something a regular customer would never type by accident.
-            </Text>
-            <FormLayout>
-              <FormLayout.Group>
-                <TextField
-                  label="Cheat code"
-                  value={cheatCode}
-                  onChange={setCheatCode}
-                  placeholder="seos-show-campaigns"
-                  autoComplete="off"
-                  helpText="Case-insensitive exact match on the customer's whole message."
-                />
-                <Box paddingBlockStart="600">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Button onClick={saveCheatCode} loading={cheatSubmitting} disabled={cheatSubmitting}>Save</Button>
-                    {cheatSavedNote ? <Text as="span" tone="success" variant="bodySm">{cheatSavedNote}</Text> : null}
-                  </InlineStack>
-                </Box>
-              </FormLayout.Group>
-            </FormLayout>
-          </BlockStack>
-        </Box>
-
-        {campaigns.length > 0 ? (
-          <BlockStack gap="200">
-            {campaigns.map((c) => {
-              const startDate = new Date(c.startsAt);
-              const endDate = new Date(c.endsAt);
-              const status = campaignStatus(now, startDate, endDate);
-              return (
-                <Box key={c.id} padding="300" background="bg-surface-secondary" borderRadius="200">
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between" blockAlign="center" wrap>
-                      <InlineStack gap="200" blockAlign="center" wrap>
-                        <Badge tone={status.tone}>{status.label}</Badge>
-                        <Text as="span" variant="headingSm">{c.name}</Text>
-                      </InlineStack>
-                      <InlineStack gap="100">
-                        <Button size="slim" onClick={() => startEdit(c)} disabled={submitting}>Edit</Button>
-                        <Button size="slim" tone="critical" variant="plain" onClick={() => remove(c.id)} disabled={submitting}>Delete</Button>
-                      </InlineStack>
-                    </InlineStack>
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      {startDate.toLocaleString()} → {endDate.toLocaleString()}
-                    </Text>
-                  </BlockStack>
-                </Box>
-              );
-            })}
-          </BlockStack>
-        ) : (
-          <Banner tone="info">No campaigns yet. Add one below — the chat starts answering questions about it the moment its start time arrives.</Banner>
-        )}
-
-        <Divider />
-
-        <BlockStack gap="200">
-          <InlineStack align="space-between" blockAlign="center" wrap>
-            <Text as="h3" variant="headingSm">{editingId ? "Edit campaign" : "Add a campaign"}</Text>
-            <Button variant="plain" onClick={() => setShowTemplate((v) => !v)}>
-              {showTemplate ? "Hide template" : "Show template"}
-            </Button>
-          </InlineStack>
-
-          {showTemplate ? (
-            <Box padding="300" background="bg-surface-secondary" borderRadius="200">
-              <BlockStack gap="200">
-                <Text as="p" tone="subdued" variant="bodySm">
-                  Copy this template into the campaign content field below as a starting structure, then fill in the bracketed placeholders with your actual sale details.
+            {error ? <Banner tone="critical">{error}</Banner> : null}
+            {unknownSkus.length > 0 ? (
+              <Banner tone="warning" onDismiss={() => setUnknownSkus([])} title={`${unknownSkus.length} SKU${unknownSkus.length === 1 ? "" : "s"} not found in your catalog`}>
+                <Text as="p" variant="bodySm">
+                  Saved. The campaign content references these SKU-shaped values that don't match any synced product or variant: <strong>{unknownSkus.join(", ")}</strong>. Verify these are correct (a typo like "L5OO" with the letter O instead of zero is a common one) or re-sync your catalog if these are new.
                 </Text>
-                <Text as="p" tone="subdued" variant="bodySm">
-                  <strong>Keep it tight.</strong> Every character of campaign content lands in every chat prompt while the campaign is live — bullet points beat prose, and short codes/dates are better than full sentences. Aim for under ~500 characters (~100 words) per campaign so multiple promos can run together without crowding the AI's working memory. The progress bar at the top of this page tracks the combined size.
-                </Text>
-                <Box padding="200" background="bg-surface" borderRadius="100">
-                  <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 12.5, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{template}</pre>
-                </Box>
-                <InlineStack>
-                  <Button onClick={copyTemplate}>Use this template</Button>
+              </Banner>
+            ) : null}
+          </BlockStack>
+        </div>
+      ) : null}
+
+      <Row
+        title="CS team cheat code"
+        help="Typed as a whole message in the chat (any capitals), it lists every live promotion in one reply — the same for everyone, no AI. Pick something a shopper would never type. Blank turns it off."
+      >
+        <InlineStack gap="200" blockAlign="center" wrap={false}>
+          <div style={{ flex: "1 1 auto", maxWidth: 320, minWidth: 0 }}>
+            <TextField label="Cheat code" labelHidden value={cheatCode} onChange={setCheatCode} placeholder="seos-show-campaigns" autoComplete="off" />
+          </div>
+          <Button onClick={saveCheatCode} loading={cheatSubmitting} disabled={cheatSubmitting}>Save</Button>
+          {cheatSavedNote ? <Text as="span" tone="success" variant="bodySm">{cheatSavedNote}</Text> : null}
+        </InlineStack>
+      </Row>
+
+      {campaigns.length > 0 ? (
+        campaigns.map((c) => {
+          const startDate = new Date(c.startsAt);
+          const endDate = new Date(c.endsAt);
+          const status = campaignStatus(now, startDate, endDate);
+          return (
+            <Row
+              key={c.id}
+              title={<InlineStack gap="200" blockAlign="center"><span>{c.name}</span><Badge tone={status.tone} size="small">{status.label}</Badge></InlineStack>}
+              help={mounted ? `${timeLabel(c.startsAt)} → ${timeLabel(c.endsAt)}` : " "}
+              control={
+                <InlineStack gap="100" blockAlign="center" wrap={false}>
+                  <Button size="slim" onClick={() => startEdit(c)} disabled={submitting}>Edit</Button>
+                  <Button size="slim" tone="critical" variant="plain" onClick={() => remove(c.id)} disabled={submitting}>Delete</Button>
                 </InlineStack>
-              </BlockStack>
-            </Box>
-          ) : null}
-
-          <FormLayout>
-            <TextField
-              label="Campaign name"
-              value={name}
-              onChange={setName}
-              placeholder="Summer Sale 2026"
-              autoComplete="off"
-              helpText="Internal label only — customers don't see this."
+              }
             />
-            <FormLayout.Group>
-              <TextField
-                label="Starts at"
-                type="datetime-local"
-                value={startsAt}
-                onChange={setStartsAt}
-                autoComplete="off"
-                helpText="Local time of the merchant. The chat starts mentioning this campaign at this moment."
-              />
-              <TextField
-                label="Ends at"
-                type="datetime-local"
-                value={endsAt}
-                onChange={setEndsAt}
-                autoComplete="off"
-                helpText="The chat stops mentioning this campaign at this moment. Must be after the start."
-              />
-            </FormLayout.Group>
-            <TextField
-              label="Campaign content"
-              value={content}
-              onChange={setContent}
-              multiline={10}
-              autoComplete="off"
-              helpText="Plain text or markdown. The AI quotes from this when customers ask about the sale, codes, or terms. Don't paste internal-only notes."
-            />
-            <InlineStack gap="200">
-              <Button variant="primary" onClick={submit} disabled={!validForm || submitting} loading={submitting}>
-                {editingId ? "Save changes" : "Add campaign"}
-              </Button>
-              {editingId ? <Button onClick={reset} disabled={submitting}>Cancel</Button> : null}
-            </InlineStack>
-          </FormLayout>
-        </BlockStack>
-      </BlockStack>
-    </Card>
-  );
-}
-
-
-
-
-
-
-function SectionHeading({ eyebrow, title, description }) {
-  return (
-    <BlockStack gap="100">
-      {eyebrow && (
-        <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">
-          {eyebrow.toUpperCase()}
-        </Text>
+          );
+        })
+      ) : (
+        <Row help="No promotions yet. Add one below — the assistant starts mentioning it when its start time arrives." />
       )}
-      <Text as="h2" variant="headingLg">{title}</Text>
-      {description && <Text as="p" tone="subdued">{description}</Text>}
-    </BlockStack>
+
+      <Row
+        stack
+        title={editingId ? "Edit promotion" : "Add a promotion"}
+        help="Keep it short — bullet points and codes beat prose. Live promotions are part of every chat, so aim for under ~500 characters each."
+      >
+        <BlockStack gap="300">
+          {showTemplate ? (
+            <div className="kn-finds">
+              <pre className="kn-pre">{template}</pre>
+              <InlineStack gap="200">
+                <Button size="slim" onClick={copyTemplate}>Use this template</Button>
+                <Button size="slim" variant="plain" onClick={() => setShowTemplate(false)}>Close</Button>
+              </InlineStack>
+            </div>
+          ) : null}
+          <div className="set-grid set-grid--3">
+            <TextField label="Name" value={name} onChange={setName} placeholder="Summer Sale 2026" autoComplete="off" helpText="Only you see this." />
+            <TextField label="Starts" type="datetime-local" value={startsAt} onChange={setStartsAt} autoComplete="off" helpText="Your local time." />
+            <TextField label="Ends" type="datetime-local" value={endsAt} onChange={setEndsAt} autoComplete="off" helpText="Must be after the start." />
+          </div>
+          <TextField
+            label="What the assistant should know"
+            labelAction={{ content: showTemplate ? "Hide template" : "Show template", onAction: () => setShowTemplate((v) => !v) }}
+            value={content}
+            onChange={setContent}
+            multiline={5}
+            autoComplete="off"
+            helpText="Plain text or markdown. The assistant quotes from this when shoppers ask about the sale, codes or terms — no internal-only notes."
+          />
+          <InlineStack gap="200">
+            <Button variant="primary" onClick={submit} disabled={!validForm || submitting} loading={submitting}>
+              {editingId ? "Save changes" : "Add promotion"}
+            </Button>
+            {editingId ? <Button onClick={reset} disabled={submitting}>Cancel</Button> : null}
+          </InlineStack>
+        </BlockStack>
+      </Row>
+    </>
   );
 }
 
+const KIND_LABEL = { Policy: "Policy", Page: "Page", Article: "Blog" };
 
 function StoreKnowledgeCard({ docs }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
+  const mounted = useMounted();
   const started = fetcher.data?.storeSyncStarted;
   const busy = fetcher.state !== "idle";
   useEffect(() => {
@@ -1014,13 +992,12 @@ function StoreKnowledgeCard({ docs }) {
   };
   const last = docs.reduce((m, d) => (d.syncedAt && (!m || d.syncedAt > m) ? d.syncedAt : m), null);
   const count = (kind) => docs.filter((d) => d.kind === kind).length;
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   // One type at a time, searchable, 10 per page — 400+ documents don't scroll forever.
   const tabs = [
-    { id: "all", content: `All (${docs.length})` },
-    { id: "Page", content: `Pages (${count("Page")})` },
-    { id: "Article", content: `Blog articles (${count("Article")})` },
-    { id: "Policy", content: `Policies (${count("Policy")})` },
+    { id: "all", label: "All", n: docs.length },
+    { id: "Page", label: "Pages", n: count("Page") },
+    { id: "Article", label: "Blog", n: count("Article") },
+    { id: "Policy", label: "Policies", n: count("Policy") },
   ];
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -1032,125 +1009,175 @@ function StoreKnowledgeCard({ docs }) {
   const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const at = Math.min(pageIndex, pages - 1);
   const shown = filtered.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE);
-  const KIND_TONE = { Policy: "info", Page: undefined, Article: "success" };
-  const rows = shown.map((d) => [
-    <Badge key={`${d.id}-k`} tone={KIND_TONE[d.kind]}>{d.kind === "Article" ? "Blog" : d.kind}</Badge>,
-    d.url ? <a key={d.id} href={d.url} target="_blank" rel="noreferrer">{d.title}</a> : d.title,
-    `${Math.max(1, Math.round(d.chars / 1000))}k chars`,
-  ]);
+  const breakdown = [plural(count("Policy"), "policy", "policies"), plural(count("Page"), "page", "pages"), plural(count("Article"), "blog article", "blog articles")].join(" · ");
   return (
-    <Card>
-      <BlockStack gap="300">
-        <InlineStack align="space-between" blockAlign="center">
-          <BlockStack gap="050">
-            <Text as="h2" variant="headingMd">
-              {docs.length > 0
-                ? `${docs.length} documents learned (${plural(count("Policy"), "policy", "policies")}, ${plural(count("Page"), "page", "pages")}, ${plural(count("Article"), "blog article", "blog articles")})`
-                : "Nothing learned yet"}
-            </Text>
-            <Text as="p" tone="subdued" variant="bodySm">
-              {last ? `Last refreshed ${new Date(last).toLocaleString()}` : "Click refresh to read your store's policies, pages and blog articles now."}
-            </Text>
-          </BlockStack>
-          <Button onClick={refresh} loading={busy} disabled={busy}>Refresh from store now</Button>
-        </InlineStack>
-        {started && (
+    <Card padding="0">
+      <Row
+        title={docs.length > 0 ? `${docs.length} documents learned` : "Nothing learned yet"}
+        help={docs.length > 0
+          ? `${breakdown}${last && mounted ? ` · Refreshed ${timeLabel(last)}` : ""}`
+          : "Refresh to read your store's policies, pages and blog articles now."}
+        control={<Button onClick={refresh} loading={busy} disabled={busy}>Refresh now</Button>}
+      >
+        {started ? (
           <Banner tone="info"><p>Reading your store's policies, pages and blog articles — this takes a minute or two. The list updates automatically.</p></Banner>
-        )}
-        {docs.length > 0 && (
-          <BlockStack gap="300">
-            <Tabs tabs={tabs} selected={tab} onSelect={(i) => { setTab(i); setPageIndex(0); }} fitted />
-            <TextField
-              label="Search what was learned"
-              labelHidden
-              placeholder="Search titles — e.g. clinical, plantar fasciitis, returns"
-              value={query}
-              onChange={(v) => { setQuery(v); setPageIndex(0); }}
-              clearButton
-              onClearButtonClick={() => { setQuery(""); setPageIndex(0); }}
-              autoComplete="off"
-            />
-            {rows.length > 0 ? (
-              <DataTable columnContentTypes={["text", "text", "text"]} headings={["Type", "Title", "Size"]} rows={rows} />
-            ) : (
-              <Box padding="400"><Text as="p" tone="subdued" alignment="center">Nothing matches "{query}".</Text></Box>
-            )}
-            {filtered.length > PER_PAGE && (
-              <InlineStack align="space-between" blockAlign="center">
-                <Text as="p" tone="subdued" variant="bodySm">
-                  {at * PER_PAGE + 1}–{Math.min(filtered.length, (at + 1) * PER_PAGE)} of {filtered.length}
-                </Text>
-                <Pagination
-                  hasPrevious={at > 0}
-                  onPrevious={() => setPageIndex(at - 1)}
-                  hasNext={at < pages - 1}
-                  onNext={() => setPageIndex(at + 1)}
-                />
-              </InlineStack>
-            )}
-          </BlockStack>
-        )}
-      </BlockStack>
+        ) : null}
+      </Row>
+      {docs.length > 0 && (
+        <>
+          <div className="kn-tools">
+            <div className="kn-seg" role="group" aria-label="Show">
+              {tabs.map((t, i) => (
+                <button key={t.id} type="button" className="kn-seg__btn" aria-pressed={tab === i} onClick={() => { setTab(i); setPageIndex(0); }}>
+                  {t.label}<span className="kn-seg__n">{t.n}</span>
+                </button>
+              ))}
+            </div>
+            <div className="kn-search">
+              <TextField
+                label="Search what was learned"
+                labelHidden
+                size="slim"
+                prefix={<Icon source={SearchIcon} tone="subdued" />}
+                placeholder="Search titles, e.g. clinical"
+                value={query}
+                onChange={(v) => { setQuery(v); setPageIndex(0); }}
+                clearButton
+                onClearButtonClick={() => { setQuery(""); setPageIndex(0); }}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          {shown.length > 0 ? (
+            <ul className="kn-docs">
+              {shown.map((d) => (
+                <li key={d.id} className="kn-doc">
+                  <span className={`kn-kind kn-kind--${d.kind}`}>{KIND_LABEL[d.kind] || d.kind}</span>
+                  <span className="kn-doc__title">
+                    {d.url ? <a href={d.url} target="_blank" rel="noreferrer" title={d.title}>{d.title}</a> : d.title}
+                  </span>
+                  <span className="kn-doc__size">{`${Math.max(1, Math.round(d.chars / 1000))}k chars`}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="kn-empty">{q ? `Nothing matches “${query.trim()}”.` : "None of these yet."}</div>
+          )}
+          {filtered.length > PER_PAGE && (
+            <div className="kn-foot">
+              <span>{at * PER_PAGE + 1}–{Math.min(filtered.length, (at + 1) * PER_PAGE)} of {filtered.length}</span>
+              <Pagination
+                hasPrevious={at > 0}
+                onPrevious={() => setPageIndex(at - 1)}
+                hasNext={at < pages - 1}
+                onNext={() => setPageIndex(at + 1)}
+              />
+            </div>
+          )}
+        </>
+      )}
     </Card>
   );
 }
 
 export default function Knowledge() {
   const data = useLoaderData();
+  const mounted = useMounted();
+  const [promosOpen, setPromosOpen] = useState(false);
   const now = Date.now();
-  const livePromos = (data.campaigns || []).filter((c) => new Date(c.startsAt).getTime() <= now && new Date(c.endsAt).getTime() >= now).length;
-  const summary = [
-    { label: "From your website", value: `${(data.storeKnowledge || []).length} pages, policies & articles` },
-    { label: "Your team's notes", value: `${(data.files || []).length} file${(data.files || []).length === 1 ? "" : "s"}` },
-    { label: "Promotions", value: livePromos ? `${livePromos} live now` : "none live" },
+  const campaigns = data.campaigns || [];
+  const livePromos = campaigns.filter((c) => new Date(c.startsAt).getTime() <= now && new Date(c.endsAt).getTime() >= now).length;
+  const scheduledPromos = campaigns.filter((c) => new Date(c.startsAt).getTime() > now).length;
+  const docs = data.storeKnowledge || [];
+  const files = data.files || [];
+  const issues = (data.knowledgeCheck?.counts?.critical || 0) + (data.knowledgeCheck?.counts?.warning || 0);
+  const lastRead = docs.reduce((m, d) => (d.syncedAt && (!m || d.syncedAt > m) ? d.syncedAt : m), null);
+
+  const overview = [
+    {
+      id: "website", icon: GlobeIcon, label: "From your website",
+      value: plural(docs.length, "document", "documents"),
+      hint: docs.length === 0 ? "Not read yet" : lastRead && mounted ? `Refreshed ${timeLabel(lastRead)}` : "Pages, policies & blog",
+    },
+    {
+      id: "notes", icon: NoteIcon, label: "Your team's notes",
+      value: plural(files.length, "file", "files"),
+      hint: files.length === 0 ? "None yet" : issues > 0 ? `${plural(issues, "line", "lines")} to check` : "Check passed",
+      tone: files.length === 0 ? null : issues > 0 ? "bad" : "good",
+    },
+    {
+      id: "promos", icon: DiscountIcon, label: "Promotions",
+      value: livePromos ? `${livePromos} live` : "None live",
+      hint: scheduledPromos ? `${scheduledPromos} scheduled` : "Optional",
+    },
   ];
+  const go = (id) => {
+    if (id === "promos") setPromosOpen(true);
+    const el = document.getElementById(`kn-${id}`);
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" }));
+  };
 
   return (
     <Page>
       <TitleBar title="Knowledge" />
-      <BrandHeader title="Knowledge" />
-      <BlockStack gap="800">
-        <Card>
-          <BlockStack gap="300">
-            <Text as="h2" variant="headingMd">What your assistant knows about your store</Text>
-            <InlineStack gap="800" wrap>
-              {summary.map((s) => (
-                <BlockStack key={s.label} gap="050">
-                  <Text as="span" variant="bodySm" tone="subdued">{s.label}</Text>
-                  <Text as="span" variant="headingMd">{s.value}</Text>
-                </BlockStack>
+      {/* Static CSS, injected as-is: as a text child React would escape its
+          quotes on the server and the page wouldn't hydrate. */}
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + KNOWLEDGE_CSS }} />
+      <div className="kn set-links">
+        <BlockStack gap="600">
+          <BrandHeader title="Knowledge" gutter={false} />
+
+          <section>
+            <SectionHead title="What your assistant knows">
+              Three sources. When they disagree, your team's notes win, then live promotions, then your website.
+            </SectionHead>
+            <div className="kn-overview">
+              {overview.map((s) => (
+                <button key={s.id} type="button" className="kn-stat" onClick={() => go(s.id)}>
+                  <span className="kn-stat__mark" aria-hidden="true"><Icon source={s.icon} /></span>
+                  <span className="kn-stat__body">
+                    <span className="kn-stat__label">{s.label}</span>
+                    <span className="kn-stat__value">{s.value}</span>
+                    <span className={`kn-stat__hint${s.tone ? ` kn-stat__hint--${s.tone}` : ""}`}>{s.hint}</span>
+                  </span>
+                </button>
               ))}
-            </InlineStack>
-            <Text as="p" tone="subdued" variant="bodySm">
-              If two sources disagree, the assistant trusts your team's notes first, then live promotions, then your website.
-            </Text>
-          </BlockStack>
-        </Card>
+            </div>
+          </section>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Learned from your website"
-            description="Everything your store publishes — policies, pages (FAQs, size guides, clinical studies, technology…) and blog articles — is read automatically after every product sync and nightly. Nothing to upload."
-          />
-          <StoreKnowledgeCard docs={data.storeKnowledge || []} />
-        </BlockStack>
+          <section id="kn-website" className="kn-sec">
+            <SectionHead title="Learned from your website">
+              Policies, pages (FAQs, size guides, clinical studies, technology…) and blog articles — read automatically after every product sync and nightly. Nothing to upload.
+            </SectionHead>
+            <StoreKnowledgeCard docs={docs} />
+          </section>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Your team's notes"
-            description="Add what isn't on the website, or correct what is."
-          />
-          <KnowledgeFilesCard files={data.files} check={data.knowledgeCheck} />
-        </BlockStack>
+          <section id="kn-notes" className="kn-sec">
+            <SectionHead title="Your team's notes">
+              What the website doesn't say, or says differently — FAQs, sizing advice, brand voice. The assistant looks things up here, and these notes win over the website. A Rules &amp; Guidelines file is followed on every chat.
+            </SectionHead>
+            <KnowledgeFilesCard files={files} check={data.knowledgeCheck} />
+          </section>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Promotions"
-            description="Add a sale with start and end dates. The assistant only mentions what's live right now; ended promotions disappear on their own. It can also read your offers from a page on your site: Settings → Promotions page."
-          />
-          <CampaignsCard initial={data.campaigns} template={data.campaignTemplate} initialCheatCode={data.campaignCheatCode} />
+          <section id="kn-promos" className="kn-sec">
+            <Card padding="0">
+              <Row
+                title={<InlineStack gap="200" blockAlign="center"><span>Promotions</span><Badge tone={livePromos ? "success" : undefined}>{livePromos ? `${livePromos} live` : "None live"}</Badge></InlineStack>}
+                help="Dated sales the assistant mentions only while they're live. Your offers page in Settings → Shopping tools usually covers this."
+                control={
+                  <Button onClick={() => setPromosOpen((o) => !o)} disclosure={promosOpen ? "up" : "down"} ariaExpanded={promosOpen} ariaControls="kn-promos-body">
+                    {promosOpen ? "Hide" : "Show"}
+                  </Button>
+                }
+              />
+              <div id="kn-promos-body" className="kn-promos-body" hidden={!promosOpen}>
+                <CampaignsCard initial={data.campaigns} template={data.campaignTemplate} initialCheatCode={data.campaignCheatCode} />
+              </div>
+            </Card>
+          </section>
         </BlockStack>
-      </BlockStack>
+      </div>
     </Page>
   );
 }
