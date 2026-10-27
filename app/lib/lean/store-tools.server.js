@@ -120,6 +120,7 @@ export async function buildLeanStoreExtras({
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
     returnsInChat: config.returnsInChat !== false,
+    guestOrderLookup: config.guestOrderLookup !== false,
     returnPolicy: returnPolicy(config),
   };
 
@@ -155,8 +156,9 @@ export async function buildLeanStoreExtras({
   });
 
   // Orders and returns for every shopper: signed in → their order cards;
-  // signed out → a sign-in button (no VIP mode needed — it's their own data).
-  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat, policy: ctx.returnPolicy });
+  // signed out → sign in, or look one order up with its number and email
+  // (no VIP mode needed — it's their own data).
+  const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat, guestLookup: ctx.guestOrderLookup, policy: ctx.returnPolicy });
   wrap(orders.definition, orders.run);
 
   if (config.fitPredictorEnabled === true) {

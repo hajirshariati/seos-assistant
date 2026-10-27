@@ -478,6 +478,25 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: True Fit, pick a shoe`);
   await ctx.close();
 }
+// Order status without signing in: the form (with its errors), and the order found.
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const { ctx, page } = await open("/full", { viewport: vp });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "where is my order?");
+  await page.waitForSelector(".ai-ordl", { timeout: 6000 });
+  await page.click("[data-ordl-open]");
+  await page.click(".ai-ordl__go");
+  await page.waitForTimeout(400);
+  await axe(page, `${name}: order lookup form, with errors`);
+  await page.fill("[name=order]", "1172010");
+  await page.fill("[name=email]", "pat@example.com");
+  await page.click(".ai-ordl__go");
+  await page.waitForSelector(".ai-ordl-done", { timeout: 6000 });
+  await page.waitForTimeout(400);
+  await axe(page, `${name}: order looked up`);
+  await ctx.close();
+}
 for (const run of axeRuns) {
   const serious = run.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   check(`axe WCAG 2.2 AA — ${run.label}: no serious/critical violations`, serious.length === 0, serious.map((v) => `${v.id} (${v.nodes}) ${v.target}`).join("; "));

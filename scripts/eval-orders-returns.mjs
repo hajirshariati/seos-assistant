@@ -7,6 +7,7 @@ process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
 const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
+const { cleanLookup, guestSearch, matchGuestOrder, guestOrderCard, lookupGuestOrder, createLookupLimiter, GUEST_LIMITS } = await import("../app/lib/guest-order.server.js");
 
 let passed = 0, failed = 0;
 const test = async (name, fn) => {
@@ -214,12 +215,111 @@ await test("reasons: size and width reasons offer an exchange, others don't", ()
   assert.equal(reasonByKey("damaged").change, undefined);
   assert.equal(reasonByKey("nope"), null);
 });
-await test("chat tool: signed out → a sign-in button, no order data", async () => {
+await test("chat tool: signed out → sign in or look the order up; no order data; never asks for an email in the chat", async () => {
   const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null });
   const r = await t.run({});
   assert.equal(r.signed_in, false);
-  assert.deepEqual(r._events, [{ type: "login_prompt", intent: "track" }]);
+  assert.deepEqual(r._events, [{ type: "login_prompt", intent: "track", lookup: true }]);
   assert.ok(!("orders" in r));
+  assert.match(r.note, /look up the order with its order number \(or confirmation code\) and the email/);
+  assert.match(r.note, /Don't ask for their email or order details in the chat/);
+  assert.match(t.definition.description, /Never ask them to type their email or order details into the chat/);
+  // The number they mentioned fills in the form — junk doesn't.
+  assert.deepEqual((await t.run({ orderNumber: "#1174861" }))._events[0], { type: "login_prompt", intent: "track", lookup: true, order: "1174861" });
+  assert.equal((await t.run({ orderNumber: "<b>x" }))._events[0].order, undefined);
+  // Returns still need sign-in; the card says so.
+  const ret = await t.run({ intent: "return" });
+  assert.match(ret.note, /sign in to start a return \(returns need sign-in\)/);
+  // The store turned the lookup off: sign-in only, as before.
+  const off = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null, guestLookup: false }).run({ orderNumber: "1174861" });
+  assert.deepEqual(off._events, [{ type: "login_prompt", intent: "track" }]);
+});
+
+// ── Order status without signing in (routes/order-lookup.jsx) ──
+await test("guest lookup: what's typed is cleaned up; anything else is refused per field", () => {
+  assert.deepEqual(cleanLookup({ order: " #1174861 ", email: " Pat@Example.COM " }), { order: "1174861", email: "pat@example.com" });
+  assert.deepEqual(cleanLookup({ order: "pqype1gh8", email: "a@b.co" }), { order: "pqype1gh8", email: "a@b.co" });
+  assert.deepEqual(cleanLookup({ order: "AE-1001", email: "a@b.co" }).order, "AE-1001");
+  assert.deepEqual(Object.keys(cleanLookup({ order: "1", email: "a@b.co" }).errors), ["order"]);
+  assert.deepEqual(Object.keys(cleanLookup({ order: '1001" OR email:*', email: "a@b.co" }).errors), ["order"], "search syntax can't get in");
+  assert.deepEqual(Object.keys(cleanLookup({ order: "1001", email: "nope" }).errors), ["email"]);
+  assert.deepEqual(Object.keys(cleanLookup({}).errors), ["order", "email"]);
+  assert.deepEqual(Object.keys(cleanLookup({ order: "1001", email: `${"a".repeat(250)}@b.co` }).errors), ["email"]);
+});
+await test("guest lookup: searched by order number or confirmation code only", () => {
+  assert.equal(guestSearch("1174861"), 'name:"#1174861" OR name:"1174861" OR confirmation_number:"1174861"');
+});
+const guest = (over = {}) => order({ email: "Pat@Example.com", confirmationNumber: "PQYPE1GH8", ...over });
+await test("guest lookup: the number (or code) AND the email must be the same order's — exactly", () => {
+  const o = guest();
+  assert.equal(matchGuestOrder([o], { order: "1171674", email: "pat@example.com" }), o);
+  assert.equal(matchGuestOrder([o], { order: "pqype1gh8", email: "pat@example.com" }), o, "confirmation code, any case");
+  assert.equal(matchGuestOrder([o], { order: "1171674", email: "someone@else.com" }), null, "wrong email");
+  assert.equal(matchGuestOrder([o], { order: "117167", email: "pat@example.com" }), null, "part of the number isn't enough");
+  assert.equal(matchGuestOrder([o], { order: "71674", email: "pat@example.com" }), null);
+  assert.equal(matchGuestOrder([guest({ email: null })], { order: "1171674", email: "" }), null, "an order with no email never matches");
+  // Confirmation codes aren't unique: the email picks the right one.
+  const other = guest({ id: "gid://shopify/Order/6000", name: "#1180000", email: "sam@example.com" });
+  assert.equal(matchGuestOrder([other, o], { order: "PQYPE1GH8", email: "pat@example.com" }), o);
+});
+await test("guest lookup: the card shows status and items only — no ids, email, address, payment, prices or return actions", () => {
+  const c = guestOrderCard(guest(), { trackingBase: "https://track.example", now: Date.parse("2026-10-20T00:00:00Z") });
+  assert.deepEqual(Object.keys(c).sort(), ["carrier", "date", "deliveredAt", "eta", "guest", "id", "items", "number", "returnStatus", "shippedAt", "stage", "stageLabel", "step", "trackUrl"].sort());
+  assert.equal(c.id, "guest-1171674");
+  assert.equal(c.number, "1171674");
+  assert.equal(c.stageLabel, "On its way");
+  assert.equal(c.trackUrl, "https://track.example/tracking/1Z9", "tracking link carries the tracking number, never the email");
+  assert.deepEqual(c.items, [{ title: "Savannah Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: "https://cdn/x.jpg", quantity: 1 }]);
+  const text = JSON.stringify(c);
+  assert.ok(!/@|example\.com|PQYPE1GH8|gid:|Customer/.test(text), text);
+  assert.ok(!("canReturn" in c) && !("returnsUrl" in c));
+});
+await test("guest lookup: found → the card; any miss → the same not-found (no hint which detail was wrong)", async () => {
+  const seen = [];
+  const graphql = async ({ variables }) => { seen.push(variables.q); return { orders: { nodes: [guest()] } }; };
+  const log = console.log; const logged = []; console.log = (m) => logged.push(String(m));
+  try {
+    const ok = await lookupGuestOrder({ shop: "s", accessToken: "t", order: "1171674", email: "pat@example.com", graphql });
+    assert.equal(ok.order.number, "1171674");
+    const wrongEmail = await lookupGuestOrder({ shop: "s", accessToken: "t", order: "1171674", email: "x@example.com", graphql });
+    const wrongNumber = await lookupGuestOrder({ shop: "s", accessToken: "t", order: "1171675", email: "pat@example.com", graphql: async () => ({ orders: { nodes: [] } }) });
+    assert.deepEqual(wrongEmail, { notFound: true });
+    assert.deepEqual(wrongNumber, wrongEmail);
+  } finally { console.log = log; }
+  assert.equal(seen[0], guestSearch("1171674"));
+  assert.ok(logged.every((l) => !/pat@|1171674|x@example/.test(l)), "the log never names who looked or what for");
+  assert.ok(logged.some((l) => /\[pii-access\].*guest_order_lookup result=found/.test(l)));
+});
+await test("guest lookup: tries are limited per device, per order, per email and per store", () => {
+  let t = 0;
+  const lim = createLookupLimiter({ now: () => t });
+  const tries = (n, parts, shop = "s") => Array.from({ length: n }, () => lim(shop, parts).ok);
+  assert.equal(GUEST_LIMITS.device.limit, 6);
+  // One device: 6 in ten minutes, then wait.
+  assert.deepEqual(tries(7, { device: "1.1.1.1" }), [true, true, true, true, true, true, false]);
+  t += 10 * 60_000 + 1;
+  assert.equal(lim("s", { device: "1.1.1.1" }).ok, true, "free again after the window");
+  // One order from many devices: 6 an hour, so switching devices doesn't help guess its email.
+  const byOrder = Array.from({ length: 7 }, (_, i) => lim("s", { device: `9.9.9.${i}`, order: "1171674", email: `guess${i}@x.com` }).ok);
+  assert.deepEqual(byOrder, [true, true, true, true, true, true, false]);
+  const r = lim("s", { device: "8.8.8.8", order: "1171674", email: "pat@example.com" });
+  assert.equal(r.ok, false);
+  assert.ok(r.retryAfter > 0 && r.retryAfter <= 3600);
+  // One email from many devices: 10 an hour, so no one can walk order numbers for it.
+  const byEmail = Array.from({ length: 11 }, (_, i) => lim("s", { device: `7.7.7.${i}`, order: `20000${i}`, email: "victim@x.com" }).ok);
+  assert.deepEqual(byEmail.slice(-2), [true, false]);
+  // Another store has its own limits.
+  assert.equal(lim("other", { device: "8.8.8.8", order: "1171674", email: "pat@example.com" }).ok, true);
+});
+await test("guest lookup: the whole store's lookups are capped; a full limiter turns lookups away (it never forgets tries)", () => {
+  let t = 0;
+  const lim = createLookupLimiter({ limits: { ...GUEST_LIMITS, store: { limit: 3, windowMs: 60_000 } }, now: () => t });
+  assert.deepEqual([0, 1, 2, 3].map((i) => lim("s", { device: `d${i}` }).ok), [true, true, true, false]);
+  const tiny = createLookupLimiter({ maxKeys: 4, now: () => t });
+  assert.equal(tiny("s", { device: "a", order: "1001", email: "a@b.co" }).ok, true);
+  assert.equal(tiny("s", { device: "b", order: "1002", email: "b@b.co" }).ok, false, "full: turned away, not forgotten");
+  t += 60 * 60_000 + 1;
+  assert.equal(tiny("s", { device: "b", order: "1002", email: "b@b.co" }).ok, true, "old tries age out, then there's room");
 });
 await test("chat tool: signed in → order cards for the widget, a short summary for the model", async () => {
   const realFetch = globalThis.fetch;

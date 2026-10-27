@@ -20,6 +20,8 @@ export const viewAllLog = [];
 export const viewAllIndexLog = [];
 export const viewAllCardsLog = [];
 export const feedbackBodies = [];
+// Order lookups without signing in (POST /apps/hajirai/order-lookup).
+export const lookupBodies = [];
 export const METHODS = [
   { key: "happy_returns", label: "Drop off at any Happy Returns location", detail: "No box or label needed.", fee: "$5.95", findUrl: "https://locations.example/" },
   { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
@@ -214,6 +216,29 @@ export function start(port) {
         }
         if (u.pathname === "/apps/hajirai/signed-in" && u.searchParams.get("check")) return send(200, "application/json", JSON.stringify({ signedIn: /signedin=1/.test(req.headers.cookie || "") }));
         if (u.pathname === "/apps/hajirai/signed-in") return send(200, "text/html", signedInPage(u.searchParams.get("back")));
+        // Order status without signing in: order number (or confirmation code)
+        // + email, both of the same order → that order's status, as the real
+        // route answers (routes/order-lookup.jsx). mockCtl.lookupTries: tries
+        // allowed before "too many tries".
+        if (u.pathname === "/apps/hajirai/order-lookup" && req.method === "POST") {
+          let b = {};
+          try { b = JSON.parse(body || "{}"); } catch { /* */ }
+          lookupBodies.push({ ...b, contentType: req.headers["content-type"] || "" });
+          const reply = (code, obj) => setTimeout(() => send(code, "application/json", JSON.stringify(obj)), mockCtl.lookupDelayMs ?? 250);
+          if (mockCtl.lookupTries != null && lookupBodies.length > mockCtl.lookupTries) return reply(429, { error: "too_many_tries", message: "Too many tries for now. Please wait a little and try again, or sign in to see your orders.", retryAfter: 300 });
+          const order = String(b.order || "").replace(/\s+/g, "").replace(/^#+/, "");
+          const email = String(b.email || "").trim().toLowerCase();
+          const fields = {};
+          if (!/^[a-z0-9-]{3,24}$/i.test(order)) fields.order = "Enter your order number or confirmation number.";
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) fields.email = "Enter the email you used for the order.";
+          if (Object.keys(fields).length) return reply(400, { error: "invalid", fields });
+          const o = ORDERS[1];
+          if ((order === o.number || order.toUpperCase() === "QWERTY123") && email === "pat@example.com") {
+            const card = { number: o.number, date: o.date, stage: o.stage, stageLabel: o.stageLabel, step: o.step, shippedAt: o.shippedAt, deliveredAt: o.deliveredAt, eta: o.eta, carrier: o.carrier, trackUrl: o.trackUrl, returnStatus: o.returnStatus };
+            return reply(200, { ok: true, order: { ...card, id: `guest-${o.number}`, items: o.items.map(({ title, options, image, quantity }) => ({ title, options, image, quantity })), guest: true } });
+          }
+          return reply(404, { error: "not_found", message: "We couldn't find an order with those details. Check them against your order confirmation email — orders from the last 60 days can be looked up here." });
+        }
         if (u.pathname === "/apps/hajirai/returns" && req.method === "GET") {
           if (!/signedin=1/.test(req.headers.cookie || "")) return send(401, "application/json", JSON.stringify({ error: "sign_in_required" }));
           const o = ORDERS.find((x) => x.id === u.searchParams.get("orderId"));
@@ -390,9 +415,11 @@ export function start(port) {
               const page = /returns page/i.test(parsed.message);
               w({ type: "order_cards", intent, orders: ORDERS.map(orderNow).map((o) => page ? { ...o, returnMode: "page", returnsUrl: "https://returns.example/?order-number=" + o.number } : o), returnMethods: page ? [] : METHODS });
             } else {
-              w({ type: "text", text: "Sign in and I'll pull up your orders right here." });
+              w({ type: "text", text: "Sign in, or look your order up with its number and email." });
               w({ type: "products", products: [] });
-              w({ type: "login_prompt", intent });
+              // As the server sends it: the lookup on, with a number they mentioned filled in.
+              const num = (parsed.message.match(/#?(\d{5,})/) || [])[1];
+              w({ type: "login_prompt", intent, lookup: !/sign-in only/i.test(parsed.message), ...(num ? { order: num } : {}) });
             }
             w({ type: "done" });
             return resp.end();

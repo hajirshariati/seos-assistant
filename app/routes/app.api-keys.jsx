@@ -97,6 +97,7 @@ export const loader = async ({ request }) => {
     returnsInChat: config.returnsInChat !== false,
     returnWindowDays: Number.isFinite(config.returnWindowDays) ? config.returnWindowDays : 30,
     returnsDeliveredOnly: config.returnsDeliveredOnly !== false,
+    guestOrderLookup: config.guestOrderLookup !== false,
     feedbackSurveyOn: config.feedbackSurveyOn === true,
     feedbackSurvey: config.feedbackSurvey || "",
     feedbackSurveyLabel: config.feedbackSurveyLabel || "Share feedback",
@@ -260,6 +261,7 @@ export const action = async ({ request }) => {
   text("trackingPageUrl");
   text("returnsPageUrl");
   bool("returnsInChat");
+  bool("guestOrderLookup");
   const windowDays = formData.get("returnWindowDays");
   if (windowDays !== null) {
     const n = Number.parseInt(String(windowDays).trim(), 10);
@@ -459,7 +461,7 @@ const FIELDS = {
   appearDelayOn: ["visibility", "bool"], appearDelaySec: ["visibility"], hideInternational: ["visibility", "bool"],
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
-  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
@@ -885,6 +887,15 @@ function CareSection({ values, set }) {
           control={<div style={{ width: 130 }}><TextField label="Return window" labelHidden type="number" min={0} max={365} value={values.returnWindowDays} onChange={set("returnWindowDays")} autoComplete="off" suffix="days" /></div>}
         />
         <Row title="Only after delivery" help={values.returnsDeliveredOnly ? "The return button appears once the order is delivered." : "The return button appears as soon as the order ships."} toggle checked={values.returnsDeliveredOnly} onChange={set("returnsDeliveredOnly")} />
+        <Row
+          title="Order status without signing in"
+          help={values.guestOrderLookup
+            ? "Signed-out shoppers can check one order with its order number (or confirmation code) and the email they used. They see status, items and tracking only — never names, addresses or payment details — and need to sign in to start a return. Tries are limited so no one can guess."
+            : "Shoppers sign in to see their orders."}
+          toggle
+          checked={values.guestOrderLookup}
+          onChange={set("guestOrderLookup")}
+        />
       </Group>
     </BlockStack>
   );

@@ -271,7 +271,8 @@ function md(t){if(!t)return'';return t.replace(/^\s*\|[\s\-:|]+\|\s*$/gm,'').rep
    session id then lives in memory for this page. */
 var _memSess='';
 function getSess(){var id='';try{id=localStorage.getItem(SK)||''}catch(e){}if(!id)id=_memSess;if(!id){id='sess_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);try{localStorage.setItem(SK,id)}catch(e){}}_memSess=id;return id}
-function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.slice(-50)))}catch(e){}}
+/* An order looked up without signing in is never written to the browser. */
+function saveH(m){try{localStorage.setItem(HK,JSON.stringify(m.filter(function(x){return !x.guestOrder}).slice(-50)))}catch(e){}}
 function loadH(){try{return JSON.parse(localStorage.getItem(HK))||[]}catch(e){return[]}}
 
 /* Storefront root (Shopify Markets can serve the shop under /en-ca/ etc.). */
@@ -2543,7 +2544,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 true-fit-intro'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 order-lookup'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -3738,7 +3739,11 @@ function fmtDay(d){if(!d)return'';try{var p=String(d).split('-');var dt=new Date
 function optLine(o){var v=[];for(var k in (o||{}))if(Object.prototype.hasOwnProperty.call(o,k))v.push(o[k]);return v.join(' · ')}
 var ORD_ICON={bag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
   user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>',
-  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'};
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5M12 13v8M7.5 5.5l9 5"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>',
+  chev:'<svg class="ai-ordl__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'};
 /* Returns started for this order: what the server knows plus what this
    browser saw go through (so the card is right even before it asks again). */
 function cardReturns(o){
@@ -3781,7 +3786,9 @@ function orderCardHtml(o){
   /* Actions sit right under the items; returns started show below them. */
   h+='<div class="ai-ord__actions">';
   if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
-  if(o.canReturn&&returnableItems(o).length){
+  /* Looked up without signing in: returns need the shopper signed in. */
+  if(o.guest){if(!cancelled)h+='<button type="button" class="ai-ord__btn" data-ord-login="return">Sign in to return</button>'}
+  else if(o.canReturn&&returnableItems(o).length){
     /* The store runs returns on its own page: open it with the order filled in. */
     if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))h+='<a class="ai-ord__btn" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
     else h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
@@ -3796,10 +3803,92 @@ function ordersHtml(list){
   for(var i=0;i<Math.min(list.length,3);i++)h+=orderCardHtml(list[i]);
   return h+'</div>';
 }
-function loginCardHtml(intent){
-  return '<div class="ai-ord ai-ord--signin"><div class="ai-ord__signin-icon">'+ORD_ICON.user+'</div>'+
+function loginCardHtml(p){
+  if(typeof p==='string')p={intent:p};
+  var intent=p&&p.intent==='return'?'return':'track';
+  if(!p||!p.lookup)return '<div class="ai-ord ai-ord--signin"><div class="ai-ord__signin-icon">'+ORD_ICON.user+'</div>'+
     '<div class="ai-ord__signin-text"><div class="ai-ord__num">Sign in to see your orders</div><div class="ai-ord__date">Track packages and start returns right here.</div></div>'+
-    '<button type="button" class="ai-ord__btn is-primary" data-ord-login="'+esc(intent||'track')+'">Sign in</button></div>';
+    '<button type="button" class="ai-ord__btn is-primary" data-ord-login="'+intent+'">Sign in</button></div>';
+  return lookupCardHtml(intent,p.order||'',false);
+}
+/* Order status without signing in. Two ways in, one card: sign in (every
+   order, returns), or look one order up with its number (or the
+   confirmation code from the email) and the email it was placed with. The
+   form goes straight to the store — never to the assistant — and both have
+   to match. The order shows here only: it's never saved in this browser. */
+var ORDER_LOOKUP_URL='/apps/hajirai/order-lookup';
+var ordlSeq=0;
+function lookupCardHtml(intent,order,open){
+  var n=++ordlSeq,ret=intent==='return',f='ai-ordl-'+n,hint=/^[A-Za-z0-9-]{3,24}$/.test(order)?order:'';
+  return '<div class="ai-ord ai-ordl" data-ordl>'+
+    '<div class="ai-ordl__head"><span class="ai-ordl__icon">'+ORD_ICON.box+'</span><span class="ai-ordl__htxt"><span class="ai-ord__num">'+(ret?'Start a return':'Check on your order')+'</span><span class="ai-ord__date">'+(ret?'Returns start here once you\u2019re signed in.':'Its status, tracking and items.')+'</span></span></div>'+
+    '<div class="ai-ordl__opts">'+
+      '<button type="button" class="ai-ordl__opt" data-ord-login="'+intent+'"><span class="ai-ordl__oi is-ink">'+ORD_ICON.user+'</span><span class="ai-ordl__ot"><b>Sign in</b><span>'+(ret?'Start a return right here':'Every order, plus returns')+'</span></span>'+ORD_ICON.chev+'</button>'+
+      '<button type="button" class="ai-ordl__opt" data-ordl-open aria-expanded="'+(open?'true':'false')+'" aria-controls="'+f+'"><span class="ai-ordl__oi">'+ORD_ICON.search+'</span><span class="ai-ordl__ot"><b>'+(ret?'Check an order\u2019s status':'Look up an order')+'</b><span>Order number and email</span></span>'+ORD_ICON.chev+'</button>'+
+      '<form class="ai-ordl__form" id="'+f+'" novalidate'+(open?'':' hidden')+'>'+
+        '<div class="ai-ordl__field"><label for="'+f+'-o">Order or confirmation number</label>'+
+          '<input id="'+f+'-o" name="order" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="30" placeholder="e.g. 1234567" value="'+esc(hint)+'" aria-describedby="'+f+'-oh '+f+'-oe">'+
+          '<span class="ai-ordl__hint" id="'+f+'-oh">It\u2019s in your order confirmation email.</span><span class="ai-ordl__ferr" id="'+f+'-oe" hidden></span></div>'+
+        '<div class="ai-ordl__field"><label for="'+f+'-e">Email used for the order</label>'+
+          '<input id="'+f+'-e" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="you@example.com" aria-describedby="'+f+'-ee">'+
+          '<span class="ai-ordl__ferr" id="'+f+'-ee" hidden></span></div>'+
+        '<div class="ai-ordl__err" role="alert" hidden></div>'+
+        '<button type="submit" class="ai-ord__btn is-primary ai-ordl__go">Find my order</button>'+
+        '<p class="ai-ordl__note">'+ORD_ICON.lock+'Used only to find it. Never saved.</p>'+
+      '</form>'+
+    '</div></div>';
+}
+function ordlField(form,name,msg){
+  var input=form.querySelector('[name="'+name+'"]'),err=form.querySelector('#'+input.id+'e');
+  if(msg){input.setAttribute('aria-invalid','true');err.textContent=msg;err.hidden=false}
+  else{input.removeAttribute('aria-invalid');err.textContent='';err.hidden=true}
+}
+function ordlOpen(btn,open){
+  var form=document.getElementById(btn.getAttribute('aria-controls'));if(!form)return;
+  if(open==null)open=form.hidden;
+  form.hidden=!open;btn.setAttribute('aria-expanded',String(open));
+  if(open){var first=form.querySelector('input[name="order"]');if(first&&first.value)first=form.querySelector('input[name="email"]');if(first)try{first.focus()}catch(e){}}
+}
+function ordlSubmit(form){
+  if(form.__busy)return;
+  var oIn=form.querySelector('[name="order"]'),eIn=form.querySelector('[name="email"]');
+  var order=String(oIn.value||'').replace(/\s+/g,'').replace(/^#+/,''),email=String(eIn.value||'').trim();
+  var bad={};
+  if(!/^[A-Za-z0-9-]{3,24}$/.test(order))bad.order='Enter your order number or confirmation number.';
+  if(email.length>254||!/^[^\s@<>()",;:]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(email))bad.email='Enter the email you used for the order.';
+  ordlField(form,'order',bad.order);ordlField(form,'email',bad.email);
+  var errBox=form.querySelector('.ai-ordl__err');errBox.hidden=true;
+  if(bad.order||bad.email){try{(bad.order?oIn:eIn).focus()}catch(e){}return}
+  var go=form.querySelector('.ai-ordl__go');
+  form.__busy=true;go.disabled=true;go.classList.add('is-busy');go.setAttribute('aria-busy','true');
+  var done=function(){form.__busy=false;go.disabled=false;go.classList.remove('is-busy');go.removeAttribute('aria-busy')};
+  var fail=function(msg){done();errBox.textContent=msg;errBox.hidden=false};
+  fetch(ORDER_LOOKUP_URL,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({order:order,email:email})})
+    .then(function(r){return r.json().catch(function(){return {}}).then(function(d){return {status:r.status,d:d}})})
+    .then(function(x){
+      var d=x.d||{};
+      if(x.status===200&&d.ok&&d.order&&d.order.number){done();ordlShow(form.closest('.ai-ordl'),d.order);return}
+      if(x.status===400&&d.fields){done();ordlField(form,'order',d.fields.order);ordlField(form,'email',d.fields.email);return}
+      if(x.status===403&&d.error==='off'){var row=form.closest('.ai-ordl').querySelector('[data-ordl-open]');if(row)row.remove();form.remove();return}
+      /* Not found: the same words whatever was wrong — no hint which detail. */
+      if(x.status===404){done();errBox.innerHTML='<b>We couldn\u2019t find an order with those details.</b><span>Check them against your confirmation email. Orders from the last 60 days can be looked up here.</span>';errBox.hidden=false;return}
+      fail(d.message||'We couldn\u2019t look that up right now. Please try again in a moment.');
+    })
+    .catch(function(){fail('We couldn\u2019t look that up right now. Please try again in a moment.')});
+}
+/* The order, in place of the form. The assistant learns its status (never
+   the email) for follow-up questions in this visit only. */
+function ordlShow(card,o){
+  if(!card)return;
+  o.guest=true;o.id='guest-'+String(o.number).replace(/[^A-Za-z0-9-]/g,'');
+  var wrap=document.createElement('div');wrap.className='ai-ordl-done';
+  wrap.innerHTML='<div class="ai-ords">'+orderCardHtml(o)+'</div>'+
+    '<div class="ai-ordl__after"><span>'+ORD_ICON.lock+'This order only \u00b7 not saved</span><button type="button" class="ai-ordl__again" data-ordl-again>Look up another order</button></div>';
+  card.replaceWith(wrap);
+  var when=o.deliveredAt?'delivered '+fmtDay(o.deliveredAt):o.eta?'arriving by '+fmtDay(o.eta):'';
+  var items=(o.items||[]).map(function(i){return i.title}).slice(0,4).join(', ');
+  messages.push({role:'assistant',guestOrder:true,content:'Order #'+o.number+' (looked up with its number and email): '+o.stageLabel+(when?', '+when:'')+(o.carrier?' via '+o.carrier:'')+'.'+(items?' Items: '+items+'.':'')+' Returns need sign-in.'});
+  var head=wrap.querySelector('.ai-ord__num');if(head){head.setAttribute('tabindex','-1');try{head.focus({preventScroll:true})}catch(e){}}
 }
 /* Sign-in: Shopify's own sign-in in a small window; it lands on a page that
    tells the chat and closes. Blocked pop-up: same tab, and the chat picks up
@@ -4066,6 +4155,16 @@ function resumeReturns(){
   }
 }
 panel.addEventListener('click',function(e){
+  var lk=e.target.closest&&e.target.closest('[data-ordl-open],[data-ordl-again]');
+  if(lk&&panel.contains(lk)){
+    e.preventDefault();
+    if(lk.hasAttribute('data-ordl-open')){ordlOpen(lk);return}
+    var done=lk.closest('.ai-ordl-done');if(!done)return;
+    var holder=document.createElement('div');holder.innerHTML=lookupCardHtml('track','',true);
+    var fresh=holder.firstChild;done.replaceWith(fresh);
+    var inp=fresh.querySelector('input[name="order"]');if(inp)try{inp.focus()}catch(_){}
+    return;
+  }
   var t=e.target.closest&&e.target.closest('[data-ord-login],[data-ord-return],[data-ret-item],[data-ret-next],[data-ret-reason],[data-ret-method],[data-ret-submit],[data-ret-cancel]');
   if(!t||!panel.contains(t))return;
   if(t.hasAttribute('data-ord-login')){e.preventDefault();startSignIn(t.getAttribute('data-ord-login'));return}
@@ -4078,6 +4177,12 @@ panel.addEventListener('click',function(e){
   if(t.hasAttribute('data-ret-reason')){st.reason=t.getAttribute('data-ret-reason');renderReturn(card,RET_METHODS.length>1?'method':'confirm');return}
   if(t.hasAttribute('data-ret-method')){st.method=t.getAttribute('data-ret-method');renderReturn(card,'method');return}
   if(t.hasAttribute('data-ret-submit')){if(card.__sending)return;card.__sending=true;setTimeout(function(){card.__sending=false},1500);submitReturn(card,t.getAttribute('data-ret-submit'));return}
+});
+
+panel.addEventListener('submit',function(e){
+  var form=e.target&&e.target.closest&&e.target.closest('.ai-ordl__form');
+  if(!form)return;
+  e.preventDefault();ordlSubmit(form);
 });
 
 function sendMessage(){
@@ -4370,7 +4475,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   fitResult=String(p.key);
 }
 if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods}
-if(p.type==='login_prompt'){pendingLogin=p.intent||'track'}
+if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:''}}
 if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pendingCompare=p.comparison}
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
@@ -4827,6 +4932,8 @@ document.addEventListener('keydown',function(e){
   if(fbSheet&&!fbSheet.hidden){if(vfOpen)vfClose(true);else closeFeedback();return}
   var pk=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.is-cmp-picking');
   if(pk){cmpCancel(pk);return}
+  var lf=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.ai-ordl__form');
+  if(lf){var lb=panel.querySelector('[aria-controls="'+lf.id+'"]');if(lb){ordlOpen(lb,false);try{lb.focus()}catch(_){}}return}
   toggle(false);
 });
 menuBtn.setAttribute('aria-haspopup','true');menuBtn.setAttribute('aria-expanded','false');

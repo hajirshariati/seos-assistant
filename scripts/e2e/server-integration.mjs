@@ -299,6 +299,31 @@ await test("\"Find my shoe size\" with no shoe picked: how True Fit works and th
   assert.ok(!plain.events.some((e) => e.type === "size_intro"));
   assert.match(plain.events[0].text, /sandals/);
 });
+await test("order status without signing in: signed requests only, JSON only, malformed refused, tries limited, the store's switch obeyed", async () => {
+  const post = (body, { ip = "198.51.100.70", type = "application/json", url = signed("/order-lookup") } = {}) =>
+    fetch(url, { method: "POST", headers: { "content-type": type, "x-forwarded-for": ip }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  const unsigned = await post({ order: "1001", email: "a@b.co" }, { url: `http://localhost:${APP_PORT}/order-lookup?shop=${SHOP}` });
+  assert.ok(unsigned.status >= 400 && unsigned.status < 500, `unsigned → ${unsigned.status}`);
+  assert.equal((await post("order=1001&email=a@b.co", { type: "application/x-www-form-urlencoded" })).status, 415, "a plain form post from another page is refused");
+  const bad = await post({ order: '1" OR email:*', email: "nope" });
+  assert.equal(bad.status, 400);
+  assert.deepEqual(Object.keys((await bad.json()).fields).sort(), ["email", "order"]);
+  assert.equal(bad.headers.get("cache-control"), "no-store");
+  // Every try counts (six per device in ten minutes), even malformed ones.
+  for (let i = 0; i < 5; i++) await post({ order: "x", email: "x" });
+  const limited = await post({ order: "x", email: "x" });
+  assert.equal(limited.status, 429);
+  assert.match((await limited.json()).message, /Too many tries/);
+  assert.ok(Number(limited.headers.get("retry-after")) > 0);
+  // The store turned it off: refused before anything is looked up.
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { guestOrderLookup: false } });
+  await configCacheExpiry();
+  const off = await post({ order: "1001", email: "a@b.co" }, { ip: "198.51.100.71" });
+  assert.equal(off.status, 403);
+  assert.equal((await off.json()).error, "off");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { guestOrderLookup: true } });
+  await configCacheExpiry();
+});
 await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
   const settle = () => new Promise((r) => setTimeout(r, 250));

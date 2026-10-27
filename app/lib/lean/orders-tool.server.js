@@ -1,9 +1,10 @@
 // "Where's my order?" / "I want to return…" in the chat. Signed-in shoppers
 // get their orders as clean cards (status, progress, items, tracking) with a
 // "Return an item" button that runs the return in the chat. Signed-out
-// shoppers get a sign-in card (Shopify's own sign-in, in a small window);
-// the chat continues once they're signed in. Order details never go to
-// anyone Shopify hasn't signed in as that customer.
+// shoppers get a card with two ways in: sign in (Shopify's own sign-in, in a
+// small window; the chat continues once they're signed in), or look one
+// order up with its number and email — that form goes straight to the store
+// (routes/order-lookup.jsx), never through the AI, and shows status only.
 
 import { getOrderCards, returnPolicy } from "../orders.server.js";
 import { publicReturnMethods } from "../returns.server.js";
@@ -22,7 +23,7 @@ export const ORDERS_TOOL = {
   description:
     "The customer's own orders: status, delivery progress, tracking, and the button to start a return or exchange. Use for where is my order, tracking, delivery, an order number, past purchases, or wanting to return or exchange something they bought. " +
     "The orders appear as cards under your reply — keep your reply to one short sentence and don't repeat what the cards show (numbers, dates, tracking). " +
-    "If the customer isn't signed in, a sign-in button appears instead: say in one sentence that they need to sign in to see their orders. " +
+    "If the customer isn't signed in, a card appears instead where they can sign in, or look up the order with its order number (or confirmation code) and the email they used: point them to it in one sentence. Never ask them to type their email or order details into the chat. " +
     IN_CHAT_RETURNS,
 
   input_schema: {
@@ -34,7 +35,7 @@ export const ORDERS_TOOL = {
   },
 };
 
-export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true, policy = returnPolicy() }) {
+export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true, guestLookup = true, policy = returnPolicy() }) {
   // Which orders get the return button, in words, for the model.
   const rule = [policy.deliveredOnly ? "delivered" : "shipped", policy.windowDays > 0 ? `within ${policy.windowDays} days of ordering` : ""].filter(Boolean).join(", ");
   return {
@@ -42,10 +43,16 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
     run: async (input = {}) => {
       const intent = input.intent === "return" ? "return" : "track";
       if (!loggedInCustomerId) {
+        // The order number they mentioned fills in the lookup form (never an email).
+        const hint = String(input.orderNumber || "").replace(/\s+/g, "").replace(/^#+/, "");
         return {
           signed_in: false,
-          note: "A sign-in button is shown under your reply. Once they sign in, the chat continues with their orders.",
-          _events: [{ type: "login_prompt", intent }],
+          note: guestLookup
+            ? (intent === "return"
+              ? "A card under your reply lets them sign in to start a return (returns need sign-in), or look up the order's status with its number and email. Point them to it in one sentence. Don't ask for their email or order details in the chat."
+              : "A card under your reply lets them sign in, or look up the order with its order number (or confirmation code) and the email they used. Point them to it in one sentence. Don't ask for their email or order details in the chat.")
+            : "A sign-in button is shown under your reply. Once they sign in, the chat continues with their orders.",
+          _events: [{ type: "login_prompt", intent, ...(guestLookup ? { lookup: true, ...(/^[a-z0-9-]{3,24}$/i.test(hint) ? { order: hint } : {}) } : {}) }],
         };
       }
       if (!accessToken) return { error: "Orders aren't available right now." };

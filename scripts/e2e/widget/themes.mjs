@@ -38,7 +38,11 @@ const SSE = {
     { id: "5003", number: "1169000", date: "2026-09-02", stage: "cancelled", stageLabel: "Cancelled", step: 0, deliveredAt: "", eta: "", carrier: "", trackUrl: "", returnStatus: "", canReturn: false, items: [{ lineId: "9004", title: "Orthotic Flip Flops", options: {}, image: "", quantity: 1, returnable: 0, handle: "x" }] },
   ] }]),
   signin: ev("Sign in and I'll pull up your orders right here.", [], [{ type: "login_prompt", intent: "track" }]),
+  lookup: ev("Sign in, or look your order up with its number and email.", [], [{ type: "login_prompt", intent: "track", lookup: true }]),
 };
+// Order status without signing in: what the lookup answers.
+const LOOKUP_FOUND = { ok: true, order: { id: "guest-1172010", number: "1172010", date: "2026-10-20", stage: "shipped", stageLabel: "On its way", step: 1, shippedAt: "2026-10-21", deliveredAt: "", eta: "2026-10-24", carrier: "USPS", trackUrl: "https://track.example/2", returnStatus: "", guest: true,
+  items: [{ title: "Jillian Braided Quarter Strap Sandal - Black", options: { Size: "9 US" }, image: img, quantity: 1 }] } };
 // scene name -> steps
 const SCENES = {
   home: [], menu: ["menu"], one: ["one"], oneAtc: ["one", "atc0"], oneAdded: ["one", "atc0", "pick", "add"],
@@ -52,6 +56,8 @@ const SCENES = {
   homeLogged: ["url:/full?login=Dana"], helpersKnown: ["url:/products/savannah-red?tf=known&login=Dana", "fitknown", "reload"],
   typing: ["slowchat", "typing"], cut: ["cut"], e429: ["e429"], thanks: ["one", "thumb"], chips: ["chips"],
   signin: ["signin"], orders: ["orders"], phoneOrders: ["phone", "orders"],
+  lookup: ["lookup"], lookupOpen: ["lookup", "lkopen"], lookupErr: ["lookup", "lkopen", "lkbad"], lookupMiss: ["lkmiss", "lookup", "lkopen", "lkfill"],
+  lookupFound: ["lkfound", "lookup", "lkopen", "lkfill"], phoneLookup: ["phone", "lookup", "lkopen"], phoneLookupFound: ["phone", "lkfound", "lookup", "lkopen", "lkfill"],
   retItems: ["orders", "ret"], retReason: ["orders", "ret", "retitem", "retnext"], retConfirm: ["orders", "ret", "retitem", "retnext", "retsmall"],
   retDone: ["retok", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"], retErr: ["retbad", "orders", "ret", "retitem", "retnext", "retsmall", "retgo"],
   compare: ["cmpask"], compareAll: ["cmpask", "cmpall"], phoneCompare: ["phone", "cmpask"], phoneCompareAll: ["phone", "cmpask", "cmpall"],
@@ -61,7 +67,7 @@ const SCENES = {
 const probe = () => {
   const theme = document.querySelector(".ai-chat-panel").getAttribute("data-theme");
   const lum = (c) => { const m = c && c.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return { L: 0.2126 * r + 0.7152 * g + 0.0722 * b, a: m[3] === undefined ? 1 : Number(m[3]) }; };
-  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-welcome__avatar, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow, .ai-ord__btn.is-primary, .ai-ord__steps, .ai-ret__item.is-on .ai-ret__check, .ai-cmp__atc, .ai-cmp-bar__go:not([disabled]), .ai-cmp__segbtn[aria-checked=true] .ai-cmp__segn, .ai-cmp-pick[aria-pressed=true]";
+  const INK = ".ai-chat-helper__icon, .ai-kl-submit, .ai-chat-wave i, .ai-chat-mic, .ai-chat-send, .ai-chat-msg--user .ai-chat-msg-bubble, .ai-chat-cta-btn, .ai-chat-product-cta, .ai-chat-atc-primary, .ai-chat-atc-add, .ai-chat-atc-check, .ai-chat-fit-result__badge, .ai-chat-avatar-placeholder, .ai-chat-welcome__avatar, .ai-ordl__oi.is-ink, .ai-chat-atc-val.is-on, .ai-chat-viz-opt[aria-pressed=true], .ai-chat-viz-retry, .ai-chat-retry-btn, .ai-chat-fit-bar, .ai-chat-fit-bar *, [class*=confidence] *, .ai-chat-products-arrow, .ai-chat-choices-arrow, .ai-ord__btn.is-primary, .ai-ord__steps, .ai-ret__item.is-on .ai-ret__check, .ai-cmp__atc, .ai-cmp-bar__go:not([disabled]), .ai-cmp__segbtn[aria-checked=true] .ai-cmp__segn, .ai-cmp-pick[aria-pressed=true]";
   const PHOTO = ".ai-chat-product-img, .ai-chat-product-img *, .ai-chat-atc-thumb, .ai-chat-atc-thumb *, img, .ai-chat-viz-result-imgwrap, canvas, .ai-chat-glow";
   const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const cs = getComputedStyle(e); const l = lum(cs.backgroundColor); if (l && l.a > 0.5) return { l: l.L, el: e }; } return { l: theme === "dark" ? 0 : 1, el: document.body }; };
   const nm = (e) => (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 2).join(".") : e.tagName.toLowerCase());
@@ -150,6 +156,8 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
   if (steps.includes("ret")) await p.route("**/apps/hajirai/returns**", (r) => (r.request().method() === "GET" ? r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false }) }) : r.fallback()));
   if (steps.includes("retok")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, rma: "R1001", labelUrl: "https://label.example/1", returnsUrl: "https://returns.example/", refundTo: "original_payment", exchangeCards: [{ ...JIL, preselect: { Size: "9.5 US" }, exchange_to: "9.5 US" }] }) }));
   if (steps.includes("retbad")) await p.route("**/apps/hajirai/returns**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false, message: "I couldn't start this return here — you can finish it on our returns page.", fallbackUrl: "https://returns.example/" }) }));
+  if (steps.includes("lkmiss")) await p.route("**/apps/hajirai/order-lookup**", (r) => r.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not_found", message: "We couldn't find an order with those details." }) }));
+  if (steps.includes("lkfound")) await p.route("**/apps/hajirai/order-lookup**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(LOOKUP_FOUND) }));
   const urlStep = steps.find((x) => x.startsWith("url:"));
   await p.goto("http://localhost:4791" + (urlStep ? urlStep.slice(4) : "/products/savannah-red")); await p.waitForTimeout(500);
   if (!steps.includes("noopen")) { await p.click(".ai-chat-launcher__text"); await p.waitForTimeout(1100); }
@@ -169,6 +177,9 @@ for (const theme of ["dark", "light"]) for (const [name, steps] of Object.entrie
     if (st === "klgood") { await p.fill(".ai-kl-email", "a@b.co"); await p.click(".ai-kl-submit"); await p.waitForTimeout(800); }
     if (st === "typing") { await p.fill(".ai-chat-input", "hello"); await p.keyboard.press("Enter"); await p.waitForTimeout(900); }
     if (st === "cut" || st === "e429") { await p.fill(".ai-chat-input", st); await p.keyboard.press("Enter"); await p.waitForTimeout(1500); }
+    if (st === "lkopen") { await p.click(".ai-chat-msg:last-child [data-ordl-open]"); await p.waitForTimeout(400); }
+    if (st === "lkbad") { await p.click(".ai-chat-msg:last-child .ai-ordl__go"); await p.waitForTimeout(300); }
+    if (st === "lkfill") { await p.fill(".ai-chat-msg:last-child [name=order]", "1172010"); await p.fill(".ai-chat-msg:last-child [name=email]", "pat@example.com"); await p.click(".ai-chat-msg:last-child .ai-ordl__go"); await p.waitForTimeout(900); }
     if (st === "thumb") { await p.click(".ai-chat-fb-btn >> nth=0"); await p.waitForTimeout(400); }
     if (st === "vizgo") { await p.click(".ai-chat-viz-btn"); await p.waitForTimeout(1300); }
     if (st === "wait3") { await p.waitForTimeout(1500); }

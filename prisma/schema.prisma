@@ -181,6 +181,9 @@ model ShopConfig {
   // (0 = no limit), and only once delivered (off: once shipped).
   returnWindowDays     Int      @default(30)
   returnsDeliveredOnly Boolean  @default(true)
+  // Signed-out shoppers can check one order's status in the chat with its
+  // order number (or confirmation code) and the email it was placed with.
+  guestOrderLookup     Boolean  @default(true)
   referralPageUrl     String   @default("")
   // A feedback survey (Typeform ID or link) as Start here button 4 in the
   // chat, opening inside it; and hiding the separate live chat button

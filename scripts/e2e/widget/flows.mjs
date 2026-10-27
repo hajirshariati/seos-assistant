@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS } = await import("./mock-store.mjs");
+const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -308,6 +308,102 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`tf intro (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Order status without signing in: one card, two ways in — sign in, or look
+// one order up with its number (or confirmation code) and email. The form
+// goes straight to the store, never through the chat; the order is shown,
+// never saved; the assistant learns its status (not the email) for follow-ups.
+for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const phone = label === "phone";
+  const ctx = await browser.newContext(opts);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  mockCtl.lookupTries = null;
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input", "where is my order #1172010?");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-ordl", { timeout: 6000 });
+  const card0 = await page.evaluate(() => {
+    const c = document.querySelector(".ai-ordl"), rows = [...c.querySelectorAll(".ai-ordl__opt")];
+    return { title: c.querySelector(".ai-ord__num").textContent, rows: rows.map((r) => r.querySelector("b").textContent), signIn: rows[0].getAttribute("data-ord-login"), expanded: rows[1].getAttribute("aria-expanded"), formHidden: c.querySelector(".ai-ordl__form").hidden, order: c.querySelector("[name=order]").value, overflow: c.scrollWidth - c.clientWidth };
+  });
+  check(`order lookup (${label}): signed out, one card with two ways in — Sign in, or Look up an order`, card0.title === "Check on your order" && card0.rows.join("|") === "Sign in|Look up an order" && card0.signIn === "track" && card0.expanded === "false" && card0.formHidden && card0.overflow <= 1, JSON.stringify(card0));
+  check(`order lookup (${label}): the order number they mentioned is filled in (never an email)`, card0.order === "1172010", card0.order);
+  await page.click("[data-ordl-open]");
+  const opened = await page.evaluate(() => ({ expanded: document.querySelector("[data-ordl-open]").getAttribute("aria-expanded"), hidden: document.querySelector(".ai-ordl__form").hidden, focus: document.activeElement?.getAttribute("name"), font: getComputedStyle(document.querySelector("[name=email]")).fontSize, type: document.querySelector("[name=email]").type, auto: document.querySelector("[name=email]").autocomplete }));
+  check(`order lookup (${label}): the form opens under its row, focus on what's left to fill`, opened.expanded === "true" && !opened.hidden && opened.focus === "email", JSON.stringify(opened));
+  check(`order lookup (${label}): a real email field, 16px so phones don't zoom`, opened.type === "email" && opened.auto === "email" && opened.font === "16px", JSON.stringify(opened));
+  // Empty / malformed: said per field, nothing sent.
+  const sentBefore = lookupBodies.length;
+  await page.fill("[name=order]", "");
+  await page.click(".ai-ordl__go");
+  const bad = await page.evaluate(() => ({ o: document.querySelector("[name=order]").getAttribute("aria-invalid"), e: document.querySelector("[name=email]").getAttribute("aria-invalid"), msgs: [...document.querySelectorAll(".ai-ordl__ferr:not([hidden])")].map((x) => x.textContent), focus: document.activeElement?.getAttribute("name") }));
+  check(`order lookup (${label}): empty fields say what's needed, focus on the first, nothing sent`, bad.o === "true" && bad.e === "true" && bad.msgs.length === 2 && bad.focus === "order" && lookupBodies.length === sentBefore, JSON.stringify(bad));
+  // Wrong details: the same answer whatever was wrong; what they typed stays.
+  const chatsBefore = chatBodies.length;
+  await page.fill("[name=order]", "1172099");
+  await page.fill("[name=email]", "pat@example.com");
+  await page.click(".ai-ordl__go");
+  await page.waitForFunction(() => !document.querySelector(".ai-ordl__err").hidden, null, { timeout: 5000 });
+  const miss = await page.evaluate(() => ({ err: document.querySelector(".ai-ordl__err").textContent, role: document.querySelector(".ai-ordl__err").getAttribute("role"), order: document.querySelector("[name=order]").value, invalid: document.querySelectorAll("[aria-invalid=true]").length, card: !!document.querySelector(".ai-ord[data-ord]") }));
+  check(`order lookup (${label}): not found → one calm message (no hint which detail), inputs kept`, /couldn.t find an order with those details/.test(miss.err) && /last 60 days/.test(miss.err) && miss.role === "alert" && miss.order === "1172099" && miss.invalid === 0 && !miss.card, JSON.stringify(miss));
+  check(`order lookup (${label}): sent straight to the store as JSON — never through the chat`, lookupBodies.at(-1).order === "1172099" && lookupBodies.at(-1).email === "pat@example.com" && /application\/json/.test(lookupBodies.at(-1).contentType) && chatBodies.length === chatsBefore, JSON.stringify(lookupBodies.at(-1)));
+  // The right details: the order, in place of the form.
+  await page.fill("[name=order]", " #1172010 ");
+  await page.fill("[name=email]", "Pat@Example.com ");
+  await page.click(".ai-ordl__go");
+  await page.waitForSelector(".ai-ordl-done", { timeout: 5000 });
+  const found = await page.evaluate(() => {
+    const d = document.querySelector(".ai-ordl-done"), c = d.querySelector(".ai-ord[data-ord]");
+    return { num: c.querySelector(".ai-ord__num").textContent, pill: c.querySelector(".ai-ord__pill").textContent, track: c.querySelector("a.ai-ord__btn")?.textContent, ret: !!c.querySelector("[data-ord-return]"), signRet: c.querySelector("[data-ord-login]")?.getAttribute("data-ord-login"), note: d.querySelector(".ai-ordl__after").textContent, form: !!document.querySelector(".ai-ordl__form"), focus: document.activeElement?.className, overflow: d.scrollWidth - d.clientWidth };
+  });
+  check(`order lookup (${label}): found → the order's card: status, progress, tracking`, found.num === "Order #1172010" && found.pill === "On its way" && found.track === "Track package" && !found.form && found.overflow <= 1, JSON.stringify(found));
+  check(`order lookup (${label}): returns still need sign-in`, !found.ret && found.signRet === "return", JSON.stringify(found));
+  check(`order lookup (${label}): says it's this order only and not saved; focus moves to the order`, /This order only · not saved/.test(found.note) && /Look up another order/.test(found.note) && /ai-ord__num/.test(found.focus || ""), JSON.stringify(found));
+  check(`order lookup (${label}): what they typed was cleaned up before it was sent`, lookupBodies.at(-1).order === "1172010" && lookupBodies.at(-1).email === "Pat@Example.com", JSON.stringify(lookupBodies.at(-1)));
+  // Never saved in this browser.
+  const stored = await page.evaluate(() => JSON.stringify(Object.keys(localStorage).map((k) => localStorage.getItem(k))) + JSON.stringify(Object.keys(sessionStorage).map((k) => sessionStorage.getItem(k))));
+  check(`order lookup (${label}): nothing about it is saved in the browser — no email, no order card`, !/pat@example\.com/i.test(stored) && !/looked up with its number/.test(stored) && !/guest-1172010/.test(stored));
+  // The assistant knows the status for follow-ups — never the email.
+  await page.fill(".ai-chat-input", "when will it arrive?");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(900);
+  const hist = JSON.stringify(chatBodies.at(-1).history || []);
+  check(`order lookup (${label}): a follow-up question carries the order's status, never the email`, /Order #1172010 \(looked up with its number and email\): On its way, arriving by/.test(hist) && !/pat@example/i.test(JSON.stringify(chatBodies.at(-1))), hist.slice(-300));
+  // Look up another: a fresh, empty form.
+  await page.click("[data-ordl-again]");
+  const again = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-ordl")].pop(); return { open: !c.querySelector(".ai-ordl__form").hidden, order: c.querySelector("[name=order]").value, email: c.querySelector("[name=email]").value, focus: document.activeElement?.getAttribute("name") }; });
+  check(`order lookup (${label}): "Look up another order" opens a fresh, empty form`, again.open && again.order === "" && again.email === "" && again.focus === "order", JSON.stringify(again));
+  // Escape folds the form; the chat stays open.
+  await page.keyboard.press("Escape");
+  const esc = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-ordl")].pop(); return { hidden: c.querySelector(".ai-ordl__form").hidden, focus: document.activeElement?.hasAttribute("data-ordl-open"), open: document.querySelector(".ai-chat-panel").classList.contains("open") }; });
+  check(`order lookup (${label}): Escape folds the form back, the chat stays open`, esc.hidden && esc.focus && esc.open, JSON.stringify(esc));
+  if (!phone) {
+    // Too many tries: said plainly, with sign-in as the way forward.
+    mockCtl.lookupTries = lookupBodies.length;
+    await page.click("[data-ordl-open] >> nth=-1");
+    await page.fill("[name=order] >> nth=-1", "1172010");
+    await page.fill("[name=email] >> nth=-1", "pat@example.com");
+    await page.click(".ai-ordl__go >> nth=-1");
+    await page.waitForFunction(() => { const e = [...document.querySelectorAll(".ai-ordl__err")].pop(); return e && !e.hidden; }, null, { timeout: 5000 });
+    check(`order lookup (${label}): too many tries → wait, or sign in`, /Too many tries/.test(await page.evaluate(() => [...document.querySelectorAll(".ai-ordl__err")].pop().textContent)));
+    mockCtl.lookupTries = null;
+    // The store turned the lookup off: sign-in only, as before.
+    await page.fill(".ai-chat-input", "where is my order? sign-in only");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-msg:last-child .ai-ord--signin", { timeout: 6000 });
+    check(`order lookup (${label}): lookup off → the sign-in card only`, !(await page.$(".ai-chat-msg:last-child [data-ordl-open]")));
+    // After a reload no looked-up order comes back.
+    await page.reload();
+    await page.click(".ai-chat-launcher__text");
+    await page.waitForTimeout(800);
+    check(`order lookup (${label}): after a reload no looked-up order is shown`, !(await page.$(".ai-ordl-done")) && !(await page.$('.ai-ord[data-ord^="guest-"]')));
+  }
+  check(`order lookup (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The two fit tools: featured on the welcome screen, and each only on the
 // products it belongs to — True Fit on shoes, FITFinder on orthotics.
 {
@@ -492,8 +588,8 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.waitForTimeout(500);
   await page.fill(".ai-chat-input-area textarea", "where is my order?");
   await page.keyboard.press("Enter");
-  await page.waitForSelector(".ai-ord--signin", { timeout: 6000 });
-  check("orders signed out: a sign-in card, no order details", (await page.$$(".ai-ord[data-ord]")).length === 0);
+  await page.waitForSelector(".ai-ordl", { timeout: 6000 });
+  check("orders signed out: sign in or look it up, no order details", (await page.$$(".ai-ord[data-ord]")).length === 0);
   const [popup] = await Promise.all([page.waitForEvent("popup"), page.click("[data-ord-login]")]);
   await popup.waitForEvent("close", { timeout: 8000 }).catch(() => {});
   check("orders: Shopify's sign-in opens in a small window that closes itself", popup.isClosed());

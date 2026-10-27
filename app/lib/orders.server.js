@@ -9,7 +9,7 @@
 import { ADMIN_API_VERSION } from "./admin-api-version.js";
 import { findChatReturns } from "../models/ChatReturn.server.js";
 
-const ORDER_FIELDS = `
+export const ORDER_FIELDS = `
   id
   name
   createdAt
