@@ -22,7 +22,7 @@ import {
   DropZone,
   Pagination,
 } from "@shopify/polaris";
-import { DeleteIcon, SearchIcon, GlobeIcon, NoteIcon, DiscountIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, SearchIcon, GlobeIcon, NoteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -100,6 +100,7 @@ export const loader = async ({ request }) => {
     })),
     campaignTemplate: CAMPAIGN_TEMPLATE,
     campaignCheatCode: config.campaignCheatCode || "",
+    promoPageUrl: config.promoPageUrl || "",
   };
 };
 
@@ -425,7 +426,7 @@ holiday return-window extensions, restock schedules, etc.]
 const KNOWLEDGE_CSS = `
   .kn .set-row__title { overflow-wrap: anywhere; }
   .kn-sec { scroll-margin-top: 16px; }
-  .kn-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .kn-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .kn-stat { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px;
     border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.07); cursor: pointer;
     transition: box-shadow .16s ease, transform .16s ease; }
@@ -482,8 +483,9 @@ const KNOWLEDGE_CSS = `
   .kn-note { font-size: 12px; line-height: 17px; color: #616161; }
   .kn-pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff; white-space: pre-wrap; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .kn-banner { padding: 0 16px 13px; }
-  .kn-promos-body { border-top: 1px solid rgba(30,27,51,0.07); }
-  .kn-promos-body > .kn-banner { padding-top: 13px; }
+  .kn-more { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .kn-promos-body { flex-basis: 100%; margin-top: 8px; }
+  .kn-promos-body .kn-banner { padding-top: 13px; }
   @media (prefers-reduced-motion: reduce) { .kn-stat, .kn-seg__btn { transition: none; } .kn-stat:hover { transform: none; } }
   @media (max-width: 760px) {
     .kn-overview { gap: 8px; }
@@ -1087,7 +1089,6 @@ export default function Knowledge() {
   const now = Date.now();
   const campaigns = data.campaigns || [];
   const livePromos = campaigns.filter((c) => new Date(c.startsAt).getTime() <= now && new Date(c.endsAt).getTime() >= now).length;
-  const scheduledPromos = campaigns.filter((c) => new Date(c.startsAt).getTime() > now).length;
   const docs = data.storeKnowledge || [];
   const files = data.files || [];
   const issues = (data.knowledgeCheck?.counts?.critical || 0) + (data.knowledgeCheck?.counts?.warning || 0);
@@ -1105,14 +1106,12 @@ export default function Knowledge() {
       hint: files.length === 0 ? "None yet" : issues > 0 ? `${plural(issues, "line", "lines")} to check` : "Check passed",
       tone: files.length === 0 ? null : issues > 0 ? "bad" : "good",
     },
-    {
-      id: "promos", icon: DiscountIcon, label: "Promotions",
-      value: livePromos ? `${livePromos} live` : "None live",
-      hint: scheduledPromos ? `${scheduledPromos} scheduled` : "Optional",
-    },
   ];
+  // Where the assistant reads offers instead (Settings → Shopping tools).
+  const promoPage = (() => {
+    try { const u = new URL(data.promoPageUrl); return `${u.hostname.replace(/^www\./, "")}${u.pathname}`; } catch { return ""; }
+  })();
   const go = (id) => {
-    if (id === "promos") setPromosOpen(true);
     const el = document.getElementById(`kn-${id}`);
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" }));
@@ -1130,7 +1129,7 @@ export default function Knowledge() {
 
           <section>
             <SectionHead title="What your assistant knows">
-              Three sources. When they disagree, your team's notes win, then live promotions, then your website.
+              Your website, plus your team's notes. When the two disagree, your notes win.
             </SectionHead>
             <div className="kn-overview">
               {overview.map((s) => (
@@ -1160,21 +1159,21 @@ export default function Knowledge() {
             <KnowledgeFilesCard files={files} check={data.knowledgeCheck} />
           </section>
 
-          <section id="kn-promos" className="kn-sec">
-            <Card padding="0">
-              <Row
-                title={<InlineStack gap="200" blockAlign="center"><span>Promotions</span><Badge tone={livePromos ? "success" : undefined}>{livePromos ? `${livePromos} live` : "None live"}</Badge></InlineStack>}
-                help="Dated sales the assistant mentions only while they're live. Your offers page in Settings → Shopping tools usually covers this."
-                control={
-                  <Button onClick={() => setPromosOpen((o) => !o)} disclosure={promosOpen ? "up" : "down"} ariaExpanded={promosOpen} ariaControls="kn-promos-body">
-                    {promosOpen ? "Hide" : "Show"}
-                  </Button>
-                }
-              />
-              <div id="kn-promos-body" className="kn-promos-body" hidden={!promosOpen}>
+          {/* Dated promotions: kept, folded away — offers normally come from
+              the promotions page in Settings → Shopping tools. */}
+          <section className="kn-more">
+            <Button variant="plain" onClick={() => setPromosOpen((o) => !o)} disclosure={promosOpen ? "up" : "down"} ariaExpanded={promosOpen} ariaControls="kn-promos-body">
+              Dated promotions
+            </Button>
+            <span className="kn-note">
+              {livePromos ? `${livePromos} live. ` : ""}
+              {promoPage ? `Not needed — the assistant reads your offers from ${promoPage} (Settings → Shopping tools).` : "Offers can also be read from a page on your site: Settings → Shopping tools."}
+            </span>
+            <div id="kn-promos-body" className="kn-promos-body" hidden={!promosOpen}>
+              <Card padding="0">
                 <CampaignsCard initial={data.campaigns} template={data.campaignTemplate} initialCheatCode={data.campaignCheatCode} />
-              </div>
-            </Card>
+              </Card>
+            </div>
           </section>
         </BlockStack>
       </div>
