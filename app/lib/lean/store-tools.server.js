@@ -217,8 +217,9 @@ export async function buildLeanStoreExtras({
     wrap({
       name: "show_store_locator",
       description:
-        "Show a button that opens the store locator map (stores and retailers that carry Aetrex, searchable by location) right inside the chat. " +
-        "Use whenever the customer asks where to buy or try on Aetrex in person, for stores, retailers or dealers near them, or for the store locator.",
+        "Show a button that opens the store locator map (stores and retailers, searchable by location) right inside the chat. " +
+        "Use it when the customer wants to visit a location in person — to get fitted or have their feet scanned, to try styles on — or asks for stores, retailers or dealers near them, or for the store locator. " +
+        "Not the answer to \"where can I buy these?\": they can buy right here, online — show the product with its Add to cart — and locations may not carry every style, so never promise a product is in stock at one. Add the locator only if they want to visit in person.",
       input_schema: { type: "object", properties: {} },
     }, async () => ({
       ok: true,

@@ -2495,7 +2495,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 view-all-filters'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 compare-tray'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2951,7 +2951,11 @@ function vfPriceText(va){
   if(f.pmin!=null&&f.pmax!=null)return vfMoney(f.pmin)+'–'+vfMoney(f.pmax);
   return f.pmax!=null?'Under '+vfMoney(f.pmax):vfMoney(f.pmin)+'+';
 }
-function vfValueLabel(va,k,v){var x=va.ix.facets[k].values[v];return x?x.l:''}
+/* "10.5 - 11" → "10.5–11": a size range reads as one size. */
+function vfSizeLabel(l){return String(l).replace(/(\d)\s*[-\u2013]\s*(\d)/g,'$1\u2013$2')}
+function vfValueLabel(va,k,v){var x=va.ix.facets[k].values[v];return x?(k==='size'?vfSizeLabel(x.l):x.l):''}
+/* Size keys as wide as the longest size needs, on one line. */
+function vfKeyWidth(va){var n=0;va.ix.facets.size.values.forEach(function(v){n=Math.max(n,vfSizeLabel(v.l).length)});return Math.max(54,Math.round(n*8.6+24))}
 function vfPillText(va,k){
   if(k==='price')return vfPriceText(va);
   var sel=va.f.sel[k],on=[];for(var v in sel)if(sel[v])on.push(+v);
@@ -3053,8 +3057,8 @@ function vfBody(va,kind){
   if(kind==='price')return vfPriceHtml(va);
   var X=F[kind],counts=vfCounts(va,kind),sel=va.f.sel[kind];
   if(kind==='size'){
-    h='<div class="ai-vf-sizes" role="group" aria-label="'+esc(vfTitle(va,'size'))+'">';
-    X.order.forEach(function(i){var v=X.values[i],n=counts[i]||0,on=!!sel[i];h+='<button type="button" class="ai-vf-size" data-vf="size" data-v="'+i+'" aria-pressed="'+on+'"'+(!n&&!on?' disabled':'')+'>'+esc(v.l)+'</button>'});
+    h='<div class="ai-vf-sizes" role="group" aria-label="'+esc(vfTitle(va,'size'))+'" style="--vf-key:'+vfKeyWidth(va)+'px">';
+    X.order.forEach(function(i){var v=X.values[i],n=counts[i]||0,on=!!sel[i];h+='<button type="button" class="ai-vf-size" data-vf="size" data-v="'+i+'" aria-pressed="'+on+'"'+(!n&&!on?' disabled':'')+'>'+esc(vfSizeLabel(v.l))+'</button>'});
     return h+'</div>';
   }
   if(kind==='color'){
@@ -3072,6 +3076,8 @@ function vfOpenPanel(va,box,kind,pill){
   var sh=fbSheetEl(),compact=vfCompact(box);
   var pop=el('div','ai-vf-pop ai-vf-pop--'+kind+(compact?' is-sheet':''));
   pop.setAttribute('role','dialog');pop.setAttribute('aria-label',kind==='all'?'Filters':vfTitle(va,kind));pop.tabIndex=-1;
+  /* Room for five size keys a row, however long the sizes are. */
+  if(kind==='size'&&!compact)pop.style.width=Math.min(480,Math.max(352,vfKeyWidth(va)*5+32+36))+'px';
   var foot=kind==='sort'?'':'<div class="ai-vf-pop__foot"><button type="button" class="ai-vf-pop__reset" data-vf-reset="'+kind+'">'+(kind==='all'?'Clear all':'Clear')+'</button><button type="button" class="ai-vf-pop__done" data-vf-close="1">'+vfShowText(va)+'</button></div>';
   pop.innerHTML=(compact?'<div class="ai-vf-pop__grab" aria-hidden="true"></div>':'')+
     '<div class="ai-vf-pop__head"><span class="ai-vf-pop__title">'+esc(kind==='all'?'Filters':vfTitle(va,kind))+'</span><button type="button" class="ai-vf-pop__x" data-vf-close="1" aria-label="Close">'+VF_XL+'</button></div>'+
@@ -3208,7 +3214,10 @@ function cleanMap(p){
 function formCtaHtml(f){
   return '<button type="button" class="ai-chat-cta-btn ai-chat-form-cta" data-form="'+esc(f.form)+'" data-form-label="'+esc(f.label)+'" aria-haspopup="dialog">'+esc(f.label)+'</button>';
 }
-var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/><path d="M6 9h2M6 12h2M16 9h2M16 12h2"/></svg>';
+/* Two arrows, one each way: the usual sign for compare in a shop. */
+var CMP_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 8.5h14M15.5 5.5l3 3-3 3M19.5 15.5h-14M8.5 12.5l-3 3 3 3"/></svg>';
+var CMP_PLUS='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 6.5v11M6.5 12h11"/></svg>';
+var CMP_X='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17"/></svg>';
 var CMP_STAR='<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1 6L12 17l-5.35 2.85 1-6L3.3 9.6l6-.9z"/></svg>';
 var CMP_CHECK='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 /* The product handle in this page's URL (/products/<handle>, also under a
@@ -3227,7 +3236,10 @@ function compareCtaHtml(products){
   var label=direct?(list.length===2?'Compare these two':'Compare all three'):'Compare';
   var hint=direct?'Side by side':cmpPickHint();
   return '<div class="ai-cmp-cta"><button type="button" class="ai-cmp-cta__btn" data-cmp-start aria-label="'+esc(label+' — '+hint.toLowerCase())+'"><span class="ai-cmp-cta__icon">'+CMP_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__thumbs" aria-hidden="true">'+thumbs+'</span><span class="ai-cmp-cta__go" aria-hidden="true">'+WI.arrow+'</span></button>'+
-    '<div class="ai-cmp-bar" hidden><span class="ai-cmp-bar__msg" aria-live="polite">'+cmpPickHint()+'</span><button type="button" class="ai-cmp-bar__cancel" data-cmp-cancel>Cancel</button><button type="button" class="ai-cmp-bar__go" data-cmp-go disabled>Compare</button></div>'+
+    /* Picking: the row turns into a tray — × to stop, a slot per pick (its
+       photo; tap it to take it out), and the button, which says what's left
+       to do until there are enough to compare. */
+    '<div class="ai-cmp-bar" role="group" aria-label="Compare" hidden><button type="button" class="ai-cmp-bar__x" data-cmp-cancel aria-label="Cancel compare">'+CMP_X+'</button><span class="ai-cmp-bar__slots"></span><span class="ai-cmp-bar__msg ai-sr" aria-live="polite">'+cmpPickHint()+'</span><button type="button" class="ai-cmp-bar__go" data-cmp-go disabled>'+cmpPickHint()+'</button></div>'+
     '<div class="ai-cmp-cta__err" role="alert" hidden></div></div>';
 }
 function cmpBubbleCards(bubble){return Array.prototype.slice.call(bubble.querySelectorAll('.ai-chat-products .ai-chat-product-card[data-handle]'))}
@@ -3235,28 +3247,55 @@ function cmpPicked(bubble){return cmpBubbleCards(bubble).filter(function(c){retu
 function cmpPickMode(bubble,on){
   var cta=$('.ai-cmp-cta',bubble);if(!cta)return;
   bubble.classList.toggle('is-cmp-picking',on);
+  /* Coming back from picking, the row fades in where the tray was. */
+  cta.classList.toggle('is-back',!on);
   $('.ai-cmp-cta__btn',cta).hidden=on;$('.ai-cmp-bar',cta).hidden=!on;
   cmpBubbleCards(bubble).forEach(function(c){
     var b=$('.ai-cmp-pick',c);
-    if(on&&!b){b=document.createElement('button');b.type='button';b.className='ai-cmp-pick';b.setAttribute('data-cmp-pick','');b.innerHTML=CMP_CHECK;c.appendChild(b)}
+    if(on&&!b){b=document.createElement('button');b.type='button';b.className='ai-cmp-pick';b.setAttribute('data-cmp-pick','');b.innerHTML=CMP_PLUS+CMP_CHECK;c.appendChild(b)}
     if(b){b.hidden=!on;b.setAttribute('aria-pressed',c.classList.contains('is-cmp-picked')?'true':'false');b.setAttribute('aria-label','Compare '+(c.getAttribute('data-title')||'this product'))}
     if(!on)c.classList.remove('is-cmp-picked');
   });
   if(on)cmpPickUpdate(bubble);
+  else{var s=$('.ai-cmp-bar__slots',cta);s.innerHTML='';s.removeAttribute('data-picked')}
 }
 function cmpPickUpdate(bubble){
-  var n=cmpPicked(bubble).length,cta=$('.ai-cmp-cta',bubble);if(!cta)return;
-  $('.ai-cmp-bar__msg',cta).textContent=n===0?cmpPickHint():n===1?'Pick 1 more':'';
-  var go=$('.ai-cmp-bar__go',cta);go.disabled=n<2;go.textContent=n>=2?'Compare '+n:'Compare';
-  cmpBubbleCards(bubble).forEach(function(c){var b=$('.ai-cmp-pick',c);if(b)b.setAttribute('aria-pressed',c.classList.contains('is-cmp-picked')?'true':'false');c.classList.toggle('is-cmp-full',n>=cmpMax()&&!c.classList.contains('is-cmp-picked'))});
+  var cta=$('.ai-cmp-cta',bubble);if(!cta)return;
+  var picked=cmpPicked(bubble),n=picked.length,max=cmpMax();
+  $('.ai-cmp-bar__msg',cta).textContent=n===0?cmpPickHint():n===1?'Pick 1 more':n+' picked';
+  var go=$('.ai-cmp-bar__go',cta);go.disabled=n<2;go.textContent=n>=2?'Compare '+n:n===1?'Pick 1 more':cmpPickHint();
+  /* One slot per pick, in the cards' order; only a new one pops in. */
+  var slots=$('.ai-cmp-bar__slots',cta),was=','+(slots.getAttribute('data-picked')||'')+',',hs=[],h='';
+  for(var i=0;i<max;i++){
+    var c=picked[i];
+    if(!c){h+='<span class="ai-cmp-slot is-empty" aria-hidden="true">'+CMP_PLUS+'</span>';continue}
+    var hd=c.getAttribute('data-handle'),im=c.getAttribute('data-image')||'';hs.push(hd);
+    h+='<button type="button" class="ai-cmp-slot'+(was.indexOf(','+hd+',')<0?' is-new':'')+'" data-cmp-unpick="'+esc(hd)+'" aria-label="'+esc('Remove '+(c.getAttribute('data-title')||'this product')+' from compare')+'">'+(im?'<img src="'+esc(im)+'" alt="" loading="lazy">':'')+'<span class="ai-cmp-slot__x" aria-hidden="true">'+CMP_X+'</span></button>';
+  }
+  slots.innerHTML=h;slots.setAttribute('data-picked',hs.join(','));
+  cmpBubbleCards(bubble).forEach(function(c){var b=$('.ai-cmp-pick',c);if(b)b.setAttribute('aria-pressed',c.classList.contains('is-cmp-picked')?'true':'false');c.classList.toggle('is-cmp-full',n>=max&&!c.classList.contains('is-cmp-picked'))});
 }
 function cmpToggle(card){
   var bubble=card.closest('.ai-chat-msg-bubble');if(!bubble)return;
   if(!card.classList.contains('is-cmp-picked')&&cmpPicked(bubble).length>=cmpMax()){
-    var m=$('.ai-cmp-bar__msg',bubble);if(m){m.textContent=cmpMax()+' at most';m.classList.remove('is-nudge');void m.offsetWidth;m.classList.add('is-nudge')}
+    /* Full: the slots give a little shake, and it's read out. */
+    var m=$('.ai-cmp-bar__msg',bubble),s=$('.ai-cmp-bar__slots',bubble);
+    if(m)m.textContent=cmpMax()+' at most';
+    if(s){s.classList.remove('is-nudge');void s.offsetWidth;s.classList.add('is-nudge')}
     return;
   }
   card.classList.toggle('is-cmp-picked');cmpPickUpdate(bubble);
+}
+function cmpCancel(bubble){
+  cmpErr(bubble,'');cmpPickMode(bubble,false);
+  var sb=$('[data-cmp-start]',bubble);if(sb)try{sb.focus({preventScroll:true})}catch(e){}
+}
+/* A tap on a slot takes that one out; focus goes to its card's circle. */
+function cmpUnpick(bubble,handle){
+  var card=cmpBubbleCards(bubble).filter(function(c){return c.getAttribute('data-handle')===handle})[0];
+  if(!card||!card.classList.contains('is-cmp-picked'))return;
+  cmpToggle(card);
+  var b=$('.ai-cmp-pick',card);if(b)try{b.focus({preventScroll:true})}catch(e){}
 }
 function cmpErr(bubble,msg){
   var e=$('.ai-cmp-cta__err',bubble);if(!e)return;
@@ -4722,10 +4761,13 @@ showMic();
 inputEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
 inputEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'});
 /* Escape steps back one level wherever focus is: a filter panel, then a
-   sheet (View all, a survey, the map), then the chat itself. */
+   sheet (View all, a survey, the map), picking cards to compare, then the
+   chat itself. */
 document.addEventListener('keydown',function(e){
   if(e.key!=='Escape'||!isOpen)return;
   if(fbSheet&&!fbSheet.hidden){if(vfOpen)vfClose(true);else closeFeedback();return}
+  var pk=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.is-cmp-picking');
+  if(pk){cmpCancel(pk);return}
   toggle(false);
 });
 menuBtn.setAttribute('aria-haspopup','true');menuBtn.setAttribute('aria-expanded','false');
@@ -4761,7 +4803,7 @@ if(retryBtn){
   inputEl.value=lastUserMessage;sendMessage();
   return;
 }
-var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode]');
+var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode],[data-cmp-unpick]');
 if(cmpBtn){
   e.preventDefault();
   var cbub=cmpBtn.closest('.ai-chat-msg-bubble');
@@ -4769,7 +4811,8 @@ if(cmpBtn){
   if(!cbub)return;
   if(cmpBtn.hasAttribute('data-cmp-start'))startCompare(cbub);
   else if(cmpBtn.hasAttribute('data-cmp-go'))runCompare(cbub,cmpPicked(cbub));
-  else{cmpErr(cbub,'');cmpPickMode(cbub,false);var sb=$('[data-cmp-start]',cbub);if(sb)try{sb.focus({preventScroll:true})}catch(_){}}
+  else if(cmpBtn.hasAttribute('data-cmp-unpick'))cmpUnpick(cbub,cmpBtn.getAttribute('data-cmp-unpick'));
+  else cmpCancel(cbub);
   return;
 }
 /* Picking cards to compare: a tap anywhere on a card picks it. */

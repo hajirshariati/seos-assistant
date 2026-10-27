@@ -455,6 +455,18 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: view all, price filter`);
   await ctx.close();
 }
+// Picking cards to compare: the tray with one pick in it.
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const { ctx, page } = await open("/showcase", { viewport: vp });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "many");
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  await (await page.$$(".ai-chat-msg:last-child .ai-chat-product-card"))[0].click();
+  await page.waitForTimeout(500);
+  await axe(page, `${name}: picking to compare`);
+  await ctx.close();
+}
 for (const run of axeRuns) {
   const serious = run.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   check(`axe WCAG 2.2 AA — ${run.label}: no serious/critical violations`, serious.length === 0, serious.map((v) => `${v.id} (${v.nodes}) ${v.target}`).join("; "));

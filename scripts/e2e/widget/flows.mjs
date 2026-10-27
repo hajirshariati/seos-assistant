@@ -632,8 +632,20 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.click(".ai-chat-msg:last-child [data-cmp-start]");
   const cards4 = await page.$$(".ai-chat-msg:last-child .ai-chat-product-card");
   const go = ".ai-chat-msg:last-child [data-cmp-go]";
+  const tray = () => page.evaluate(() => {
+    const b = document.querySelector(".ai-chat-msg:last-child .ai-cmp-bar"), r = b.getBoundingClientRect(), x = b.querySelector("[data-cmp-cancel]").getBoundingClientRect();
+    return { go: b.querySelector("[data-cmp-go]").textContent, slots: [...b.querySelectorAll(".ai-cmp-slot")].map((s) => (s.matches("[data-cmp-unpick]") ? s.getAttribute("data-cmp-unpick") : "")), oneLine: b.scrollWidth <= b.clientWidth + 1 && Math.round(r.height) <= 56, xLeft: x.left - r.left < 12, xLabel: b.querySelector("[data-cmp-cancel]").getAttribute("aria-label") };
+  });
+  const t0 = await tray();
+  check(`compare (${label}): the tray opens with × on the left, ${phone ? 2 : 3} empty slots and the button saying what to do`, t0.slots.join() === (phone ? "," : ",,") && t0.go === (phone ? "Pick 2" : "Pick 2 or 3") && t0.xLeft && t0.xLabel === "Cancel compare" && t0.oneLine, JSON.stringify(t0));
   await cards4[0].click();
-  check(`compare (${label}): 4 cards → pick; one pick isn't enough`, (await page.$eval(go, (b) => b.disabled)) && /Pick 1 more/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-bar__msg")));
+  const t1 = await tray();
+  check(`compare (${label}): 4 cards → pick; one pick isn't enough`, (await page.$eval(go, (b) => b.disabled)) && /Pick 1 more/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-bar__msg")) && t1.go === "Pick 1 more" && t1.slots[0] === "savannah-red" && t1.oneLine, JSON.stringify(t1));
+  // A slot takes its pick out again (focus goes to that card's circle).
+  await page.click(".ai-chat-msg:last-child [data-cmp-unpick=savannah-red]");
+  const t2 = await tray();
+  check(`compare (${label}): tapping a picked slot takes it out`, t2.slots.every((s) => !s) && !(await page.$(".ai-chat-msg:last-child .is-cmp-picked")) && (await page.evaluate(() => document.activeElement?.classList.contains("ai-cmp-pick") && document.activeElement.closest("[data-handle]")?.dataset.handle === "savannah-red")), JSON.stringify(t2));
+  await cards4[0].click();
   await page.waitForTimeout(400);
   // The circle sits on a white photo: it has to show there, empty or picked,
   // in either theme.
@@ -656,11 +668,13 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`compare (${label}): pick circles show on white photos, empty and picked, in both themes`, ["light", "dark"].every((t) => pickLook[t].ring >= 0.4 && pickLook[t].picked < 0.1 && pickLook[t].check > 0.9), JSON.stringify(pickLook));
   for (const i of [1, 3, 2]) await cards4[i].click();
   const picked = await page.$$eval(".ai-chat-msg:last-child .ai-chat-product-card.is-cmp-picked", (c) => c.map((x) => x.dataset.handle));
+  const t3 = await tray();
   if (phone) {
-    check(`compare (${label}): two at most on a phone`, picked.join() === "savannah-red,jillian-black" && (await page.textContent(go)) === "Compare 2" && /2 at most/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-bar__msg")), JSON.stringify(picked));
+    check(`compare (${label}): two at most on a phone`, picked.join() === "savannah-red,jillian-black" && (await page.textContent(go)) === "Compare 2" && /2 at most/.test(await page.textContent(".ai-chat-msg:last-child .ai-cmp-bar__msg")) && t3.slots.join() === "savannah-red,jillian-black", JSON.stringify({ picked, t3 }));
   } else {
-    check(`compare (${label}): three at most`, picked.length === 3 && !picked.includes("orthotic-one") && (await page.textContent(go)) === "Compare 3", JSON.stringify(picked));
+    check(`compare (${label}): three at most`, picked.length === 3 && !picked.includes("orthotic-one") && (await page.textContent(go)) === "Compare 3" && t3.slots.join() === picked.join(), JSON.stringify({ picked, t3 }));
   }
+  check(`compare (${label}): the tray stays on one line, full`, t3.oneLine, JSON.stringify(t3));
   await page.click(go);
   await page.waitForTimeout(900);
   const nCols = phone ? 2 : 3;
@@ -672,7 +686,13 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   await page.waitForTimeout(1200);
   await page.click(".ai-chat-msg:last-child [data-cmp-start]");
   await page.click(".ai-chat-msg:last-child [data-cmp-cancel]");
-  check(`compare (${label}): Cancel puts the row back`, await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return !m.querySelector(".is-cmp-picking") && !m.querySelector(".ai-cmp-cta__btn").hidden && !m.querySelector(".is-cmp-picked"); }));
+  check(`compare (${label}): Cancel puts the row back`, await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return !m.querySelector(".is-cmp-picking") && !m.querySelector(".ai-cmp-cta__btn").hidden && !m.querySelector(".is-cmp-picked") && !m.querySelector(".ai-cmp-slot") && document.activeElement === m.querySelector("[data-cmp-start]"); }));
+  // Escape while picking steps back to the row — the chat stays open.
+  await page.click(".ai-chat-msg:last-child [data-cmp-start]");
+  await (await page.$$(".ai-chat-msg:last-child .ai-chat-product-card"))[1].click();
+  await page.focus(".ai-chat-msg:last-child [data-cmp-cancel]");
+  await page.keyboard.press("Escape");
+  check(`compare (${label}): Escape while picking cancels it, the chat stays open`, await page.evaluate(() => { const m = [...document.querySelectorAll(".ai-chat-msg")].pop(); return !m.querySelector(".is-cmp-picking") && !m.querySelector(".is-cmp-picked") && document.activeElement === m.querySelector("[data-cmp-start]") && document.querySelector(".ai-chat-panel").classList.contains("open"); }));
   mockCtl.compareFail = true;
   const nMsgs = await page.$$eval(".ai-chat-msg", (m) => m.length);
   await page.click(".ai-chat-msg:last-child [data-cmp-start]");

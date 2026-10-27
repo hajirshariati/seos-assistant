@@ -1466,6 +1466,19 @@ await test("the prompt asks for a sales associate's voice: lead with the next be
   assert.match(p, /Never imply something is available when it isn't/);
   assert.match(p, /never with an apology for what the store doesn't have/);
 });
+await test("\"Where can I buy these?\" — right here, online; the store locator is for visiting, never for buying", async () => {
+  const p = buildLeanSystemPrompt({ shop: "x" });
+  assert.match(p, /"Where can I buy these\?" \/ "Do you have a store\?": they can buy right here/);
+  assert.match(p, /Don't send them to a store or the store locator to buy/);
+  const { buildLeanStoreExtras } = await import("../app/lib/lean/store-tools.server.js");
+  const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config: { storeLocatorMapId: "15ecd30bd8acd4" }, messages: [{ role: "user", content: "where can I buy these?" }], latestUserMessage: "where can I buy these?" });
+  const loc = ex.tools.find((t) => t.definition.name === "show_store_locator");
+  assert.ok(loc, "the locator tool is offered when the store has one");
+  assert.match(loc.definition.description, /Not the answer to "where can I buy these\?"/);
+  assert.match(loc.definition.description, /never promise a product is in stock at one/);
+  assert.match(loc.definition.description, /have their feet scanned/);
+  assert.doesNotMatch(loc.definition.description, /whenever the customer asks where to buy/);
+});
 await test("\"Unfortunately, no men's styles\" is rewritten: the men's options come first", async () => {
   const s = scripted([
     { stop_reason: "end_turn", content: [txt("Unfortunately, our fall collection is women's only — there are no men's styles in it right now. Would you like to see men's shoes?")] },

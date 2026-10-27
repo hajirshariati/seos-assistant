@@ -4903,47 +4903,96 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-cmp-cta__err { margin-top: 6px; font-size: 12.5px; color: #c4271c; }
 .ai-chat-panel[data-theme="dark"] .ai-cmp-cta__err { color: #ff7b72; }
 
-/* Picking 2 or 3 */
+/* Picking 2 or 3: the row becomes a tray in the same place — × on the left,
+   a slot per pick (dashed until filled with that product's photo), and the
+   button on the right, which says what's left to do until it can compare. */
 .ai-chat-panel .ai-cmp-bar {
   display: flex; align-items: center; gap: 8px;
-  min-height: 48px; padding: 6px 6px 6px 14px;
-  border-radius: 14px;
+  box-sizing: border-box; min-height: 52px; padding: 7px;
+  border-radius: 16px;
   background: var(--seos-bg-raised, #fff);
-  box-shadow: inset 0 0 0 1px var(--seos-line-strong);
+  box-shadow: inset 0 0 0 1px var(--seos-line), 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.07);
+  animation: aiCmpIn 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .ai-chat-panel .ai-cmp-bar[hidden] { display: none; }
-.ai-chat-panel .ai-cmp-bar__msg { flex: 1; font-size: 13.5px; font-weight: 500; color: var(--seos-text); }
-.ai-chat-panel .ai-cmp-bar__msg.is-nudge { animation: aiCmpNudge 0.35s ease; color: var(--seos-text-2); }
+.ai-chat-panel[data-theme="dark"] .ai-cmp-bar { box-shadow: inset 0 0 0 1px var(--seos-line-strong), 0 6px 18px rgba(0, 0, 0, 0.35); }
+.ai-chat-panel .ai-cmp-cta.is-back .ai-cmp-cta__btn { animation: aiCmpFade 0.28s ease both; }
+@keyframes aiCmpIn { from { opacity: 0; transform: translateY(4px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes aiCmpFade { from { opacity: 0; } to { opacity: 1; } }
+.ai-chat-panel .ai-cmp-bar__x {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--seos-surface); color: var(--seos-text); cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+@media (hover: hover) { .ai-chat-panel .ai-cmp-bar__x:hover { background: var(--seos-line); } }
+.ai-chat-panel .ai-cmp-bar__x:active { transform: scale(0.92); }
+.ai-chat-panel .ai-cmp-bar__slots { display: flex; gap: 6px; flex: 1; min-width: 0; padding-left: 2px; }
+.ai-chat-panel .ai-cmp-bar__slots.is-nudge { animation: aiCmpNudge 0.36s ease; }
 @keyframes aiCmpNudge { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-.ai-chat-panel .ai-cmp-bar__cancel {
-  min-height: 36px; padding: 0 12px; border: 0; border-radius: 999px;
-  background: transparent; color: var(--seos-text); font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
+.ai-chat-panel .ai-cmp-slot {
+  position: relative; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0; border: 0; border-radius: 11px;
+  font: inherit;
 }
+.ai-chat-panel .ai-cmp-slot.is-empty {
+  box-shadow: inset 0 0 0 1.5px var(--seos-line-strong);
+  background: transparent; color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-cmp-slot.is-empty svg { opacity: 0.7; }
+.ai-chat-panel .ai-cmp-bar__slots .ai-cmp-slot.is-empty ~ .ai-cmp-slot.is-empty svg { opacity: 0.35; }
+/* A pick: its photo (white in every theme), tap to take it out. */
+.ai-chat-panel button.ai-cmp-slot {
+  background: #fff; cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease;
+}
+.ai-chat-panel button.ai-cmp-slot img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+.ai-chat-panel button.ai-cmp-slot.is-new { animation: aiCmpPop 0.34s cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes aiCmpPop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+.ai-chat-panel button.ai-cmp-slot:active { transform: scale(0.94); }
+.ai-chat-panel .ai-cmp-slot__x {
+  position: absolute; top: -5px; right: -5px;
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #111114; color: #fff;
+  box-shadow: 0 0 0 2px var(--seos-bg-raised, #fff);
+}
+.ai-chat-panel .ai-cmp-slot__x svg { width: 9px; height: 9px; stroke-width: 3; }
 .ai-chat-panel .ai-cmp-bar__go {
-  min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px;
-  background: var(--seos-ink); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
-  transition: opacity 0.15s ease;
+  flex: none; min-height: 38px; padding: 0 18px; border: 0; border-radius: 999px;
+  background: var(--seos-ink); color: #fff; font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
-.ai-chat-panel .ai-cmp-bar__go[disabled] { background: var(--seos-surface); color: var(--seos-text-2); cursor: default; }
+@media (hover: hover) { .ai-chat-panel .ai-cmp-bar__go:not([disabled]):hover { background: var(--seos-ink-hover); } }
+.ai-chat-panel .ai-cmp-bar__go:not([disabled]):active { transform: scale(0.97); }
+.ai-chat-panel .ai-cmp-bar__go[disabled] { background: var(--seos-surface); color: var(--seos-text-2); cursor: default; font-weight: 500; }
 .ai-chat-panel[data-theme="dark"] .ai-cmp-bar__go:not([disabled]) { color: #0d0d12; }
+/* Loading the table: the button keeps its color, with a spinner. */
+.ai-chat-panel .ai-cmp-bar__go.is-busy { background: var(--seos-ink); }
+.ai-chat-panel[data-theme="dark"] .ai-cmp-bar__go.is-busy::after { border-color: rgba(13, 13, 18, 0.25); border-top-color: #0d0d12; }
 .ai-chat-panel .is-cmp-picking .ai-chat-product-card { position: relative; cursor: pointer; transition: box-shadow 0.15s ease, opacity 0.15s ease; }
 .ai-chat-panel .is-cmp-picking .ai-chat-product-card.is-cmp-picked { box-shadow: 0 0 0 2px var(--seos-ink); border-radius: 14px; }
 .ai-chat-panel .is-cmp-picking .ai-chat-product-card.is-cmp-full { opacity: 0.55; }
 /* The pick circle sits on the product photo, which is white in every theme,
-   so it has fixed colors: a clear ring with a faint check (it reads as
-   "tap to pick"), and solid dark with a white check once picked. */
+   so it has fixed colors: a ring with a plus (it reads as "add to compare"),
+   and solid dark with a white check once picked. */
 .ai-chat-panel .ai-cmp-pick {
   position: absolute; top: 10px; left: 10px; z-index: 2;
   display: flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0; border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.42);
   background: rgba(255, 255, 255, 0.96);
-  color: rgba(0, 0, 0, 0.2); cursor: pointer;
+  color: rgba(0, 0, 0, 0.62); cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.14);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 .ai-chat-panel .ai-cmp-pick[hidden] { display: none; }
-@media (hover: hover) { .ai-chat-panel .ai-chat-product-card:hover .ai-cmp-pick:not([aria-pressed="true"]) { border-color: rgba(0, 0, 0, 0.7); color: rgba(0, 0, 0, 0.45); } }
+.ai-chat-panel .ai-cmp-pick svg { width: 13px; height: 13px; }
+.ai-chat-panel .ai-cmp-pick[aria-pressed="true"] svg:first-child,
+.ai-chat-panel .ai-cmp-pick:not([aria-pressed="true"]) svg + svg { display: none; }
+@media (hover: hover) { .ai-chat-panel .ai-chat-product-card:hover .ai-cmp-pick:not([aria-pressed="true"]) { border-color: rgba(0, 0, 0, 0.7); color: rgba(0, 0, 0, 0.85); } }
 .ai-chat-panel .ai-cmp-pick[aria-pressed="true"] { background: #111114; border-color: #111114; color: #fff; transform: scale(1.06); }
 /* The dark theme recolors every border inside a card; not this one. */
 .ai-chat-panel[data-theme] .ai-chat-product-card .ai-cmp-pick:not([aria-pressed="true"]) { border-color: rgba(0, 0, 0, 0.42); }
@@ -5076,20 +5125,25 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-cmp-cta__thumbs { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel .ai-cmp-cta__btn, .ai-chat-panel .ai-cmp__segbtn, .ai-chat-panel .ai-cmp-pick { transition: none; }
-  .ai-chat-panel .ai-cmp-bar__msg.is-nudge { animation: none; }
+  .ai-chat-panel .ai-cmp-cta__btn, .ai-chat-panel .ai-cmp__segbtn, .ai-chat-panel .ai-cmp-pick, .ai-chat-panel .ai-cmp-bar__go, .ai-chat-panel .ai-cmp-bar__x, .ai-chat-panel button.ai-cmp-slot { transition: none; }
+  .ai-chat-panel .ai-cmp-bar, .ai-chat-panel .ai-cmp-bar__slots.is-nudge, .ai-chat-panel button.ai-cmp-slot.is-new, .ai-chat-panel .ai-cmp-cta.is-back .ai-cmp-cta__btn { animation: none; }
   .ai-chat-panel .ai-cmp-cta__btn.is-busy .ai-cmp-cta__go::after, .ai-chat-panel .ai-cmp-bar__go.is-busy::after { animation-duration: 1.4s; }
 }
 .ai-chat-panel .ai-cmp-cta__btn[hidden] { display: none; }
-.ai-chat-panel .ai-cmp-bar__msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ai-chat-panel .ai-cmp-bar__cancel, .ai-chat-panel .ai-cmp-bar__go { flex: none; white-space: nowrap; }
+.ai-chat-panel .ai-cmp-bar__go { white-space: nowrap; }
+/* Small phones: the tray stays on one line. */
+@media (max-width: 374px) {
+  .ai-chat-panel .ai-cmp-bar { gap: 6px; padding: 6px; }
+  .ai-chat-panel .ai-cmp-bar__x { width: 32px; height: 32px; }
+  .ai-chat-panel .ai-cmp-slot { width: 32px; height: 32px; border-radius: 9px; }
+  .ai-chat-panel .ai-cmp-bar__go { padding: 0 13px; font-size: 13px; }
+}
 .ai-chat-panel .ai-cmp__segbtn { white-space: nowrap; }
 @media (max-width: 480px) {
   .ai-chat-panel .ai-cmp__segbtn { font-size: 12.5px; padding: 0 6px; gap: 5px; }
 }
 /* The comparison uses the whole width of the conversation. */
 .ai-chat-panel .ai-chat-msg:has(.ai-cmp) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
-.ai-chat-panel .ai-cmp-bar__cancel { padding: 0 10px; }
 .ai-chat-panel .ai-chat-msg:has(.ai-cmp) { max-width: 100%; }
 .ai-chat-panel .ai-cmp__img { max-width: 168px; }
 /* The buy row stays in reach while the table scrolls: pinned to the bottom
@@ -5492,9 +5546,11 @@ button.ai-chat-launcher__text {
 /* ── View all: filters ─────────────────────────────────────────────────────
    A frosted bar stuck to the top of the list: one rounded button per
    filter, Sort at the end, and the chosen values as chips underneath. */
+/* Stuck at the very top of the list: a sticky element keeps clear of the
+   list's padding, so its offset is minus that padding. */
 .ai-chat-panel .ai-vf {
   position: sticky;
-  top: 0;
+  top: -12px;
   z-index: 5;
   margin: -12px -14px 10px;
   padding: 10px 14px;
@@ -5504,7 +5560,7 @@ button.ai-chat-launcher__text {
   backdrop-filter: saturate(180%) blur(18px);
   border-bottom: 1px solid var(--seos-line);
 }
-.ai-chat-panel.is-wide .ai-vf { margin: -16px -24px 14px; padding: 12px 24px; }
+.ai-chat-panel.is-wide .ai-vf { top: -16px; margin: -16px -24px 14px; padding: 12px 24px; }
 .ai-chat-panel .ai-vf__row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ai-chat-panel .ai-vf__pills {
   flex: 1;
@@ -5777,8 +5833,9 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-vf-pop__done:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
 .ai-chat-panel .ai-vf-sec + .ai-vf-sec { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--seos-line); }
 .ai-chat-panel .ai-vf-sec__h { margin: 0 0 10px; font-size: 13px; font-weight: 650; color: var(--seos-text); letter-spacing: -0.005em; }
-/* Sizes: a grid of round-cornered keys. */
-.ai-chat-panel .ai-vf-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px; }
+/* Sizes: a grid of round-cornered keys, each wide enough for the longest
+   size ("10.5–11") on one line. */
+.ai-chat-panel .ai-vf-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--vf-key, 54px), 1fr)); gap: 8px; }
 .ai-chat-panel .ai-vf-size {
   all: unset;
   box-sizing: border-box;
@@ -5788,9 +5845,12 @@ button.ai-chat-launcher__text {
   place-items: center;
   background: var(--seos-surface);
   color: var(--seos-text);
+  padding: 0 6px;
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
 }
