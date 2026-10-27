@@ -308,6 +308,51 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`tf intro (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// A reopened chat reads the same: everything under a reply comes back with
+// it after a reload — the sign-in / look-up card, True Fit's button, the FIT
+// result, quick replies — and only the last reply's choices stay tappable.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  const send = async (t, sel) => {
+    const n = await page.$$eval(".ai-chat-msg.assistant, .ai-chat-msg--assistant, [data-role=assistant]", (x) => x.length).catch(() => 0);
+    await page.fill(".ai-chat-input", t);
+    await page.keyboard.press("Enter");
+    if (sel) await page.waitForSelector(sel, { timeout: 6000 });
+    await page.waitForTimeout(600);
+    return n;
+  };
+  await send("full", ".ai-chat-suggestions");
+  await send("where is my order #1172010?", ".ai-ordl");
+  await send("what size am I", ".ai-chat-truefit-cta");
+  await send("fit please");
+  const snap = () => page.evaluate(() => ({
+    lookup: [...document.querySelectorAll(".ai-ordl .ai-ordl__opt b")].map((b) => b.textContent).join("|"),
+    order: document.querySelector(".ai-ordl [name=order]")?.value || "",
+    trueFit: document.querySelectorAll(".ai-chat-truefit-cta").length,
+    fit: document.querySelectorAll(".ai-chat-fit-result").length,
+    quick: document.querySelectorAll(".ai-chat-suggestions").length,
+    staleQuick: document.querySelectorAll(".ai-chat-suggestions.is-stale").length,
+    cards: document.querySelectorAll(".ai-chat-product-card").length,
+    link: document.querySelectorAll(".ai-chat-msg-bubble a.ai-chat-cta-btn, .ai-chat-msg-bubble .ai-chat-cta-btn[href]").length,
+  }));
+  const before = await snap();
+  await page.reload();
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForSelector(".ai-ordl", { timeout: 5000 });
+  await page.waitForTimeout(400);
+  const after = await snap();
+  check("reopened chat: the sign-in / look-up card comes back, rows and order number too", after.lookup === "Sign in|Look up an order|Tracking page" && after.order === "1172010", JSON.stringify(after));
+  check("reopened chat: True Fit's button, the FIT result, the cards and links come back", after.trueFit === before.trueFit && after.trueFit === 1 && after.fit === before.fit && after.cards === before.cards && after.link === before.link, JSON.stringify({ before, after }));
+  check("reopened chat: earlier quick replies come back faded, not tappable", after.quick === 1 && after.staleQuick === 1, JSON.stringify(after));
+  check("reopened chat: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // Order status without signing in: one card, two ways in — sign in, or look
 // one order up with its number (or confirmation code) and email. The form
 // goes straight to the store, never through the chat; the order is shown,

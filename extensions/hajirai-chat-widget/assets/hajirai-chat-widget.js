@@ -2624,7 +2624,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 cta-pair'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 keep-extras'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4697,6 +4697,17 @@ if(cleanText){
   if(pendingForm)_saved.formCta=pendingForm;
   if(pendingMap)_saved.mapCta=pendingMap;
   if(pendingSizeIntro)_saved.sizeIntro=pendingSizeIntro;
+  /* Everything else under the reply comes back with it too — the sign-in
+     card, buttons, size results, choices — so a reopened chat reads the
+     same as it did. */
+  if(pendingLogin)_saved.login=pendingLogin;
+  if(supportCta)_saved.support=supportCta;
+  if(sizeFinder)_saved.sizeFinder=sizeFinder;
+  if(fitReport)_saved.fitReport=fitReport;
+  if(vizCta&&vizCta.productHandle)_saved.viz=vizCta;
+  if(choices.length)_saved.choices=choices.slice(0,8);
+  if(sugg&&sugg.length)_saved.sugg=sugg.slice(0,6);
+  if(fitResult&&ff){for(var sf=0;sf<ff.fits.length;sf++){var sfo=ff.fits[sf];if(sfo.key===fitResult)_saved.fit={key:sfo.key,label:sfo.label,name:sfo.name,description:sfo.description}}}
   if(pendingViewAll&&prods&&prods.length){
     _saved.viewAll=pendingViewAll;
     /* The full lists are big: only the latest three stay with the history. */
@@ -5128,26 +5139,78 @@ var prodLink=e.target.closest('.ai-chat-product-card a[href]');
 if(prodLink)markChatAttributed();
 });
 
+/* A saved reply's extras, drawn in the order finish() draws them. Saved
+   data is checked before it's shown. */
+var STR=function(v,n){return typeof v==='string'?v.trim().slice(0,n||200):''};
+function cleanStrs(a,max,len){return Array.isArray(a)?a.map(function(x){return STR(x,len)}).filter(Boolean).slice(0,max):[]}
+var HANDLE_RE=/^[a-z0-9][a-z0-9-]{0,200}$/i;
+function cleanLogin(p){
+  if(!p||typeof p!=='object')return null;
+  return {intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:/^[A-Za-z0-9-]{3,24}$/.test(String(p.order||''))?String(p.order):'',pages:p.pages||null};
+}
+function cleanSupport(p){
+  if(!p||typeof p!=='object')return null;
+  var u=STR(p.fallbackUrl,500);
+  return {label:STR(p.label,80)||SUPPORT_LABEL,fallbackUrl:/^(https?:\/\/|\/)/i.test(u)?u:''};
+}
+function cleanFinder(p){return p&&HANDLE_RE.test(String(p.handle||''))?{handle:String(p.handle),title:STR(p.title)}:null}
+function cleanFitReport(p){
+  if(!p||!STR(p.size,20))return null;
+  return {handle:HANDLE_RE.test(String(p.handle||''))?String(p.handle):'',productTitle:STR(p.productTitle),size:STR(p.size,20),
+    confidence:Math.max(0,Math.min(100,parseInt(p.confidence,10)||0)),reasons:cleanStrs(p.reasons,6,200),
+    display:p.display==='percent'||p.display==='hide'?p.display:'bar'};
+}
+function cleanFit(p){return p&&STR(p.label,40)?{key:STR(p.key,40),label:STR(p.label,40),name:STR(p.name,80),description:STR(p.description,300)}:null}
+function cleanViz(p){
+  if(!p||!HANDLE_RE.test(String(p.productHandle||'')))return null;
+  return {productHandle:String(p.productHandle),productTitle:STR(p.productTitle),styleContext:STR(p.styleContext,300),label:STR(p.label,40)||'See It Styled',
+    scenes:Array.isArray(p.scenes)&&p.scenes.length?p.scenes.slice(0,12):null,sceneGroup:STR(p.sceneGroup,40),productCategory:STR(p.productCategory,60)};
+}
+function restoreExtras(m,md,live){
+  var b=$('.ai-chat-msg-bubble',md);if(!b)return;
+  var add=function(h){if(h)b.insertAdjacentHTML('beforeend',h)};
+  var prods=m.products||[];
+  var viz=cleanViz(m.viz);
+  if(viz){var vc=b.querySelector('.ai-chat-product-card[data-handle="'+viz.productHandle+'"]');if(vc)injectVizButton(vc,viz)}
+  var ch=cleanStrs(m.choices,8,120);
+  if(ch.length){add(choiceButtonsHtml(ch));var lc=b.querySelector('.ai-chat-choices:last-of-type');if(lc)initChoicesScroll(lc)}
+  if(m.linkCTA&&m.linkCTA.url)add(ctaHtml(m.linkCTA));
+  var sup=cleanSupport(m.support);if(sup)add(supportCtaHtml(sup));
+  var fc=m.formCta;
+  if(fc&&/^[A-Za-z0-9]{4,32}$/.test(String(fc.form||'')))add(formCtaHtml({form:String(fc.form),label:String(fc.label||'').slice(0,40)||'Open the quiz'}));
+  var mc=cleanMap(m.mapCta);if(mc)add(mapCtaHtml(mc));
+  var va=m.viewAll&&prods.length?cleanViewAll(m.viewAll):null;if(va)placeViewAll(b,va,prods);
+  var ti=cleanSizeIntro(m.sizeIntro);if(ti)add(sizeIntroHtml(ti));
+  var fit=cleanFit(m.fit);
+  if(fit){var fp=$('.ai-chat-msg-bubble > p',md);if(fp)fp.insertAdjacentHTML('afterend',fitCardHtml(fit))}
+  if(m.comparison)add(compareHtml(m.comparison));
+  if(Array.isArray(m.orders)&&m.orders.length){
+    if(Array.isArray(m.returnMethods)&&m.returnMethods.length)RET_METHODS=m.returnMethods;
+    add(ordersHtml(m.orders));
+  }
+  /* Signed in since: the orders come in the chat now, not this card. */
+  var lg=CUST_LOGGED_IN?null:cleanLogin(m.login);if(lg)add(loginCardHtml(lg));
+  var tf=cleanFinder(m.sizeFinder);if(tf)add(trueFitBtnHtml(tf));
+  var fr=cleanFitReport(m.fitReport);
+  if(fr){
+    var mp=fr.handle?b.querySelector('.ai-chat-product-card[data-handle="'+fr.handle+'"]'):null;
+    if(mp&&!mp.closest('.ai-chat-products--showcase')){mp.classList.add('has-fit');mp.insertAdjacentHTML('beforeend',fitSnippetHtml(fr))}
+    else add(fitReportHtml(fr));
+  }
+  var sg=cleanStrs(m.sugg,6,200);
+  if(sg.length){var h='<div class="ai-chat-suggestions"><div class="ai-chat-suggestions-label">Quick replies</div>';for(var si=0;si<sg.length;si++){h+='<button class="ai-chat-suggest-btn" data-message="'+esc(sg[si])+'"><span class="suggest-plus">+</span> '+esc(sg[si])+'</button>'}add(h+'</div>')}
+  if(!live){var st=b.querySelectorAll('.ai-chat-choices, .ai-chat-suggestions');for(var sj=0;sj<st.length;sj++)st[sj].classList.add('is-stale')}
+}
+
 /* Init */
 setTimeout(tfResume,0);
 if(messages.length===0)buildWelcome();
-else for(var i=0;i<messages.length;i++){
-  var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
-  var _cta=messages[i].linkCTA;
-  if(_cta&&_cta.url&&_md){var _lb=$('.ai-chat-msg-bubble',_md);if(_lb)_lb.insertAdjacentHTML('beforeend',ctaHtml(_cta))}
-  var _mc=cleanMap(messages[i].mapCta);
-  if(_mc&&_md){var _mb=$('.ai-chat-msg-bubble',_md);if(_mb)_mb.insertAdjacentHTML('beforeend',mapCtaHtml(_mc))}
-  var _fc=messages[i].formCta;
-  if(_fc&&/^[A-Za-z0-9]{4,32}$/.test(String(_fc.form||''))&&_md){var _fb=$('.ai-chat-msg-bubble',_md);if(_fb)_fb.insertAdjacentHTML('beforeend',formCtaHtml({form:String(_fc.form),label:String(_fc.label||'').slice(0,40)||'Open the quiz'}))}
-  var _ti=cleanSizeIntro(messages[i].sizeIntro);
-  if(_ti&&_md){var _tib=$('.ai-chat-msg-bubble',_md);if(_tib)_tib.insertAdjacentHTML('beforeend',sizeIntroHtml(_ti))}
-  var _va=messages[i].viewAll;
-  if(_va&&_md&&messages[i].products&&messages[i].products.length){var _vac=cleanViewAll(_va),_vab=$('.ai-chat-msg-bubble',_md);if(_vac&&_vab)placeViewAll(_vab,_vac,messages[i].products)}
-  if(messages[i].comparison&&_md){var _cb=$('.ai-chat-msg-bubble',_md);if(_cb)_cb.insertAdjacentHTML('beforeend',compareHtml(messages[i].comparison))}
-  var _os=messages[i].orders;
-  if(Array.isArray(_os)&&_os.length&&_md){
-    if(Array.isArray(messages[i].returnMethods)&&messages[i].returnMethods.length)RET_METHODS=messages[i].returnMethods;
-    var _ordB=$('.ai-chat-msg-bubble',_md);if(_ordB)_ordB.insertAdjacentHTML('beforeend',ordersHtml(_os));
+else{
+  /* Only the last reply's choices stay tappable, as in a live chat. */
+  var _last=messages[messages.length-1];
+  for(var i=0;i<messages.length;i++){
+    var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
+    if(_md&&messages[i].role==='assistant')restoreExtras(messages[i],_md,messages[i]===_last);
   }
 }
 if(messages.length)resumeReturns();
