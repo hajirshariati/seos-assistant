@@ -2624,7 +2624,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 store-pages-app'}catch(e){}
+try{window.__hajiraiWidget='2026-10-27 cta-pair'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2739,17 +2739,16 @@ function viewAllHtml(va,shown){
   var seen={};(shown||[]).forEach(function(x){if(x&&x.handle)seen[x.handle]=1});
   var more=va.products.filter(function(x){return !seen[x.handle]});
   var rest=va.total-(va.products.length-more.length);
-  var thumbs='';
-  for(var i=0;i<Math.min(more.length,3);i++)thumbs+='<span class="ai-cmp-cta__thumb">'+(more[i].image?'<img src="'+esc(more[i].image)+'" alt="" loading="lazy">':'')+'</span>';
   var hint=rest+' more to browse';
-  return '<div class="ai-va-cta"><button type="button" class="ai-cmp-cta__btn" data-viewall="'+id+'" aria-haspopup="dialog" aria-label="'+esc(va.label+' — '+hint)+'"><span class="ai-cmp-cta__icon">'+VA_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(va.label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__thumbs" aria-hidden="true">'+thumbs+'</span><span class="ai-cmp-cta__go" aria-hidden="true">'+WI.arrow+'</span></button></div>';
+  return '<div class="ai-va-cta"><button type="button" class="ai-cmp-cta__btn" data-viewall="'+id+'" aria-haspopup="dialog" aria-label="'+esc(va.label+' — '+hint)+'"><span class="ai-cmp-cta__icon">'+VA_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(va.label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span></button></div>';
 }
 /* Right under the cards, above Compare. */
 function placeViewAll(bubble,va,shown){
   if(!bubble||!va)return;
   var html=viewAllHtml(va,shown);
+  /* With Compare: the two side by side (View all the wider), on phones one above the other. */
   var cmp=bubble.querySelector('.ai-cmp-cta');
-  if(cmp){cmp.insertAdjacentHTML('beforebegin',html);return}
+  if(cmp){var pair=document.createElement('div');pair.className='ai-cta-pair';pair.innerHTML='<div class="ai-cta-pair__in"></div>';cmp.parentNode.insertBefore(pair,cmp);var pin=pair.firstChild;pin.insertAdjacentHTML('beforeend',html);pin.appendChild(cmp);return}
   var row=bubble.querySelector('.ai-chat-products-wrap')||bubble.querySelector('.ai-chat-products');
   if(row)row.insertAdjacentHTML('afterend',html);else bubble.insertAdjacentHTML('beforeend',html);
 }
@@ -3360,11 +3359,9 @@ function compareCtaHtml(products){
   var list=cmpCards(products);
   if(list.length<2)return '';
   var direct=list.length<=cmpMax();
-  var thumbs='';
-  for(var i=0;i<Math.min(list.length,3);i++){var im=list[i].image||list[i].featured_image||'';thumbs+='<span class="ai-cmp-cta__thumb">'+(im?'<img src="'+esc(im)+'" alt="" loading="lazy">':'')+'</span>'}
   var label=direct?(list.length===2?'Compare these two':'Compare all three'):'Compare';
   var hint=direct?'Side by side':cmpPickHint();
-  return '<div class="ai-cmp-cta"><button type="button" class="ai-cmp-cta__btn" data-cmp-start aria-label="'+esc(label+' — '+hint.toLowerCase())+'"><span class="ai-cmp-cta__icon">'+CMP_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__thumbs" aria-hidden="true">'+thumbs+'</span><span class="ai-cmp-cta__go" aria-hidden="true">'+WI.arrow+'</span></button>'+
+  return '<div class="ai-cmp-cta"><button type="button" class="ai-cmp-cta__btn" data-cmp-start aria-label="'+esc(label+' — '+hint.toLowerCase())+'"><span class="ai-cmp-cta__icon">'+CMP_ICON+'</span><span class="ai-cmp-cta__text"><span class="ai-cmp-cta__label">'+esc(label)+'</span><span class="ai-cmp-cta__hint">'+esc(hint)+'</span></span><span class="ai-cmp-cta__go" aria-hidden="true"></span></button>'+
     /* Picking: the row turns into a tray — × to stop, a slot per pick (its
        photo; tap it to take it out), and the button, which says what's left
        to do until there are enough to compare. */

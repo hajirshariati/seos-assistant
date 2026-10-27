@@ -6354,3 +6354,25 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-appn__panel { animation: none; }
   .ai-chat-panel .ai-appn__row, .ai-chat-panel .ai-appn__seg button { transition: none; }
 }
+
+/* View all and Compare: side by side when the reply is wide enough (the
+   desktop chat) — View all about 70%, Compare 30% — one above the other in
+   a narrow one (phones). No thumbnails or arrows: the label says it.
+   Compare's empty end slot only shows its spinner while the table loads. */
+.ai-chat-panel .ai-cmp-cta__go:empty { display: none; }
+.ai-chat-panel .ai-cmp-cta__btn.is-busy .ai-cmp-cta__go:empty { display: flex; width: 16px; height: 16px; }
+.ai-chat-panel .ai-cta-pair { margin-top: 10px; container-type: inline-size; }
+.ai-chat-panel .ai-cta-pair__in > .ai-va-cta { margin-top: 0; }
+.ai-chat-panel .ai-cta-pair__in > .ai-cmp-cta { margin-top: 8px; }
+@container (min-width: 420px) {
+  .ai-chat-panel .ai-cta-pair__in { display: flex; align-items: stretch; gap: 8px; }
+  .ai-chat-panel .ai-cta-pair__in > .ai-va-cta { flex: 7 1 0; min-width: 0; display: flex; }
+  .ai-chat-panel .ai-cta-pair__in > .ai-cmp-cta { flex: 3 1 0; min-width: 0; margin-top: 0; display: flex; flex-direction: column; container-type: inline-size; }
+  .ai-chat-panel .ai-cta-pair__in .ai-cmp-cta__btn { flex: 1 1 auto; }
+  /* Picking to compare: the tray takes the whole row. */
+  .ai-chat-panel .is-cmp-picking .ai-cta-pair__in > .ai-cmp-cta { flex-basis: 100%; }
+}
+@container (max-width: 199px) {
+  .ai-chat-panel .ai-cta-pair__in .ai-cmp-cta .ai-cmp-cta__icon { display: none; }
+  .ai-chat-panel .ai-cta-pair__in .ai-cmp-cta .ai-cmp-cta__btn { padding-left: 14px; }
+}

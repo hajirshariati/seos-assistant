@@ -1219,7 +1219,16 @@ for (const [label, path, opts] of [["desktop", "/showcase", { viewport: { width:
     return { label: b.querySelector(".ai-cmp-cta__label").textContent, hint: b.querySelector(".ai-cmp-cta__hint").textContent, thumbs: b.querySelectorAll(".ai-cmp-cta__thumb").length, afterCards: !!(cards.compareDocumentPosition(b) & 4), beforeCompare: !cmp || !!(b.compareDocumentPosition(cmp) & 4), fits: r.left >= br.left - 0.5 && r.right <= br.right + 0.5, height: Math.round(r.height), popup: b.getAttribute("aria-haspopup"),
       bg: getComputedStyle(b).backgroundColor, cmpBg: cmpBtn ? getComputedStyle(cmpBtn).backgroundColor : "", fg: getComputedStyle(b).color };
   });
-  check(`view all (${label}): a row under the cards names the full count`, row.label === "View all 10 women's sale boots" && row.hint === "8 more to browse" && row.thumbs === 3, JSON.stringify(row));
+  check(`view all (${label}): a row under the cards names the full count — no thumbnails, no arrows`, row.label === "View all 10 women's sale boots" && row.hint === "8 more to browse" && row.thumbs === 0 && (await page.$$eval(".ai-chat-msg:last-child .ai-cmp-cta__thumb, .ai-chat-msg:last-child .ai-cmp-cta__go svg", (x) => x.length)) === 0, JSON.stringify(row));
+  // With Compare: side by side when the reply is wide (about 70 / 30), one above the other when it's narrow.
+  const pairAt = async (w) => page.evaluate((w) => {
+    const pr = document.querySelector(".ai-cta-pair"); if (w) pr.style.width = w + "px";
+    const v = pr.querySelector(".ai-va-cta").getBoundingClientRect(), c = pr.querySelector(".ai-cmp-cta").getBoundingClientRect(), r = pr.getBoundingClientRect();
+    const out = { sameRow: Math.abs(v.top - c.top) < 2, share: +(v.width / (v.width + c.width)).toFixed(2), sameHeight: Math.abs(v.height - c.height) < 2, inside: c.right <= r.right + 0.5 && v.left >= r.left - 0.5 };
+    pr.style.width = ""; return out;
+  }, w);
+  const wide = await pairAt(560), narrow = await pairAt(340);
+  check(`view all (${label}): with Compare — side by side 70/30 in a wide reply, stacked in a narrow one`, wide.sameRow && wide.share >= 0.66 && wide.share <= 0.74 && wide.sameHeight && wide.inside && !narrow.sameRow && narrow.inside, JSON.stringify({ wide, narrow }));
   check(`view all (${label}): right under the cards, above Compare, inside the bubble, easy to tap`, row.afterCards && row.beforeCompare && row.fits && row.height >= 44 && row.popup === "dialog", JSON.stringify(row));
   check(`view all (${label}): filled, so it stands apart from Compare`, row.bg !== row.cmpBg && row.bg !== "rgba(0, 0, 0, 0)" && row.fg !== row.bg, JSON.stringify(row));
   await page.click("[data-viewall]");
