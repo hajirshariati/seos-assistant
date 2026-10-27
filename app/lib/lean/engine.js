@@ -231,14 +231,6 @@ export function onlyAsksBack(text, latestUserMessage) {
   return onlyQuestions(t);
 }
 
-// A good sales associate leads with what they can offer, not with what's
-// missing: a reply that opens "Unfortunately…" gets one rewrite. ("Sorry"
-// is left alone — it's how a person answers a late order or sore feet.)
-const NEGATIVE_OPENING = /^[\s*_"'“‘(]*(unfortunately|sadly|regrettably|i['’]?m afraid|i am afraid)\b/i;
-export function opensNegative(text) {
-  return NEGATIVE_OPENING.test(String(text || ""));
-}
-
 // Colors the shopper named this turn ("the Rebecca in size 10 burgundy") that
 // the reply neither mentions nor shows — swapped for other colors in their
 // size without a word about the one they asked for. Live store, 2026-10-27:
@@ -475,8 +467,6 @@ export async function runLeanTurn({
   const usage = {};
   let toolCalls = 0;
   let retried = false;
-  let firstCodes = new Set();
-  let rewroteAgain = false;
   let text = "";
   let finalIssues = [];
   const searches = [];
@@ -702,12 +692,6 @@ export async function runLeanTurn({
         detail: `The customer asked "${asked}" and your reply only asks them something back. Answer their question first, in a sentence or two from the facts (look them up if you need to) — then offer a next step if you like. If you truly can't answer without knowing something, ask it with tap choices.`,
       });
     }
-    if (opensNegative(text)) {
-      issues.push({
-        code: "negative_opening",
-        detail: "Your reply opens with what's missing (\"Unfortunately…\"). Change the tone, not the answer: keep answering exactly what the customer asked, with every fact — if what they asked for (a color, a size, a style) is sold out or not carried, still say so plainly — but put it the way a great sales associate would, with what you can offer in the same breath (e.g. \"The Burgundy is sold out in 10 — it's still in 9–9.5 and 11.5–12, and in size 10 the Rebecca comes in Black, Dark Brown and Leopard:\", or \"Our fall collection is women's styles — for men, these are the season's favorites:\"). Search only if you have nothing to offer yet. Never swap what they asked for without saying so.",
-      });
-    }
     // Only colors the shown styles are made in: the shopper asked for this
     // style in that color, and the reply went to its other colors.
     const shownStyles = new Set(shown.map((h) => String(byHandle.get(h)?.style || "").toLowerCase()).filter(Boolean));
@@ -763,14 +747,8 @@ export async function runLeanTurn({
       familyIndex,
       knowledgeText,
     }));
-    // A rewrite needs a step left to happen in; on the last step the issues
-    // stand. One rewrite per reply — and one more when the first was asked to
-    // fix the tone ("Unfortunately…") and came back with a new problem, so
-    // fixing the tone can never cost a fact.
-    const canRewrite = !retried || (firstCodes.has("negative_opening") && !rewroteAgain && issues.some((i) => !firstCodes.has(i.code)));
-    if (issues.length > 0 && canRewrite && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
-      if (retried) rewroteAgain = true;
-      else firstCodes = new Set(issues.map((i) => i.code));
+    // A rewrite needs a step left to happen in; on the last step the issues stand.
+    if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";

@@ -1449,22 +1449,12 @@ await test("a follow-up after the tap isn't tied to the collection (no featured 
 });
 
 console.log("\nsales voice");
-const { opensNegative } = await import("../app/lib/lean/engine.js");
-await test("a reply that opens with what's missing is caught; empathy isn't", () => {
-  assert.equal(opensNegative("Unfortunately, the fall collection is women's only."), true);
-  assert.equal(opensNegative("**Unfortunately** we don't carry that."), true);
-  assert.equal(opensNegative("I'm afraid that style is sold out."), true);
-  assert.equal(opensNegative("Sadly, no men's styles there."), true);
-  assert.equal(opensNegative("Sorry to hear your order is running late — here's where it is."), false);
-  assert.equal(opensNegative("The Danika comes in wide; unfortunately not in red."), false, "only the opening");
-  assert.equal(opensNegative(""), false);
-});
-await test("the prompt asks for a sales associate's voice: lead with the next best option, stay truthful", () => {
+await test("the prompt asks for a sales associate's voice: say it plainly, offer the next best, vary the wording", () => {
   const p = buildLeanSystemPrompt({ shop: "x" });
-  assert.match(p, /lead with what you can offer/);
-  assert.match(p, /don't open with "Unfortunately"/);
+  assert.match(p, /say so plainly and kindly, then offer the next best options/);
+  assert.match(p, /"Unfortunately" is fine now and then — just don't open every such reply with it; vary the wording/);
   assert.match(p, /Never imply something is available when it isn't/);
-  assert.match(p, /never with an apology for what the store doesn't have/);
+  assert.doesNotMatch(p, /don't open with "Unfortunately"/);
 });
 await test("\"Where can I buy these?\" — right here, online; the store locator is for visiting, never for buying", async () => {
   const p = buildLeanSystemPrompt({ shop: "x" });
@@ -1479,22 +1469,15 @@ await test("\"Where can I buy these?\" — right here, online; the store locator
   assert.match(loc.definition.description, /have their feet scanned/);
   assert.doesNotMatch(loc.definition.description, /whenever the customer asks where to buy/);
 });
-await test("\"Unfortunately, no men's styles\" is rewritten: the men's options come first", async () => {
+await test("a reply that opens \"Unfortunately…\" is kept as written — no rewrite over a word", async () => {
   const s = scripted([
-    { stop_reason: "end_turn", content: [txt("Unfortunately, our fall collection is women's only — there are no men's styles in it right now. Would you like to see men's shoes?")] },
-    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "sneaker", gender: "men" })] },
-    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Chase Arch Support Sneaker - Red"]] })] },
-    { stop_reason: "end_turn", content: [txt("For men, the Chase Arch Support Sneaker in red is a great pick — our fall collection itself is women's styles.")] },
+    { stop_reason: "end_turn", content: [txt("Unfortunately, our fall collection is women's only — but our men's sneakers are great for fall. Want to see them?")] },
   ]);
   const logs = [];
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "do you have any men's styles?" }], latestUserMessage: "do you have any men's styles?", callModel: s.callModel, log: (l) => logs.push(l) });
-  assert.ok(logs.some((l) => /rewrite: .*negative_opening/.test(l)), logs.join("\n"));
-  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /Change the tone, not the answer/);
-  assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /Never swap what they asked for without saying so/);
-  assert.equal(r.retried, true);
-  assert.deepEqual(r.cards.map((c) => c.title), ["Chase Arch Support Sneaker - Red"]);
-  assert.match(r.text, /^For men, the Chase/);
-  assert.deepEqual(r.issues, []);
+  assert.equal(r.retried, false, logs.join("\n"));
+  assert.match(r.text, /^Unfortunately, our fall collection is women's only/);
+  assert.equal(s.requests.length, 1);
 });
 
 
@@ -1524,29 +1507,37 @@ const boots = buildLeanCatalog(BOOTS, { shop: "s.myshopify.com" });
 const BH = Object.fromEntries(boots.products.map((p) => [p.title, p.handle]));
 const others = [BH["Rebecca Heel Boot - Black"], BH["Rebecca Heel Boot - Dark Brown"], BH["Rebecca Heel Boot - Leopard"]];
 const in10 = (hs) => Object.fromEntries(hs.map((h) => [h, { size: "10" }]));
-await test("burgundy sold out in 10: fixing the tone can't drop the color — a second rewrite brings Burgundy back", async () => {
+await test("burgundy sold out in 10, other colors shown without a word about it → sent back to say so", async () => {
   const burgundy = BH["Rebecca Heel Boot - Burgundy"];
   const s = scripted([
     { stop_reason: "tool_use", content: [tu("d1", "get_product_details", { handle: burgundy })] },
-    { stop_reason: "end_turn", content: [txt("Unfortunately, the Rebecca in Burgundy is sold out in size 10.")] },
-    // The tone rewrite goes to the other colors and forgets Burgundy…
     { stop_reason: "tool_use", content: [tu("c1", "get_colorways", { handles: [burgundy], size: "10" })] },
     { stop_reason: "tool_use", content: [tu("s1", "show_products", { handles: others, options: in10(others) })] },
     { stop_reason: "end_turn", content: [txt("Each is ready to add to cart in size 10 — just tap the one you love!")] },
-    // …so it's sent back once more, about the color.
     { stop_reason: "tool_use", content: [tu("s2", "show_products", { handles: [burgundy, ...others], options: in10([burgundy, ...others]) })] },
     { stop_reason: "end_turn", content: [txt("The Burgundy is sold out in 10 — it's still in 7, 8 and 9. In size 10 the Rebecca comes in Black, Dark Brown and Leopard:")] },
   ]);
   const logs = [];
   const msg = "I want the rebecca in size 10 burgundy";
   const r = await runLeanTurn({ catalog: boots, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: (l) => logs.push(l) });
-  const rewrites = logs.filter((l) => /fact-check failed → rewrite/.test(l));
-  assert.deepEqual(rewrites.map((l) => l.split("rewrite: ")[1]), ["negative_opening,missing_cards", "missed_color"], logs.join("\n"));
-  assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /Change the tone, not the answer/);
-  assert.match(JSON.stringify(s.requests[5].messages.at(-1)), /The customer asked for burgundy/);
+  assert.deepEqual(logs.filter((l) => /rewrite: /.test(l)).map((l) => l.split("rewrite: ")[1]), ["missed_color"], logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[4].messages.at(-1)), /The customer asked for burgundy/);
   assert.match(r.text, /^The Burgundy is sold out in 10/);
   assert.deepEqual(r.cards.map((c) => c.title), ["Rebecca Heel Boot - Burgundy", "Rebecca Heel Boot - Black", "Rebecca Heel Boot - Dark Brown", "Rebecca Heel Boot - Leopard"]);
   assert.equal(r.cards[0].preselect, undefined, "the sold-out size isn't pre-picked on the Burgundy card");
+  assert.deepEqual(r.issues, []);
+});
+await test("an honest \"Unfortunately, the Burgundy is sold out in 10…\" with the other colors goes out as written", async () => {
+  const burgundy = BH["Rebecca Heel Boot - Burgundy"];
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("d1", "get_product_details", { handle: burgundy }), tu("c1", "get_colorways", { handles: [burgundy], size: "10" })] },
+    { stop_reason: "tool_use", content: [tu("s1", "show_products", { handles: [burgundy, ...others], options: in10([burgundy, ...others]) })] },
+    { stop_reason: "end_turn", content: [txt("Unfortunately, the Burgundy is sold out in 10 — it's still in 7, 8 and 9. In size 10 the Rebecca comes in Black, Dark Brown and Leopard:")] },
+  ]);
+  const msg = "I want the rebecca in size 10 burgundy";
+  const r = await runLeanTurn({ catalog: boots, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, false);
+  assert.match(r.text, /^Unfortunately, the Burgundy is sold out in 10/);
   assert.deepEqual(r.issues, []);
 });
 await test("\"What sizes are left in burgundy?\" answered with other colors is sent back to answer it (one rewrite)", async () => {
