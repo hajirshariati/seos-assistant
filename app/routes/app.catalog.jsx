@@ -9,16 +9,13 @@ import {
   Button,
   Badge,
   Banner,
-  Box,
-  Divider,
-  FormLayout,
+  Icon,
   TextField,
   Select,
   Tag,
-  DataTable,
-  ProgressBar,
   Checkbox,
 } from "@shopify/polaris";
+import { SearchIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -40,6 +37,7 @@ import { computeCatalogCoverage, COVERAGE_SOURCE_LABELS } from "../lib/catalog-c
 import { extractMerchantConditionTags } from "../lib/condition-tags";
 import { backfillShopEmbeddings, resolveShopEmbedding } from "../lib/embeddings.server";
 import BrandHeader from "../components/BrandHeader";
+import { SETTINGS_CSS, Row, Group, SectionHead } from "../components/SettingsUI";
 import { nextScheduledSyncAt } from "../lib/catalog-sync-scheduler.server";
 import { similarityOptions } from "../lib/similar-attributes.js";
 
@@ -319,29 +317,63 @@ export const action = async ({ request }) => {
   return { error: "unknown intent" };
 };
 
+// Same look as Settings (compact cards of rows, title and help on the left,
+// the action on the right), plus a few pieces of this page's own.
+const CATALOG_CSS = `
+  .ct .set-row__title { overflow-wrap: anywhere; }
+  .ct-pad { padding: 13px 16px 0; display: grid; gap: 8px; }
+  .ct-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px 16px 12px; }
+  .ct-search { flex: 1 1 260px; min-width: 0; }
+  .ct-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 12px 16px 0; border-top: 1px solid rgba(30,27,51,0.07); }
+  .ct-sub__label { font-size: 11.5px; line-height: 16px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: #616161; }
+  .ct-sub__help { font-size: 12px; line-height: 16px; color: #8a8a8a; }
+  .ct-sub + .set-row { padding-top: 8px; }
+  .ct-more { padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .ct-quiet { padding: 0 16px 12px; font-size: 12px; line-height: 17px; color: #8a8a8a; }
+  .ct-empty { padding: 4px 16px 14px; font-size: 13px; color: #616161; }
+  .ct-bar { height: 6px; border-radius: 999px; background: rgba(26,46,38,0.08); overflow: hidden; }
+  .ct-bar > span { display: block; height: 100%; border-radius: inherit; background: #2D6B4F; transition: width .5s ease; }
+  .ct-bar--partial > span { background: #b98900; }
+  .ct-bar--missing > span { background: #c5280c; }
+  .ct-bar--info > span { background: #a8a8a8; }
+  .ct-progress { display: grid; gap: 6px; }
+  .ct-progress__text { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: #616161; font-variant-numeric: tabular-nums; }
+  .ct-cov { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.1fr) minmax(0, 1.35fr) 88px; align-items: center; gap: 6px 20px; padding: 10px 16px; }
+  .ct-cov + .ct-cov { border-top: 1px solid rgba(30,27,51,0.06); }
+  .ct-cov--head { padding-top: 7px; padding-bottom: 7px; border-top: 1px solid rgba(30,27,51,0.07); font-size: 11.5px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: #8a8a8a; }
+  .ct-cov__name { font-size: 13.5px; line-height: 20px; font-weight: 600; color: #1a1a1a; }
+  .ct-cov__use { font-size: 12px; line-height: 17px; color: #616161; }
+  .ct-cov__num { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; font-size: 12.5px; color: #303030; font-variant-numeric: tabular-nums; }
+  .ct-cov__na, .ct-cov__src { font-size: 12px; line-height: 17px; color: #616161; }
+  .ct-cov__na { margin-top: 4px; }
+  .ct-cov__status { justify-self: end; }
+  .ct-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .ct-ticks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+  .ct-note { padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); font-size: 12.5px; line-height: 18px; color: #616161; }
+  .ct-note strong, .ct-note code { color: #1a1a1a; }
+  .ct-note code { font-size: 12px; }
+  .ct-help { font-size: 12px; line-height: 17px; color: #616161; }
+  @media (prefers-reduced-motion: reduce) { .ct-bar > span { transition: none; } }
+  @media (max-width: 760px) {
+    .ct-two { grid-template-columns: minmax(0, 1fr); }
+    .ct-cov { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+    .ct-cov--head { display: none; }
+    .ct-cov__status { grid-row: 1; grid-column: 2; }
+    .ct-cov__bar, .ct-cov__src { grid-column: 1 / -1; }
+    .ct-search { flex-basis: 100%; }
+    .ct-ticks { grid-template-columns: minmax(0, 1fr); }
+  }
+`;
 
-function formatTime(iso) {
-  if (!iso) return "Never";
-  return new Date(iso).toLocaleString();
+// Dates read the browser's clock and time zone, so they're shown once the
+// page runs in the browser (the server's render then matches the browser's).
+function useMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
 }
-
-
-
-function statusBadge(status) {
-  if (status === "running") return <Badge tone="info">Syncing</Badge>;
-  if (status === "error") return <Badge tone="critical">Error</Badge>;
-  return <Badge tone="success">Idle</Badge>;
-}
-
-
-
-
-
-
-
-
-
-
+const timeLabel = (iso) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const plural = (n, one, many) => `${Number(n).toLocaleString()} ${n === 1 ? one : many}`;
 
 function SemanticSearchCard({ provider, embeddedCount, productsCount }) {
   const fetcher = useFetcher();
@@ -375,141 +407,126 @@ function SemanticSearchCard({ provider, embeddedCount, productsCount }) {
     fetcher.submit(fd, { method: "post" });
   };
 
+  const title = (badge) => <InlineStack gap="200" blockAlign="center"><span>Match products by meaning</span>{badge}</InlineStack>;
+  const what = "Shoppers asking for “shoes for standing all day” also find arch-support styles that don't use those words.";
+
   if (!provider) {
     return (
-      <Card>
-        <BlockStack gap="300">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="h2" variant="headingMd">Semantic search</Text>
-            <Badge>Disabled</Badge>
-          </InlineStack>
-          <Text as="p" tone="subdued">
-            Match products by meaning, not keywords. Customers asking for "shoes for standing all day" find arch-support styles even when descriptions don't say "standing". Configure a provider in <strong>Settings → Semantic search</strong> to enable.
-          </Text>
-        </BlockStack>
+      <Card padding="0">
+        <Row title={title(<Badge>Off</Badge>)} help={`${what} Turn it on in Settings → Integrations → Semantic search.`} />
       </Card>
     );
   }
 
   const remaining = Math.max(0, (productsCount || 0) - displayEmbedded);
-  const tone = remaining === 0 ? "success" : "info";
   const percent = (productsCount || 0) > 0
     ? Math.min(100, Math.round((displayEmbedded / productsCount) * 100))
     : 0;
 
   return (
-    <Card>
-      <BlockStack gap="300">
-        <InlineStack gap="200" blockAlign="center">
-          <Text as="h2" variant="headingMd">Semantic search</Text>
-          <Badge tone={tone}>{provider === "voyage" ? "Voyage AI" : "OpenAI"}</Badge>
-        </InlineStack>
-        <BlockStack gap="200">
-          <InlineStack align="space-between" blockAlign="center">
-            <Text as="p" tone="subdued" variant="bodySm">
-              {displayEmbedded.toLocaleString()} of {(productsCount || 0).toLocaleString()} products embedded
-            </Text>
-            <Text as="p" tone="subdued" variant="bodySm">{percent}%</Text>
+    <Card padding="0">
+      <Row
+        title={title(<Badge tone={remaining === 0 ? "success" : "info"}>{provider === "voyage" ? "Voyage AI" : "OpenAI"}</Badge>)}
+        help={`${what} New and updated products are added automatically.`}
+        control={
+          <Button onClick={startBackfill} loading={isBackfilling} disabled={(remaining === 0 && !result?.error) || isReembedding}>
+            {remaining === 0 ? "All products added" : `Add ${remaining.toLocaleString()} missing`}
+          </Button>
+        }
+      >
+        <BlockStack gap="300">
+          <div className="ct-progress">
+            <div className="ct-progress__text">
+              <span>{`${displayEmbedded.toLocaleString()} of ${(productsCount || 0).toLocaleString()} products searchable by meaning`}</span>
+              <span>{percent}%</span>
+            </div>
+            <div className="ct-bar" role="progressbar" aria-label="Products searchable by meaning" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+              <span style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+          {result?.error && (
+            <Banner tone="critical">{result.error}</Banner>
+          )}
+          {result?.backfilled && !result.error && (
+            <Banner tone="success">
+              Added {result.processed?.toLocaleString() || 0} product
+              {result.processed === 1 ? "" : "s"}.
+              {result.failed > 0 ? ` ${result.failed} failed.` : ""}
+              {result.remaining > 0 ? ` ${result.remaining.toLocaleString()} remaining — run it again.` : ""}
+            </Banner>
+          )}
+          {result?.reembedded && !result.error && (
+            <Banner tone="success">
+              Re-embedded {result.processed?.toLocaleString() || 0} product
+              {result.processed === 1 ? "" : "s"} with fresh catalog data.
+              {result.failed > 0 ? ` ${result.failed} failed.` : ""}
+            </Banner>
+          )}
+          <InlineStack gap="200" blockAlign="center" wrap>
+            <Button
+              onClick={startReembed}
+              loading={isReembedding}
+              disabled={isBackfilling || (productsCount || 0) === 0}
+              tone="critical"
+              variant="plain"
+            >
+              Re-embed all
+            </Button>
+            <span className="ct-help">After product fields change, the metaobject scope is granted, or bulk edits — those don't refresh on their own.</span>
           </InlineStack>
-          <ProgressBar progress={percent} tone={remaining === 0 ? "success" : "primary"} size="small" />
         </BlockStack>
-        <Text as="p" tone="subdued" variant="bodySm">
-          {remaining > 0
-            ? `${remaining.toLocaleString()} remaining — click Backfill to embed them. New and updated products are embedded automatically.`
-            : "All products are searchable by meaning. New and updated products are embedded automatically."}
-        </Text>
-        {result?.error && (
-          <Banner tone="critical">{result.error}</Banner>
-        )}
-        {result?.backfilled && !result.error && (
-          <Banner tone="success">
-            Backfilled {result.processed?.toLocaleString() || 0} product
-            {result.processed === 1 ? "" : "s"}.
-            {result.failed > 0 ? ` ${result.failed} failed.` : ""}
-            {result.remaining > 0 ? ` ${result.remaining.toLocaleString()} remaining — run Backfill again.` : ""}
-          </Banner>
-        )}
-        {result?.reembedded && !result.error && (
-          <Banner tone="success">
-            Re-embedded {result.processed?.toLocaleString() || 0} product
-            {result.processed === 1 ? "" : "s"} with fresh catalog data.
-            {result.failed > 0 ? ` ${result.failed} failed.` : ""}
-          </Banner>
-        )}
-        <InlineStack gap="200" wrap>
-          <Button
-            onClick={startBackfill}
-            loading={isBackfilling}
-            disabled={(remaining === 0 && !result?.error) || isReembedding}
-          >
-            {remaining === 0 ? "All products embedded" : `Backfill ${remaining.toLocaleString()} products`}
-          </Button>
-          <Button
-            onClick={startReembed}
-            loading={isReembedding}
-            disabled={isBackfilling || (productsCount || 0) === 0}
-            tone="critical"
-            variant="plain"
-          >
-            Re-embed all (refresh)
-          </Button>
-        </InlineStack>
-        <Text as="p" tone="subdued" variant="bodySm">
-          Use <strong>Re-embed all</strong> after attribute mappings change, after the metaobject scope is granted, or after bulk catalog edits — those don't auto-refresh embeddings.
-        </Text>
-      </BlockStack>
+      </Row>
     </Card>
   );
 }
-
 
 function MetafieldRow({ row, onAdd, onRemove, busy }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(row.attribute || "");
   return (
-    <Box paddingBlock="200" borderBlockEndWidth="025" borderColor="border-secondary">
-      <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
-        <BlockStack gap="050">
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="span" variant="bodyMd" fontWeight="semibold">{row.name}</Text>
-            {row.status === "automatic" && <Badge tone="success">Used automatically</Badge>}
-            {row.status === "added" && <Badge tone="success">{`Added as "${row.attribute}"`}</Badge>}
-            {row.target === "variant" && <Badge>Per size/color</Badge>}
-          </InlineStack>
-          <Text as="span" variant="bodySm" tone="subdued">
-            {[row.typeLabel, row.count ? `filled in on ${row.count.toLocaleString()} product${row.count === 1 ? "" : "s"}` : "", row.why]
-              .filter(Boolean).join(" · ")}
-            {row.description && row.description !== row.name ? ` — ${row.description}` : ""}
-          </Text>
-        </BlockStack>
-        {row.status === "available" && !editing && (
-          <InlineStack gap="200" wrap={false}>
+    <Row
+      title={
+        <InlineStack gap="200" blockAlign="center">
+          <span>{row.name}</span>
+          {row.status === "automatic" && <Badge tone="success" size="small">Used automatically</Badge>}
+          {row.status === "added" && <Badge tone="success" size="small">{`Added as "${row.attribute}"`}</Badge>}
+          {row.target === "variant" && <Badge size="small">Per size/color</Badge>}
+        </InlineStack>
+      }
+      help={
+        <>
+          {[row.typeLabel, row.count ? `filled in on ${row.count.toLocaleString()} product${row.count === 1 ? "" : "s"}` : "", row.why]
+            .filter(Boolean).join(" · ")}
+          {row.description && row.description !== row.name ? ` — ${row.description}` : ""}
+        </>
+      }
+      control={
+        row.status === "available" && !editing ? (
+          <InlineStack gap="100" wrap={false}>
             <Button size="slim" onClick={() => onAdd(row, row.attribute)} loading={busy}>Add</Button>
             <Button size="slim" variant="tertiary" onClick={() => setEditing(true)}>Rename</Button>
           </InlineStack>
-        )}
-        {row.status === "added" && (
+        ) : row.status === "added" ? (
           <Button size="slim" variant="tertiary" tone="critical" onClick={() => onRemove(row.attribute)} loading={busy}>Remove</Button>
-        )}
-      </InlineStack>
-      {editing && (
-        <Box paddingBlockStart="200">
-          <InlineStack gap="200" blockAlign="end" wrap={false}>
-            <div style={{ flex: 1 }}>
-              <TextField
-                label="Name the assistant uses"
-                value={name}
-                onChange={setName}
-                autoComplete="off"
-                helpText="Lowercase words, e.g. heel_height. We picked one for you."
-              />
-            </div>
-            <Button variant="primary" disabled={!name.trim()} loading={busy} onClick={() => { onAdd(row, name); setEditing(false); }}>Add</Button>
-            <Button variant="tertiary" onClick={() => setEditing(false)}>Cancel</Button>
-          </InlineStack>
-        </Box>
-      )}
-    </Box>
+        ) : null
+      }
+    >
+      {editing ? (
+        <InlineStack gap="200" blockAlign="end" wrap={false}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TextField
+              label="Name the assistant uses"
+              value={name}
+              onChange={setName}
+              autoComplete="off"
+              helpText="Lowercase words, e.g. heel_height. We picked one for you."
+            />
+          </div>
+          <Button variant="primary" disabled={!name.trim()} loading={busy} onClick={() => { onAdd(row, name); setEditing(false); }}>Add</Button>
+          <Button variant="tertiary" onClick={() => setEditing(false)}>Cancel</Button>
+        </InlineStack>
+      ) : null}
+    </Row>
   );
 }
 
@@ -580,202 +597,199 @@ function AttributeMappingsCard({ mappings, choices = [], choicesError = null }) 
   // Mappings that don't come from a definition (tag prefixes, manual keys).
   const pickerIds = new Set(choices.filter((r) => r.status === "added").map((r) => r.attribute));
   const manualMappings = mappings.filter((m) => !pickerIds.has(m.attribute));
+  const rowsOf = (list) => list.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />);
+
+  const banners = [
+    fetcher.data?.syncStarted ? (
+      <Banner key="ok" tone="success">
+        <p>
+          {fetcher.data.savedAttribute ? `Added "${fetcher.data.savedAttribute}". ` : "Saved. "}
+          Updating your products in the background — this takes about a minute.
+        </p>
+      </Banner>
+    ) : null,
+    lastError ? <Banner key="err" tone="critical"><p>{lastError}</p></Banner> : null,
+    choicesError ? (
+      <Banner key="load" tone="warning">
+        <p>We couldn't load your store's fields from Shopify ({choicesError}). You can still add one by hand under Advanced.</p>
+      </Banner>
+    ) : null,
+  ].filter(Boolean);
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">Product attributes</Text>
-          <Text as="p" tone="subdued">
-            These are the fields on your products in Shopify. Click <strong>Add</strong> on any the assistant should know about —
-            it can then filter by them ("show me cork footbeds") and answer questions about them. Your products update automatically.
-          </Text>
-        </BlockStack>
+    <Card padding="0">
+      {banners.length > 0 && <div className="ct-pad">{banners}</div>}
 
-        {fetcher.data?.syncStarted && (
-          <Banner tone="success">
-            <p>
-              {fetcher.data.savedAttribute ? `Added "${fetcher.data.savedAttribute}". ` : "Saved. "}
-              Updating your products in the background — this takes about a minute.
-            </p>
-          </Banner>
-        )}
-        {lastError && <Banner tone="critical"><p>{lastError}</p></Banner>}
-        {choicesError && (
-          <Banner tone="warning">
-            <p>We couldn't load your store's fields from Shopify ({choicesError}). You can still add one by hand under Advanced.</p>
-          </Banner>
-        )}
-
-        {choices.length > 0 && (
-          <>
-            <TextField
-              label="Search your product fields"
-              labelHidden
-              placeholder="Search fields (e.g. material, heel, width)"
-              value={search}
-              onChange={setSearch}
-              autoComplete="off"
-              clearButton
-              onClearButtonClick={() => setSearch("")}
-            />
-
-            {inUse.length > 0 && (
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingSm">In use</Text>
-                {inUse.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
-              </BlockStack>
-            )}
-
+      {choices.length > 0 && (
+        <>
+          <div className="ct-tools">
+            <div className="ct-search">
+              <TextField
+                label="Search your product fields"
+                labelHidden
+                size="slim"
+                prefix={<Icon source={SearchIcon} tone="subdued" />}
+                placeholder="Search fields, e.g. heel height"
+                value={search}
+                onChange={setSearch}
+                autoComplete="off"
+                clearButton
+                onClearButtonClick={() => setSearch("")}
+              />
+            </div>
             {recommended.length > 0 && !q && (
-              <InlineStack align="space-between" blockAlign="center" gap="200">
-                <Text as="p" tone="subdued" variant="bodySm">
-                  Not sure? Add every recommended field — duplicates and internal fields are already left out, and extra fields don't slow answers down.
-                </Text>
-                <Button variant="primary" onClick={addAllRecommended} loading={busy}>
-                  {`Add all recommended (${recommended.length})`}
-                </Button>
-              </InlineStack>
+              <Button variant="primary" onClick={addAllRecommended} loading={busy}>
+                {`Add all recommended (${recommended.length})`}
+              </Button>
             )}
+          </div>
 
-            {recommended.length > 0 && (
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingSm">Recommended to add</Text>
-                <Text as="p" variant="bodySm" tone="subdued">Filled in on your products and useful for shoppers.</Text>
-                {recommended.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
-              </BlockStack>
-            )}
-            {inUse.length + recommended.length === 0 && (
-              <Text as="p" tone="subdued">No matching fields{q ? ` for "${search}"` : ""}.</Text>
-            )}
+          {inUse.length > 0 && (
+            <>
+              <div className="ct-sub"><span className="ct-sub__label">{`In use · ${inUse.length}`}</span></div>
+              {rowsOf(inUse)}
+            </>
+          )}
 
-            {other.length > 0 && (
-              <BlockStack gap="100">
+          {recommended.length > 0 && (
+            <>
+              <div className="ct-sub">
+                <span className="ct-sub__label">{`Recommended · ${recommended.length}`}</span>
+                <span className="ct-sub__help">Filled in on your products and useful for shoppers. Duplicates and internal fields are left out; extra fields don't slow answers down.</span>
+              </div>
+              {rowsOf(recommended)}
+            </>
+          )}
+          {inUse.length + recommended.length === 0 && (
+            <div className="ct-empty">No matching fields{q ? ` for "${search}"` : ""}.</div>
+          )}
+
+          {other.length > 0 && (
+            <>
+              <div className="ct-more">
                 <Button variant="plain" disclosure={showOther ? "up" : "down"} onClick={() => setShowOther((v) => !v)}>
                   {`${showOther ? "Hide" : "Show"} ${other.length} other field${other.length === 1 ? "" : "s"} (long text, internal IDs, rarely used)`}
                 </Button>
-                {showOther && other.map((r) => <MetafieldRow key={r.id} row={r} onAdd={addFromPicker} onRemove={handleDelete} busy={busy} />)}
-              </BlockStack>
-            )}
-            {hiddenCount > 0 && !q && (
-              <Text as="p" variant="bodySm" tone="subdued">
-                {`${hiddenCount} more field${hiddenCount === 1 ? " is" : "s are"} hidden — empty on every product, added by other apps, or links to other records.`}
-              </Text>
-            )}
-          </>
-        )}
+              </div>
+              {showOther && rowsOf(other)}
+            </>
+          )}
+          {hiddenCount > 0 && !q && (
+            <div className={other.length > 0 ? "ct-quiet" : "ct-more ct-help"}>
+              {`${hiddenCount} more field${hiddenCount === 1 ? " is" : "s are"} hidden — empty on every product, added by other apps, or links to other records.`}
+            </div>
+          )}
+        </>
+      )}
 
-        <Divider />
-        <BlockStack gap="200">
-          <Button variant="plain" disclosure={showAdvanced ? "up" : "down"} onClick={() => setShowAdvanced((v) => !v)}>
-            Advanced: tag prefixes or a field that isn't listed
-          </Button>
-          {showAdvanced && (
+      <div className="ct-more">
+        <Button variant="plain" disclosure={showAdvanced ? "up" : "down"} onClick={() => setShowAdvanced((v) => !v)}>
+          Advanced: tag prefixes or a field that isn't listed
+        </Button>
+      </div>
+      {showAdvanced && (
+        <>
+          {manualMappings.map((m) => (
+            <Row
+              key={m.id}
+              title={m.attribute}
+              help={m.sourceType === "metafield" ? `Metafield ${m.namespace}.${m.key}` : `Tags starting with “${m.prefix}”`}
+              control={<Button size="slim" variant="tertiary" tone="critical" onClick={() => handleDelete(m.attribute)}>Remove</Button>}
+            />
+          ))}
+          <Row stack>
             <BlockStack gap="300">
-              {manualMappings.length > 0 && (
-                <BlockStack gap="200">
-                  {manualMappings.map((m) => (
-                    <InlineStack key={m.id} align="space-between" blockAlign="center">
-                      <InlineStack gap="200" blockAlign="center">
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">{m.attribute}</Text>
-                        {m.sourceType === "metafield" ? (
-                          <Tag>{`metafield: ${m.namespace}.${m.key}`}</Tag>
-                        ) : (
-                          <Tag>{`tag prefix: ${m.prefix}`}</Tag>
-                        )}
-                      </InlineStack>
-                      <Button variant="tertiary" tone="critical" onClick={() => handleDelete(m.attribute)}>Remove</Button>
-                    </InlineStack>
-                  ))}
-                </BlockStack>
-              )}
-              <FormLayout>
-                <FormLayout.Group>
-                  <TextField label="Attribute name" value={attribute} onChange={setAttribute}
-                    helpText="The name the assistant uses (e.g. material, heel_height)." autoComplete="off" />
-                  <Select label="Comes from"
-                    options={[{ label: "Metafield", value: "metafield" }, { label: "Product tags with a prefix", value: "tag_prefix" }]}
-                    value={sourceType} onChange={setSourceType} />
-                  <Select label="Level"
-                    options={[{ label: "Product", value: "product" }, { label: "Variant (per size/color)", value: "variant" }]}
-                    value={target} onChange={setTarget}
-                    disabled={sourceType === "tag_prefix"} />
-                </FormLayout.Group>
-                {sourceType === "metafield" ? (
-                  <FormLayout.Group>
-                    <TextField label="Namespace" value={namespace} onChange={setNamespace} placeholder="custom" autoComplete="off" />
-                    <TextField label="Key" value={key} onChange={setKey} placeholder="material" autoComplete="off" />
-                  </FormLayout.Group>
-                ) : (
+              <div className="set-grid set-grid--3">
+                <TextField label="Attribute name" value={attribute} onChange={setAttribute}
+                  helpText="The name the assistant uses (e.g. material, heel_height)." autoComplete="off" />
+                <Select label="Comes from"
+                  options={[{ label: "Metafield", value: "metafield" }, { label: "Product tags with a prefix", value: "tag_prefix" }]}
+                  value={sourceType} onChange={setSourceType} />
+                <Select label="Level"
+                  options={[{ label: "Product", value: "product" }, { label: "Variant (per size/color)", value: "variant" }]}
+                  value={target} onChange={setTarget}
+                  disabled={sourceType === "tag_prefix"} />
+              </div>
+              {sourceType === "metafield" ? (
+                <div className="set-grid">
+                  <TextField label="Namespace" value={namespace} onChange={setNamespace} placeholder="custom" autoComplete="off" />
+                  <TextField label="Key" value={key} onChange={setKey} placeholder="material" autoComplete="off" />
+                </div>
+              ) : (
+                <div style={{ maxWidth: 360 }}>
                   <TextField label="Tag prefix" value={prefix} onChange={setPrefix} placeholder="material:"
                     helpText="Tags like 'material:leather' become material = leather." autoComplete="off" />
-                )}
+                </div>
+              )}
+              <InlineStack>
                 <Button loading={busy} disabled={!canSave} onClick={handleManualSave}>Add</Button>
-              </FormLayout>
+              </InlineStack>
             </BlockStack>
-          )}
-        </BlockStack>
-      </BlockStack>
+          </Row>
+        </>
+      )}
     </Card>
   );
 }
 
+const COVERAGE_TONE = { good: "success", partial: "attention", missing: "critical", info: "info" };
+const COVERAGE_LABEL = { good: "Ready", partial: "Partial", missing: "Missing", info: "None set" };
+
 function CatalogCoverageCard({ coverage }) {
-  const toneFor = { good: "success", partial: "attention", missing: "critical", info: "info" };
-  const labelFor = { good: "Ready", partial: "Partial", missing: "Missing", info: "None set" };
-  const rows = coverage.rows.map((r) => [
-    <BlockStack gap="050" key={r.key}>
-      <Text as="span" variant="bodyMd" fontWeight="semibold">{r.label}</Text>
-      <Text as="span" variant="bodySm" tone="subdued">{r.use}</Text>
-    </BlockStack>,
-    <BlockStack gap="050" key={`${r.key}-n`}>
-      <Text as="span" variant="bodyMd">{`${r.covered} / ${r.total} (${r.pct}%)`}</Text>
-      {Object.keys(r.notApplicable || {}).length > 0 && (
-        <Text as="span" variant="bodySm" tone="subdued">
-          {`Doesn't apply to ${Object.entries(r.notApplicable).map(([c, n]) => `${c} (${n})`).join(", ")}`}
-        </Text>
-      )}
-    </BlockStack>,
-    Object.entries(r.sources)
-      .sort((a, b) => b[1] - a[1])
-      .map(([src, n]) => `${COVERAGE_SOURCE_LABELS[src] || src} (${n})`)
-      .join(", ") || "—",
-    <Badge key={`${r.key}-status`} tone={toneFor[r.status]}>{labelFor[r.status]}</Badge>,
-  ]);
   return (
-    <Card>
-      <BlockStack gap="300">
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">What the assistant can filter on</Text>
-          <Text as="p" tone="subdued">
-            Share of active products with each field, and where the value comes from. Kinds of products a field
-            doesn't apply to (orthotics have no color) are left out and listed under the count. Common metafields
-            (for example <code>custom.color</code>, <code>custom.gender_text</code>) are detected automatically
-            during sync — a mapping below always takes priority.
-          </Text>
-        </BlockStack>
+    <Group
+      title="What the assistant can filter on"
+      badge={coverage.gaps.length > 0 ? <Badge tone="attention">{`${coverage.gaps.length} to improve`}</Badge> : <Badge tone="success">Ready</Badge>}
+    >
+      <div className="ct-pad">
+        <div className="ct-help">
+          Share of active products with each field, and where the value comes from. Products a field doesn't apply to (orthotics have no color) are left out.
+          Common metafields like <code>custom.color</code> are detected during sync; a mapping under Product fields always wins.
+        </div>
         {coverage.gaps.length > 0 && (
           <Banner tone="warning">
             <p>
               Limited data for <strong>{coverage.gaps.join(", ")}</strong>. Requests that depend on these
-              (for example “red shoes” or “women's sandals”) may miss products. Fill the field in Shopify or add a
-              mapping below, then click <strong>Resync now</strong>.
+              (for example “red shoes” or “women's sandals”) may miss products. Fill the field in Shopify or add it
+              under Product fields, then click <strong>Resync now</strong>.
             </p>
           </Banner>
         )}
-        <DataTable
-          columnContentTypes={["text", "text", "text", "text"]}
-          headings={["Field", "Products", "Comes from", "Status"]}
-          rows={rows}
-        />
-      </BlockStack>
-    </Card>
+      </div>
+      <div style={{ height: 12 }} />
+      <div className="ct-cov ct-cov--head" aria-hidden="true">
+        <span>Field</span><span>Products</span><span>Comes from</span><span style={{ justifySelf: "end" }}>Status</span>
+      </div>
+      {coverage.rows.map((r) => {
+        const na = Object.entries(r.notApplicable || {});
+        const from = Object.entries(r.sources)
+          .sort((a, b) => b[1] - a[1])
+          .map(([src, n]) => `${COVERAGE_SOURCE_LABELS[src] || src} (${n})`)
+          .join(", ");
+        return (
+          <div className="ct-cov" key={r.key}>
+            <div>
+              <div className="ct-cov__name">{r.label}</div>
+              <div className="ct-cov__use">{r.use}</div>
+            </div>
+            <div className="ct-cov__bar">
+              <div className="ct-cov__num"><span>{`${r.covered.toLocaleString()} / ${r.total.toLocaleString()}`}</span><span>{`${r.pct}%`}</span></div>
+              <div className={`ct-bar ct-bar--${r.status}`}><span style={{ width: `${r.pct}%` }} /></div>
+              {na.length > 0 && <div className="ct-cov__na">{`Doesn't apply to ${na.map(([c, n]) => `${c} (${n})`).join(", ")}`}</div>}
+            </div>
+            <div className="ct-cov__src">{from || "—"}</div>
+            <div className="ct-cov__status"><Badge tone={COVERAGE_TONE[r.status]}>{COVERAGE_LABEL[r.status]}</Badge></div>
+          </div>
+        );
+      })}
+    </Group>
   );
 }
 
 function CatalogSyncCard({ data }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
+  const mounted = useMounted();
   const isStopping = data.status === "stopping" ||
     (fetcher.state !== "idle" && fetcher.formData?.get("intent") === "stop_sync");
   const isRunning = (data.status === "running" || data.status === "stopping" ||
@@ -797,71 +811,65 @@ function CatalogSyncCard({ data }) {
   const syncedSoFar = data.syncedSoFar || 0;
   const estimate = data.productsCount || 0;
   const pct = estimate > 0 && syncedSoFar > 0 ? Math.min(100, Math.round((syncedSoFar / estimate) * 100)) : null;
+  const active = data.status === "running" || data.status === "stopping";
+  const badge = active
+    ? <Badge tone="info">Syncing</Badge>
+    : data.status === "error"
+      ? <Badge tone="critical">Last sync failed</Badge>
+      : data.lastSyncedAt ? <Badge tone="success">Up to date</Badge> : <Badge>Not synced yet</Badge>;
+  const when = mounted
+    ? [
+      data.lastSyncedAt ? `Last full sync ${timeLabel(data.lastSyncedAt)}` : "No full sync yet",
+      data.nextScheduledSyncAt ? `next ${timeLabel(data.nextScheduledSyncAt)}` : "",
+    ].filter(Boolean).join(" · ")
+    : "";
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <InlineStack align="space-between" blockAlign="center">
-          <BlockStack gap="100">
-            <Text as="h2" variant="headingMd">Catalog sync</Text>
-            <Text as="p" tone="subdued">
-              Indexes your Shopify products, variants, prices, and inventory. The AI searches this database in real time instead of guessing.
-            </Text>
-          </BlockStack>
-          {statusBadge(data.status === "stopping" ? "running" : data.status)}
-        </InlineStack>
-        <Divider />
-        <InlineStack gap="800">
-          <Box>
-            <Text as="p" tone="subdued" variant="bodySm">Products indexed</Text>
-            <Text as="p" variant="headingLg">{data.productsCount}</Text>
-          </Box>
-          <Box>
-            <Text as="p" tone="subdued" variant="bodySm">Last sync</Text>
-            <Text as="p" variant="bodyMd">{formatTime(data.lastSyncedAt)}</Text>
-          </Box>
-          <Box>
-            <Text as="p" tone="subdued" variant="bodySm">Next full sync</Text>
-            <Text as="p" variant="bodyMd">{formatTime(data.nextScheduledSyncAt)}</Text>
-            <Text as="p" tone="subdued" variant="bodySm">
-              Nightly reconciliation — product edits sync in real time via webhooks in between.
-            </Text>
-          </Box>
-        </InlineStack>
-        {(data.status === "running" || data.status === "stopping") && syncedSoFar > 0 && (
-          <BlockStack gap="200">
-            <InlineStack align="space-between">
-              <Text as="p" variant="bodySm" tone="subdued">
-                {isStopping ? "Stopping..." : `${syncedSoFar} products synced${pct !== null ? ` (${pct}%)` : ""}...`}
-              </Text>
-            </InlineStack>
-            {pct !== null && (
-              <div style={{ height: "6px", borderRadius: "3px", background: "#e4e5e7", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct}%`, borderRadius: "3px", background: "#2D6B4F", transition: "width 0.5s ease" }} />
-              </div>
-            )}
-          </BlockStack>
-        )}
-        {data.lastError && (
-          <Banner tone="critical" title="Last sync failed"><p>{data.lastError}</p></Banner>
-        )}
-        <InlineStack gap="200">
-          {data.status !== "running" && data.status !== "stopping" && (
-            <Button variant="primary" loading={isRunning} onClick={handleResync}>
-              Resync now
-            </Button>
-          )}
-          {(data.status === "running" || data.status === "stopping") && (
+    <Card padding="0">
+      <Row
+        title={<InlineStack gap="200" blockAlign="center"><span>{`${plural(data.productsCount || 0, "product", "products")} indexed`}</span>{badge}</InlineStack>}
+        help={
+          <>
+            {when ? `${when}. ` : ""}
+            {active
+              ? "Syncing now — the assistant keeps using the current catalog until it's done."
+              : "Product edits sync within seconds; a full check runs nightly."}
+          </>
+        }
+        control={
+          active ? (
             <Button variant="plain" tone="critical" loading={isStopping} onClick={handleStop}>
               {isStopping ? "Stopping..." : "Stop sync"}
             </Button>
-          )}
-        </InlineStack>
-      </BlockStack>
+          ) : (
+            <Button loading={isRunning} onClick={handleResync}>Resync now</Button>
+          )
+        }
+      >
+        {(active && syncedSoFar > 0) || data.lastError ? (
+          <BlockStack gap="300">
+            {active && syncedSoFar > 0 && (
+              <div className="ct-progress">
+                <div className="ct-progress__text">
+                  <span>{isStopping ? "Stopping..." : `${syncedSoFar.toLocaleString()} products synced${pct !== null ? ` of ${estimate.toLocaleString()}` : ""}…`}</span>
+                  {pct !== null && <span>{pct}%</span>}
+                </div>
+                {pct !== null && (
+                  <div className="ct-bar" role="progressbar" aria-label="Sync progress" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                    <span style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+            {data.lastError && (
+              <Banner tone="critical" title="Last sync failed"><p>{data.lastError}</p></Banner>
+            )}
+          </BlockStack>
+        ) : null}
+      </Row>
     </Card>
   );
 }
-
 
 function DisplayCard({ productCardStyle }) {
   const styleFetcher = useFetcher();
@@ -872,13 +880,11 @@ function DisplayCard({ productCardStyle }) {
     styleFetcher.submit(fd, { method: "post" });
   };
   return (
-    <Card>
-      <BlockStack gap="400">
-        <Text as="h2" variant="headingMd">Display</Text>
-
-        <BlockStack gap="200">
+    <Group title="Product cards in the chat">
+      <Row stack>
+        <BlockStack gap="300">
           <Select
-            label="Product card style"
+            label="Card style"
             options={[
               { label: "Compact — image left, info right (up to 3 cards)", value: "horizontal" },
               { label: "Showcase — square image on top, scrollable row (up to 10 cards)", value: "showcase" },
@@ -886,30 +892,18 @@ function DisplayCard({ productCardStyle }) {
             value={productCardStyle || "horizontal"}
             onChange={handleStyleChange}
             disabled={styleFetcher.state === "submitting"}
-            helpText="Compact stacks cards vertically and is best when the AI usually returns 1–3 strong matches. Showcase is a horizontal scroll-snap row of larger square cards — good for browse-style queries where customers want to compare more options."
+            helpText="Compact suits 1–3 strong matches. Showcase is a swipeable row of larger square cards — good for browsing and comparing."
           />
+          <div className="ct-note">
+            <strong>One card per style.</strong> Products that differ only by color show as one card, with the other colors offered
+            alongside. Titles are grouped by everything before the last dash — <code>Product Name - Color</code>, e.g.{" "}
+            <code>Chase Arch Support Sneaker - Black</code> and <code>Chase Arch Support Sneaker - White</code> → one card.
+          </div>
         </BlockStack>
-
-        <Divider />
-
-        <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-          <BlockStack gap="150">
-            <Text as="p" variant="bodySm" tone="subdued">
-              <strong>One card per style:</strong> products that differ only by color show as a single card, with the other colors offered alongside. The app groups products by everything before the last dash in the title, so titles should follow this format:
-            </Text>
-            <Text as="p" variant="bodySm">
-              <code>Product Name - Color</code>
-            </Text>
-            <Text as="p" variant="bodySm" tone="subdued">
-              Examples: <code>Chase Arch Support Sneaker - Black</code>, <code>Chase Arch Support Sneaker - White</code> → shown as one card.
-            </Text>
-          </BlockStack>
-        </Box>
-      </BlockStack>
-    </Card>
+      </Row>
+    </Group>
   );
 }
-
 
 // Attributes that already scope every similar-products lookup.
 const SIMILAR_ALWAYS = new Set(["gender", "category", "category_for_filter"]);
@@ -919,6 +913,9 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
   const [attrs, setAttrs] = useState(initial || []);
   const [input, setInput] = useState("");
   const [showManual, setShowManual] = useState(attributeKeys.length === 0);
+  // Ticked ones first, as they were when the page opened — a box doesn't
+  // jump away from the pointer when it's ticked.
+  const [firstPicked] = useState(() => new Set((initial || []).map((a) => String(a).toLowerCase())));
 
   const save = (list) => {
     const fd = new FormData();
@@ -939,128 +936,108 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
     if (!has(v)) toggle(v, true);
   };
 
-  // Only fields that can sensibly match (short, shared values) — chosen ones first.
+  // Only fields that can sensibly match (short, shared values).
   const options = similarityOptions(attributeKeys, attrs, SIMILAR_ALWAYS)
-    .sort((a, b) => Number(has(b.key)) - Number(has(a.key)));
+    .sort((a, b) => Number(firstPicked.has(String(b.key).toLowerCase())) - Number(firstPicked.has(String(a.key).toLowerCase())));
   const extra = attrs.filter((a) => !options.some((r) => String(r.key).toLowerCase() === a.toLowerCase()));
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">"Show me something similar"</Text>
-          <Text as="p" tone="subdued">
-            When a shopper asks for “something like this one” or “similar but cheaper”, the assistant shows other styles from
-            the same category and gender that share the qualities you tick here. Only fields that can match between products
-            are listed. Leave everything unticked to turn this off.
-          </Text>
-        </BlockStack>
-
-        {fetcher.state !== "idle" && <Text as="p" variant="bodySm" tone="subdued">Saving…</Text>}
-
-        {options.length > 0 ? (
-          <BlockStack gap="100">
-            {options.map((r) => (
-              <Checkbox
-                key={r.key}
-                label={String(r.key).replace(/_/g, " ")}
-                helpText={`On ${Number(r.n).toLocaleString()} product${r.n === 1 ? "" : "s"}`}
-                checked={has(r.key)}
-                onChange={(on) => toggle(r.key, on)}
-              />
-            ))}
-          </BlockStack>
-        ) : (
-          <Text as="p" tone="subdued">
-            No product attributes found yet. Add some on the <strong>Catalog</strong> page under "Product attributes", then come back.
-          </Text>
-        )}
-
-        {extra.length > 0 && (
-          <InlineStack gap="200" wrap>
-            {extra.map((a) => <Tag key={a} onRemove={() => toggle(a, false)}>{a}</Tag>)}
-          </InlineStack>
-        )}
-
-        <Button variant="plain" disclosure={showManual ? "up" : "down"} onClick={() => setShowManual((v) => !v)}>
-          Type an attribute name instead
-        </Button>
-        {showManual && (
-          <InlineStack gap="200" blockAlign="end" wrap={false}>
-            <div style={{ flex: 1 }}>
-              <TextField label="Attribute name" value={input} onChange={setInput} placeholder="footbed" autoComplete="off" />
+    <Group
+      title="“Show me something similar”"
+      badge={attrs.length > 0 ? <Badge tone="success">{`${attrs.length} ticked`}</Badge> : <Badge>Off</Badge>}
+    >
+      <Row stack help="When a shopper asks for “something like this one” or “similar but cheaper”, the assistant shows other styles from the same category and gender that share what you tick. Nothing ticked turns this off.">
+        <BlockStack gap="300">
+          {options.length > 0 ? (
+            <div className="ct-ticks">
+              {options.map((r) => (
+                <Checkbox
+                  key={r.key}
+                  label={String(r.key).replace(/_/g, " ")}
+                  helpText={`On ${Number(r.n).toLocaleString()} product${r.n === 1 ? "" : "s"}`}
+                  checked={has(r.key)}
+                  onChange={(on) => toggle(r.key, on)}
+                />
+              ))}
             </div>
-            <Button onClick={addManual} disabled={!input.trim()}>Add</Button>
+          ) : (
+            <Text as="p" tone="subdued">
+              No product fields found yet. Add some under <strong>Product fields</strong> above, then come back.
+            </Text>
+          )}
+
+          {extra.length > 0 && (
+            <InlineStack gap="200" wrap>
+              {extra.map((a) => <Tag key={a} onRemove={() => toggle(a, false)}>{a}</Tag>)}
+            </InlineStack>
+          )}
+
+          <InlineStack gap="300" blockAlign="center">
+            <Button variant="plain" disclosure={showManual ? "up" : "down"} onClick={() => setShowManual((v) => !v)}>
+              Type a field name instead
+            </Button>
+            {fetcher.state !== "idle" && <Text as="span" variant="bodySm" tone="subdued">Saving…</Text>}
           </InlineStack>
-        )}
-      </BlockStack>
-    </Card>
+          {showManual && (
+            <InlineStack gap="200" blockAlign="end" wrap={false}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TextField label="Attribute name" value={input} onChange={setInput} placeholder="footbed" autoComplete="off" />
+              </div>
+              <Button onClick={addManual} disabled={!input.trim()}>Add</Button>
+            </InlineStack>
+          )}
+        </BlockStack>
+      </Row>
+    </Group>
   );
 }
-
-
-
-
-function SectionHeading({ eyebrow, title, description }) {
-  return (
-    <BlockStack gap="100">
-      {eyebrow && (
-        <Text as="p" variant="bodySm" tone="subdued" fontWeight="semibold">
-          {eyebrow.toUpperCase()}
-        </Text>
-      )}
-      <Text as="h2" variant="headingLg">{title}</Text>
-      {description && <Text as="p" tone="subdued">{description}</Text>}
-    </BlockStack>
-  );
-}
-
 
 export default function Catalog() {
   const data = useLoaderData();
   return (
     <Page>
       <TitleBar title="Catalog" />
-      <BrandHeader title="Catalog" />
-      <BlockStack gap="800">
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Your products"
-            description="The assistant reads your Shopify products automatically and stays in sync as you edit them. You only need to act if something looks out of date."
-          />
-          <CatalogSyncCard data={data} />
-          {data.coverage && <CatalogCoverageCard coverage={data.coverage} />}
-        </BlockStack>
+      {/* Static CSS, injected as-is: as a text child React would escape its
+          quotes on the server and the page wouldn't hydrate. */}
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + CATALOG_CSS }} />
+      <div className="ct set-links">
+        <BlockStack gap="600">
+          <BrandHeader title="Catalog" gutter={false} />
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="What the assistant knows about each product"
-            description="Pick the product fields (metafields) the assistant should use — like material, footbed or heel height. Common ones are picked up automatically."
-          />
-          <AttributeMappingsCard mappings={data.mappings} choices={data.metafieldChoices || []} choicesError={data.metafieldError} />
-        </BlockStack>
+          <section>
+            <SectionHead title="Your products">
+              The assistant reads your Shopify products and stays in sync as you edit them. You only need to act if something looks out of date.
+            </SectionHead>
+            <BlockStack gap="400">
+              <CatalogSyncCard data={data} />
+              {data.coverage && <CatalogCoverageCard coverage={data.coverage} />}
+            </BlockStack>
+          </section>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Recommendations and product cards"
-            description="What “similar” means for your products, and how cards look in the chat."
-          />
-          <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
-          <DisplayCard productCardStyle={data.productCardStyle} />
-        </BlockStack>
+          <section>
+            <SectionHead title="Product fields">
+              The Shopify fields (metafields) the assistant uses — material, footbed, heel height. Add one and the assistant can filter by it (“show me cork footbeds”) and answer questions about it; your products update on their own.
+            </SectionHead>
+            <AttributeMappingsCard mappings={data.mappings} choices={data.metafieldChoices || []} choicesError={data.metafieldError} />
+          </section>
 
-        <BlockStack gap="400">
-          <SectionHeading
-            title="Match products by meaning (optional)"
-            description="With semantic search turned on in Settings, shoppers asking for 'shoes for standing all day' also find arch-support styles that don't use those words."
-          />
+          <section>
+            <SectionHead title="Recommendations and product cards">
+              What “similar” means for your products, and how cards look in the chat.
+            </SectionHead>
+            <div className="ct-two">
+              <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
+              <DisplayCard productCardStyle={data.productCardStyle} />
+            </div>
+          </section>
+
           <SemanticSearchCard
             provider={data.embeddingProvider}
             embeddedCount={data.embeddedCount}
             productsCount={data.productsCount}
           />
         </BlockStack>
-      </BlockStack>
+      </div>
     </Page>
   );
 }
