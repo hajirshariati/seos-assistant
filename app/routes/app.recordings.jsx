@@ -1,26 +1,49 @@
 // Test recordings: the conversations saved while the store had recording on
-// (Settings → Testing). Newest chat first; each opens to its full transcript.
+// (Settings → Testing). Chats are grouped by day (or week) in the store's
+// time zone, newest first; only the latest group starts open, so the page
+// stays short however many chats pile up. Search, a tester filter and "has
+// errors" narrow it down; each chat opens to its full transcript.
 // Kept 30 days; "Delete" clears one chat now, "Delete all" every chat.
-import { useCallback, useState } from "react";
-import { useLoaderData, useFetcher, Link } from "react-router";
-import { Page, Layout, Card, BlockStack, InlineStack, Text, Button, Banner, Badge, EmptyState } from "@shopify/polaris";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLoaderData, useFetcher, useNavigate } from "react-router";
+import { Page, Card, BlockStack, InlineStack, Text, Button, Badge, TextField, Select, Icon } from "@shopify/polaris";
+import { SearchIcon, ChevronDownIcon, ChevronRightIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings, deleteAllRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
-import { recordingState, groupSessions, KEEP_DAYS } from "../lib/chat-recording.js";
+import { recordingState, groupSessions, recordingLabels, KEEP_DAYS } from "../lib/chat-recording.js";
+import { getShopTimeZone } from "../lib/shop-timezone.server";
+import BrandHeader from "../components/BrandHeader";
+import { SETTINGS_CSS, Row, SectionHead } from "../components/SettingsUI";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const [config, rows] = await Promise.all([getShopConfig(session.shop), listRecordings(session.shop)]);
+  const { session, admin } = await authenticate.admin(request);
+  const [config, rows, timeZone] = await Promise.all([
+    getShopConfig(session.shop),
+    listRecordings(session.shop),
+    getShopTimeZone(admin, session.shop).catch(() => ""),
+  ]);
   const st = recordingState(config);
-  const sessions = groupSessions(rows).map((s) => ({
-    ...s,
-    startedAt: new Date(s.startedAt).toISOString(),
-    lastAt: new Date(s.lastAt).toISOString(),
-    turns: s.turns.map((t) => ({ id: t.id, at: new Date(t.createdAt).toISOString(), message: t.message, reply: t.reply, products: t.products || [], extras: t.extras, ok: t.ok })),
-  }));
-  return { recording: { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope }, sessions, total: rows.length };
+  // Days, weeks and times are worked out here, in the store's time zone.
+  const L = recordingLabels({ timeZone });
+  const sessions = groupSessions(rows)
+    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
+    .map((s) => ({
+      sessionId: s.sessionId,
+      tester: s.tester,
+      page: s.page,
+      failed: s.failed,
+      day: L.day(s.startedAt),
+      week: L.week(s.startedAt),
+      time: L.time(s.startedAt),
+      turns: s.turns.map((t) => ({ id: t.id, at: L.time(t.createdAt), message: t.message, reply: t.reply, products: t.products || [], extras: t.extras, ok: t.ok })),
+    }));
+  return {
+    recording: { on: st.on, until: st.until ? L.dateTime(st.until) : null, scope: st.scope },
+    sessions,
+    total: rows.length,
+  };
 };
 
 export const action = async ({ request }) => {
@@ -37,37 +60,173 @@ export const action = async ({ request }) => {
   return null;
 };
 
-const when = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return iso; } };
+const REC_CSS = `
+  .rec .set-row__title { overflow-wrap: anywhere; }
+  .rec-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .rec-search { flex: 1 1 260px; min-width: 0; }
+  .rec-tester { width: 180px; }
+  .rec-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); }
+  .rec-seg button, .rec-chip { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; }
+  .rec-seg button { padding: 5px 11px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550; color: #4a4a4a; }
+  .rec-seg button[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
+  .rec-chip { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #4a4a4a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .rec-chip[aria-pressed="true"] { background: #fff1f0; color: #a33d3d; box-shadow: inset 0 0 0 1px rgba(163,61,61,0.35); }
+  .rec-seg button:focus-visible, .rec-chip:focus-visible, .rec-head:focus-visible, .rec-chat:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; }
+  .rec-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; font-size: 13px; color: #616161; }
+  .rec-head { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; cursor: pointer; }
+  .rec-head + .rec-head, .rec-chat + .rec-head, .rec-open + .rec-head, .rec-more + .rec-head { border-top: 1px solid rgba(30,27,51,0.09); }
+  .rec-head:hover { background: rgba(26,46,38,0.025); }
+  .rec-head__title { font-size: 14px; line-height: 20px; font-weight: 650; color: #1a2e26; }
+  .rec-head__sub { flex: 1; min-width: 0; font-size: 12.5px; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec-head .Polaris-Icon { margin: 0; flex: none; }
+  .rec-err { color: #a33d3d; font-weight: 600; }
+  .rec-chat { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 66px minmax(0, 110px) minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%;
+    padding: 9px 16px; border-top: 1px solid rgba(30,27,51,0.07); cursor: pointer; }
+  .rec-chat:hover { background: rgba(26,46,38,0.025); }
+  .rec-chat[aria-expanded="true"] { background: rgba(45,107,79,0.04); }
+  .rec-chat__time { font-size: 12.5px; color: #616161; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec--week .rec-chat { grid-template-columns: 150px minmax(0, 110px) minmax(0, 1fr) auto; }
+  .rec-chat__who { font-size: 13px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec-chat__q { font-size: 13px; color: #303030; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec-chat__meta { display: flex; align-items: center; gap: 6px; }
+  .rec-open { padding: 4px 16px 14px; background: rgba(45,107,79,0.04); }
+  .rec-open__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 6px 0 10px; font-size: 12px; color: #616161; }
+  .rec-tx { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
+  .rec-turn { display: grid; gap: 4px; }
+  .rec-msg { max-width: 82%; padding: 8px 12px; border-radius: 14px; font-size: 13px; line-height: 19px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .rec-msg--you { justify-self: end; background: #1d1d1f; color: #fff; border-bottom-right-radius: 5px; }
+  .rec-msg--ai { justify-self: start; max-width: 88%; background: #f5f5f7; color: #1d1d1f; border-bottom-left-radius: 5px; }
+  .rec-msg--fail { background: #fff1f0; box-shadow: inset 0 0 0 1px #ffccc7; }
+  .rec-msg__extra { margin-top: 6px; font-size: 12px; line-height: 17px; color: #6e6e73; }
+  .rec-at { font-size: 11px; color: #8e8e93; }
+  .rec-more { padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .rec-empty { padding: 28px 16px; text-align: center; color: #616161; font-size: 13px; }
+  @media (max-width: 760px) {
+    .rec-tester { width: 100%; }
+    .rec-chat, .rec--week .rec-chat { grid-template-columns: minmax(58px, auto) minmax(0, 1fr) auto; }
+    .rec-chat__q { grid-column: 2 / -1; grid-row: 2; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rec-msg, .rec-msg--ai { max-width: 92%; }
+  }
+`;
+
+const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+const PER_GROUP = 25;
 
 function Transcript({ turns }) {
   return (
-    <div style={{ display: "grid", gap: 12, paddingTop: 12 }}>
+    <div className="rec-tx">
       {turns.map((t) => (
-        <div key={t.id} style={{ display: "grid", gap: 6 }}>
-          <div style={{ justifySelf: "end", maxWidth: "80%", background: "#1d1d1f", color: "#fff", borderRadius: 14, padding: "8px 12px", fontSize: 13, whiteSpace: "pre-wrap" }}>{t.message}</div>
-          <div style={{ justifySelf: "start", maxWidth: "88%", background: t.ok ? "#f5f5f7" : "#fff1f0", border: t.ok ? "none" : "1px solid #ffccc7", borderRadius: 14, padding: "8px 12px", fontSize: 13, whiteSpace: "pre-wrap", color: "#1d1d1f" }}>
-            {t.reply}
+        <div key={t.id} className="rec-turn">
+          <div className="rec-msg rec-msg--you">{t.message}</div>
+          <div className={`rec-msg rec-msg--ai${t.ok ? "" : " rec-msg--fail"}`}>
+            {t.reply || (t.ok ? "" : "No reply — the turn failed.")}
             {(t.products.length > 0 || t.extras) && (
-              <div style={{ marginTop: 6, fontSize: 12, color: "#6e6e73" }}>
+              <div className="rec-msg__extra">
                 {t.products.length > 0 && <div>Products shown: {t.products.join(" · ")}</div>}
                 {t.extras && <div>Also shown: {t.extras}</div>}
               </div>
             )}
           </div>
-          <div style={{ fontSize: 11, color: "#8e8e93", justifySelf: "start" }}>{when(t.at)}</div>
+          <div className="rec-at">{t.at}</div>
         </div>
       ))}
     </div>
   );
 }
 
+function ChatRow({ s, open, onToggle, onDelete, deleting, withDay }) {
+  const n = s.turns.length;
+  return (
+    <>
+      <button type="button" className="rec-chat" aria-expanded={open} onClick={onToggle}>
+        <span className="rec-chat__time">{withDay ? `${s.day.label}, ${s.time}` : s.time}</span>
+        <span className="rec-chat__who">{s.tester || "Shopper"}</span>
+        <span className="rec-chat__q">{s.turns[0]?.message || ""}</span>
+        <span className="rec-chat__meta">
+          {s.failed > 0 && <Badge tone="critical" size="small">{`${s.failed} failed`}</Badge>}
+          <Badge size="small">{plural(n, "message", "messages")}</Badge>
+        </span>
+      </button>
+      {open && (
+        <div className="rec-open">
+          <div className="rec-open__bar">
+            <span>{`${plural(n, "message", "messages")}${s.page ? ` · started on ${s.page}` : ""}`}</span>
+            <Button variant="plain" tone="critical" disabled={deleting} onClick={onDelete} accessibilityLabel={`Delete chat from ${s.tester || "shopper"}`}>Delete chat</Button>
+          </div>
+          <Transcript turns={s.turns} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function DayGroup({ group, open, onToggle, openChats, toggleChat, onDelete, removing, withDay }) {
+  const [showAll, setShowAll] = useState(false);
+  const failed = group.sessions.filter((s) => s.failed > 0).length;
+  const shown = showAll ? group.sessions : group.sessions.slice(0, PER_GROUP);
+  return (
+    <>
+      <button type="button" className="rec-head" aria-expanded={open} onClick={onToggle}>
+        <Icon source={open ? ChevronDownIcon : ChevronRightIcon} tone="subdued" />
+        <span className="rec-head__title">{group.label}</span>
+        <span className="rec-head__sub">
+          {plural(group.sessions.length, "chat", "chats")} · {plural(group.messages, "message", "messages")}
+          {failed > 0 && <span className="rec-err">{` · ${failed} with errors`}</span>}
+        </span>
+      </button>
+      {open && (
+        <>
+          {shown.map((s) => (
+            <ChatRow
+              key={s.sessionId}
+              s={s}
+              open={openChats.has(s.sessionId)}
+              onToggle={() => toggleChat(s.sessionId)}
+              onDelete={() => onDelete(s)}
+              deleting={Boolean(removing)}
+              withDay={withDay}
+            />
+          ))}
+          {group.sessions.length > PER_GROUP && (
+            <div className="rec-more">
+              <Button variant="plain" disclosure={showAll ? "up" : "down"} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : `Show ${group.sessions.length - PER_GROUP} more`}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+// By day, the last week of days shows; older days fold behind one row.
+const RECENT_DAYS = 7;
+
 export default function Recordings() {
   const { recording, sessions } = useLoaderData();
+  const navigate = useNavigate();
   const fetcher = useFetcher();
+  const rowFetcher = useFetcher();
   const shopify = useAppBridge();
-  const [open, setOpen] = useState(() => new Set(sessions.slice(0, 1).map((s) => s.sessionId)));
+  const [by, setBy] = useState("day");
+  const [query, setQuery] = useState("");
+  const [tester, setTester] = useState("");
+  const [onlyErrors, setOnlyErrors] = useState(false);
+  // The newest day (or week) starts open; the rest stay folded.
+  const [openGroups, setOpenGroups] = useState(() => new Set(sessions[0] ? [`day:${sessions[0].day.key}`, `week:${sessions[0].week.key}`] : []));
+  // While searching or filtering every matching group opens; these are the
+  // ones folded again by hand.
+  const [foldedMatches, setFoldedMatches] = useState(() => new Set());
+  const [openChats, setOpenChats] = useState(() => new Set());
   const [exporting, setExporting] = useState(false);
-  const toggle = (id) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [showOlder, setShowOlder] = useState(false);
+
+  const toggleSet = (setter) => (id) => setter((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleGroup = toggleSet(setOpenGroups);
+  const toggleMatch = toggleSet(setFoldedMatches);
+  const toggleChat = toggleSet(setOpenChats);
+
   // Downloads run inside the embedded app with its session token (see Analytics).
   const exportCsv = useCallback(async () => {
     setExporting(true);
@@ -87,67 +246,147 @@ export default function Recordings() {
       setExporting(false);
     }
   }, [shopify]);
+
   const deleting = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete_all";
   // One chat at a time; it disappears as soon as Delete is confirmed.
-  const rowFetcher = useFetcher();
   const removing = rowFetcher.state !== "idle" ? rowFetcher.formData?.get("sessionId") : null;
-  const shown = sessions.filter((s) => s.sessionId !== removing);
   const removeChat = (s) => {
-    if (!window.confirm(`Delete this chat (${s.turns.length} ${s.turns.length === 1 ? "message" : "messages"})? This can't be undone.`)) return;
+    if (!window.confirm(`Delete this chat (${plural(s.turns.length, "message", "messages")})? This can't be undone.`)) return;
     rowFetcher.submit({ intent: "delete_session", sessionId: s.sessionId }, { method: "post" });
   };
+
+  const testers = useMemo(() => [...new Set(sessions.map((s) => s.tester || "Shopper"))].sort(), [sessions]);
+  const q = query.trim().toLowerCase();
+  const filtering = Boolean(q || tester || onlyErrors);
+  const visible = useMemo(() => sessions.filter((s) =>
+    s.sessionId !== removing &&
+    (!tester || (s.tester || "Shopper") === tester) &&
+    (!onlyErrors || s.failed > 0) &&
+    (!q || `${s.tester} ${s.page} ${s.turns.map((t) => `${t.message} ${t.reply}`).join(" ")}`.toLowerCase().includes(q)),
+  ), [sessions, removing, tester, onlyErrors, q]);
+
+  const groups = useMemo(() => {
+    const out = [];
+    const byKey = new Map();
+    for (const s of visible) {
+      const g = s[by];
+      const id = `${by}:${g.key}`;
+      if (!byKey.has(id)) { const grp = { id, label: g.label, sessions: [], messages: 0 }; byKey.set(id, grp); out.push(grp); }
+      const grp = byKey.get(id);
+      grp.sessions.push(s);
+      grp.messages += s.turns.length;
+    }
+    return out;
+  }, [visible, by]);
+  useEffect(() => { setFoldedMatches(new Set()); }, [q, tester, onlyErrors]);
+  const isOpen = (g) => (filtering ? !foldedMatches.has(g.id) : openGroups.has(g.id));
+  const totalMessages = visible.reduce((n, s) => n + s.turns.length, 0);
+  const folded = by === "day" && !filtering && !showOlder ? groups.slice(RECENT_DAYS) : [];
+  const listed = folded.length ? groups.slice(0, RECENT_DAYS) : groups;
+  const withErrors = sessions.filter((s) => s.failed > 0).length;
+
   return (
-    <Page title="Test recordings" subtitle={`Conversations saved while recording is on · kept ${KEEP_DAYS} days`}>
+    <Page>
       <TitleBar title="Test recordings" />
-      <Layout>
-        <Layout.Section>
-          <BlockStack gap="400">
-            <Banner tone={recording.on ? "info" : undefined}>
-              {recording.on
-                ? <>Recording {recording.scope === "everyone" ? "every chat" : "testers' chats"} until {when(recording.until)}. Change it in <Link to="/app/api-keys#testing">Settings → Testing</Link>.</>
-                : <>Recording is off. Turn it on in <Link to="/app/api-keys#testing">Settings → Testing</Link> and share the tester link with your team.</>}
-            </Banner>
-            {shown.length === 0 ? (
-              <Card>
-                <EmptyState heading="No recorded chats yet" image="">
-                  <p>Once recording is on, chats from people using the tester link appear here.</p>
-                </EmptyState>
-              </Card>
-            ) : (
-              <>
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text as="p" tone="subdued">{shown.length} {shown.length === 1 ? "chat" : "chats"} · {shown.reduce((n, s) => n + s.turns.length, 0)} messages</Text>
-                  <InlineStack gap="200">
-                    <Button onClick={exportCsv} loading={exporting}>Export CSV</Button>
-                    <Button tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? This can't be undone.")) fetcher.submit({ intent: "delete_all" }, { method: "post" }); }}>Delete all</Button>
-                  </InlineStack>
+      {/* Static CSS, injected as-is: as a text child React would escape its
+          quotes on the server and the page wouldn't hydrate. */}
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + REC_CSS }} />
+      <div className={`rec set-links${by === "week" ? " rec--week" : ""}`}>
+        <BlockStack gap="400">
+          <BrandHeader title="Test recordings" gutter={false} />
+          <div>
+            <SectionHead title="Test recordings">
+              {`Chats saved while recording is on, kept ${KEEP_DAYS} days. Times are in your store's time zone.`}
+            </SectionHead>
+            <Card padding="0">
+              <Row
+                title={<InlineStack gap="200" blockAlign="center"><span>Recording</span>{recording.on ? <Badge tone="success">On</Badge> : <Badge>Off</Badge>}</InlineStack>}
+                help={recording.on
+                  ? `Saving ${recording.scope === "everyone" ? "every chat" : "testers' chats"} until ${recording.until}.`
+                  : "Turn it on and share the tester link with your team."}
+                control={<Button onClick={() => navigate("/app/api-keys#testing")}>Settings → Testing</Button>}
+              />
+            </Card>
+          </div>
+
+          {sessions.length === 0 ? (
+            <Card>
+              <div className="rec-empty">
+                <Text as="p" variant="headingSm">No recorded chats yet</Text>
+                <p style={{ margin: "4px 0 0" }}>Once recording is on, chats from people using the tester link appear here.</p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <div className="rec-tools">
+                <div className="rec-search">
+                  <TextField
+                    label="Search chats"
+                    labelHidden
+                    size="slim"
+                    prefix={<Icon source={SearchIcon} tone="subdued" />}
+                    placeholder="Search what was said"
+                    value={query}
+                    onChange={setQuery}
+                    clearButton
+                    onClearButtonClick={() => setQuery("")}
+                    autoComplete="off"
+                  />
+                </div>
+                {testers.length > 1 && (
+                  <div className="rec-tester">
+                    <Select label="Tester" labelHidden options={[{ label: "All testers", value: "" }, ...testers.map((t) => ({ label: t, value: t }))]} value={tester} onChange={setTester} />
+                  </div>
+                )}
+                {withErrors > 0 && (
+                  <button type="button" className="rec-chip" aria-pressed={onlyErrors} onClick={() => setOnlyErrors((v) => !v)}>
+                    {`Has errors · ${withErrors}`}
+                  </button>
+                )}
+                <div className="rec-seg" role="group" aria-label="Group by">
+                  <button type="button" aria-pressed={by === "day"} onClick={() => setBy("day")}>By day</button>
+                  <button type="button" aria-pressed={by === "week"} onClick={() => setBy("week")}>By week</button>
+                </div>
+              </div>
+
+              <div className="rec-summary">
+                <span>{`${plural(visible.length, "chat", "chats")} · ${plural(totalMessages, "message", "messages")}${filtering ? " match" : ""}`}</span>
+                <InlineStack gap="200">
+                  <Button size="slim" onClick={exportCsv} loading={exporting}>Export CSV</Button>
+                  <Button size="slim" variant="tertiary" tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? This can't be undone.")) fetcher.submit({ intent: "delete_all" }, { method: "post" }); }}>Delete all</Button>
                 </InlineStack>
-                {shown.map((s) => (
-                  <Card key={s.sessionId}>
-                    <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
-                    <button type="button" onClick={() => toggle(s.sessionId)} aria-expanded={open.has(s.sessionId)} style={{ all: "unset", cursor: "pointer", display: "block", flex: 1, minWidth: 0 }}>
-                      <InlineStack align="space-between" blockAlign="center" wrap={false} gap="300">
-                        <BlockStack gap="050">
-                          <InlineStack gap="200" blockAlign="center">
-                            <Text as="span" variant="headingSm">{s.tester || "Shopper"}</Text>
-                            <Badge>{`${s.turns.length} ${s.turns.length === 1 ? "message" : "messages"}`}</Badge>
-                            {s.failed > 0 && <Badge tone="critical">{`${s.failed} failed`}</Badge>}
-                          </InlineStack>
-                          <Text as="span" variant="bodySm" tone="subdued">{when(s.startedAt)}{s.page ? ` · ${s.page}` : ""} — “{(s.turns[0]?.message || "").slice(0, 80)}”</Text>
-                        </BlockStack>
-                        <Text as="span" tone="subdued">{open.has(s.sessionId) ? "Hide" : "Show"}</Text>
-                      </InlineStack>
-                    </button>
-                    <Button variant="tertiary" tone="critical" disabled={Boolean(removing)} onClick={() => removeChat(s)} accessibilityLabel={`Delete chat from ${s.tester || "shopper"}`}>Delete</Button>
-                    </InlineStack>
-                    {open.has(s.sessionId) && <Transcript turns={s.turns} />}
-                  </Card>
-                ))}
-              </>
-            )}
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
+              </div>
+
+              {groups.length === 0 ? (
+                <Card><div className="rec-empty">No chats match. Try other words, or clear the filters.</div></Card>
+              ) : (
+                <Card padding="0">
+                  {listed.map((g) => (
+                    <DayGroup
+                      key={g.id}
+                      group={g}
+                      open={isOpen(g)}
+                      onToggle={() => (filtering ? toggleMatch(g.id) : toggleGroup(g.id))}
+                      openChats={openChats}
+                      toggleChat={toggleChat}
+                      onDelete={removeChat}
+                      removing={removing}
+                      withDay={by === "week"}
+                    />
+                  ))}
+                  {(folded.length > 0 || (showOlder && by === "day" && !filtering && groups.length > RECENT_DAYS)) && (
+                    <div className="rec-more">
+                      <Button variant="plain" disclosure={showOlder ? "up" : "down"} onClick={() => setShowOlder((v) => !v)}>
+                        {showOlder ? "Hide older days" : `Show ${folded.length} older days (${plural(folded.reduce((n, g) => n + g.sessions.length, 0), "chat", "chats")})`}
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              )}
+            </>
+          )}
+        </BlockStack>
+      </div>
     </Page>
   );
 }

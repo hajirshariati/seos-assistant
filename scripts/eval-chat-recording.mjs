@@ -5,7 +5,7 @@
 //
 // Run: node scripts/eval-chat-recording.mjs
 import assert from "node:assert/strict";
-import { recordingState, shouldRecord, cleanTester, describeExtras, groupSessions, RECORD_DAYS, KEEP_DAYS } from "../app/lib/chat-recording.js";
+import { recordingState, shouldRecord, cleanTester, describeExtras, groupSessions, recordingLabels, RECORD_DAYS, KEEP_DAYS } from "../app/lib/chat-recording.js";
 
 let passed = 0;
 let failed = 0;
@@ -65,6 +65,27 @@ test("turns group into chats, newest chat first, turns in order", () => {
   assert.deepEqual(g[1].turns.map((x) => x.id), ["a1", "a2", "a3"]);
   assert.equal(g[1].tester, "Ann");
   assert.equal(g[1].failed, 1);
+});
+
+console.log("\nthe admin page's days and weeks");
+test("days in the store's time zone: Today, Yesterday, then the date", () => {
+  // Tue Oct 20, 2026, 9am in New York (13:00 UTC).
+  const L = recordingLabels({ timeZone: "America/New_York", now: new Date("2026-10-20T13:00:00Z") });
+  assert.deepEqual(L.day(new Date("2026-10-20T03:30:00Z")), { key: "2026-10-19", label: "Yesterday" }); // 11:30pm Oct 19 NY
+  assert.deepEqual(L.day(new Date("2026-10-20T04:30:00Z")), { key: "2026-10-20", label: "Today" });
+  assert.deepEqual(L.day(new Date("2026-10-16T15:00:00Z")), { key: "2026-10-16", label: "Fri, Oct 16" });
+});
+test("weeks start Monday: This week, Last week, Week of …", () => {
+  const L = recordingLabels({ timeZone: "America/New_York", now: new Date("2026-10-20T13:00:00Z") });
+  assert.deepEqual(L.week(new Date("2026-10-19T15:00:00Z")), { key: "2026-10-19", label: "This week" });
+  assert.deepEqual(L.week(new Date("2026-10-18T15:00:00Z")), { key: "2026-10-12", label: "Last week" });
+  assert.deepEqual(L.week(new Date("2026-10-04T15:00:00Z")), { key: "2026-09-28", label: "Week of Sep 28" });
+});
+test("times read in the store's zone; an unknown zone falls back to UTC", () => {
+  assert.equal(recordingLabels({ timeZone: "America/New_York" }).time(new Date("2026-10-20T19:05:00Z")), "3:05 PM");
+  const bad = recordingLabels({ timeZone: "Mars/Olympus", now: new Date("2026-10-20T13:00:00Z") });
+  assert.equal(bad.time(new Date("2026-10-20T19:05:00Z")), "7:05 PM");
+  assert.equal(bad.day(new Date("2026-10-20T01:00:00Z")).label, "Today");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -69,3 +69,53 @@ export function groupSessions(rows = []) {
   }
   return sessions.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
 }
+
+// Labels for the admin page, in the store's time zone, worked out on the
+// server so the page reads the same before and after it loads: each chat's
+// day ("Today", "Yesterday", "Mon, Oct 20") and week ("This week", "Last
+// week", "Week of Oct 6", weeks starting Monday), and short times.
+const keyDate = (key) => new Date(`${key}T12:00:00Z`);
+const shiftKey = (key, days) => {
+  const d = keyDate(key);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const mondayOf = (key) => shiftKey(key, -((keyDate(key).getUTCDay() + 6) % 7));
+const utcFmt = (opts) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts });
+
+function zoneFmt(timeZone, opts) {
+  try { return new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "UTC", ...opts }); }
+  catch { return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts }); }
+}
+
+export function recordingLabels({ timeZone = "", now = new Date() } = {}) {
+  const dayKey = dayKeyOf(timeZone);
+  const today = dayKey(now);
+  const yesterday = shiftKey(today, -1);
+  const thisWeek = mondayOf(today);
+  const lastWeek = shiftKey(thisWeek, -7);
+  const dayName = utcFmt({ weekday: "short", month: "short", day: "numeric" });
+  const shortDay = utcFmt({ month: "short", day: "numeric" });
+  const time = zoneFmt(timeZone, { hour: "numeric", minute: "2-digit" });
+  const dateTime = zoneFmt(timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return {
+    day(date) {
+      const key = dayKey(date);
+      return { key, label: key === today ? "Today" : key === yesterday ? "Yesterday" : dayName.format(keyDate(key)) };
+    },
+    week(date) {
+      const key = mondayOf(dayKey(date));
+      return { key, label: key === thisWeek ? "This week" : key === lastWeek ? "Last week" : `Week of ${shortDay.format(keyDate(key))}` };
+    },
+    time: (date) => time.format(new Date(date)),
+    dateTime: (date) => dateTime.format(new Date(date)),
+  };
+}
+
+function dayKeyOf(timeZone) {
+  const fmt = zoneFmt(timeZone, { year: "numeric", month: "2-digit", day: "2-digit" });
+  return (date) => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(date)).map((x) => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}`;
+  };
+}
