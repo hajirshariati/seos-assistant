@@ -1070,7 +1070,7 @@ function ProductSpecsCard({ specs, maxBytes }) {
     match.nameMismatch ? `${plural(match.nameMismatch, "product's style name is", "products' style names are")} spelled differently in the sheet` : "",
     match.left ? `${plural(match.left, "value was", "values were")} left out — the product page says otherwise, or the sheet lists a style twice with different values` : "",
     sheet?.duplicates ? `${plural(sheet.duplicates, "code is", "codes are")} listed twice with different values` : "",
-    sheet?.odd ? `${plural(sheet.odd, "cell", "cells")} couldn't be read` : "",
+    sheet?.odd ? `${plural(sheet.odd, "value was", "values were")} left out — not readable or not possible (e.g. a 245 mm drop)` : "",
   ].filter(Boolean) : [];
 
   return (

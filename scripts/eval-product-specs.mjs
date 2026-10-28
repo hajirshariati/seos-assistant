@@ -154,6 +154,17 @@ await test("one wording per value: None/NONE/N ONE, quotes, \"in\", mm spacing, 
   assert.equal(cleanSpecValue("shaft_height", "6").value, '6"');
   assert.equal(cleanSpecValue("shaft_circumference", "362mm").value, '362 mm (14.3")');
   assert.equal(cleanSpecValue("temperature_rating", "Up to -20C / -4F").value, "Up to -20°C / -4°F");
+  assert.equal(cleanSpecValue("shaft_height", '5 in"').value, '5"', "the unit written twice");
+  assert.equal(cleanSpecValue("shaft_height", '4in"').value, '4"');
+  assert.equal(cleanSpecValue("shaft_height", '5 1/2in"').value, '5 1/2"');
+  assert.equal(cleanSpecValue("shaft_height", "6 inches").value, '6"');
+  assert.equal(cleanSpecValue("heel_to_toe_drop", "46.mm").value, "46 mm");
+  assert.equal(cleanSpecValue("heel_in", '1 3/20th"').value, '1 3/20"');
+  assert.equal(cleanSpecValue("upper", "Fabric w/ leather").value, "Fabric with leather");
+  assert.deepEqual(cleanSpecValue("heel_to_toe_drop", "245mm"), { odd: true }, "a drop that can't be real is never shown");
+  assert.deepEqual(cleanSpecValue("shaft_circumference", "36mm"), { odd: true });
+  assert.deepEqual(cleanSpecValue("heel_mm", "Flat"), { odd: true });
+  assert.equal(cleanSpecValue("heel_to_toe_drop", "62mm").value, "62 mm", "a tall wedge's drop is fine");
   assert.equal(tidyText("1.125"), "1.125", "real precision stays");
   assert.equal(tidyText('Up to "X"'), 'Up to "X"');
 });

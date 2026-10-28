@@ -133,6 +133,11 @@ export function tidyText(raw) {
     .replace(/\s+/g, " ").trim();
   if (!s) return "";
   s = s.replace(/"\s*in\b\.?/gi, '"').replace(/(\d)\s+"/g, '$1"');
+  // The unit written twice or spelled out: "5 in\"", "4in\"", "6 inches" → 6".
+  s = s.replace(/(\d)\s*(?:inches|inch|in)\b\.?\s*"?/gi, '$1"');
+  s = s.replace(/(\d)\.\s*(?=mm\b)/gi, "$1 ");
+  s = s.replace(/(\d+\/\d+)(?:st|nd|rd|th)s?\b/gi, "$1"); // "1 3/20th\"" → 1 3/20"
+  s = s.replace(/\bw\s*\/\s*/gi, "with ");
   // Spreadsheet float noise ("7.6000000000000014"), not real precision.
   s = s.replace(/(\d+\.\d{6,})/g, (m) => tidyNumber(m));
   s = s.replace(/(\d+)\.(\d*?)0+(?=\D|$)/g, (m, a, b) => (b ? `${a}.${b}` : a));
@@ -171,8 +176,25 @@ function measurement(raw, unit, fallbackUnit, { inches = true } = {}) {
   return mm && inches ? `${out} (${toInches(Number(mm[1]))})` : out;
 }
 
+// What a measurement can really be, in inches — anything outside is a typo
+// in the sheet ("245 mm" for a drop), left out and listed, never shown.
+const PLAUSIBLE = {
+  heel_mm: [0, 6], heel_in: [0, 6], heel_to_toe_drop: [0, 4], toe_height: [0, 2.5],
+  shaft_height: [1, 30], shaft_circumference: [6, 30],
+};
+
 // raw cell → { value } | { unknown: true } | { odd: true } for one field.
 export function cleanSpecValue(key, raw, unit = "") {
+  const r = cleanValue(key, raw, unit);
+  const range = PLAUSIBLE[key];
+  if (range && r.value) {
+    const inches = inchesOf(r.value);
+    if (!Number.isFinite(inches) || inches < range[0] || inches > range[1]) return { odd: true };
+  }
+  return r;
+}
+
+function cleanValue(key, raw, unit) {
   const s = tidyText(raw);
   if (isUnknown(s)) return { unknown: true };
   switch (key) {
@@ -588,6 +610,6 @@ export function specsReportCsv({ sheet = {}, match = {} } = {}) {
   for (const l of match.left || []) lines.push(csvLine([l.reason === "product page says otherwise" ? "Sheet and product page disagree" : "Sheet lists the style twice with different values", l.title, l.handle, up(l.own), FIELD[l.field]?.label || l.field, l.sheet || "", l.page || "", ""]));
   for (const m of match.styleOnly || []) lines.push(csvLine(["Colorway not in the sheet — its style's specs are used; pig products and materials stay unknown", m.title, m.handle, up(m.own), "", "", "", `Style row${(m.codes || []).length > 1 ? "s" : ""} used: ${(m.codes || []).map(up).join(", ")}`]));
   for (const d of sheet.duplicates || []) lines.push(csvLine(["Code listed twice with different values", "", "", d.code.toUpperCase(), FIELD[d.field]?.label || d.field, d.values.join(" | "), "", d.tabs.join(" | ")]));
-  for (const o of sheet.odd || []) lines.push(csvLine(["Value not understood", "", "", o.code, o.column, o.value, "", o.tab]));
+  for (const o of sheet.odd || []) lines.push(csvLine(["Value not understood or not possible (left out)", "", "", o.code, o.column, o.value, "", o.tab]));
   return lines.join("\r\n") + "\r\n";
 }
