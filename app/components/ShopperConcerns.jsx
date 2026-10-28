@@ -1,6 +1,7 @@
-// "What shoppers ask about most" — the card at the top of Test recordings:
-// the three themes the most shopper chats raised (all time), each with its
-// count, a shopper's own words and what to look at; the next few below.
+// "Top shopper issues & questions" — the card at the top of Test recordings:
+// the three issues, needs or questions the most shopper chats raised (all
+// time; everyday browsing isn't counted), each with its count, a shopper's
+// own words and what to look at; the next few below.
 // "View chats" narrows the list underneath to that theme's kept chats.
 import { useState } from "react";
 import { Card, Button, Spinner } from "@shopify/polaris";
@@ -88,12 +89,12 @@ export default function ShopperConcerns({ concerns, activeId, onView, onRefresh,
   const { read, top, more, pending, run, hasKey } = concerns;
   const running = Boolean(run?.running);
   const head = read > 0
-    ? `All time: ${plural(read, "shopper chat", "shopper chats")} read since ${concerns.sinceLabel}. Testers' chats aren't counted.`
-    : "The themes shoppers raise most in recorded chats. Testers' chats aren't counted.";
+    ? `All time: ${plural(read, "shopper chat", "shopper chats")} read since ${concerns.sinceLabel}. Everyday browsing ("show me shoes") and testers' chats aren't counted.`
+    : "The issues, needs and questions shoppers raise most in recorded chats. Everyday browsing and testers' chats aren't counted.";
 
   let body;
   if (!hasKey) {
-    body = <div className="sc-note"><b>Add your Claude API key</b>Once it's in Settings → API keys, the themes shoppers raise most show here.</div>;
+    body = <div className="sc-note"><b>Add your Claude API key</b>Once it's in Settings → API keys, the issues and questions shoppers raise most show here.</div>;
   } else if (top.length > 0) {
     body = (
       <div className="sc-grid">
@@ -103,15 +104,15 @@ export default function ShopperConcerns({ concerns, activeId, onView, onRefresh,
   } else if (running) {
     body = <div className="sc-note"><b>Reading shopper chats…</b>The first read takes a minute or two. You can leave this page; it carries on.</div>;
   } else if (read > 0) {
-    body = <div className="sc-note"><b>Nothing has come up twice yet</b>{`A theme shows once two or more chats raise it (${plural(read, "chat", "chats")} read so far).`}</div>;
+    body = <div className="sc-note"><b>No issue or question has come up twice yet</b>{`One shows once two or more chats raise it (${plural(read, "chat", "chats")} read so far; everyday browsing isn't counted).`}</div>;
   } else {
-    body = <div className="sc-note"><b>No shopper chats yet</b>With recording on for every shopper (Settings → Testing), the three things shoppers ask about most show here.</div>;
+    body = <div className="sc-note"><b>No shopper chats yet</b>With recording on for every shopper (Settings → Testing), the three issues and questions shoppers raise most show here.</div>;
   }
 
   const showFoot = hasKey && (read > 0 || pending > 0 || running || run?.error);
   return (
     <div>
-      <SectionHead title="What shoppers ask about most">{head}</SectionHead>
+      <SectionHead title="Top shopper issues & questions">{head}</SectionHead>
       <Card padding="0">
         {body}
         {hasKey && more.length > 0 && (

@@ -4,8 +4,8 @@
 // stays short however many chats pile up. Search, a tester filter and "has
 // errors" narrow it down; each chat opens to its full transcript.
 // Kept 30 days; "Delete" clears one chat now, "Delete all" every chat.
-// On top, "What shoppers ask about most" (components/ShopperConcerns.jsx):
-// the themes the most shopper chats raised, all time.
+// On top, "Top shopper issues & questions" (components/ShopperConcerns.jsx):
+// the issues, needs and questions the most shopper chats raised, all time.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher, useNavigate, useRevalidator } from "react-router";
 import { Page, Card, BlockStack, InlineStack, Text, Button, Badge, TextField, Select, Icon } from "@shopify/polaris";
@@ -425,7 +425,7 @@ export default function Recordings() {
                 <span>{`${plural(visible.length, "chat", "chats")} · ${plural(totalMessages, "message", "messages")}${filtering ? " match" : ""}`}</span>
                 <InlineStack gap="200">
                   <Button size="slim" onClick={exportCsv} loading={exporting}>Export CSV</Button>
-                  <Button size="slim" variant="tertiary" tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? \"What shoppers ask about most\" starts over too. This can't be undone.")) { setTheme(null); fetcher.submit({ intent: "delete_all" }, { method: "post" }); } }}>Delete all</Button>
+                  <Button size="slim" variant="tertiary" tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? \"Top shopper issues & questions\" starts over too. This can't be undone.")) { setTheme(null); fetcher.submit({ intent: "delete_all" }, { method: "post" }); } }}>Delete all</Button>
                 </InlineStack>
               </div>
 

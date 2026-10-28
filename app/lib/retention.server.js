@@ -30,7 +30,7 @@ async function runOnce() {
   } catch (err) {
     console.error("[retention] cleanupOldUsage failed:", err?.message || err);
   }
-  // Shopper chats not read into "What shoppers ask about most" yet are read
+  // Shopper chats not read into "Top shopper issues & questions" yet are read
   // before old recordings are deleted, so the all-time counts keep them.
   try {
     await readAllPendingConcerns();

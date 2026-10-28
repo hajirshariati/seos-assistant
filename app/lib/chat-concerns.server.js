@@ -1,4 +1,4 @@
-// What shoppers keep asking about — reading recorded shopper chats into
+// Top shopper issues & questions — reading recorded shopper chats into
 // themes (rules and prompts in chat-concerns.js). A read runs in the
 // background, one per store at a time: (1) themes the new chats need, (2)
 // which themes each chat raises, a batch of chats per call, (3) the top

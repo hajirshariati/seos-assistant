@@ -1,4 +1,4 @@
-// What shoppers ask about most (top of Test recordings): which chats are
+// Top shopper issues & questions (top of Test recordings): which chats are
 // read, what the model is shown, how its answers are checked, and how
 // themes are counted, ranked and quoted. With TEST_DATABASE_URL set, the
 // whole read also runs against a migrated Postgres with a stand-in model.
@@ -10,7 +10,7 @@ import { register } from "node:module";
 import { groupSessions } from "../app/lib/chat-recording.js";
 import {
   shopperSessions, pendingSessions, chatDigest, spread, keyThemes, themesPrompt, parseProposedThemes, assignPrompt, parseAssignments,
-  describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote, MAX_THEMES, MAX_NEW_THEMES, MIN_CHATS,
+  describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote, MAX_THEMES, MAX_NEW_THEMES, MIN_CHATS, KIND_LABELS, SYSTEM_PROMPT,
 } from "../app/lib/chat-concerns.js";
 
 let passed = 0;
@@ -64,6 +64,18 @@ await test("theme finding lists tracked themes by key and says how many may be a
   assert.match(themesPrompt([], sessions), /doesn't track any themes yet/);
   const full = Array.from({ length: MAX_THEMES }, (_, i) => ({ id: `t${i}`, title: `Theme ${i}`, kind: "question" }));
   assert.match(themesPrompt(full, sessions), /at most 0/);
+});
+await test("issues, needs and questions only: everyday browsing is never a theme, but a need inside it counts", () => {
+  const p = themesPrompt([], groupSessions([turn("x", "show me shoes")]));
+  assert.match(SYSTEM_PROMPT, /not everyday browsing/);
+  for (const example of ["Wide shoes for wide feet", "Wants free shipping", "Order hasn't arrived"]) assert.ok(p.includes(example), example);
+  assert.match(p, /Leave out everyday shopping/);
+  assert.match(p, /"show me shoes"/);
+  assert.match(p, /Those are never themes/);
+  assert.match(p, /"sneakers for my wide feet" → wide feet/);
+  const a = assignPrompt([{ id: "A", title: "Wide feet", kind: "request" }], groupSessions([turn("x", "show me shoes")]));
+  assert.match(a, /only asks to see, find or compare products — gets an empty list/);
+  assert.deepEqual(KIND_LABELS, { complaint: "Issue", question: "Question", request: "Need" });
 });
 await test("assignment shows every chat in [brackets] with its theme keys; describe shows replies", () => {
   const themes = [{ id: "A", title: "Wide widths", kind: "request" }, { id: "B", title: "Order late", kind: "complaint" }];
