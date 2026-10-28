@@ -498,6 +498,42 @@ model ChatRecording {
   @@index([createdAt])
 }
 
+// What shoppers keep asking about (the top of Test recordings): themes the
+// model found in recorded shopper chats — labels written for the team, never
+// a shopper's words — and, in ChatConcernChat, which chats raised each. Those
+// links outlive the 30-day recordings, so the counts cover all time. "Delete
+// all" on Test recordings clears both.
+model ChatConcern {
+  id          String   @id @default(cuid())
+  shop        String
+  title       String
+  summary     String   @default("")
+  // complaint | question | request
+  kind        String   @default("question")
+  lookAt      String   @default("")
+  // How many chats the theme had when it was last described.
+  describedAt Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shop])
+}
+
+// One recorded shopper chat that was read: the themes it raised and, for
+// each, the recorded turn whose words show it (shown only while that
+// recording is kept). lastTurnAt is the newest turn read.
+model ChatConcernChat {
+  shop       String
+  sessionId  String
+  concernIds String[]
+  quoteIds   String[]
+  lastTurnAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@id([shop, sessionId])
+}
+
 // What each storefront chat turn was about — search filters, store
 // questions (answered or not), support hand-offs, store tools used. Never
 // the customer's words or anything identifying them. Kept 90 days.

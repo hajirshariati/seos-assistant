@@ -4,8 +4,10 @@
 // stays short however many chats pile up. Search, a tester filter and "has
 // errors" narrow it down; each chat opens to its full transcript.
 // Kept 30 days; "Delete" clears one chat now, "Delete all" every chat.
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLoaderData, useFetcher, useNavigate } from "react-router";
+// On top, "What shoppers ask about most" (components/ShopperConcerns.jsx):
+// the themes the most shopper chats raised, all time.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLoaderData, useFetcher, useNavigate, useRevalidator } from "react-router";
 import { Page, Card, BlockStack, InlineStack, Text, Button, Badge, TextField, Select, Icon } from "@shopify/polaris";
 import { SearchIcon, ChevronDownIcon, ChevronRightIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
@@ -14,7 +16,9 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings, deleteAllRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { recordingState, groupSessions, recordingLabels, KEEP_DAYS } from "../lib/chat-recording.js";
 import { getShopTimeZone } from "../lib/shop-timezone.server";
+import { concernSummary, startConcernRead, concernRunState, forgetConcernChat, resetConcerns } from "../lib/chat-concerns.server";
 import BrandHeader from "../components/BrandHeader";
+import ShopperConcerns, { CONCERNS_CSS } from "../components/ShopperConcerns";
 import { SETTINGS_CSS, Row, SectionHead } from "../components/SettingsUI";
 
 export const loader = async ({ request }) => {
@@ -27,7 +31,16 @@ export const loader = async ({ request }) => {
   const st = recordingState(config);
   // Days, weeks and times are worked out here, in the store's time zone.
   const L = recordingLabels({ timeZone });
-  const sessions = groupSessions(rows)
+  const grouped = groupSessions(rows);
+  // The card never takes the page down: if its data can't be read, it's empty.
+  const { since, updatedAt, ...concerns } = await concernSummary(session.shop, grouped).catch((err) => {
+    console.error("[recordings] concerns summary failed:", err?.message || err);
+    return { read: 0, top: [], more: [], pending: 0, run: concernRunState(session.shop) };
+  });
+  const hasKey = Boolean(config?.anthropicApiKey);
+  // New shopper chats are read when the page opens (at most every 30 minutes).
+  if (hasKey && concerns.pending > 0) concerns.run = startConcernRead(session.shop, { apiKey: config.anthropicApiKey, auto: true });
+  const sessions = grouped
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
     .map((s) => ({
       sessionId: s.sessionId,
@@ -43,19 +56,38 @@ export const loader = async ({ request }) => {
     recording: { on: st.on, until: st.until ? L.dateTime(st.until) : null, scope: st.scope },
     sessions,
     total: rows.length,
+    concerns: {
+      ...concerns,
+      hasKey,
+      sinceLabel: since ? shortDate(since, timeZone) : "",
+      updatedLabel: updatedAt ? L.dateTime(updatedAt) : "",
+    },
   };
 };
+
+function shortDate(date, timeZone) {
+  const opts = { month: "short", day: "numeric", year: "numeric" };
+  try { return new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "UTC", ...opts }).format(new Date(date)); }
+  catch { return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts }).format(new Date(date)); }
+}
 
 export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const form = await request.formData();
   if (form.get("intent") === "delete_all") {
     const count = await deleteAllRecordings(session.shop);
+    await resetConcerns(session.shop);
     return { deleted: count };
   }
   if (form.get("intent") === "delete_session") {
     const count = await deleteRecordingSession(session.shop, form.get("sessionId"));
+    await forgetConcernChat(session.shop, form.get("sessionId"));
     return { deleted: count };
+  }
+  if (form.get("intent") === "refresh_concerns") {
+    const config = await getShopConfig(session.shop);
+    if (!config?.anthropicApiKey) return { concerns: concernRunState(session.shop) };
+    return { concerns: startConcernRead(session.shop, { apiKey: config.anthropicApiKey }) };
   }
   return null;
 };
@@ -71,6 +103,10 @@ const REC_CSS = `
   .rec-seg button[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
   .rec-chip { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #4a4a4a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
   .rec-chip[aria-pressed="true"] { background: #fff1f0; color: #a33d3d; box-shadow: inset 0 0 0 1px rgba(163,61,61,0.35); }
+  .rec-tools { scroll-margin-top: 16px; }
+  .rec-chip--theme { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+  .rec-chip--theme[aria-pressed="true"] { background: rgba(45,107,79,0.10); color: #1f4d39; box-shadow: inset 0 0 0 1px rgba(45,107,79,0.35); }
+  .rec-chip__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .rec-seg button:focus-visible, .rec-chip:focus-visible, .rec-head:focus-visible, .rec-chat:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; }
   .rec-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; font-size: 13px; color: #616161; }
   .rec-head { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; cursor: pointer; }
@@ -204,10 +240,12 @@ function DayGroup({ group, open, onToggle, openChats, toggleChat, onDelete, remo
 const RECENT_DAYS = 7;
 
 export default function Recordings() {
-  const { recording, sessions } = useLoaderData();
+  const { recording, sessions, concerns } = useLoaderData();
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const rowFetcher = useFetcher();
+  const concernFetcher = useFetcher();
+  const revalidator = useRevalidator();
   const shopify = useAppBridge();
   const [by, setBy] = useState("day");
   const [query, setQuery] = useState("");
@@ -221,6 +259,25 @@ export default function Recordings() {
   const [openChats, setOpenChats] = useState(() => new Set());
   const [exporting, setExporting] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
+  // "View chats" on a theme: the list shows only that theme's kept chats.
+  const [theme, setTheme] = useState(null);
+  const listRef = useRef(null);
+  const viewTheme = (t) => {
+    setTheme(t ? { id: t.id, title: t.title, ids: t.sessionIds } : null);
+    if (t) requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  // While the chats are being read, the page checks back every few seconds.
+  const reading = Boolean(concerns.run?.running);
+  const revalidatorRef = useRef(revalidator);
+  revalidatorRef.current = revalidator;
+  useEffect(() => {
+    if (!reading) return undefined;
+    const t = setInterval(() => {
+      const r = revalidatorRef.current;
+      if (r.state === "idle" && document.visibilityState === "visible") r.revalidate();
+    }, 4000);
+    return () => clearInterval(t);
+  }, [reading]);
 
   const toggleSet = (setter) => (id) => setter((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleGroup = toggleSet(setOpenGroups);
@@ -257,13 +314,15 @@ export default function Recordings() {
 
   const testers = useMemo(() => [...new Set(sessions.map((s) => s.tester || "Shopper"))].sort(), [sessions]);
   const q = query.trim().toLowerCase();
-  const filtering = Boolean(q || tester || onlyErrors);
+  const themeIds = useMemo(() => (theme ? new Set(theme.ids) : null), [theme]);
+  const filtering = Boolean(q || tester || onlyErrors || themeIds);
   const visible = useMemo(() => sessions.filter((s) =>
     s.sessionId !== removing &&
+    (!themeIds || themeIds.has(s.sessionId)) &&
     (!tester || (s.tester || "Shopper") === tester) &&
     (!onlyErrors || s.failed > 0) &&
     (!q || `${s.tester} ${s.page} ${s.turns.map((t) => `${t.message} ${t.reply}`).join(" ")}`.toLowerCase().includes(q)),
-  ), [sessions, removing, tester, onlyErrors, q]);
+  ), [sessions, removing, themeIds, tester, onlyErrors, q]);
 
   const groups = useMemo(() => {
     const out = [];
@@ -278,7 +337,7 @@ export default function Recordings() {
     }
     return out;
   }, [visible, by]);
-  useEffect(() => { setFoldedMatches(new Set()); }, [q, tester, onlyErrors]);
+  useEffect(() => { setFoldedMatches(new Set()); }, [q, tester, onlyErrors, themeIds]);
   const isOpen = (g) => (filtering ? !foldedMatches.has(g.id) : openGroups.has(g.id));
   const totalMessages = visible.reduce((n, s) => n + s.turns.length, 0);
   const folded = by === "day" && !filtering && !showOlder ? groups.slice(RECENT_DAYS) : [];
@@ -290,10 +349,17 @@ export default function Recordings() {
       <TitleBar title="Test recordings" />
       {/* Static CSS, injected as-is: as a text child React would escape its
           quotes on the server and the page wouldn't hydrate. */}
-      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + REC_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + REC_CSS + CONCERNS_CSS }} />
       <div className={`rec set-links${by === "week" ? " rec--week" : ""}`}>
         <BlockStack gap="400">
           <BrandHeader title="Test recordings" gutter={false} />
+          <ShopperConcerns
+            concerns={concerns}
+            activeId={theme?.id || ""}
+            onView={viewTheme}
+            onRefresh={() => concernFetcher.submit({ intent: "refresh_concerns" }, { method: "post" })}
+            refreshing={concernFetcher.state !== "idle"}
+          />
           <div>
             <SectionHead title="Test recordings">
               {`Chats saved while recording is on, kept ${KEEP_DAYS} days. Times are in your store's time zone.`}
@@ -318,7 +384,13 @@ export default function Recordings() {
             </Card>
           ) : (
             <>
-              <div className="rec-tools">
+              <div className="rec-tools" ref={listRef}>
+                {theme && (
+                  <button type="button" className="rec-chip rec-chip--theme" aria-pressed="true" onClick={() => setTheme(null)} aria-label={`Showing chats about ${theme.title}. Show all chats`}>
+                    <span className="rec-chip__label">{theme.title}</span>
+                    <span aria-hidden="true">✕</span>
+                  </button>
+                )}
                 <div className="rec-search">
                   <TextField
                     label="Search chats"
@@ -353,7 +425,7 @@ export default function Recordings() {
                 <span>{`${plural(visible.length, "chat", "chats")} · ${plural(totalMessages, "message", "messages")}${filtering ? " match" : ""}`}</span>
                 <InlineStack gap="200">
                   <Button size="slim" onClick={exportCsv} loading={exporting}>Export CSV</Button>
-                  <Button size="slim" variant="tertiary" tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? This can't be undone.")) fetcher.submit({ intent: "delete_all" }, { method: "post" }); }}>Delete all</Button>
+                  <Button size="slim" variant="tertiary" tone="critical" loading={deleting} onClick={() => { if (window.confirm("Delete all recorded chats? \"What shoppers ask about most\" starts over too. This can't be undone.")) { setTheme(null); fetcher.submit({ intent: "delete_all" }, { method: "post" }); } }}>Delete all</Button>
                 </InlineStack>
               </div>
 

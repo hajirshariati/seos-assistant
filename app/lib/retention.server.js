@@ -5,6 +5,7 @@ import { cleanupOldUsage } from "../models/ChatUsage.server";
 import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
+import { readAllPendingConcerns } from "./chat-concerns.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -28,6 +29,13 @@ async function runOnce() {
     await cleanupOldUsage();
   } catch (err) {
     console.error("[retention] cleanupOldUsage failed:", err?.message || err);
+  }
+  // Shopper chats not read into "What shoppers ask about most" yet are read
+  // before old recordings are deleted, so the all-time counts keep them.
+  try {
+    await readAllPendingConcerns();
+  } catch (err) {
+    console.error("[retention] readAllPendingConcerns failed:", err?.message || err);
   }
   try {
     await cleanupOldRecordings();
