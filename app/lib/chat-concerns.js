@@ -29,9 +29,22 @@ export const DESCRIBE_CHATS = 20;
 export const AUTO_EVERY_MS = 30 * 60 * 1000;
 
 const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
+// At most n characters, cut at a word (never mid-word), with "…" when cut.
 const clip = (s, n) => {
   const t = squash(s);
-  return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t;
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > n * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.—–-]+$/, "")}…`;
+};
+// Longer text for the team: whole sentences up to n characters when it
+// has to be cut, else cut at a word.
+const fitText = (s, n) => {
+  const t = squash(s);
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return end > n * 0.5 ? cut.slice(0, end + 1) : clip(t, n);
 };
 const ms = (d) => {
   const t = new Date(d).getTime();
@@ -235,6 +248,18 @@ export const PROPOSE_TOOL = {
 
 // Whitespace becomes one space; any other control character is dropped.
 const cleanLabel = (s, n) => clip([...squash(s)].filter((c) => c >= " ").join(""), n);
+// The model sometimes points at chats by their number in the prompt
+// ("chats [3], [7] and [8]") — numbers that mean nothing on the page.
+export function dropChatNumbers(text) {
+  return squash(String(text || "")
+    .replace(/\bchats?\s+(\[\d+\](?:(?:\s*,\s*(?:and\s+)?|\s+and\s+)\[\d+\])*)/gi, (_, refs) => {
+      const n = (refs.match(/\[\d+\]/g) || []).length;
+      return n === 1 ? "one chat" : `${n} chats`;
+    })
+    .replace(/\s*\[\d+\]/g, "")
+    .replace(/\s+([,.;:!?)])/g, "$1"));
+}
+const cleanText = (s, n) => fitText(dropChatNumbers([...squash(s)].filter((c) => c >= " ").join("")), n);
 const titleKey = (s) => cleanLabel(s, 80).toLowerCase().replace(/['’]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 const sameTitle = (a, b) => titleKey(a) === titleKey(b);
 
@@ -247,7 +272,7 @@ export function parseProposedThemes(input, existing = []) {
     const title = cleanLabel(t?.title, 80);
     if (!title || out.length >= room) continue;
     if ([...existing, ...out].some((e) => sameTitle(e.title, title))) continue;
-    out.push({ title, summary: cleanLabel(t?.summary, 240), kind: CONCERN_KINDS.includes(t?.kind) ? t.kind : "question" });
+    out.push({ title, summary: cleanText(t?.summary, 400), kind: CONCERN_KINDS.includes(t?.kind) ? t.kind : "question" });
   }
   return out;
 }
@@ -335,10 +360,10 @@ Chats with this theme (shopper messages and the assistant's replies):
 ${chats}
 
 Describe the theme for the store team from these chats only. Call describe_theme with:
-- summary: one sentence on what these shoppers want or what goes wrong.
-- look_at: one short, concrete thing the team could check or change that these chats point to — e.g. information the assistant couldn't give (add it to the store's pages or Knowledge), sizes or widths shoppers want that aren't in stock, a policy or page that confuses them. Only what the chats show; if the assistant handled them well, say what shoppers need so the team can offer, stock or explain it.
+- summary: what these shoppers want or what goes wrong, in one or two short sentences (35 words at most).
+- look_at: the one or two most useful things the team could check or change that these chats point to — e.g. information the assistant couldn't give (add it to the store's pages or Knowledge), sizes or widths shoppers want that aren't in stock, a policy or page that confuses them. Only what the chats show; if the assistant handled them well, say what shoppers need so the team can offer, stock or explain it. Plain sentences, 45 words at most, no numbered list.
 - kind: complaint, question or request.
-Never include names, emails, phone numbers, order numbers or anything else that identifies a shopper.`;
+Write for someone who hasn't seen these chats: never refer to a chat by its number. Never include names, emails, phone numbers, order numbers or anything else that identifies a shopper.`;
 }
 
 export const DESCRIBE_TOOL = {
@@ -357,8 +382,8 @@ export const DESCRIBE_TOOL = {
 
 export function parseDescription(input, theme) {
   return {
-    summary: cleanLabel(input?.summary, 240) || theme.summary,
-    lookAt: cleanLabel(input?.look_at, 240),
+    summary: cleanText(input?.summary, 400) || theme.summary,
+    lookAt: cleanText(input?.look_at, 500),
     kind: CONCERN_KINDS.includes(input?.kind) ? input.kind : theme.kind,
   };
 }
@@ -386,15 +411,22 @@ export function rankConcerns(themes = [], links = [], { min = MIN_CHATS } = {}) 
     .sort((a, b) => b.count - a.count || order(a.kind) - order(b.kind) || ms(b.createdAt) - ms(a.createdAt));
 }
 
-// A quote for a theme: the shopper's own message from its newest chat that's
-// still kept, preferring one short enough to read at a glance.
+// A quote for a theme: the shopper's own words from its newest chats still
+// kept — a sentence that says something (4+ words) short enough to read at a
+// glance first, then a longer one cut at a word, then the longest of the
+// short ones ("returns", a product code).
 export function pickQuote(theme, turnText) {
-  let fallback = "";
+  const texts = [];
   for (const c of theme.chats || []) {
     const text = squash(turnText.get(c.turnId));
-    if (!text) continue;
-    if (text.length <= 180) return text;
-    fallback ||= clip(text, 180);
+    if (text) texts.push(text);
+    if (texts.length >= 40) break;
   }
-  return fallback;
+  const words = (t) => t.split(" ").length;
+  const good = texts.find((t) => t.length <= 180 && words(t) >= 4);
+  if (good) return good;
+  const long = texts.find((t) => words(t) >= 4);
+  if (long) return clip(long, 180);
+  const short = texts.filter((t) => t.length <= 180).reduce((best, t) => (t.length > best.length ? t : best), "");
+  return short || (texts[0] ? clip(texts[0], 180) : "");
 }

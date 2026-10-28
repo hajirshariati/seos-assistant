@@ -3,7 +3,7 @@
 // time; everyday browsing isn't counted), each with its count, a shopper's
 // own words and what to look at; the next few below.
 // "View chats" narrows the list underneath to that theme's kept chats.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, Button, Spinner } from "@shopify/polaris";
 import { SectionHead } from "./SettingsUI";
 import { KIND_LABELS } from "../lib/chat-concerns.js";
@@ -27,6 +27,14 @@ export const CONCERNS_CSS = `
   .sc-bar { height: 4px; border-radius: 999px; background: rgba(26,46,38,0.07); overflow: hidden; }
   .sc-bar span { display: block; height: 100%; border-radius: inherit; background: #2D6B4F; }
   .sc-summary { margin: 0; font-size: 13px; line-height: 19px; color: #303030; }
+  /* Long text shows a few lines, and Read more opens the rest. */
+  .sc-clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .sc-summary.sc-clamp { -webkit-line-clamp: 3; }
+  .sc-look__text.sc-clamp { -webkit-line-clamp: 4; }
+  .sc-tile[data-open="true"] .sc-clamp { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  .sc-toggle { all: unset; box-sizing: border-box; align-self: flex-start; cursor: pointer; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #2D6B4F; }
+  .sc-toggle:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .sc-toggle:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; border-radius: 4px; }
   .sc-quote { margin: 0; padding: 8px 10px; border-radius: 10px; background: #f5f5f7; font-size: 12.5px; line-height: 18px; color: #4a4a4a;
     font-style: italic; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .sc-look { font-size: 12.5px; line-height: 18px; color: #303030; }
@@ -60,8 +68,21 @@ function Kind({ kind }) {
 
 function Tile({ t, rank, active, onView }) {
   const kept = t.sessionIds.length;
+  // Read more shows only when the summary or what to look at runs past its
+  // lines; measured while folded (and again when the window changes size).
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  const sumRef = useRef(null);
+  const lookRef = useRef(null);
+  useEffect(() => {
+    if (open) return undefined;
+    const measure = () => setLong([sumRef.current, lookRef.current].some((el) => el && el.scrollHeight > el.clientHeight + 1));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, t.summary, t.lookAt]);
   return (
-    <div className="sc-tile" data-active={active ? "true" : undefined}>
+    <div className="sc-tile" data-active={active ? "true" : undefined} data-open={open ? "true" : undefined}>
       <div className="sc-top">
         <span className="sc-rank" aria-label={`Number ${rank}`}>{rank}</span>
         <Kind kind={t.kind} />
@@ -69,9 +90,14 @@ function Tile({ t, rank, active, onView }) {
       <div className="sc-title">{t.title}</div>
       <div className="sc-count"><b>{t.count.toLocaleString()}</b><span>{`${t.count === 1 ? "chat" : "chats"} · ${pct(t.share)} of shopper chats`}</span></div>
       <div className="sc-bar" aria-hidden="true"><span style={{ width: `${Math.max(2, Math.min(100, Math.round(t.share * 100)))}%` }} /></div>
-      {t.summary && <p className="sc-summary">{t.summary}</p>}
+      {t.summary && <p className="sc-summary sc-clamp" ref={sumRef}>{t.summary}</p>}
       {t.quote && <blockquote className="sc-quote">{`“${t.quote}”`}</blockquote>}
-      {t.lookAt && <div className="sc-look"><b>Look at</b>{t.lookAt}</div>}
+      {t.lookAt && <div className="sc-look"><b>Look at</b><span className="sc-look__text sc-clamp" ref={lookRef}>{t.lookAt}</span></div>}
+      {(long || open) && (
+        <button type="button" className="sc-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? "Read less" : "Read more"}
+        </button>
+      )}
       {kept > 0 && (
         <div className="sc-view">
           <Button variant="plain" onClick={() => onView(active ? null : t)} accessibilityLabel={active ? "Show all chats" : `View the ${kept} chats about ${t.title}`}>

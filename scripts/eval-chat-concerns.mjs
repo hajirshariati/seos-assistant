@@ -12,7 +12,7 @@ import { groupSessions } from "../app/lib/chat-recording.js";
 import {
   shopperSessions, pendingSessions, chatDigest, spread, keyThemes, themesPrompt, parseProposedThemes, assignPrompt, parseAssignments,
   describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote, MAX_THEMES, MAX_NEW_THEMES, MIN_CHATS, KIND_LABELS, SYSTEM_PROMPT,
-  isButtonMessage, offeredReplies, buttonSet, themeButtonTexts, normalizeMessage, DEFAULT_BUTTON_MESSAGES,
+  isButtonMessage, offeredReplies, buttonSet, themeButtonTexts, normalizeMessage, DEFAULT_BUTTON_MESSAGES, dropChatNumbers,
 } from "../app/lib/chat-concerns.js";
 import { describeExtras } from "../app/lib/chat-recording.js";
 
@@ -247,13 +247,29 @@ await test("counted per chat; themes under the minimum left out; ties put compla
   assert.equal(r[0].chats[0].turnId, "q6");
   assert.deepEqual(rankConcerns(T, L, { min: 1 }).map((t) => t.id), ["W", "O", "S", "R"]);
 });
-await test("the quote is a shopper's own words from the newest kept chat, short ones first", () => {
+await test("the quote is a shopper's own words: a sentence that says something before a single word or a code", () => {
   const w = rankConcerns(T, L)[0];
   assert.equal(pickQuote(w, new Map([["q3", "Do you have the Chase in 9 wide?"], ["q1", "wide please"]])), "Do you have the Chase in 9 wide?", "q6 (newest) expired, so the next kept one");
-  const long = "x".repeat(300);
-  assert.equal(pickQuote(w, new Map([["q6", long], ["q3", "short one"]])), "short one");
-  assert.equal(pickQuote(w, new Map([["q6", long]])).length, 180);
+  assert.equal(pickQuote(w, new Map([["q6", "returns"], ["q3", "I2420"], ["q1", "how do I return a worn pair?"]])), "how do I return a worn pair?", "a sentence beats newer single words");
+  const longSentence = `I bought these last month and ${"they pinch my toes badly ".repeat(10)}`;
+  const q = pickQuote(w, new Map([["q6", "returns"], ["q3", longSentence]]));
+  assert.ok(q.length <= 180 && q.endsWith("…") && !/\s…$/.test(q) && longSentence.startsWith(q.slice(0, -1)), q);
+  assert.equal(pickQuote(w, new Map([["q6", "returns"], ["q3", "I2420"]])), "returns", "only short ones: the longest");
+  assert.equal(pickQuote(w, new Map([["q6", "x".repeat(300)]])).length, 180, "never longer than 180");
   assert.equal(pickQuote(w, new Map()), "", "nothing kept, no quote");
+});
+await test("descriptions aren't cut mid-word, keep whole sentences, and never point at chats by number", () => {
+  const long = `Shoppers want to start returns and understand the policy (30-day window, $5.95 fee). ${"They also ask about exchanges at the same price and third-party orders. ".repeat(8)}`;
+  const d = parseDescription({ summary: long, look_at: "Check stock where popular styles have no wide option — shoppers in chats [3], [7], and [8] hit both walls; see [2].", kind: "request" }, { title: "Wide", kind: "request" });
+  assert.ok(d.summary.length <= 400 && /[.!?]$/.test(d.summary), d.summary);
+  assert.ok(long.startsWith(d.summary));
+  assert.equal(d.lookAt, "Check stock where popular styles have no wide option — shoppers in 3 chats hit both walls; see.");
+  assert.equal(dropChatNumbers("As in chat [2], the size was gone."), "As in one chat, the size was gone.");
+  assert.equal(dropChatNumbers("A 30-day window [sic] applies."), "A 30-day window [sic] applies.");
+  const words = parseDescription({ summary: "word ".repeat(200), look_at: "", kind: "question" }, { kind: "question" }).summary;
+  assert.ok(words.endsWith("word…") && words.length <= 400, words.slice(-20));
+  assert.match(describePrompt({ title: "x", kind: "request" }, []), /never refer to a chat by its number/);
+  assert.match(describePrompt({ title: "x", kind: "request" }, []), /35 words at most/);
 });
 await test("keys follow the stored order", () => {
   assert.deepEqual(keyThemes(T).map((t) => t.key), ["t1", "t2", "t3", "t4"]);
@@ -482,6 +498,15 @@ if (!process.env.TEST_DATABASE_URL) {
       const broken = { graphql: async () => { throw new Error("Access denied for themes"); } };
       const fallback = await C.storeButtonTexts(`btn2-${Date.now()}.myshopify.com`, { admin: broken });
       assert.ok(fallback.has("help me find the right aetrex shoe size and fit."));
+    });
+    await test("top themes are described afresh even when no new chat came in", async () => {
+      await prisma.chatConcern.updateMany({ where: { shop: SHOP }, data: { describedAt: 0 } });
+      assert.ok((await summary()).describe > 0, "the page sees there's describing to do");
+      calls.length = 0;
+      C.startConcernRead(SHOP, { client: fake() });
+      await C.settleConcernRead(SHOP);
+      assert.ok(calls.length > 0 && calls.every((c) => c.tool === "describe_theme"), calls.map((c) => c.tool).join(","));
+      assert.equal((await summary()).describe, 0);
     });
     await test("Delete all starts over, and a read in progress writes nothing after it", async () => {
       await rec("z1", "wide again", { minutesAgo: 2 });

@@ -115,7 +115,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
   const chats = shopperSessions(groupSessions(rows), buttons);
   const pending = pendingSessions(chats, links).sort((a, b) => new Date(a.lastAt) - new Date(b.lastAt));
   onProgress({ total: pending.length, done: 0 });
-  if (!pending.length) return { read: 0, themes: stored.length };
+  // Nothing new to read: only the top themes may need describing (step 3).
   // Kept chats read earlier that raised no theme: a need that comes up once
   // a day still becomes a theme (they're shown when finding themes), and
   // when new themes are added they're read again against them.
@@ -139,7 +139,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
   // 1. Themes the new chats need.
   const themes = [...stored];
   let added = 0;
-  if (themes.length < MAX_THEMES) {
+  if (pending.length && themes.length < MAX_THEMES) {
     const sample = [...spread(pending, SAMPLE_CHATS), ...spread(unthemed, Math.floor(SAMPLE_CHATS / 2))];
     const proposed = parseProposedThemes(await ask(themesPrompt(themes, sample), PROPOSE_TOOL, 3000), themes);
     if (stale()) return { read: 0, stale: true };
@@ -151,7 +151,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
 
   // 2. Which themes each chat raises — a few batches at a time. A batch that
   // fails is read again next time; the rest are kept.
-  const toRead = added ? [...pending, ...unthemed] : pending;
+  const toRead = !pending.length ? [] : added ? [...pending, ...unthemed] : pending;
   onProgress({ total: toRead.length, done: 0 });
   const limit = createLimiter(3);
   let done = 0;
@@ -196,7 +196,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
       console.error(`[concerns] describe failed shop=${shop}:`, err?.status || "", err?.message || err);
     }
   }
-  console.log(`[concerns] read shop=${shop} chats=${read}/${toRead.length} new=${pending.length} themes=${themes.length} added=${added}`);
+  if (toRead.length) console.log(`[concerns] read shop=${shop} chats=${read}/${toRead.length} new=${pending.length} themes=${themes.length} added=${added}`);
   return { read, pending: pending.length, themes: themes.length, added, partial: Boolean(firstError) };
 }
 
@@ -263,6 +263,8 @@ export async function concernSummary(shop, sessions = [], buttons = buttonSet())
     top: ranked.slice(0, TOP_COUNT).map(shape),
     more: ranked.slice(TOP_COUNT, TOP_COUNT + MORE_COUNT).map(shape),
     pending: pendingSessions(shopperSessions(sessions, buttons), links).length,
+    // Top themes due a fresh description that still have chats to read it from.
+    describe: ranked.slice(0, TOP_COUNT).filter((t) => needsDescribing(t, t.count) && t.chats.some((c) => kept.has(c.sessionId))).length,
     run: concernRunState(shop),
   };
 }

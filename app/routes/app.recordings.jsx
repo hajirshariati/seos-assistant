@@ -40,8 +40,9 @@ export const loader = async ({ request }) => {
     return { read: 0, top: [], more: [], pending: 0, run: concernRunState(session.shop) };
   });
   const hasKey = Boolean(config?.anthropicApiKey);
-  // New shopper chats are read when the page opens (at most every 30 minutes).
-  if (hasKey && concerns.pending > 0) concerns.run = startConcernRead(session.shop, { apiKey: config.anthropicApiKey, auto: true, buttons });
+  // New shopper chats are read (and top themes described afresh) when the
+  // page opens, at most every 30 minutes.
+  if (hasKey && (concerns.pending > 0 || concerns.describe > 0)) concerns.run = startConcernRead(session.shop, { apiKey: config.anthropicApiKey, auto: true, buttons });
   const sessions = grouped
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
     .map((s) => ({
