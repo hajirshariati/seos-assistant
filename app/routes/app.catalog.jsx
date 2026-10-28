@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useFetcher, useRevalidator } from "react-router";
 import {
   Page,
@@ -40,6 +40,39 @@ import BrandHeader from "../components/BrandHeader";
 import { SETTINGS_CSS, Row, Group, SectionHead } from "../components/SettingsUI";
 import { nextScheduledSyncAt } from "../lib/catalog-sync-scheduler.server";
 import { similarityOptions } from "../lib/similar-attributes.js";
+import { getSpecSheet, readSpecUpload, saveSpecSheet, deleteSpecSheet, SPEC_FILE_MAX_BYTES } from "../lib/product-specs.server";
+import { shopifySpecsCsv, cleanSheetCsv, specsReportCsv } from "../lib/product-specs.js";
+import { loadLeanCatalog, reloadLeanCatalog } from "../lib/lean/catalog.server";
+import { styleName } from "../lib/lean/catalog.js";
+
+// The spec sheet as the Catalog page shows it: the file, how far it
+// reaches, what shoppers can now ask for, and what needs a look.
+async function specsSummary(shop, catalog = null) {
+  const sheet = await getSpecSheet(shop);
+  const cat = catalog || await loadLeanCatalog(shop).catch(() => null);
+  const finds = cat?.vocab?.specs || {};
+  if (!sheet) return { sheet: null, finds };
+  const r = sheet.report || {};
+  const m = cat?.specReport || null;
+  const styles = (list) => [...new Set((list || []).map((x) => styleName(x.title).replace(/\s+(arch support|orthotic).*$/i, "")).filter(Boolean))];
+  return {
+    sheet: {
+      fileName: sheet.fileName,
+      updatedAt: sheet.updatedAt ? new Date(sheet.updatedAt).toISOString() : null,
+      codes: r.codes || 0,
+      tabsUsed: (r.tabs || []).filter((t) => t.rows > 0).length,
+      tabsSkipped: (r.tabs || []).filter((t) => t.skipped).map((t) => `${t.tab} (${t.skipped})`),
+      duplicates: (r.duplicates || []).length,
+      odd: (r.odd || []).length,
+    },
+    match: m ? {
+      products: m.products, byCode: m.byCode, byStyle: m.byStyle,
+      missing: m.missing.length, missingStyles: styles(m.missing).slice(0, 6), missingStyleCount: styles(m.missing).length,
+      nameMismatch: m.nameMismatch.length, left: m.left.length,
+    } : null,
+    finds,
+  };
+}
 
 
 function safeParse(raw, fallback) {
@@ -115,10 +148,19 @@ export const loader = async ({ request }) => {
     console.error("[catalog] attribute keys failed:", err?.message || err);
   }
 
+  let specs = null;
+  try {
+    specs = await specsSummary(session.shop);
+  } catch (err) {
+    console.error("[catalog] specs summary failed:", err?.message || err);
+  }
+
   return {
     shop: session.shop,
     attributeKeys,
     coverage,
+    specs,
+    specFileMaxBytes: SPEC_FILE_MAX_BYTES,
     status: state.status,
     lastSyncedAt: state.lastSyncedAt,
     nextScheduledSyncAt: nextScheduledSyncAt().toISOString(),
@@ -308,12 +350,42 @@ export const action = async ({ request }) => {
     return { error: "Invalid similarity attributes." };
   }
 
-  
-  
-  
-  
-  
-  
+  // Product specs: upload (or replace), remove, and the files to download.
+  if (intent === "upload_specs") {
+    const fileName = String(formData.get("fileName") || "").slice(0, 200);
+    const sheet = readSpecUpload({ fileName, base64: String(formData.get("data") || "") });
+    if (sheet.error) return { specsError: sheet.error };
+    await saveSpecSheet(session.shop, { fileName, rows: sheet.rows, report: sheet.report });
+    const catalog = await reloadLeanCatalog(session.shop);
+    const summary = await specsSummary(session.shop, catalog);
+    return { specsSaved: true, specsMatched: summary.match ? summary.match.byCode + summary.match.byStyle : 0, specsProducts: summary.match?.products || 0 };
+  }
+
+  if (intent === "remove_specs") {
+    await deleteSpecSheet(session.shop);
+    await reloadLeanCatalog(session.shop);
+    return { specsRemoved: true };
+  }
+
+  if (intent === "download_specs") {
+    const kind = String(formData.get("kind") || "");
+    const sheet = await getSpecSheet(session.shop);
+    if (!sheet) return { specsError: "Upload a spec sheet first." };
+    const base = String(sheet.fileName || "specs").replace(/\.[a-z0-9]+$/i, "").replace(/[^\w.-]+/g, "-").slice(0, 60) || "specs";
+    if (kind === "clean") return { download: { fileName: `${base}-cleaned.csv`, content: `\uFEFF${cleanSheetCsv(sheet.rows)}` } };
+    const catalog = await loadLeanCatalog(session.shop);
+    if (kind === "report") {
+      return { download: { fileName: `${base}-to-check.csv`, content: `\uFEFF${specsReportCsv({ sheet: sheet.report, match: catalog.specReport || {} })}` } };
+    }
+    if (kind === "shopify") {
+      const products = [...catalog.products].sort((a, b) => a.handle.localeCompare(b.handle));
+      const byHandle = new Map(products.map((p) => [p.handle, { specs: p.specs || {} }]));
+      // No byte-order mark: Shopify reads the first column's name as is.
+      return { download: { fileName: `${base}-shopify-import.csv`, content: shopifySpecsCsv(products, byHandle) } };
+    }
+    return { specsError: "Unknown download." };
+  }
+
   return { error: "unknown intent" };
 };
 
@@ -353,6 +425,13 @@ const CATALOG_CSS = `
   .ct-note strong, .ct-note code { color: #1a1a1a; }
   .ct-note code { font-size: 12px; }
   .ct-help { font-size: 12px; line-height: 17px; color: #616161; }
+  .ct-spec-cov { padding-bottom: 0; }
+  .ct-finds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .ct-find { display: grid; align-content: start; gap: 1px; padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); }
+  .ct-find__n { font-size: 18px; line-height: 24px; font-weight: 650; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+  .ct-find__label { font-size: 12.5px; line-height: 17px; font-weight: 600; color: #303030; }
+  .ct-find__hint { font-size: 11.5px; line-height: 15px; color: #8a8a8a; }
+  .ct-list { margin: 2px 0 0; padding-left: 16px; display: grid; gap: 2px; }
   @media (prefers-reduced-motion: reduce) { .ct-bar > span { transition: none; } }
   @media (max-width: 760px) {
     .ct-two { grid-template-columns: minmax(0, 1fr); }
@@ -362,6 +441,7 @@ const CATALOG_CSS = `
     .ct-cov__bar, .ct-cov__src { grid-column: 1 / -1; }
     .ct-search { flex-basis: 100%; }
     .ct-ticks { grid-template-columns: minmax(0, 1fr); }
+    .ct-finds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 `;
 
@@ -905,6 +985,175 @@ function DisplayCard({ productCardStyle }) {
   );
 }
 
+const SPEC_FINDS = [
+  ["removable_footbed", "Removable footbed", "for their own orthotics"],
+  ["no_pig_products", "No pig products", "listed in the materials"],
+  ["slip_resistant", "Slip resistant", "work and wet floors"],
+  ["metatarsal_pad", "Metatarsal pad", "ball-of-foot support"],
+];
+
+function saveBlob(fileName, content) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function ProductSpecsCard({ specs, maxBytes }) {
+  const fetcher = useFetcher();
+  const files = useFetcher();
+  const input = useRef(null);
+  const mounted = useMounted();
+  const [problem, setProblem] = useState("");
+  const [reading, setReading] = useState(false);
+  const [dismissed, setDismissed] = useState(null);
+  const sheet = specs?.sheet || null;
+  const match = specs?.match || null;
+  const finds = specs?.finds || {};
+  const busy = fetcher.state !== "idle" || reading;
+  const uploading = busy && (reading || fetcher.formData?.get("intent") === "upload_specs");
+  const removing = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "remove_specs";
+  const downloading = files.state !== "idle" ? String(files.formData?.get("kind") || "") : "";
+
+  const lastFile = useRef(null);
+  useEffect(() => {
+    const d = files.data?.download;
+    if (d && d.fileName && typeof d.content === "string" && lastFile.current !== d) {
+      lastFile.current = d;
+      saveBlob(d.fileName, d.content);
+    }
+  }, [files.data]);
+
+  const pick = () => { setProblem(""); input.current?.click(); };
+  const onFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    setProblem("");
+    if (!file) return;
+    if (!/\.(xlsx|csv)$/i.test(file.name)) { setProblem("Choose an Excel workbook (.xlsx) or a CSV file."); return; }
+    if (file.size > maxBytes) { setProblem(`That file is too large — the limit is ${Math.round(maxBytes / 1024 / 1024)} MB.`); return; }
+    setReading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReading(false);
+      const fd = new FormData();
+      fd.set("intent", "upload_specs");
+      fd.set("fileName", file.name);
+      fd.set("data", String(reader.result || ""));
+      fetcher.submit(fd, { method: "post", encType: "multipart/form-data" });
+    };
+    reader.onerror = () => { setReading(false); setProblem("That file couldn't be read. Try again."); };
+    reader.readAsDataURL(file);
+  };
+  const remove = () => {
+    if (!window.confirm("Remove the spec sheet? The assistant stops using its specs right away. Facts on your product pages stay.")) return;
+    fetcher.submit({ intent: "remove_specs" }, { method: "post" });
+  };
+  const download = (kind) => files.submit({ intent: "download_specs", kind }, { method: "post" });
+
+  const result = fetcher.data;
+  const notice = problem
+    ? { tone: "critical", text: problem }
+    : result?.specsError ? { tone: "critical", text: result.specsError }
+      : result?.specsSaved ? { tone: "success", text: `Sheet saved. ${result.specsMatched.toLocaleString()} of ${result.specsProducts.toLocaleString()} products now have specs — the assistant uses them from the next message.` }
+        : result?.specsRemoved ? { tone: "info", text: "Spec sheet removed." } : null;
+  const noticeKey = notice ? `${notice.tone}:${notice.text}` : "";
+  const matched = match ? match.byCode + match.byStyle : 0;
+  const pct = match?.products ? Math.round((matched / match.products) * 100) : 0;
+  const toCheck = match ? [
+    match.missing ? `${plural(match.missing, "product isn't", "products aren't")} in the sheet${match.missingStyles.length ? ` (${match.missingStyles.join(", ")}${match.missingStyleCount > match.missingStyles.length ? "…" : ""})` : ""}` : "",
+    match.nameMismatch ? `${plural(match.nameMismatch, "product's style name is", "products' style names are")} spelled differently in the sheet` : "",
+    match.left ? `${plural(match.left, "value was", "values were")} left out — the product page says otherwise, or the sheet lists a style twice with different values` : "",
+    sheet?.duplicates ? `${plural(sheet.duplicates, "code is", "codes are")} listed twice with different values` : "",
+    sheet?.odd ? `${plural(sheet.odd, "cell", "cells")} couldn't be read` : "",
+  ].filter(Boolean) : [];
+
+  return (
+    <Group
+      title="Spec sheet"
+      badge={sheet ? <Badge tone="success">In use</Badge> : <Badge>None yet</Badge>}
+    >
+      <input ref={input} type="file" accept=".xlsx,.csv" onChange={onFile} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
+      <Row
+        title={sheet ? sheet.fileName : "Upload your technical sheet"}
+        help={sheet
+          ? `${mounted && sheet.updatedAt ? `Uploaded ${timeLabel(sheet.updatedAt)} · ` : ""}${plural(sheet.codes, "style code", "style codes")} from ${plural(sheet.tabsUsed, "tab", "tabs")}.${sheet.tabsSkipped.length ? ` Not used: ${sheet.tabsSkipped.join("; ")}.` : ""}`
+          : "An Excel workbook (every tab is read) or a CSV with a style code column — “Style #” — and columns like Removable Depth, Contains Pig Products, Shank, Lining, Heel to Toe Drop, Shaft Height, Temperature Rating, Slip Resistant."}
+        control={
+          <InlineStack gap="300" blockAlign="center" wrap={false}>
+            {sheet && <Button variant="plain" tone="critical" onClick={remove} loading={removing} disabled={busy && !removing}>Remove</Button>}
+            <Button onClick={pick} loading={uploading} disabled={busy && !uploading}>{sheet ? "Replace" : "Upload sheet"}</Button>
+          </InlineStack>
+        }
+      >
+        {notice && dismissed !== noticeKey ? (
+          <Banner tone={notice.tone} onDismiss={() => setDismissed(noticeKey)}><p>{notice.text}</p></Banner>
+        ) : null}
+      </Row>
+
+      {sheet && match ? (
+        <>
+          <div className="ct-sub"><span className="ct-sub__label">Coverage</span></div>
+          <div className="ct-pad ct-spec-cov">
+            <div className="ct-cov__num"><span>{`${matched.toLocaleString()} of ${plural(match.products, "product", "products")} have specs`}</span><span>{`${pct}%`}</span></div>
+            <div className={`ct-bar${pct < 50 ? " ct-bar--partial" : ""}`}><span style={{ width: `${pct}%` }} /></div>
+            <div className="ct-help">
+              {`${match.byCode.toLocaleString()} by their exact code · ${match.byStyle.toLocaleString()} by their style — their colorway isn't in the sheet, so only what's the same in every color is used (not pig products or materials).`}
+            </div>
+          </div>
+          <div style={{ height: 12 }} />
+        </>
+      ) : null}
+
+      {sheet ? (
+        <Row
+          title="What shoppers can ask for now"
+          help="In-stock products each search filter finds. Products that don't list a spec are never assumed to have it."
+        >
+          <div className="ct-finds">
+            {SPEC_FINDS.map(([k, label, hint]) => (
+              <div className="ct-find" key={k}>
+                <span className="ct-find__n">{Number(finds[k] || 0).toLocaleString()}</span>
+                <span className="ct-find__label">{label}</span>
+                {hint ? <span className="ct-find__hint">{hint}</span> : null}
+              </div>
+            ))}
+          </div>
+        </Row>
+      ) : null}
+
+      {sheet && toCheck.length ? (
+        <Row
+          title="To check"
+          help={<ul className="ct-list">{toCheck.map((t) => <li key={t}>{t}</li>)}</ul>}
+          control={<Button onClick={() => download("report")} loading={downloading === "report"}>Download list</Button>}
+        />
+      ) : null}
+
+      {sheet ? (
+        <Row
+          title="For your Shopify product pages"
+          help="The handle plus one column per spec (custom.removable_footbed_depth, custom.contains_pig_products…), only what your product pages don't already show. In Shopify: add these product metafield definitions (Settings → Custom data → Products, single line text), then Products → Import with “Overwrite products with matching handles”. Try a few rows first."
+          control={<Button onClick={() => download("shopify")} loading={downloading === "shopify"}>Download CSV</Button>}
+        />
+      ) : null}
+
+      {sheet ? (
+        <Row
+          title="Cleaned sheet"
+          help="Every code with one wording per value — to share with your product team, or to fix and upload again."
+          control={<Button variant="plain" onClick={() => download("clean")} loading={downloading === "clean"}>Download</Button>}
+        />
+      ) : null}
+    </Group>
+  );
+}
+
 // Attributes that already scope every similar-products lookup.
 const SIMILAR_ALWAYS = new Set(["gender", "category", "category_for_filter"]);
 
@@ -1019,6 +1268,13 @@ export default function Catalog() {
               The Shopify fields (metafields) the assistant uses — material, footbed, heel height. Add one and the assistant can filter by it (“show me cork footbeds”) and answer questions about it; your products update on their own.
             </SectionHead>
             <AttributeMappingsCard mappings={data.mappings} choices={data.metafieldChoices || []} choicesError={data.metafieldError} />
+          </section>
+
+          <section>
+            <SectionHead title="Product specs">
+              Your technical sheet — removable footbed, pig products, shank, lining, heel-to-toe drop, boot shaft, temperature rating and more, by style code. The assistant answers spec questions from it and can find, for example, shoes for custom orthotics. What a product page already says always wins.
+            </SectionHead>
+            <ProductSpecsCard specs={data.specs} maxBytes={data.specFileMaxBytes} />
           </section>
 
           <section>

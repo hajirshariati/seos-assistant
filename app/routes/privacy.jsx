@@ -181,6 +181,7 @@ export default function PrivacyPolicy() {
         <ul>
           <li>Product catalog data (titles, descriptions, prices, variants, images, tags, metafields, product types), kept current via Shopify webhooks.</li>
           <li>Product attribute mappings configured by the merchant (metafield mappings and tag prefixes).</li>
+          <li>A product spec sheet uploaded by the merchant (style codes with their technical specs), stored cleaned up and matched to the catalog.</li>
           <li>Knowledge files uploaded by the merchant (FAQs, sizing guides, brand info, product specs, custom rules), and — when semantic retrieval is enabled — derived text chunks and numeric embedding vectors of that content.</li>
           <li>Merchant-provided third-party API keys — encrypted at rest with AES-256-GCM, removable by the merchant at any time from Settings.</li>
           <li>Standard Shopify session records for the installing store. When a staff member uses the embedded admin, the session record may include that staff member&apos;s Shopify account name and email as provided by Shopify&apos;s authentication. The first name is used solely to personalize the in-admin greeting.</li>
@@ -252,7 +253,7 @@ export default function PrivacyPolicy() {
         <ul>
           <li>Chat usage records (anonymous counts, tokens and cost) are retained for up to 400 days so the merchant can compare year over year, then deleted automatically.</li>
           <li>Product catalog data (including embeddings) is retained while the app is installed and updated in real time via Shopify webhooks.</li>
-          <li>Knowledge files (and their derived chunks and embeddings) are retained until deleted by the merchant.</li>
+          <li>Knowledge files (and their derived chunks and embeddings) and the product spec sheet are retained until deleted or replaced by the merchant.</li>
           <li>Feedback data (including any conversation captured under §3) is automatically deleted after 90 days.</li>
           <li>Test recordings (see §3) are automatically deleted after 30 days, and recording itself switches off two weeks after the merchant turns it on.</li>
           <li>Conversation history shown in the widget is stored in the shopper&apos;s browser (<code>localStorage</code>) and is not transmitted to our servers except as part of the per-message context window.</li>
@@ -260,9 +261,9 @@ export default function PrivacyPolicy() {
 
         <h2>8. Data deletion</h2>
         <ul>
-          <li>When a merchant uninstalls SEoS Assistant, all associated data is automatically and permanently deleted from our database, including product data, embeddings, knowledge files, attribute mappings, search rules, chat usage records, feedback, conversion records, encrypted API keys, configuration, session records, and analytics. No request to us is required.</li>
+          <li>When a merchant uninstalls SEoS Assistant, all associated data is automatically and permanently deleted from our database, including product data, embeddings, knowledge files, the product spec sheet, attribute mappings, search rules, chat usage records, feedback, conversion records, encrypted API keys, configuration, session records, and analytics. No request to us is required.</li>
           <li>We respond automatically to Shopify&apos;s mandatory privacy webhooks — customer data requests, customer redaction, and shop redaction — within the timelines Shopify requires.</li>
-          <li>Merchants can delete individual knowledge files and clear encrypted API keys at any time from the admin.</li>
+          <li>Merchants can delete individual knowledge files, remove the product spec sheet, and clear encrypted API keys at any time from the admin.</li>
         </ul>
 
         <h2>9. Data security</h2>

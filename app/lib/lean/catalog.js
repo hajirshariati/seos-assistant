@@ -8,6 +8,7 @@
 // customer. Pure — the DB loader lives in catalog.server.js.
 
 import { titleSuffixColor } from "../color-match.js";
+import { applySpecs, SPEC_FILTERS } from "../product-specs.js";
 
 function parseJson(v) {
   if (!v) return null;
@@ -236,14 +237,26 @@ export function buildVocabulary(products = []) {
     genders: tally(live, (p) => p.gender, { max: 6 }),
     activities: tally(live, (p) => p.activities, { max: 30, min: 2 }),
     conditions: tally(live, (p) => p.conditions, { max: 40, min: 2 }),
+    // In-stock products each spec filter would find (removable footbed, no
+    // pig products…) — a filter is offered only when it finds some.
+    specs: Object.fromEntries(Object.entries(SPEC_FILTERS).map(([k, test]) => [k, live.filter((p) => test(p.specFlags || {})).length])),
     total: live.length,
   };
 }
 
-export function buildLeanCatalog(rows = [], { shop = "" } = {}) {
+// specRows: the store's product spec sheet (product-specs.js), cleaned rows.
+export function buildLeanCatalog(rows = [], { shop = "", specRows = [] } = {}) {
   const products = rows
     .filter((r) => r && r.handle && !/^(draft|archived)$/i.test(String(r.status || "")))
     .map((r) => normalizeProduct(r, { shop }));
+  // Spec facts: the sheet's, where the product page doesn't already say,
+  // plus the yes/no facts the page itself states ("Removable Insole: Yes").
+  const { byHandle: specsOf, report: specReport } = applySpecs(products, specRows);
+  for (const p of products) {
+    const s = specsOf.get(p.handle);
+    p.specs = s?.specs || {};
+    p.specFlags = s?.flags || {};
+  }
   // One product per colorway ("Ashley Wedge - Navy", "Ashley Wedge - Champagne"):
   // when several products share a style and differ only by the " - X" suffix,
   // that suffix IS the colorway — even names no color list knows (Chai, Oatmeal).
@@ -269,7 +282,7 @@ export function buildLeanCatalog(rows = [], { shop = "" } = {}) {
       byCode.get(c).push(p);
     }
   }
-  return { products, vocab: buildVocabulary(products), byCode };
+  return { products, vocab: buildVocabulary(products), byCode, specReport: specRows.length ? specReport : null };
 }
 
 // One typo apart: a letter added or left out ("l2400" / "ll2400"), two

@@ -9,6 +9,7 @@ import { valueOverlap } from "../similar-attributes.js";
 import { matchColorValues, colorFamiliesIn, isColorful } from "../color-match.js";
 import { styleName, closeCodes, productKind } from "./catalog.js";
 import { merchScore, fewSizesLeft, ratingOf } from "./merch.js";
+import { SPEC_FILTERS, SEARCH_SPEC_KEYS } from "../product-specs.js";
 
 // How much merchandising can move a product among equally relevant ones. A
 // product whose title matches the request (+4 per word) still beats a better
@@ -46,12 +47,26 @@ const FIELD_WEIGHTS = [
 const SHORT_VALUE = 80;
 const isShort = (v) => String(v).length <= SHORT_VALUE;
 
+// A yes/no field says what it is in its name ("slip_resistant": "Yes"), so a
+// "Yes" makes the name searchable: "slip resistant clogs" finds it. Not a
+// "contains_…" field — searching "pig" means avoiding it, not wanting it.
+const YES = /^(yes|y|true)$/i;
+function yesFieldNames(...bags) {
+  const out = [];
+  for (const bag of bags) {
+    for (const [k, v] of Object.entries(bag || {})) {
+      if (YES.test(String(v).trim()) && !/^contains/i.test(k)) out.push(k);
+    }
+  }
+  return out;
+}
+
 function haystacks(p) {
   const values = Object.values(p.attributes || {});
   return {
     title: norm(p.title),
     category: norm([p.category, p.subcategory, p.productType].join(" ")),
-    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge, ...values.filter(isShort)].join(" ")),
+    facets: norm([...p.activities, ...p.conditions, ...p.colors, p.badge, ...values.filter(isShort), ...yesFieldNames(p.attributes, p.specFlags)].join(" ")),
     tags: norm(p.tags.join(" ")),
     description: norm([p.description, ...values.filter((v) => !isShort(v))].join(" ")),
   };
@@ -123,13 +138,17 @@ const FILTERS = {
     const c = collections?.get(want[0]);
     return Boolean(c && c.order.has(p.handle) && (!c.footwearOnly || productKind(p) === "footwear"));
   },
+  // Spec filters (removable footbed, no pig products…): only products whose
+  // page or spec sheet says so — not knowing never counts as a yes.
+  ...Object.fromEntries(Object.entries(SPEC_FILTERS).map(([k, test]) => [k, (p, want) => !want[0] || test(p.specFlags || {})])),
 };
+const ON_OFF = new Set(["on_sale", ...Object.keys(SPEC_FILTERS)]);
 
 function activeFilters(params = {}) {
   const out = {};
   for (const key of Object.keys(FILTERS)) {
     const raw = params[key];
-    if (key === "on_sale") { if (raw === true) out[key] = [true]; continue; }
+    if (ON_OFF.has(key)) { if (raw === true) out[key] = [true]; continue; }
     if (key === "max_price") { if (Number.isFinite(Number(raw)) && Number(raw) > 0) out[key] = [Number(raw)]; continue; }
     const vals = asList(raw);
     if (vals.length) out[key] = vals;
@@ -169,6 +188,16 @@ function shortDetails(attrs) {
   return out;
 }
 
+// Spec facts (product-specs.js): the sheet's, plus a removable footbed the
+// page states. keys: which ones (search results carry the few a shopper
+// decides on; full details carry all).
+function specsOf(p, keys = null) {
+  const all = { ...(p.specFlags?.removable_footbed ? { removable_footbed: p.specFlags.removable_footbed } : {}), ...(p.specs || {}) };
+  const out = {};
+  for (const [k, v] of Object.entries(all)) if (v && (!keys || keys.includes(k))) out[k] = v;
+  return out;
+}
+
 export function toModelProduct(p, { otherColors = [] } = {}) {
   return {
     handle: p.handle,
@@ -185,6 +214,7 @@ export function toModelProduct(p, { otherColors = [] } = {}) {
     ...(() => { const r = ratingOf(p); return Number.isFinite(r.rating) ? { rating: r.rating, reviews: Number.isFinite(r.count) ? r.count : undefined } : {}; })(),
     ...(fewSizesLeft(p) ? { few_sizes_left: true } : {}),
     ...(Object.keys(shortDetails(p.attributes || {})).length ? { details: shortDetails(p.attributes) } : {}),
+    ...(Object.keys(specsOf(p, SEARCH_SPEC_KEYS)).length ? { specs: specsOf(p, SEARCH_SPEC_KEYS) } : {}),
     sizes_in_stock: p.sizes.slice(0, 16),
     widths_in_stock: p.widths.length ? p.widths : undefined,
     summary: p.description.slice(0, 240),
@@ -317,7 +347,7 @@ export function leanSearch(catalog, params = {}) {
 
   const result = {
     total_matches: ranked.length,
-    filters_applied: Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, k === "on_sale" || k === "max_price" || k === "size" || k === "width" || k === "collection" ? v[0] : v])),
+    filters_applied: Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, ON_OFF.has(k) || k === "max_price" || k === "size" || k === "width" || k === "collection" ? v[0] : v])),
     products: picked,
     ...(!queryMatched && picked.length > 0
       ? { note: `No product matched the words "${params.query}"; these match the filters only — check they fit before recommending, or search differently.` }
@@ -419,6 +449,7 @@ export function productDetails(catalog, handle) {
     in_stock: p.inStock,
     description: p.description.slice(0, 1500),
     ...(Object.keys(p.attributes || {}).length ? { details: p.attributes } : {}),
+    ...(Object.keys(specsOf(p)).length ? { specs: specsOf(p) } : {}),
     tags: p.tags.slice(0, 30),
     style_colorways: siblings.map((s) => ({ handle: s.handle, title: s.title, colors: s.colors, price: s.priceLabel })),
   };

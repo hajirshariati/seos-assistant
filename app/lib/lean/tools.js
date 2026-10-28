@@ -34,6 +34,13 @@ export function buildLeanTools(vocab = {}, { similar = false, collection = null 
   }
   props.colorful = { type: "boolean", description: "Colorful colorways first (reds, pinks, greens, blues, yellows…) before black, white and neutrals — for the seasonal collection and whenever the customer wants color." };
   props.on_sale = { type: "boolean", description: "Only marked-down products (sale price below the original price). Use for sales, deals, discounts, markdowns or clearance — on its own to show everything on sale, or with other filters." };
+  // Spec filters — only those some in-stock product passes. Each keeps only
+  // products whose page or spec sheet says so; the rest don't list it.
+  const specs = vocab.specs || {};
+  if (specs.removable_footbed > 0) props.removable_footbed = { type: "boolean", description: "Only shoes whose footbed (insole) comes out — for customers who wear their own, custom or prescription orthotics. Products that don't list it are left out." };
+  if (specs.no_pig_products > 0) props.no_pig_products = { type: "boolean", description: "Only products whose specs list no pig (pork) products in their materials — for customers who avoid them. Products without that spec are left out." };
+  if (specs.slip_resistant > 0) props.slip_resistant = { type: "boolean", description: "Only products listed as slip resistant (work, restaurants, hospitals, wet floors)." };
+  if (specs.metatarsal_pad > 0) props.metatarsal_pad = { type: "boolean", description: "Only products listed with a metatarsal pad (ball-of-foot support)." };
   props.max_price = { type: "number", description: "Maximum price in dollars." };
   props.size = { type: "string", description: "Only products with this size in stock, e.g. \"8\"." };
   // Only when the store sells shoes in more than one width.
@@ -51,7 +58,7 @@ export function buildLeanTools(vocab = {}, { similar = false, collection = null 
     },
     {
       name: "get_product_details",
-      description: "Full facts for one product (description, sizes/widths in stock, colorways, tags). Use for questions about a specific product.",
+      description: "Full facts for one product (description, sizes/widths in stock, colorways, tags, and its specs when the store lists them: removable footbed and depth, pig products, lining, shank, heel-to-toe drop, boot shaft, temperature rating…). Use for questions about a specific product.",
       input_schema: {
         type: "object",
         properties: { handle: { type: "string", description: "Product handle from a search result or a shown card." } },

@@ -7,9 +7,13 @@
 // The words come from that search's filters ("View all 16 women's sale
 // boots"). Pure.
 
+import { SPEC_FILTERS } from "../product-specs.js";
+
 export const VIEW_ALL_PAGE = 24;
 
 const STRING_LISTS = ["categories", "colors", "activities", "conditions"];
+// The spec filters (removable footbed, no pig products…), on/off.
+const SPEC_FILTER_KEYS = Object.keys(SPEC_FILTERS);
 const SORTS = new Set(["best", "price_low", "price_high"]);
 const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -37,6 +41,7 @@ export function cleanViewAllSearch(raw) {
   const collection = str(String(raw.collection ?? ""), 255);
   if (collection) out.collection = collection;
   if (raw.colorful === true) out.colorful = true;
+  for (const key of SPEC_FILTER_KEYS) if (raw[key] === true) out[key] = true;
   if (SORTS.has(raw.sort)) out.sort = raw.sort;
   return Object.keys(out).length ? out : null;
 }

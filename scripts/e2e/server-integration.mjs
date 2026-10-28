@@ -75,7 +75,11 @@ function modelServer() {
       const r = JSON.parse(body || "{}");
       const msgs = r.messages || [];
       const lastUser = [...msgs].reverse().find((m) => m.role === "user");
-      modelCalls.push({ model: r.model, at: Date.now(), last: typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content || "") });
+      modelCalls.push({
+        model: r.model, at: Date.now(), last: typeof lastUser?.content === "string" ? lastUser.content : JSON.stringify(lastUser?.content || ""),
+        searchProps: Object.keys(r.tools?.find((t) => t.name === "search_products")?.input_schema?.properties || {}),
+        system: (Array.isArray(r.system) ? r.system.map((b) => b.text || "").join("\n") : String(r.system || "")),
+      });
       const first = msgs.find((m) => m.role === "user");
       const firstText = typeof first?.content === "string" ? first.content : JSON.stringify(first?.content || "");
       const delay = /SLOW/.test(firstText) ? 6000 : MODEL_DELAY_MS;
@@ -276,6 +280,39 @@ await test("View all pages: the reply sends page 1 and its search; the endpoint 
   assert.deepEqual(cards.products.map((c) => c.handle), pick.slice(0, 2), "asked order; unknown left out");
   assert.ok(cards.products.every((c) => c.title && c.url && c.price_formatted));
   assert.equal((await fetch(signed("/view-all", { handles: "<script>" }))).status, 400, "nothing usable → refused");
+});
+await test("product specs: a stored sheet reaches the catalog — spec filters find only what's listed, the tool offers them, the prompt has the rules", async () => {
+  const SPEC = `integration-specs-${Date.now()}.myshopify.com`;
+  await prisma.session.create({ data: { id: `offline_${SPEC}`, shop: SPEC, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
+  await prisma.shopConfig.create({ data: { shop: SPEC, anthropicApiKey: encrypt("sk-ant-test"), chatLimitPerMin: 0, chatLimitPerHour: 0 } });
+  const add = async (handle, title, comfort) => {
+    const p = await prisma.product.create({ data: { shop: SPEC, shopifyId: `gid://shopify/Product/${handle}`, handle, title, productType: "Footwear", tags: [], status: "ACTIVE", description: "Arch support.", attributesJson: { category_for_filter: "Sandals", comfort } } });
+    await prisma.productVariant.create({ data: { productId: p.id, shopifyId: `${p.id}-v`, price: "120.00", inventoryQty: 3, optionsJson: JSON.stringify([{ name: "Size", value: "8 US" }]) } });
+  };
+  await add("danika-black-ap100w", "Danika Arch Support Sandal - Black", "Removable Insole: Yes");
+  await add("jess-black-se210w", "Jess Sandal - Black", "Removable Insole: No");
+  await add("athena-black-ct850w", "Athena Sandal - Black", "Adjustability: Laces");
+  const { readSpecSheet } = await import(path.join(ROOT, "app/lib/product-specs.js"));
+  const sheet = readSpecSheet([{ name: "AP", rows: [["Style #", "Style Name", "Removable Depth", "Contains Pig Products", "Shank"], ["AP100", "Danika", '5/16"', "No", "None"], ["SE210", "Jess", "None", "Yes", "Metal"]] }]);
+  await prisma.productSpecSheet.create({ data: { shop: SPEC, fileName: "wiki.xlsx", rowsJson: JSON.stringify(sheet.rows), reportJson: JSON.stringify(sheet.report) } });
+  const list = async (search) => {
+    const res = await fetch(signed("/view-all", { search: JSON.stringify(search), page: "1" }, SPEC));
+    assert.equal(res.status, 200);
+    return (await res.json()).products.map((c) => c.handle).sort();
+  };
+  assert.deepEqual(await list({ query: "", categories: ["sandals"] }), ["athena-black-ct850w", "danika-black-ap100w", "jess-black-se210w"]);
+  assert.deepEqual(await list({ query: "", removable_footbed: true }), ["danika-black-ap100w"], "only the one whose footbed comes out");
+  assert.deepEqual(await list({ query: "", no_pig_products: true }), ["danika-black-ap100w"], "Jess lists pig products; Athena lists nothing");
+  const before = modelCalls.length;
+  const r = await chat("shoes for my custom orthotics", { ip: "198.51.100.61", shop: SPEC });
+  assert.equal(r.status, 200);
+  const call = modelCalls.slice(before).find((c) => c.searchProps.length);
+  assert.ok(call.searchProps.includes("removable_footbed") && call.searchProps.includes("no_pig_products"), call.searchProps.join(","));
+  assert.ok(!call.searchProps.includes("slip_resistant"), "no product lists it → not offered");
+  assert.match(call.system, /never call a product halal, kosher or vegan/);
+  await prisma.productSpecSheet.deleteMany({ where: { shop: SPEC } });
+  for (const m of ["chatHealthEvent", "chatUsage", "chatTopic", "chatProductMention", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop: SPEC } });
+  await prisma.product.deleteMany({ where: { shop: SPEC } });
 });
 await test("\"Find my shoe size\" with no shoe picked: how True Fit works and the store's kinds of shoes, from the catalog — no model call", async () => {
   const tf = { provider: "truefit", page_handle: "" };
