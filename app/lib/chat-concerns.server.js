@@ -6,7 +6,8 @@
 // counts are the chats stored against a theme, so they last after the
 // recordings themselves are deleted. The page starts a read when it opens
 // (at most every 30 minutes) or on Refresh; the daily clean-up reads what's
-// left before recordings expire.
+// left before recordings expire. Only what shoppers typed is read — never
+// the words a button sent (see shopperSessions in chat-concerns.js).
 import Anthropic from "@anthropic-ai/sdk";
 import prisma from "../db.server";
 import { DEFAULT_MODEL } from "./claude-models.js";
@@ -15,9 +16,10 @@ import { createLimiter } from "./concurrency.js";
 import { groupSessions, KEEP_DAYS } from "./chat-recording.js";
 import { redactContactDetails } from "../models/ChatFeedback.server";
 import { getShopConfig } from "../models/ShopConfig.server";
+import { parseThemeJson } from "./store-knowledge/extract.js";
 import {
   SYSTEM_PROMPT, PROPOSE_TOOL, ASSIGN_TOOL, DESCRIBE_TOOL, MAX_THEMES, BATCH_SIZE, SAMPLE_CHATS, DESCRIBE_CHATS, TOP_COUNT, MORE_COUNT, AUTO_EVERY_MS,
-  shopperSessions, pendingSessions, spread, themesPrompt, parseProposedThemes, assignPrompt, parseAssignments, describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote,
+  shopperSessions, pendingSessions, buttonSet, themeButtonTexts, spread, themesPrompt, parseProposedThemes, assignPrompt, parseAssignments, describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote,
 } from "./chat-concerns.js";
 
 const runs = new Map(); // shop → { startedAt, total, done, error, finishedAt, running }
@@ -37,7 +39,7 @@ async function keptRows(shop) {
   const since = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
   return prisma.chatRecording.findMany({
     where: { shop, createdAt: { gte: since } },
-    select: { id: true, sessionId: true, tester: true, message: true, reply: true, ok: true, createdAt: true },
+    select: { id: true, sessionId: true, tester: true, typed: true, message: true, reply: true, extras: true, ok: true, createdAt: true },
     orderBy: { createdAt: "asc" },
     take: 20000,
   });
@@ -52,6 +54,46 @@ function toolInput(resp, name) {
   return block.input || {};
 }
 
+// The store's button messages (normalized), for turns recorded before the
+// widget marked taps: the theme's Start here / Popular buttons (read from the
+// live theme's settings with read_themes), their defaults, and the seasonal
+// button. Kept 15 minutes; when the theme can't be read, the defaults and
+// the store's settings are used and it's tried again in 2 minutes.
+const buttonCache = new Map(); // shop → { at, ttl, texts }
+const BUTTON_FIELDS = ["cta1Message", "cta2Message", "cta3Message", "cta4Message", "seasonalCtaLabel"];
+
+async function themeButtons(admin) {
+  const ids = await admin.graphql(`#graphql
+    query { themes(first: 1, roles: [MAIN]) { nodes { id } } }`).then((r) => r.json());
+  const id = ids?.data?.themes?.nodes?.[0]?.id;
+  if (!id) return null;
+  const res = await admin.graphql(`#graphql
+    query ThemeSettings($id: ID!) {
+      theme(id: $id) { files(filenames: ["config/settings_data.json"], first: 1) { nodes { body { ... on OnlineStoreThemeFileBodyText { content } } } } }
+    }`, { variables: { id } }).then((r) => r.json());
+  const content = res?.data?.theme?.files?.nodes?.[0]?.body?.content;
+  return content ? themeButtonTexts(parseThemeJson(content)) : null;
+}
+
+export async function storeButtonTexts(shop, { admin = null, config = null } = {}) {
+  const hit = buttonCache.get(shop);
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.texts;
+  const own = BUTTON_FIELDS.map((k) => config?.[k]).filter((v) => typeof v === "string" && v.trim());
+  let theme = null;
+  if (admin) {
+    theme = await Promise.race([
+      themeButtons(admin),
+      new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
+    ]).catch((err) => {
+      console.error(`[concerns] theme buttons failed shop=${shop}:`, err?.message || err);
+      return null;
+    });
+  }
+  const texts = buttonSet([...own, ...(theme || [])]);
+  buttonCache.set(shop, { at: Date.now(), ttl: theme ? 15 * 60 * 1000 : 2 * 60 * 1000, texts });
+  return texts;
+}
+
 // Plain words for the page, never the raw API error.
 export function readError(err) {
   const status = err?.status ?? err?.response?.status;
@@ -61,7 +103,7 @@ export function readError(err) {
 }
 
 // One full read for a store. `client` stands in for Anthropic in the tests.
-export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL, onProgress = () => {} } = {}) {
+export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL, buttons = buttonSet(), onProgress = () => {} } = {}) {
   const gen = generation.get(shop) || 0;
   const stale = () => (generation.get(shop) || 0) !== gen;
   // Chats deleted from here on aren't written back, even if this read
@@ -69,8 +111,9 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
   const gone = new Set();
   forgotten.set(shop, gone);
   const [rows, links, stored] = await Promise.all([keptRows(shop), getLinks(shop), getThemes(shop)]);
-  const sessions = groupSessions(rows);
-  const pending = pendingSessions(sessions, links).sort((a, b) => new Date(a.lastAt) - new Date(b.lastAt));
+  // Shopper chats, with only what they typed.
+  const chats = shopperSessions(groupSessions(rows), buttons);
+  const pending = pendingSessions(chats, links).sort((a, b) => new Date(a.lastAt) - new Date(b.lastAt));
   onProgress({ total: pending.length, done: 0 });
   if (!pending.length) return { read: 0, themes: stored.length };
   // Kept chats read earlier that raised no theme: a need that comes up once
@@ -78,7 +121,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
   // when new themes are added they're read again against them.
   const waiting = new Set(pending.map((s) => s.sessionId));
   const noTheme = new Set(links.filter((l) => !(l.concernIds || []).length).map((l) => l.sessionId));
-  const unthemed = shopperSessions(sessions).filter((s) => noTheme.has(s.sessionId) && !waiting.has(s.sessionId));
+  const unthemed = chats.filter((s) => noTheme.has(s.sessionId) && !waiting.has(s.sessionId));
 
   const ai = client || new Anthropic({ apiKey, timeout: 90_000, maxRetries: 0 });
   const ask = (prompt, tool, maxTokens) => withAnthropicRetry(
@@ -139,7 +182,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
   if (!read && firstError) throw firstError;
 
   // 3. The top themes, described from their newest kept chats.
-  const byId = new Map(sessions.map((s) => [s.sessionId, s]));
+  const byId = new Map(chats.map((s) => [s.sessionId, s]));
   const top = rankConcerns(themes, await getLinks(shop)).slice(0, TOP_COUNT);
   for (const t of top) {
     if (!needsDescribing(t, t.count)) continue;
@@ -158,8 +201,9 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
 }
 
 // Starts a read in the background unless one is running. `auto` reads (the
-// page opening) happen at most every AUTO_EVERY_MS per store.
-export function startConcernRead(shop, { apiKey, auto = false, client } = {}) {
+// page opening) happen at most every AUTO_EVERY_MS per store. `buttons`: the
+// store's button messages (storeButtonTexts).
+export function startConcernRead(shop, { apiKey, auto = false, client, buttons } = {}) {
   const now = Date.now();
   if (!apiKey && !client) return concernRunState(shop);
   if (runs.get(shop)?.running) return concernRunState(shop);
@@ -169,7 +213,7 @@ export function startConcernRead(shop, { apiKey, auto = false, client } = {}) {
   }
   const state = { running: true, startedAt: now, total: 0, done: 0, error: "", finishedAt: null };
   runs.set(shop, state);
-  state.promise = readConcerns(shop, { apiKey, client, onProgress: (p) => { state.total = p.total; state.done = p.done; } })
+  state.promise = readConcerns(shop, { apiKey, client, buttons, onProgress: (p) => { state.total = p.total; state.done = p.done; } })
     .then((r) => {
       if (r?.partial) state.error = "Some chats couldn't be read. They'll be read next time.";
       return r;
@@ -192,7 +236,7 @@ export async function settleConcernRead(shop) {
 
 // The card's data. `sessions` are the page's grouped recordings
 // (groupSessions), used for the quotes and the chats still kept.
-export async function concernSummary(shop, sessions = []) {
+export async function concernSummary(shop, sessions = [], buttons = buttonSet()) {
   const [themes, links] = await Promise.all([getThemes(shop), getLinks(shop)]);
   const ranked = rankConcerns(themes, links);
   const turnText = new Map();
@@ -218,7 +262,7 @@ export async function concernSummary(shop, sessions = []) {
     updatedAt,
     top: ranked.slice(0, TOP_COUNT).map(shape),
     more: ranked.slice(TOP_COUNT, TOP_COUNT + MORE_COUNT).map(shape),
-    pending: pendingSessions(sessions, links).length,
+    pending: pendingSessions(shopperSessions(sessions, buttons), links).length,
     run: concernRunState(shop),
   };
 }
@@ -249,7 +293,10 @@ export async function readAllPendingConcerns() {
     try {
       const config = await getShopConfig(shop);
       if (!config?.anthropicApiKey) continue;
-      startConcernRead(shop, { apiKey: config.anthropicApiKey });
+      const { unauthenticated } = await import("../shopify.server");
+      const admin = await unauthenticated.admin(shop).then((r) => r.admin).catch(() => null);
+      const buttons = await storeButtonTexts(shop, { admin, config });
+      startConcernRead(shop, { apiKey: config.anthropicApiKey, buttons });
       await settleConcernRead(shop);
     } catch (err) {
       console.error(`[concerns] daily read failed shop=${shop}:`, err?.message || err);

@@ -123,6 +123,30 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   check(`${name}: no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// 3b) Each message says whether the shopper typed it or a button sent it
+// (Test recordings' issues card reads only what shoppers type).
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForSelector(".ai-chat-welcome__cta-btn[data-message]");
+  let n = chatBodies.length;
+  await page.click('.ai-chat-welcome__cta-btn[data-message="which orthotic is right for me?"]');
+  await waitUntil(() => chatBodies.length > n);
+  check("typed mark: a welcome button's message is marked as not typed", chatBodies.at(-1)?.message === "which orthotic is right for me?" && chatBodies.at(-1)?.typed === false, JSON.stringify({ m: chatBodies.at(-1)?.message, typed: chatBodies.at(-1)?.typed }));
+  await page.waitForFunction(() => !document.querySelector(".ai-chat-input-area textarea, .ai-chat-input-area input")?.disabled);
+  await page.waitForTimeout(400);
+  n = chatBodies.length;
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "do you have wide sandals");
+  await page.keyboard.press("Enter");
+  await waitUntil(() => chatBodies.length > n);
+  check("typed mark: what the shopper types is marked as typed", chatBodies.at(-1)?.message === "do you have wide sandals" && chatBodies.at(-1)?.typed === true, JSON.stringify({ m: chatBodies.at(-1)?.message, typed: chatBodies.at(-1)?.typed }));
+  check("typed mark: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // 4) FITFinder: the store's FITs go with each message; a FIT found in chat is saved back
 {
   const { ctx, page, errors } = await session("/showcase", { width: 1280, height: 860 }, "ff", 1);

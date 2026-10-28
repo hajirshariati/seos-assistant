@@ -198,6 +198,9 @@ try{applyHostButtons(JSON.parse(localStorage.getItem(HOST_KEY)||'null'))}catch(e
    the store's collections, with a season icon and tint. Remembered from the
    last visit so the welcome draws it straight away. */
 var SEA_KEY='hajirai_seasonal_cta',SEA_ON=false,SEA_ICON='fall',SEA_COLOR='fall',SEA_LABEL='',SEA_TAP='';
+/* A button is sending the next message (its words, not the shopper's), and
+   whether the last message sent was typed (or spoken) by the shopper. */
+var BTN_SEND=false,SENT_TYPED=true;
 function applySeasonal(s){
   s=s&&typeof s==='object'?s:{};
   SEA_ICON=/^(fall|winter|spring|summer)$/.test(String(s.icon||''))?String(s.icon):'fall';
@@ -1362,7 +1365,7 @@ function startHelper(kind){
   }else{
     inputEl.value=mine?'Show me orthotics in my '+fitTitle(mine)+'.':'Help me find my orthotic FIT.';
   }
-  sendMessage();
+  BTN_SEND=true;sendMessage();
 }
 
 /* Opening animation: the welcome content rises in, line by line, as the
@@ -4106,7 +4109,7 @@ function resumeAfterSignIn(){
   var done=panel.querySelectorAll('[data-ord-login]');
   for(var i=0;i<done.length;i++){var sp=document.createElement('span');sp.className='ai-ord__signedin';sp.innerHTML=ORD_ICON.check+'Signed in';done[i].replaceWith(sp)}
   if(!isOpen)toggle(true);
-  setTimeout(function(){inputEl.value=r.q||'Where’s my order?';sendMessage()},isOpen?150:700);
+  setTimeout(function(){inputEl.value=r.q||'Where’s my order?';BTN_SEND=true;sendMessage()},isOpen?150:700);
 }
 window.addEventListener('message',function(e){
   if(e.origin!==location.origin||!e.data||e.data.type!=='hajirai-signed-in')return;
@@ -4378,7 +4381,9 @@ panel.addEventListener('submit',function(e){
 
 function sendMessage(){
 var text=inputEl.value.trim();
+var byButton=BTN_SEND;BTN_SEND=false;
 if(!text||isStreaming)return;
+SENT_TYPED=!byButton;
 rateStepAside();
 var w=$('.ai-chat-welcome',msgsEl);
 if(w)w.remove();
@@ -4593,6 +4598,9 @@ var ffData=ffPayload();
 var tfData=tfPayload();
 if(tfData)body.size_finder=tfData;
 if(TESTER)body.tester=TESTER;
+/* Typed (or spoken) by the shopper, or sent by a button — the store's issues
+   card (Test recordings) reads only what shoppers type. */
+body.typed=SENT_TYPED;
 /* Sent by tapping the seasonal button: the chat shows its collection. */
 if(SEA_TAP&&SEA_TAP===msg)body.seasonal=true;
 SEA_TAP='';
@@ -5169,7 +5177,7 @@ if(retryBtn){
   /* The failed message is sent again — not stacked twice in the history. */
   var lm=messages[messages.length-1];
   if(lm&&lm.role==='user'&&lm.content===lastUserMessage){messages.pop();saveH(messages)}
-  inputEl.value=lastUserMessage;sendMessage();
+  inputEl.value=lastUserMessage;BTN_SEND=!SENT_TYPED;sendMessage();
   return;
 }
 var cmpBtn=e.target.closest('[data-cmp-start],[data-cmp-go],[data-cmp-cancel],[data-cmp-mode],[data-cmp-unpick]');
@@ -5194,7 +5202,7 @@ if(tfiBtn){
   if(tfiBtn.hasAttribute('data-tfi-show')){tfiShow(tfiBtn);return}
   if(isStreaming)return;
   var tfiAsk=tfiBtn.getAttribute('data-tfi-ask');
-  TF_PICK=tfiAsk;inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=tfiAsk;sendMessage();
+  TF_PICK=tfiAsk;inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=tfiAsk;BTN_SEND=true;sendMessage();
   return;
 }
 /* Picking cards to compare: a tap anywhere on a card picks it. */
@@ -5226,7 +5234,7 @@ if(deadEnd){
   return;
 }
 var cta=e.target.closest('[data-message]');
-if(cta){var t=cta.getAttribute('data-message');if(t){SEA_TAP=cta.hasAttribute('data-seasonal')?t:'';inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=t;sendMessage()}}
+if(cta){var t=cta.getAttribute('data-message');if(t){SEA_TAP=cta.hasAttribute('data-seasonal')?t:'';inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;inputEl.value=t;BTN_SEND=true;sendMessage()}}
 /* Chat product link clicks → set a cart attribute so the orders/create
    webhook can tag the resulting order "SEoS". keepalive lets the POST
    complete even though the browser is navigating away. Best-effort —

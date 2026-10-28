@@ -16,7 +16,7 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings, deleteAllRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { recordingState, groupSessions, recordingLabels, KEEP_DAYS } from "../lib/chat-recording.js";
 import { getShopTimeZone } from "../lib/shop-timezone.server";
-import { concernSummary, startConcernRead, concernRunState, forgetConcernChat, resetConcerns } from "../lib/chat-concerns.server";
+import { concernSummary, startConcernRead, concernRunState, forgetConcernChat, resetConcerns, storeButtonTexts } from "../lib/chat-concerns.server";
 import BrandHeader from "../components/BrandHeader";
 import ShopperConcerns, { CONCERNS_CSS } from "../components/ShopperConcerns";
 import { SETTINGS_CSS, Row, SectionHead } from "../components/SettingsUI";
@@ -32,14 +32,16 @@ export const loader = async ({ request }) => {
   // Days, weeks and times are worked out here, in the store's time zone.
   const L = recordingLabels({ timeZone });
   const grouped = groupSessions(rows);
+  // The store's button messages: the card reads only what shoppers typed.
+  const buttons = await storeButtonTexts(session.shop, { admin, config });
   // The card never takes the page down: if its data can't be read, it's empty.
-  const { since, updatedAt, ...concerns } = await concernSummary(session.shop, grouped).catch((err) => {
+  const { since, updatedAt, ...concerns } = await concernSummary(session.shop, grouped, buttons).catch((err) => {
     console.error("[recordings] concerns summary failed:", err?.message || err);
     return { read: 0, top: [], more: [], pending: 0, run: concernRunState(session.shop) };
   });
   const hasKey = Boolean(config?.anthropicApiKey);
   // New shopper chats are read when the page opens (at most every 30 minutes).
-  if (hasKey && concerns.pending > 0) concerns.run = startConcernRead(session.shop, { apiKey: config.anthropicApiKey, auto: true });
+  if (hasKey && concerns.pending > 0) concerns.run = startConcernRead(session.shop, { apiKey: config.anthropicApiKey, auto: true, buttons });
   const sessions = grouped
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
     .map((s) => ({
@@ -72,7 +74,7 @@ function shortDate(date, timeZone) {
 }
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const form = await request.formData();
   if (form.get("intent") === "delete_all") {
     const count = await deleteAllRecordings(session.shop);
@@ -87,7 +89,8 @@ export const action = async ({ request }) => {
   if (form.get("intent") === "refresh_concerns") {
     const config = await getShopConfig(session.shop);
     if (!config?.anthropicApiKey) return { concerns: concernRunState(session.shop) };
-    return { concerns: startConcernRead(session.shop, { apiKey: config.anthropicApiKey }) };
+    const buttons = await storeButtonTexts(session.shop, { admin, config });
+    return { concerns: startConcernRead(session.shop, { apiKey: config.anthropicApiKey, buttons }) };
   }
   return null;
 };

@@ -151,7 +151,13 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     // Test recordings: only while the store has it on, and (by default) only
     // for testers who opened the store with the tester link.
     record: shouldRecord(config, { tester: body.tester, internal })
-      ? { sessionId: typeof body.session_id === "string" ? body.session_id : "", tester: internal ? "Test chat" : cleanTester(body.tester), page: typeof body.page === "string" ? body.page : "" }
+      ? {
+        sessionId: typeof body.session_id === "string" ? body.session_id : "",
+        tester: internal ? "Test chat" : cleanTester(body.tester),
+        page: typeof body.page === "string" ? body.page : "",
+        // Typed by the shopper, or sent by a button (unknown from older widgets).
+        typed: typeof body.typed === "boolean" ? body.typed : null,
+      }
       : null,
   });
 }

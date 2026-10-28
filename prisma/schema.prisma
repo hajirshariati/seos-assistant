@@ -486,6 +486,9 @@ model ChatRecording {
   sessionId  String
   tester     String   @default("")
   page       String   @default("")
+  // Typed (or spoken) by the shopper, or sent by a button (a welcome button,
+  // a quick reply…); null when the widget didn't say (older widgets).
+  typed      Boolean?
   message    String
   reply      String
   products   String[]

@@ -6,12 +6,15 @@
 // Run: node scripts/eval-chat-concerns.mjs
 //      TEST_DATABASE_URL=postgresql://... node scripts/eval-chat-concerns.mjs
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { groupSessions } from "../app/lib/chat-recording.js";
 import {
   shopperSessions, pendingSessions, chatDigest, spread, keyThemes, themesPrompt, parseProposedThemes, assignPrompt, parseAssignments,
   describePrompt, parseDescription, needsDescribing, rankConcerns, pickQuote, MAX_THEMES, MAX_NEW_THEMES, MIN_CHATS, KIND_LABELS, SYSTEM_PROMPT,
+  isButtonMessage, offeredReplies, buttonSet, themeButtonTexts, normalizeMessage, DEFAULT_BUTTON_MESSAGES,
 } from "../app/lib/chat-concerns.js";
+import { describeExtras } from "../app/lib/chat-recording.js";
 
 let passed = 0;
 let failed = 0;
@@ -22,7 +25,7 @@ async function test(name, fn) {
 
 const at = (min) => new Date(Date.UTC(2026, 9, 20, 12, min));
 let rowId = 0;
-const turn = (sessionId, message, { tester = "", min = 0, reply = "Sure — here are a few.", ok = true } = {}) => ({ id: `r${++rowId}`, sessionId, tester, message, reply, ok, createdAt: at(min) });
+const turn = (sessionId, message, { tester = "", min = 0, reply = "Sure — here are a few.", ok = true, typed = null, extras = "" } = {}) => ({ id: `r${++rowId}`, sessionId, tester, message, reply, ok, typed, extras, createdAt: at(min) });
 
 console.log("\nwhich chats are read");
 await test("shopper chats only: testers, the app's Test chat, chats without an id and empty chats are left out", () => {
@@ -38,10 +41,84 @@ await test("shopper chats only: testers, the app's Test chat, chats without an i
 });
 await test("pending: never read, or carried on after it was read", () => {
   const rows = [turn("a", "hi", { min: 1 }), turn("b", "wide?", { min: 2 }), turn("b", "size 9", { min: 9 }), turn("c", "returns?", { min: 3 })];
-  const sessions = groupSessions(rows);
+  const sessions = shopperSessions(groupSessions(rows));
   const links = [{ sessionId: "b", lastTurnAt: at(2) }, { sessionId: "c", lastTurnAt: at(3) }];
   assert.deepEqual(pendingSessions(sessions, links).map((s) => s.sessionId).sort(), ["a", "b"]);
   assert.deepEqual(pendingSessions(sessions, [...links, { sessionId: "a", lastTurnAt: at(1) }, { sessionId: "b", lastTurnAt: at(9) }]), []);
+});
+
+console.log("\nonly what shoppers type");
+await test("the widget's mark wins: a button's message is skipped, a typed one kept even if it reads like a button", () => {
+  const sessions = shopperSessions(groupSessions([
+    turn("a", "Help me find my orthotic FIT.", { typed: true }),
+    turn("a", "I need wide sandals", { min: 1, typed: false }),
+    turn("b", "Show me the most popular Aetrex products.", { typed: false }),
+  ]));
+  assert.deepEqual(sessions.map((s) => [s.sessionId, s.turns.map((t) => t.message)]), [["a", ["Help me find my orthotic FIT."]]], "a chat with nothing typed isn't read at all");
+});
+await test("before the mark: the widget's own button lines are skipped", () => {
+  const is = (m) => isButtonMessage({ message: m, typed: null });
+  for (const m of [
+    "Help me find my orthotic FIT.", "help me find my orthotic fit", "I'd like to retake my orthotic FIT.", "I’d like to retake my orthotic FIT.",
+    "Show me orthotics in my FIT 2343.", "Help me find my shoe size with True Fit.", "True Fit recommends size 9.5 for me.",
+    "True Fit recommends size 8 W for me in the Chase Arch Support Sneaker.",
+  ]) assert.equal(is(m), true, m);
+  for (const m of ["I need help with my orthotic fit, my arch hurts", "what size should I get in the Chase?", "Where's my order?", "show me orthotics for flat feet"]) assert.equal(is(m), false, m);
+});
+await test("before the mark: the store's buttons (theme, defaults, seasonal) and the quick replies just offered are skipped", () => {
+  const buttons = buttonSet(["Find me shoes for standing all day", "Fall favorites"]);
+  const is = (m, extras = "") => isButtonMessage({ message: m, typed: null }, { buttons, offered: offeredReplies(extras) });
+  assert.equal(is("Find me shoes for standing all day"), true, "a theme button");
+  assert.equal(is("fall favorites"), true, "the seasonal button");
+  assert.equal(is("Help me check the status of my order."), true, "a default button");
+  assert.equal(is("What's currently on sale?"), true, "an earlier default");
+  const extras = describeExtras([{ type: "suggestions", questions: ["Do these come in wide?", "Show me the navy one"] }]);
+  assert.equal(is("Do these come in wide?", extras), true, "a quick reply it had just offered");
+  assert.equal(is("Do these come in wide?"), false, "typed when nothing offered it");
+  assert.equal(is("Find me shoes for standing all day and my heel hurts"), false, "more than the button's words is typed");
+});
+await test("before the mark: a True Fit shoe tile the reply showed is skipped", () => {
+  const extras = describeExtras([{ type: "size_intro", line: "w", lines: [{ k: "w", l: "Women's", tiles: [{ l: "Sneakers" }, { l: "Dress Shoes" }] }] }]);
+  const offered = offeredReplies(extras);
+  const is = (m) => isButtonMessage({ message: m, typed: null }, { offered });
+  assert.equal(is("Show me women's sneakers"), true);
+  assert.equal(is("Show me dress shoes"), true);
+  assert.equal(is("Show me men's dress shoes"), true);
+  assert.equal(is("Show me wide sneakers in 10"), false);
+});
+await test("a chat's turns are judged against the reply before each one; lastAt is the last typed turn", () => {
+  const rows = [
+    turn("q", "my feet hurt after work", { min: 0, typed: null, extras: describeExtras([{ type: "suggestions", questions: ["Show me work shoes"] }]) }),
+    turn("q", "Show me work shoes", { min: 1, typed: null }),
+    turn("q", "Help me find my orthotic FIT.", { min: 2, typed: null }),
+  ];
+  const [s] = shopperSessions(groupSessions(rows));
+  assert.deepEqual(s.turns.map((t) => t.message), ["my feet hurt after work"]);
+  assert.equal(s.lastAt.getTime(), at(0).getTime(), "button taps afterwards don't make it new again");
+});
+await test("the theme's button messages come from the chat's app embed, wherever the theme keeps its settings", () => {
+  const block = { type: "shopify://apps/seos-assistant/blocks/hajirai_chat/abc-123", disabled: false, settings: { cta1_message: "Find my fit", qp2_message: " New in ", cta1_label: "Fit", greeting: "Hi" } };
+  const other = { type: "shopify://apps/reviews/blocks/stars/1", settings: { cta1_message: "not ours" } };
+  assert.deepEqual(themeButtonTexts({ current: { blocks: { a: block, b: other } } }).sort(), ["Find my fit", "New in"]);
+  assert.deepEqual(themeButtonTexts({ current: "Default", presets: { Default: { blocks: { a: block } } } }).sort(), ["Find my fit", "New in"]);
+  assert.deepEqual(themeButtonTexts(null), []);
+});
+await test("kept in step with the widget and the theme block: every button line and default is known", () => {
+  const widget = readFileSync(new URL("../extensions/hajirai-chat-widget/assets/hajirai-chat-widget.js", import.meta.url), "utf8");
+  for (const lit of ["'Help me find my orthotic FIT.'", "'I\\'d like to retake my orthotic FIT.'", "'Show me orthotics in my '", "'Help me find my shoe size with True Fit.'", "'True Fit recommends size '", "' for me'", "' in the '", "data-tfi-ask=\"'+esc('Show me '+word+t.l.toLowerCase())"]) {
+    assert.ok(widget.includes(lit), `the widget still sends ${lit} — if it changed, update WIDGET_BUTTON_MESSAGES`);
+  }
+  assert.ok(widget.includes("body.typed=SENT_TYPED"), "the widget says how each message was sent");
+  // Every send goes through a button (BTN_SEND) or is the shopper's own (send button, Enter, voice).
+  const sends = widget.split("\n").filter((l) => /sendMessage\(\)/.test(l) && !/^function sendMessage/.test(l));
+  for (const l of sends) {
+    const own = /sendBtn\.addEventListener\('click'|e\.key==='Enter'|if\(heard\)/.test(l);
+    assert.ok(own || /BTN_SEND=/.test(l) || l.trim() === "BTN_SEND=true;sendMessage();", `a send without a mark: ${l.trim().slice(0, 90)}`);
+  }
+  const liquid = readFileSync(new URL("../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8");
+  const schema = JSON.parse(liquid.match(/\{% schema %\}([\s\S]*?)\{% endschema %\}/)[1]);
+  const known = new Set(DEFAULT_BUTTON_MESSAGES.map(normalizeMessage));
+  for (const st of schema.settings.filter((x) => /^(?:cta|qp)\d+_message$/.test(x.id) && x.default)) assert.ok(known.has(normalizeMessage(st.default)), st.default);
 });
 
 console.log("\nwhat the model is shown");
@@ -240,8 +317,8 @@ if (!process.env.TEST_DATABASE_URL) {
       },
     },
   });
-  const rec = (sessionId, message, { tester = "", minutesAgo = 60, shop = SHOP } = {}) => prisma.chatRecording.create({
-    data: { shop, sessionId, tester, message, reply: "Here's what I found.", products: [], createdAt: new Date(Date.now() - minutesAgo * 60_000) },
+  const rec = (sessionId, message, { tester = "", minutesAgo = 60, shop = SHOP, typed = null } = {}) => prisma.chatRecording.create({
+    data: { shop, sessionId, tester, typed, message, reply: "Here's what I found.", products: [], createdAt: new Date(Date.now() - minutesAgo * 60_000) },
   });
   const summary = async () => C.concernSummary(SHOP, groupSessions(await prisma.chatRecording.findMany({ where: { shop: SHOP } })));
   const cleanup = async () => {
@@ -371,6 +448,40 @@ if (!process.env.TEST_DATABASE_URL) {
       const price = (await summary()).top.concat((await summary()).more).find((t) => t.title === "Price matching");
       assert.ok(price, "the new theme shows");
       assert.equal(price.count, 2, "both chats count");
+    });
+    await test("button taps never reach the model, and a chat with only taps isn't counted", async () => {
+      const before = (await summary()).read;
+      await rec("k1", "Help me find my orthotic FIT.", { minutesAgo: 2 });
+      await rec("k1", "Show me the most popular Aetrex products.", { minutesAgo: 1, typed: false });
+      await rec("k2", "I need wide shoes for work", { minutesAgo: 2, typed: false });
+      await rec("k2", "is the arch support firm?", { minutesAgo: 1, typed: true });
+      calls.length = 0;
+      C.startConcernRead(SHOP, { client: fake() });
+      await C.settleConcernRead(SHOP);
+      const sent = calls.map((c) => c.prompt).join("\n");
+      assert.ok(!/orthotic FIT|most popular|wide shoes for work/.test(sent), "no button's words were sent");
+      assert.ok(/arch support firm/.test(sent), "what was typed was");
+      const s = await summary();
+      assert.equal(s.read, before + 1, "only the chat with something typed counts");
+      assert.equal(s.pending, 0);
+      assert.equal(await prisma.chatConcernChat.count({ where: { shop: SHOP, sessionId: "k1" } }), 0);
+    });
+    await test("the store's buttons are read from the live theme, with the defaults and the seasonal label; a failed read falls back", async () => {
+      const settings = `/* auto-generated */ ${JSON.stringify({ current: { blocks: { x: { type: "shopify://apps/seos/blocks/hajirai_chat/1", settings: { cta2_message: "Find shoes for my bunions" } } } } })}`;
+      const asked = [];
+      const admin = { graphql: async (q, opts) => {
+        asked.push(opts?.variables || null);
+        const body = /themes\(first: 1/.test(q) ? { data: { themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/9" }] } } } : { data: { theme: { files: { nodes: [{ body: { content: settings } }] } } } };
+        return { json: async () => body };
+      } };
+      const texts = await C.storeButtonTexts(`btn-${Date.now()}.myshopify.com`, { admin, config: { seasonalCtaLabel: "Fall Favorites" } });
+      assert.ok(texts.has("find shoes for my bunions"), "the theme's own button");
+      assert.ok(texts.has("fall favorites"), "the seasonal button");
+      assert.ok(texts.has("help me check the status of my order."), "the defaults");
+      assert.deepEqual(asked[1], { id: "gid://shopify/OnlineStoreTheme/9" });
+      const broken = { graphql: async () => { throw new Error("Access denied for themes"); } };
+      const fallback = await C.storeButtonTexts(`btn2-${Date.now()}.myshopify.com`, { admin: broken });
+      assert.ok(fallback.has("help me find the right aetrex shoe size and fit."));
     });
     await test("Delete all starts over, and a read in progress writes nothing after it", async () => {
       await rec("z1", "wide again", { minutesAgo: 2 });

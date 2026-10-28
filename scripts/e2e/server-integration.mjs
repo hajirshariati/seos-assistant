@@ -439,6 +439,13 @@ await test("test recordings: off by default; testers only; everyone; failures ke
   await chat("sandals for plantar fasciitis", { ip: "198.51.100.45", extra: { session_id: "sess-c" } }); await settle();
   r = await rows();
   assert.equal(r.at(-1).sessionId, "sess-c", "everyone: an ordinary shopper is recorded");
+  assert.equal(r.at(-1).typed, null, "an older widget doesn't say how it was sent");
+  await chat("Help me find my orthotic FIT.", { ip: "198.51.100.46", extra: { session_id: "sess-c", typed: false } }); await settle();
+  assert.equal((await rows()).at(-1).typed, false, "sent by a button");
+  await chat("do you have wide sandals", { ip: "198.51.100.47", extra: { session_id: "sess-c", typed: true } }); await settle();
+  assert.equal((await rows()).at(-1).typed, true, "typed by the shopper");
+  await chat("sandals", { ip: "198.51.100.48", extra: { session_id: "sess-c", typed: "yes" } }); await settle();
+  assert.equal((await rows()).at(-1).typed, null, "anything but true/false is unknown");
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: null, recordChatsScope: "testers" } });
   await configCacheExpiry();
 });

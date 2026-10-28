@@ -4,13 +4,14 @@ import { redactContactDetails } from "./ChatFeedback.server";
 
 // Saves one recorded turn (only called while recording applies — see
 // app/lib/chat-recording.js). Contact details are removed; lengths capped.
-export async function saveRecording({ shop, sessionId, tester, page, message, reply, products = [], extras = "", ok = true }) {
+export async function saveRecording({ shop, sessionId, tester, page, typed = null, message, reply, products = [], extras = "", ok = true }) {
   return prisma.chatRecording.create({
     data: {
       shop,
       sessionId: String(sessionId || "").slice(0, 80) || "unknown",
       tester: cleanTester(tester),
       page: String(page || "").replace(/[?#].*$/, "").slice(0, 200),
+      typed: typeof typed === "boolean" ? typed : null,
       message: redactContactDetails(String(message || "").slice(0, 2000)),
       reply: redactContactDetails(String(reply || "").slice(0, 6000)),
       products: (products || []).slice(0, 12).map((p) => String(p || "").slice(0, 200)),

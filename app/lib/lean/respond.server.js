@@ -103,7 +103,7 @@ export function leanChatResponse({
   const shown = [];
   const keep = ({ reply, products = [], ok = true }) => {
     if (!record) return;
-    saveRecording({ shop, sessionId: record.sessionId, tester: record.tester, page: record.page, message: latestUserMessage, reply, products, extras: describeExtras(shown), ok })
+    saveRecording({ shop, sessionId: record.sessionId, tester: record.tester, page: record.page, typed: record.typed, message: latestUserMessage, reply, products, extras: describeExtras(shown), ok })
       .catch((err) => console.error("[recordings] save failed:", err?.message || err));
   };
   // When the shopper leaves (closes the tab, the widget gives up), the turn

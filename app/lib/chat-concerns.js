@@ -38,20 +38,121 @@ const ms = (d) => {
   return Number.isFinite(t) ? t : 0;
 };
 
-// Chats from shoppers: a tester's name on any turn (the tester link, or
-// "Test chat" for the app's own) leaves the chat out, and so do turns saved
-// without a chat id (they can't be told apart).
-export function shopperSessions(sessions = []) {
-  return sessions.filter((s) => s.sessionId && s.sessionId !== "unknown" && !s.tester && !(s.turns || []).some((t) => t.tester) && (s.turns || []).some((t) => squash(t.message)));
+// ── What the shopper typed ──
+// Only words shoppers type (or speak) are read — never the words a button
+// sends for them. The widget marks each message (typed true/false); turns
+// recorded before it did (typed null) count as a button's when they're word
+// for word one of: the widget's own button lines, the store's welcome
+// buttons (the theme's Start here and Popular buttons, their defaults, the
+// seasonal button), a quick reply the assistant had just offered, or a True
+// Fit shoe tile it had just shown.
+
+// What the widget's own buttons send (hajirai-chat-widget.js), compared
+// after normalizeMessage.
+export const WIDGET_BUTTON_MESSAGES = [
+  /^help me find my orthotic fit\.?$/,
+  /^i'd like to retake my orthotic fit\.?$/,
+  /^show me orthotics in my .{1,80}\.$/,
+  /^help me find my shoe size with true fit\.?$/,
+  /^true fit recommends size .{1,20} for me(?: in the .{1,160})?\.$/,
+];
+
+// The theme block's Start here / Popular button messages by default, now and
+// before (a store that never changed them still sends these).
+export const DEFAULT_BUTTON_MESSAGES = [
+  "Help me choose Aetrex shoes based on my style, comfort needs, and activities.",
+  "Help me choose the right Aetrex orthotics based on my arch support needs, footwear, and daily activities.",
+  "Help me find the right Aetrex shoe size and fit.",
+  "Help me check the status of my order.",
+  "Show me the most popular Aetrex products.",
+  "Show me the latest Aetrex shoes and orthotics.",
+  "Show me Aetrex products currently on sale.",
+  "Help me understand Aetrex's return and exchange policy.",
+  "Help me find a product",
+  "I need help choosing the right size",
+  "I want to check the status of my order",
+  "Show me current sales and promotions",
+  "What are your best-selling products?",
+  "Show me what's new",
+  "What's currently on sale?",
+  "What is your return and refund policy?",
+];
+
+export function normalizeMessage(text) {
+  return squash(text).toLowerCase().replace(/[’‘`]/g, "'").replace(/[“”]/g, '"');
 }
 
-// Chats not read yet, or that carried on after they were read.
-export function pendingSessions(sessions = [], links = []) {
+// The theme's settings (config/settings_data.json, parsed): the Start here
+// and Popular button messages of the chat's app embed.
+export function themeButtonTexts(settingsData) {
+  const out = [];
+  const cur = settingsData?.current;
+  const current = typeof cur === "string" ? settingsData?.presets?.[cur] : cur;
+  for (const block of Object.values(current?.blocks || {})) {
+    if (!/\/blocks\/hajirai_chat\//.test(String(block?.type || ""))) continue;
+    for (const [k, v] of Object.entries(block.settings || {})) {
+      if (/^(?:cta|qp)\d+_message$/.test(k) && typeof v === "string" && v.trim()) out.push(v.trim());
+    }
+  }
+  return out;
+}
+
+// What a recorded turn showed with its reply that the shopper could tap: the
+// quick replies ("suggested: a | b") and the True Fit shoe tiles ("True Fit
+// — pick a shoe: Sneakers, Sandals") — see describeExtras.
+export function offeredReplies(extras) {
+  const out = new Set();
+  for (const part of String(extras || "").split(" · ")) {
+    const q = part.match(/^suggested: (.*)$/);
+    if (q) for (const x of q[1].split(" | ")) if (x.trim()) out.add(normalizeMessage(x));
+    const t = part.match(/^True Fit — pick a shoe: (.*)$/);
+    if (t) for (const x of t[1].split(", ")) if (x.trim()) out.add(`tile:${normalizeMessage(x)}`);
+  }
+  return out;
+}
+
+// buttons: the store's button messages, normalized (a Set).
+export function isButtonMessage(turn, { buttons = new Set(), offered = new Set() } = {}) {
+  if (turn?.typed === true) return false;
+  if (turn?.typed === false) return true;
+  const m = normalizeMessage(turn?.message);
+  if (!m) return false;
+  if (buttons.has(m) || offered.has(m)) return true;
+  if (WIDGET_BUTTON_MESSAGES.some((re) => re.test(m))) return true;
+  // A True Fit tile sends "Show me <women's> <tile>".
+  if (m.startsWith("show me ")) {
+    const rest = m.slice(8);
+    const afterLine = rest.replace(/^\S+ /, "");
+    if (offered.has(`tile:${rest}`) || offered.has(`tile:${afterLine}`)) return true;
+  }
+  return false;
+}
+
+export function buttonSet(texts = []) {
+  return new Set([...DEFAULT_BUTTON_MESSAGES, ...texts].map(normalizeMessage).filter(Boolean));
+}
+
+// Chats from shoppers, with only the turns they typed: a tester's name on
+// any turn (the tester link, or "Test chat" for the app's own) leaves the
+// chat out, and so do turns saved without a chat id (they can't be told
+// apart) and chats with nothing typed. lastAt is the last typed turn, so a
+// chat that only carries on with button taps isn't read again.
+export function shopperSessions(sessions = [], buttons = buttonSet()) {
+  const out = [];
+  for (const s of sessions) {
+    const all = s.turns || [];
+    if (!s.sessionId || s.sessionId === "unknown" || s.tester || all.some((t) => t.tester)) continue;
+    const turns = all.filter((t, i) => squash(t.message) && !isButtonMessage(t, { buttons, offered: offeredReplies(all[i - 1]?.extras) }));
+    if (!turns.length) continue;
+    out.push({ ...s, turns, lastAt: turns[turns.length - 1].createdAt });
+  }
+  return out;
+}
+
+// Chats (from shopperSessions) not read yet, or with new typed turns since.
+export function pendingSessions(chats = [], links = []) {
   const read = new Map(links.map((l) => [l.sessionId, ms(l.lastTurnAt)]));
-  return shopperSessions(sessions).filter((s) => {
-    if (!read.has(s.sessionId)) return true;
-    return ms(s.lastAt || s.turns[s.turns.length - 1]?.createdAt) > read.get(s.sessionId);
-  });
+  return chats.filter((s) => !read.has(s.sessionId) || ms(s.lastAt) > read.get(s.sessionId));
 }
 
 // The shopper's messages in a chat, in order, each with the turn it came from.

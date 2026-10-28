@@ -89,8 +89,8 @@ export default function ShopperConcerns({ concerns, activeId, onView, onRefresh,
   const { read, top, more, pending, run, hasKey } = concerns;
   const running = Boolean(run?.running);
   const head = read > 0
-    ? `All time: ${plural(read, "shopper chat", "shopper chats")} read since ${concerns.sinceLabel}. Everyday browsing ("show me shoes") and testers' chats aren't counted.`
-    : "The issues, needs and questions shoppers raise most in recorded chats. Everyday browsing and testers' chats aren't counted.";
+    ? `All time: ${plural(read, "shopper chat", "shopper chats")} read since ${concerns.sinceLabel}. Only what shoppers type counts — not button taps, everyday browsing ("show me shoes") or testers' chats.`
+    : "The issues, needs and questions shoppers raise most in recorded chats — only what they type, not button taps, everyday browsing or testers' chats.";
 
   let body;
   if (!hasKey) {
