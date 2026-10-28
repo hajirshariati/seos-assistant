@@ -78,6 +78,12 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     applyHostButtons(hb);
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
+  if(d.chatTexts&&typeof d.chatTexts==='object'){
+    var txtNow=function(){return [NAME,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
+    try{localStorage.setItem(TXT_KEY,JSON.stringify(d.chatTexts))}catch(e){}
+    setTexts(d.chatTexts);
+    if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
+  }
   if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||''),text:String(d.appPromo.text||'').slice(0,60),button:String(d.appPromo.button||'').slice(0,16)};
   if(d.seasonalCta&&typeof d.seasonalCta==='object'){
     var seaWas=[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|');
@@ -141,6 +147,19 @@ var QP2L=C.quickPick2Label||'';var QP2M=C.quickPick2Message||'';
 var QP3L=C.quickPick3Label||'';var QP3M=C.quickPick3Message||'';
 var QP4L=C.quickPick4Label||'';var QP4M=C.quickPick4Message||'';
 var SHOWBAN=C.showBanner!==false;
+/* Settings → Look & feel → Chat text: the store's own words win over the
+   theme editor's; a blank one keeps the theme editor's (or the default).
+   Remembered, so the next page shows them from the start. */
+var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular';
+var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,launcher:LPLACE,input:IPLACE};
+function setTexts(t){
+  t=t&&typeof t==='object'?t:{};
+  var v=function(k,max){var x=t[k];return typeof x==='string'&&x.trim()?x.replace(/\s+/g,' ').trim().slice(0,max):''};
+  NAME=v('name',60)||TXT_BASE.name;GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;
+  LPLACE=v('launcher',60)||TXT_BASE.launcher;IPLACE=v('input',60)||TXT_BASE.input;
+  START_LBL=v('startHeading',30)||'Start here';POP_LBL=v('popularHeading',30)||'Popular';
+}
+try{setTexts(JSON.parse(localStorage.getItem(TXT_KEY)||'null'))}catch(e){}
 var DISCL=C.disclaimerText||'';
 var PRIVURL=C.privacyUrl||'/pages/privacy-policy';
 var LWIDTH=C.launcherWidth||'500';
@@ -1208,6 +1227,18 @@ function welcomeCtas(){
 function welcomeCtasHtml(ctas){
   var h='';for(var i=0;i<ctas.length;i++)h+=ctas[i].sea?seaTileHtml():ctas[i].fb?fbTileHtml():ctaTileHtml(ctas[i]);return h;
 }
+function welcomeGreetingText(){
+  return (CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())?GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME):GREET;
+}
+/* Settings' chat text arrived after the chat was drawn: put it in place. */
+function refreshTexts(inWas){
+  var hn=$('.ai-chat-header__name',panel);if(hn)hn.textContent=NAME;
+  var lt=$('.ai-chat-launcher__text',launcher);if(lt){lt.textContent=LPLACE;lt.setAttribute('aria-label',LPLACE+' — open the shopping assistant')}
+  if(inputEl&&inputEl.getAttribute('placeholder')===inWas)inputEl.setAttribute('placeholder',IPLACE);
+  var wt=$('.ai-chat-welcome__title',panel);if(wt)wt.textContent=welcomeGreetingText()||('Hi, I\'m '+NAME);
+  var ls=$('[data-wl="start"]',panel);if(ls)ls.textContent=START_LBL;
+  var lp=$('[data-wl="popular"]',panel);if(lp)lp.textContent=POP_LBL;
+}
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
   var box=$('.ai-chat-welcome__ctas',panel);
@@ -1219,9 +1250,7 @@ var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+'">';
 if(SHOWBAN&&BANNER){
   h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
 }
-var welcomeGreeting=(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())
-  ? GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME)
-  : GREET;
+var welcomeGreeting=welcomeGreetingText();
 /* The assistant's face greets the shopper here; the header shows it only
    once the chat starts (it flies up there — see flyAvatarToHeader). */
 var welcomeAv=safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -1230,7 +1259,7 @@ h+='<div class="ai-chat-welcome__intro"><div class="ai-chat-welcome__avatar-wrap
 h+='<div class="ai-chat-welcome__helpers" hidden></div>';
 var ctas=welcomeCtas();
 if(ctas.length){
-  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Start here</div><div class="ai-chat-welcome__ctas">'+welcomeCtasHtml(ctas);
+  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label" data-wl="start">'+esc(START_LBL)+'</div><div class="ai-chat-welcome__ctas">'+welcomeCtasHtml(ctas);
   h+='</div></div>';
 }
 var qps=[];
@@ -1239,7 +1268,7 @@ if(QP2L&&QP2M)qps.push({l:QP2L,m:QP2M});
 if(QP3L&&QP3M)qps.push({l:QP3L,m:QP3M});
 if(QP4L&&QP4M)qps.push({l:QP4L,m:QP4M});
 if(qps.length){
-  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label">Popular</div><div class="ai-chat-welcome__quickpicks">';
+  h+='<div class="ai-chat-welcome__section"><div class="ai-chat-welcome__label" data-wl="popular">'+esc(POP_LBL)+'</div><div class="ai-chat-welcome__quickpicks">';
   for(var j=0;j<qps.length;j++)h+=qpHtml(qps[j]);
   h+='</div></div>';
 }
@@ -2677,7 +2706,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-27 truefit-steps'}catch(e){}
+try{window.__hajiraiWidget='2026-10-28 chat-text-settings'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */

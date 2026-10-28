@@ -1,6 +1,7 @@
 import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
 import { appPromoConfig } from "../lib/app-promo.js";
+import { parseChatTexts } from "../lib/chat-texts.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appearDelayConfig, startTheme, internationalConfig } from "../lib/appear-delay.js";
 import { authenticate } from "../shopify.server";
@@ -88,6 +89,9 @@ export const loader = async ({ request }) => {
         seasonalCta: seasonalCtaConfig(config),
         // Settings → Your app: its own message, once per visit.
         appPromo: appPromoConfig(config),
+        // Settings → Look & feel → Chat text (only the ones set; the rest
+        // stay the theme editor's).
+        chatTexts: parseChatTexts(config.chatTexts),
         // Settings → Showing the chat: wait this long before it appears.
         appearDelay: appearDelayConfig(config),
         // The look the chat starts in; a shopper's own pick wins.

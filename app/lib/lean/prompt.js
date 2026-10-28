@@ -1,6 +1,8 @@
 // Lean engine — system prompt. Describes HOW a great store associate works;
 // it does not pre-classify questions or encode per-trace patches. Pure.
 
+import { parseChatTexts } from "../chat-texts.js";
+
 function vocabLine(label, rows, max = 40) {
   if (!rows || rows.length === 0) return "";
   return `- ${label}: ${rows.slice(0, max).map((r) => `${r.value} (${r.count})`).join(", ")}`;
@@ -19,7 +21,8 @@ export function storeWebsite(config = {}) {
 }
 
 export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", primaryGender = "women" } = {}) {
-  const name = config.assistantName || "AI Shopping Assistant";
+  // The name set in Settings → Chat text, the one shoppers see in the chat.
+  const name = parseChatTexts(config.chatTexts).name || config.assistantName || "AI Shopping Assistant";
   const support = config.supportUrl
     ? `${config.supportLabel || "customer service"} (${config.supportUrl})`
     : "customer service";

@@ -2,6 +2,7 @@ import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageU
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
 import { getShopName } from "../lib/shop-name.server.js";
+import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -128,6 +129,7 @@ export const loader = async ({ request }) => {
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
     startTheme: startTheme(config.startTheme),
+    ...chatTextsForForm(config.chatTexts),
     hideInternational: config.hideInternational !== false,
     homeCountries: parseCountries(config.homeCountries).join(", "),
     promoPageUrl: config.promoPageUrl || "",
@@ -263,6 +265,11 @@ export const action = async ({ request }) => {
     } catch { /* ignore invalid JSON */ }
   }
   bool("hideLiveChatButton");
+
+  // Chat text: saved together, only when the form sent them.
+  if (CHAT_TEXT_FIELDS.some(([, field]) => formData.get(field) !== null)) {
+    data.chatTexts = chatTextsFromForm((field) => formData.get(field));
+  }
 
   // Customer care
   text("supportUrl");
@@ -481,6 +488,7 @@ const FIELDS = {
   anthropicApiKey: ["assistant", "secret"], anthropicModel: ["assistant"], showFollowUps: ["assistant", "bool"],
   showFeedback: ["assistant", "bool"], chatRatingOn: ["assistant", "bool"], chatRatingAfter: ["assistant"],
   startTheme: ["look"], welcomeIntroOn: ["look", "bool"], voiceInput: ["look", "bool"],
+  ...Object.fromEntries(CHAT_TEXT_FIELDS.map(([, field]) => [field, ["look"]])),
   appearDelayOn: ["visibility", "bool"], appearDelaySec: ["visibility"], hideInternational: ["visibility", "bool"],
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
@@ -835,6 +843,9 @@ function AssistantSection({ d, values, set }) {
   );
 }
 
+const TEXT_DEFAULT = Object.fromEntries(CHAT_TEXT_FIELDS.map(([key, , , def]) => [key, def]));
+const TEXT_MAX = Object.fromEntries(CHAT_TEXT_FIELDS.map(([key, , max]) => [key, max]));
+
 function LookSection({ d, values, set }) {
   return (
     <BlockStack gap="400">
@@ -847,6 +858,25 @@ function LookSection({ d, values, set }) {
         />
         <Row title="Opening animation" help="The panel springs up and the welcome rises in. Skipped for shoppers who prefer reduced motion." toggle checked={values.welcomeIntroOn} onChange={set("welcomeIntroOn")} />
         <Row title="Talk button" help="A mic in the message box: shoppers speak and their words appear as they talk. Shown where the browser supports it." toggle checked={values.voiceInput} onChange={set("voiceInput")} />
+      </Group>
+      <Group title="Chat text">
+        <Row stack help="The words shoppers see in the chat. Left blank, the chat uses what's set in the theme editor (or the default shown).">
+          <BlockStack gap="300">
+            <div className="set-grid">
+              <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={TEXT_DEFAULT.name} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat; the assistant goes by it too." />
+              <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={TEXT_DEFAULT.launcher} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
+            </div>
+            <div className="set-grid">
+              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={TEXT_DEFAULT.greeting} maxLength={TEXT_MAX.greeting} autoComplete="off" />
+              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={TEXT_DEFAULT.greetingLoggedIn} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="{name} becomes the shopper's first name." />
+            </div>
+            <div className="set-grid set-grid--3">
+              <TextField label="“Start here” heading" value={values.textStartHeading} onChange={set("textStartHeading")} placeholder={TEXT_DEFAULT.startHeading} maxLength={TEXT_MAX.startHeading} autoComplete="off" />
+              <TextField label="“Popular” heading" value={values.textPopularHeading} onChange={set("textPopularHeading")} placeholder={TEXT_DEFAULT.popularHeading} maxLength={TEXT_MAX.popularHeading} autoComplete="off" />
+              <TextField label="Message box" value={values.textInput} onChange={set("textInput")} placeholder={TEXT_DEFAULT.input} maxLength={TEXT_MAX.input} autoComplete="off" />
+            </div>
+          </BlockStack>
+        </Row>
       </Group>
       <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} />
     </BlockStack>

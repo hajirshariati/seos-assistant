@@ -640,6 +640,55 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     check("app message: off in Settings → never shown", (await page.$$(".ai-chat-app, .ai-appn")).length === 0);
   });
 }
+// Settings → Chat text: the store's words replace the theme editor's — the
+// name, the greeting, the Start here / Popular headings, the chat button and
+// the message box — live, and from the first frame on the next page; with
+// none set, the theme editor's stay.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const read = () => page.evaluate(() => ({
+    name: document.querySelector(".ai-chat-header__name")?.textContent,
+    greeting: document.querySelector(".ai-chat-welcome__title")?.textContent,
+    start: document.querySelector('[data-wl="start"]')?.textContent,
+    popular: document.querySelector('[data-wl="popular"]')?.textContent,
+    launcher: document.querySelector(".ai-chat-launcher__text")?.textContent,
+    launcherLabel: document.querySelector(".ai-chat-launcher__text")?.getAttribute("aria-label"),
+    input: document.querySelector(".ai-chat-input")?.getAttribute("placeholder"),
+  }));
+  await page.goto("http://localhost:4789/full?texts=0");
+  await page.waitForTimeout(700);
+  const theme = await read();
+  check("chat text: none set in Settings → the theme editor's words and the defaults", theme.name === "AI Shopping Assistant" && theme.start === "Start here" && theme.popular === "Popular" && theme.greeting === "Hi! I'm your personal shopping assistant." && theme.input === "How can I help you today?", JSON.stringify(theme));
+  await page.goto("http://localhost:4789/full?texts=1");
+  await page.waitForTimeout(900);
+  const live = await read();
+  const want = { name: "Aetrex Shopping Assistant", greeting: "Hello there!", start: "Get started", popular: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" };
+  check("chat text: set in Settings → put in place as soon as the settings arrive", Object.entries(want).every(([k, v]) => live[k] === v) && /^Ask Aetrex anything — open/.test(live.launcherLabel), JSON.stringify(live));
+  // The next page: the store's words from the first frame (remembered), before the settings arrive.
+  await page.route("**/apps/hajirai/widget-config**", async (r) => { await new Promise((res) => setTimeout(res, 3000)); await r.fallback(); });
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(400);
+  const first = await read();
+  check("chat text: the next page shows them from the start", Object.entries(want).every(([k, v]) => first[k] === v), JSON.stringify(first));
+  await page.unroute("**/apps/hajirai/widget-config**");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input", "show me 2");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1200);
+  check("chat text: the chat works as before", (await page.$$(".ai-chat-product-card")).length >= 1);
+  // Cleared in Settings: back to the theme editor's (a fresh chat, so the welcome shows).
+  await page.evaluate(() => { for (const k of Object.keys(localStorage)) if (/^hajirai_chat_(history|at)$/.test(k)) localStorage.removeItem(k); });
+  await page.goto("http://localhost:4789/full?texts=0");
+  await page.waitForTimeout(900);
+  const cleared = await read();
+  check("chat text: cleared in Settings → back to the theme editor's", cleared.start === "Start here" && cleared.popular === "Popular" && cleared.name === "AI Shopping Assistant", JSON.stringify(cleared));
+  check("chat text: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The two fit tools: featured on the welcome screen, and each only on the
 // products it belongs to — True Fit on shoes, FITFinder on orthotics.
 {

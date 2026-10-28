@@ -192,6 +192,10 @@ model ShopConfig {
   // Its message and button ("" → "Love {store}? You'll love our app" / "Get it").
   appPromoText         String   @default("")
   appPromoButton       String   @default("")
+  // The chat's own words (Settings → Look & feel → Chat text): its name,
+  // welcome greetings, the Start here / Popular headings, the chat button and
+  // message box text. JSON; a blank one falls back to the theme editor's.
+  chatTexts            String   @default("{}")
   referralPageUrl     String   @default("")
   // A feedback survey (Typeform ID or link) as Start here button 4 in the
   // chat, opening inside it; and hiding the separate live chat button

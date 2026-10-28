@@ -327,6 +327,12 @@ await test("order status without signing in: signed requests only, JSON only, ma
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
   const cfg = await (await fetch(signed("/widget-config"))).json();
   assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "", text: "", button: "" }, "on by default, links from the footer, the default text");
+  assert.deepEqual(cfg.chatTexts, {}, "chat text: none set → the theme editor's");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { chatTexts: JSON.stringify({ startHeading: "Get started", popularHeading: "Trending", name: "" }) } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).chatTexts, { startHeading: "Get started", popularHeading: "Trending" }, "chat text from Settings, blanks left out");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { chatTexts: "{}" } });
+  await configCacheExpiry();
   assert.equal((await fetch(signed("/app-qr", { p: "ios" }))).status, 404, "no link set → no code");
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appIosUrl: "https://apps.apple.com/us/app/aetrex/id6789256421" } });
   await configCacheExpiry();

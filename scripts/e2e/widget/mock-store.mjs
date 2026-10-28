@@ -324,6 +324,8 @@ export function start(port) {
           return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
         }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
+          // Settings → Chat text: only on ?texts= pages (?texts=0: none set, as for a store that hasn't).
+          ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : {}),
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
