@@ -1618,18 +1618,94 @@ await test("the prompt asks for a sales associate's voice: say it plainly, offer
   assert.match(p, /Never imply something is available when it isn't/);
   assert.doesNotMatch(p, /don't open with "Unfortunately"/);
 });
-await test("\"Where can I buy these?\" — right here, online; the store locator is for visiting, never for buying", async () => {
+await test("\"Where can I buy these?\" — right here, online; never sent to a store to buy", async () => {
   const p = buildLeanSystemPrompt({ shop: "x" });
-  assert.match(p, /"Where can I buy these\?" \/ "Do you have a store\?": they can buy right here/);
-  assert.match(p, /Don't send them to a store or the store locator to buy/);
+  assert.match(p, /"Where can I buy these\?": they can buy right here/);
+  assert.match(p, /don't send them to a store or the store locator to buy/);
+  assert.match(p, /Never say a store has a product in stock/);
+});
+await test("asked about stores: the locator, and warmly, the full range online — with products", async () => {
+  const p = buildLeanSystemPrompt({ shop: "x", config: { storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" } });
+  assert.match(p, /Stores, retailers, buying or trying on in person/);
+  assert.match(p, /each store picks its own selection, so not every style, color, size or width is there, while the full range is online at aetrex\.com/);
+  assert.match(p, /Then show a few products for what they're shopping for/);
+  assert.match(buildLeanSystemPrompt({ shop: "x" }), /the full range is online and they can order right here/, "no website set: just online");
   const { buildLeanStoreExtras } = await import("../app/lib/lean/store-tools.server.js");
-  const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config: { storeLocatorMapId: "15ecd30bd8acd4" }, messages: [{ role: "user", content: "where can I buy these?" }], latestUserMessage: "where can I buy these?" });
+  const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" }, messages: [{ role: "user", content: "where can I buy these?" }], latestUserMessage: "where can I buy these?" });
   const loc = ex.tools.find((t) => t.definition.name === "show_store_locator");
   assert.ok(loc, "the locator tool is offered when the store has one");
-  assert.match(loc.definition.description, /Not the answer to "where can I buy these\?"/);
-  assert.match(loc.definition.description, /never promise a product is in stock at one/);
-  assert.match(loc.definition.description, /have their feet scanned/);
-  assert.doesNotMatch(loc.definition.description, /whenever the customer asks where to buy/);
+  assert.match(loc.definition.description, /Always pair it with the online option/);
+  assert.match(loc.definition.description, /Not the answer to "where can I buy these\?" when they haven't asked about a store/);
+  assert.match(loc.definition.description, /Never promise a product is in stock at a location/);
+  assert.match(loc.definition.description, /having their feet scanned/);
+  const ran = await loc.run({});
+  assert.match(ran.note, /the full range is online at aetrex\.com — and they can order right here in the chat/);
+  assert.match(ran.note, /show a few products for what they're shopping for/);
+});
+await test("the store's website, from a link set in Settings", async () => {
+  const { storeWebsite } = await import("../app/lib/lean/prompt.js");
+  assert.equal(storeWebsite({ storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" }), "aetrex.com");
+  assert.equal(storeWebsite({ storeLocatorUrl: "https://f031fc-3.myshopify.com/pages/x", supportUrl: "https://shop.example.co.uk/help" }), "shop.example.co.uk");
+  assert.equal(storeWebsite({}), "");
+  assert.equal(storeWebsite({ supportUrl: "mailto:help@x.com" }), "");
+});
+const { shoppingFor } = await import("../app/lib/lean/engine.js");
+await test("what a store question says they're shopping for, in the catalog's own words", () => {
+  const vocab = { categories: [{ value: "sneakers" }, { value: "sandals" }, { value: "orthotics" }], productTypes: [{ value: "Footwear" }] };
+  assert.equal(shoppingFor("where can i purchase your sneakers in store?", vocab), "sneakers");
+  assert.equal(shoppingFor("any store selling your sandal near Austin", vocab), "sandals");
+  assert.equal(shoppingFor("is there a store near me?", vocab), "");
+  assert.equal(shoppingFor("where are your stores", vocab), "");
+});
+const locatorTool = { definition: { name: "show_store_locator", description: "map", input_schema: { type: "object", properties: {} } }, run: async () => ({ ok: true, note: "A button appears.", _events: [{ type: "map_cta", mapId: "m1", label: "Find a store near you", url: "" }] }) };
+await test("\"Can I buy your sandals in a store?\" — the locator alone goes back once; it comes with sandals to order online", async () => {
+  const msg = "where can i purchase your sandals in store?";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "show_store_locator", {})] },
+    { stop_reason: "end_turn", content: [txt("You can find a store near you with the map below.")] },
+    { stop_reason: "tool_use", content: [tu("t2", "search_products", { query: "sandal", gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("Find a store near you on the map below. Each store picks its own selection, so for every style, color and size the full range is online — and you can order right here, like the Savannah.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, extraTools: [locatorTool], log: (l) => logs.push(l) });
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*locator_without_products/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /shopping for sandals/);
+  assert.deepEqual(r.cards.map((c) => c.title), ["Savannah Adjustable Quarter Strap Sandal - Red"]);
+  assert.ok(r.events.some((e) => e.type === "map_cta"), "the locator stays");
+});
+await test("\"Is there a store near me?\" — the locator, no rewrite (it asks what they're shopping for)", async () => {
+  const msg = "is there a store near me?";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "show_store_locator", {})] },
+    { stop_reason: "end_turn", content: [txt("Find a store near you on the map below — and the full range is online, ready to order right here. What are you shopping for? <<Sneakers>><<Sandals>><<Orthotics>>")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, extraTools: [locatorTool], log: quiet });
+  assert.equal(r.retried, false);
+  assert.deepEqual(r.issues, []);
+});
+await test("customer service is the last step: tools first; a person when asked, upset, or truly stuck", () => {
+  const p = buildLeanSystemPrompt({ shop: "x", config: { supportUrl: "https://help.example.com" } });
+  assert.match(p, /Customer service is the last step, not the first: solve it yourself with your tools and real facts/);
+  assert.match(p, /Call contact_support when they ask for a person, are upset or frustrated, or need something you truly can't do or find after checking/);
+  assert.match(p, /with an upset customer, a short apology first and no sales pitch/);
+  assert.match(p, /If it misses, try once more with other words .* If still nothing answers it, say plainly you don't have that detail — never guess — share what you do know that helps, and offer customer service \(https:\/\/help\.example\.com\)/);
+  assert.doesNotMatch(p, /something you can't answer\), call contact_support/);
+  const cs = buildLeanTools(catalog.vocab).find((t) => t.name === "contact_support");
+  assert.match(cs.description, /the last step, after your tools/);
+  assert.match(cs.description, /Tracking an order and starting a return are done with the order card/);
+  assert.doesNotMatch(cs.description, /returns\/exchanges to start/);
+});
+await test("store info not found: search once more with other words, never guess, then customer service", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_store_info", { query: "gift wrap" })] },
+    { stop_reason: "end_turn", content: [txt("I don't have details on gift wrapping — our customer service team can tell you.")] },
+  ]);
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "do you gift wrap?" }], latestUserMessage: "do you gift wrap?", callModel: s.callModel, log: quiet });
+  const result = JSON.stringify(s.requests[1].messages.at(-1));
+  assert.match(result, /search once more/);
+  assert.match(result, /don't guess/);
 });
 await test("a reply that opens \"Unfortunately…\" is kept as written — no rewrite over a word", async () => {
   const s = scripted([

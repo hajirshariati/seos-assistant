@@ -164,6 +164,18 @@ export function offersAlreadyListed(messages = []) {
     return t.split("\n").filter((l) => /^\s*[-•*]\s+\*\*/.test(l) && OFFER_WORDS.test(l)).length >= 2;
   });
 }
+// What the customer's message says they're shopping for, in the catalog's
+// own words ("sneakers", "orthotics") — "" when it names none.
+export function shoppingFor(message, vocab = {}) {
+  const text = ` ${String(message || "").toLowerCase()} `;
+  const words = [...(vocab.categories || []), ...(vocab.productTypes || [])].map((r) => String(r?.value || "").toLowerCase().trim()).filter((w) => w.length >= 4);
+  for (const w of [...new Set(words)].sort((a, b) => b.length - a.length)) {
+    const stem = w.replace(/(es|s)$/, "");
+    if (new RegExp(`[^a-z]${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?[^a-z]`).test(text)) return w;
+  }
+  return "";
+}
+
 // The catalog's product line names, worked out once per catalog.
 const lineNameCache = new WeakMap();
 function lineNamesOf(catalog) {
@@ -604,7 +616,7 @@ export async function runLeanTurn({
       if (r?.text) knowledgeText += `\n${r.text}`;
       topic(r?.found ? "store_question" : "unanswered", String(input.query || "").toLowerCase());
       log(`[lean] store-info found=${Boolean(r?.found)}`);
-      return r?.found ? { found: true, info: r.text } : { found: false, note: "No store info on this. Say you're not sure and point to customer service." };
+      return r?.found ? { found: true, info: r.text } : { found: false, note: "No store info for these words. If it could be worded differently (another word, the policy's name), search once more. If there's still nothing, say plainly you don't have that detail — don't guess — share what you do know that helps, and offer customer service." };
     }
     if (name === "contact_support") {
       supportRequested = String(input.reason || "").slice(0, 200) || "customer needs help";
@@ -745,6 +757,15 @@ export async function runLeanTurn({
       issues.push({
         code: "missing_offers",
         detail: "The customer asked about sales and promotions, and offers are running (ACTIVE PROMOTIONS / the store's promotions page), but your reply lists none. Start with every offer that's still running — check each end date against right now — one short line each (a bold name and a few words, no fine print). Then the marked-down products.",
+      });
+    }
+    // Asked about stores for something the store sells, got the locator but
+    // no products: the full range is online — show some they can order now.
+    const shopping = events.some((e) => e?.type === "map_cta") && shown.length === 0 ? shoppingFor(latestUserMessage, catalog?.vocab) : "";
+    if (shopping) {
+      issues.push({
+        code: "locator_without_products",
+        detail: `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and say warmly that each store picks its own selection while the full range — every style, color, size and width — is online, ready to order right here.`,
       });
     }
     // Free shipping said of a product the store's offer doesn't name.

@@ -23,6 +23,7 @@ import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
 import { MAX_RULES_CHARS } from "../knowledge-check.js";
 import { whichOrthoticConfig, storeLocatorConfig } from "../feedback-survey.js";
+import { storeWebsite } from "./prompt.js";
 
 function parseJson(raw, fallback) {
   if (raw && typeof raw === "object") return raw;
@@ -216,16 +217,18 @@ export async function buildLeanStoreExtras({
   // The store locator (Storepoint), opened in the chat from a button.
   const locator = storeLocatorConfig(config);
   if (locator) {
+    const site = storeWebsite(config);
     wrap({
       name: "show_store_locator",
       description:
         "Show a button that opens the store locator map (stores and retailers, searchable by location) right inside the chat. " +
-        "Use it when the customer wants to visit a location in person — to get fitted or have their feet scanned, to try styles on — or asks for stores, retailers or dealers near them, or for the store locator. " +
-        "Not the answer to \"where can I buy these?\": they can buy right here, online — show the product with its Add to cart — and locations may not carry every style, so never promise a product is in stock at one. Add the locator only if they want to visit in person.",
+        "Use it when the customer asks about stores, retailers or dealers, buying or trying on in person, getting fitted or having their feet scanned, or for the store locator. " +
+        "Always pair it with the online option: each store picks its own selection, so not every style, color, size or width is there — the full range is online, and they can order right here in the chat; show a few products for what they're shopping for. " +
+        "Not the answer to \"where can I buy these?\" when they haven't asked about a store: they can buy right here, online — show the product with its Add to cart. Never promise a product is in stock at a location.",
       input_schema: { type: "object", properties: {} },
     }, async () => ({
       ok: true,
-      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. Say in one short sentence that they can search their area there; don't add the store locator link.`,
+      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly: a short sentence that they can find a store near them there; then that each store picks its own selection, so for every style, color, size and width the full range is ${site ? `online at ${site}` : "online"} — and they can order right here in the chat. Then show a few products for what they're shopping for (search, then show_products), or ask what with tap choices. Don't add the store locator link, and never say a store has a product in stock.`,
       _events: [{ type: "map_cta", mapId: locator.mapId, label: locator.label, url: locator.url }],
     }));
   }

@@ -110,7 +110,7 @@ export function buildLeanTools(vocab = {}, { similar = false, collection = null 
     {
       name: "contact_support",
       description:
-        "Show the customer a button to reach the store's customer service team. Use when they need a person: order problems you can't solve, returns/exchanges to start, account issues, complaints, or anything you can't answer.",
+        "Show the customer a button to reach the store's customer service team — the last step, after your tools. Use when they ask for a person, are upset or frustrated, or need what you can't do or find after checking: account changes, a damaged or wrong item, a refund or order problem the order card can't fix, or a question you still can't answer after searching. Tracking an order and starting a return are done with the order card, the tracking page and the returns center — not this.",
       input_schema: {
         type: "object",
         properties: { reason: { type: "string", description: "One short line on why, for the support team." } },

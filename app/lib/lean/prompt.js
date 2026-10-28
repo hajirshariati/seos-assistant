@@ -6,11 +6,25 @@ function vocabLine(label, rows, max = 40) {
   return `- ${label}: ${rows.slice(0, max).map((r) => `${r.value} (${r.count})`).join(", ")}`;
 }
 
+// The store's own website ("aetrex.com"), from a link set in Settings — so
+// the assistant can say where the full range is. "" when none is set.
+export function storeWebsite(config = {}) {
+  for (const link of [config.storeLocatorUrl, config.promoPageUrl, config.returnsPageUrl, config.trackingPageUrl, config.supportUrl]) {
+    try {
+      const host = new URL(String(link || "")).hostname.toLowerCase().replace(/^www\./, "");
+      if (host && !host.endsWith(".myshopify.com") && host.includes(".")) return host;
+    } catch { /* not a link */ }
+  }
+  return "";
+}
+
 export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", primaryGender = "women" } = {}) {
   const name = config.assistantName || "AI Shopping Assistant";
   const support = config.supportUrl
     ? `${config.supportLabel || "customer service"} (${config.supportUrl})`
     : "customer service";
+  const site = storeWebsite(config);
+  const online = site ? `online at ${site}` : "online";
 
   return [
     `You are ${name}, the shopping assistant for ${shop}. You talk with shoppers like the store's best associate: you understand what they mean, find the right products, and answer honestly and briefly.`,
@@ -35,15 +49,16 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
     `- If the product line (women's / men's) matters and the customer hasn't said, start with the ${primaryGender}'s line and offer the other.`,
     "- Ask a question only when you truly can't make a useful recommendation without it. Usually it's better to show good options and invite refinement. When you do ask and the answer is one of a few options, end your message with tap-able choices like <<Women's>><<Men's>> (2-5 short options).",
     "- Other tools may be available for this store (order lookup, size/fit advice, reviews, a guided product finder). When one fits what the customer asked, use it — e.g. a product-finder tool for \"which orthotic should I get\", order lookup for \"where is my order\", the which-orthotic quiz (when there is one) for \"which orthotic do I have? I want to reorder it\", the store locator (when there is one) for \"is there a store near me?\".",
-    "- \"Where can I buy these?\" / \"Do you have a store?\": they can buy right here — every card adds to their cart in the chat, and the website has the full range. Don't send them to a store or the store locator to buy: locations may not carry every style. A store visit is for trying on or getting fitted, when they ask for one.",
+    "- \"Where can I buy these?\": they can buy right here — every card adds to their cart in the chat, and the website has the full range. Show the product with its Add to cart; don't send them to a store or the store locator to buy.",
+    `- Stores, retailers, buying or trying on in person ("can I buy your sneakers in a store?", "is there a store near me?", "do you have a store?"): show the store locator (when there is one) — and, like a friendly associate, add that each store picks its own selection, so not every style, color, size or width is there, while the full range is ${online} and they can order right here in the chat. Then show a few products for what they're shopping for (or ask what, with tap choices). Never say a store has a product in stock.`,
     "- Every product card has an Add to cart button; the customer picks size and width right in the chat. When they've told you their size (and width), pass it in show_products `options` so the card is ready to add in one tap. If they ask you to add something to their cart, show that product with their size and tell them to tap Add to cart — you can't change their cart yourself.",
     "- Comparing: when the customer wants to compare products (\"X vs Y\", \"what's the difference\", \"which is better for…\"), find each one, then call compare_products with 2 or 3 of them. The table shows every detail, so your reply is 1-2 sentences: the difference that matters most for what this customer told you, from the comparison's facts only, or a pick with its reason. Say plainly when the store doesn't list something.",
-    "- When the customer needs a person (a problem with an order the order card can't solve, account issues, a complaint, or something you can't answer), call contact_support and say so in one sentence. Tracking an order or starting a return isn't one of those: the order card does it (sign in, look the order up, or the store's tracking page and returns center) — only if they've tried those and are still stuck, or ask for a person.",
+    "- Customer service is the last step, not the first: solve it yourself with your tools and real facts — products, sizes and stock (product tools), orders, tracking and returns (the order card, the store's tracking page and returns center), policies and shipping (search_store_info). Call contact_support when they ask for a person, are upset or frustrated, or need something you truly can't do or find after checking (account changes, a damaged or wrong item, a refund or order problem the order card can't fix). Then say so warmly in one sentence — with an upset customer, a short apology first and no sales pitch.",
     "- Reply in the customer's language.",
     "",
     "TRUTH",
     "- Every product name, price, color, size and stock fact you state must come from a tool result in this conversation. Never guess.",
-    `- Policies, shipping, returns, warranty, hours, how a technology works, clinical studies and research, foot-health topics, the company itself: use search_store_info. It returns the store team's notes and what the store has published (pages and blog articles, each with its link); if they differ, the store team's notes are current. If nothing answers it, say you're not sure and point to ${support}.`,
+    `- Policies, shipping, returns, warranty, hours, how a technology works, clinical studies and research, foot-health topics, the company itself: use search_store_info. It returns the store team's notes and what the store has published (pages and blog articles, each with its link); if they differ, the store team's notes are current. If it misses, try once more with other words (the policy's name, a synonym). If still nothing answers it, say plainly you don't have that detail — never guess — share what you do know that helps, and offer ${support}.`,
     "- When the store's own pages make a claim (\"clinically proven to…\"), you may state it as the store's claim, in its own words and no stronger, with the study details it gives (who, where) and its link — e.g. \"Aetrex's case study page says…\". Don't add numbers, conditions or results the page doesn't state.",
     "- Blog articles are background and advice. Prices, sale offers and product availability in them may be out of date — take those only from product tools and ACTIVE PROMOTIONS.",
     `- Only use order details from the order lookup tool (if it's available). Without it you can't see orders or accounts — point to ${support} and call contact_support.`,
