@@ -14,7 +14,7 @@ import { buildViewAllIndex } from "./view-all-index.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
-import { verifyLeanAnswer, buildFamilyIndex } from "./verify.js";
+import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { productKind, codesInText } from "./catalog.js";
 import { containsColorWord } from "../color-match.js";
@@ -164,6 +164,14 @@ export function offersAlreadyListed(messages = []) {
     return t.split("\n").filter((l) => /^\s*[-•*]\s+\*\*/.test(l) && OFFER_WORDS.test(l)).length >= 2;
   });
 }
+// The catalog's product line names, worked out once per catalog.
+const lineNameCache = new WeakMap();
+function lineNamesOf(catalog) {
+  if (!catalog) return [];
+  if (!lineNameCache.has(catalog)) lineNameCache.set(catalog, productLineNames(catalog.products || []));
+  return lineNameCache.get(catalog);
+}
+
 export function hasRunningOffers(extraSystem) {
   const s = String(extraSystem || "");
   return s.includes("PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE") || s.includes("ACTIVE PROMOTIONS (live right now");
@@ -737,6 +745,13 @@ export async function runLeanTurn({
       issues.push({
         code: "missing_offers",
         detail: "The customer asked about sales and promotions, and offers are running (ACTIVE PROMOTIONS / the store's promotions page), but your reply lists none. Start with every offer that's still running — check each end date against right now — one short line each (a bold name and a few words, no fine print). Then the marked-down products.",
+      });
+    }
+    // Free shipping said of a product the store's offer doesn't name.
+    for (const m of misappliedShipping({ text, knowledgeText, lineNames: lineNamesOf(catalog) })) {
+      issues.push({
+        code: "offer_wrong_product",
+        detail: `Your reply says ${m.line} ships free, but the store's free-shipping offer covers only the products it names: "${m.offers.join(" / ").slice(0, 300)}". ${m.line} isn't one of them — don't say it ships free. Quote the offer as written (which products it covers), or leave it out.`,
       });
     }
     issues.push(...verifyLeanAnswer({

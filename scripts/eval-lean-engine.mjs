@@ -25,7 +25,7 @@ const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes } 
 const { leanSearch, productDetails, similarProducts, styleColorways, feetForWidth, helpsWithFeet, resultHandles } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
-const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
+const { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } = await import("../app/lib/lean/verify.js");
 const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
@@ -346,6 +346,46 @@ await test("the prompt: wide width first, then the ones made for wide feet, said
   assert.match(p, /Never stop at one or two shoes/);
 });
 
+console.log("\noffers cover only the products they name");
+// Aetrex's terms page: free shipping on four orthotic lines — not the Speed.
+const TERMS = [
+  "Free shipping for loyalty members has ended on November 18th, 2025 at 11:59 PM PT. Orders placed before this date will still qualify for free shipping.",
+  "",
+  "Extreme Comfort Orthotics, Performance Comfort Orthotics, Premium Casual Orthotics, and Compete Orthotics Shipping. Free US ground shipping on all US orders (excluding non-lower 48 states). Cannot be applied on previous purchases",
+].join("\n");
+const orow = (title) => ({
+  handle: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, ""),
+  title, productType: "Orthotics", tags: [], description: "Orthotic insole.", status: "ACTIVE", featuredImageUrl: "https://img/x.jpg",
+  attributesJson: { category_for_filter: "Orthotics", gender: "men" },
+  variants: ["9 US", "10 US"].map((sz) => ({ price: "69.95", inventoryQty: 5, optionsJson: JSON.stringify([{ name: "Size", value: sz }]) })),
+});
+const ORTHO = buildLeanCatalog([
+  orow("Men's Speed Posted Orthotics"),
+  orow("Men's Speed Orthotics - Insole For Running"),
+  orow("Men's Compete Orthotics - Insoles for Active Lifestyles"),
+  orow("Men's Premium Casual Orthotics - Insoles for Everyday Activities"),
+  orow("Men's Casual Orthotics - Insole For Everyday Shoes"),
+  orow("Men's Extreme Comfort Orthotics - Insoles for Superior Cushioning"),
+  orow("Men's Performance Comfort Orthotics - Insoles for Athletic Activities"),
+], { shop: "s.myshopify.com" });
+const OH = Object.fromEntries(ORTHO.products.map((p) => [p.title, p.handle]));
+const LINES = productLineNames(ORTHO.products);
+
+await test("the store's product lines, as people name them", () => {
+  assert.deepEqual(LINES, ["Performance Comfort", "Extreme Comfort", "Premium Casual", "Compete", "Casual", "Speed"]);
+  assert.ok(productLineNames(MEN.products).includes("Chase"), "a shoe by its first word");
+});
+await test("free shipping said of a product the offer doesn't name is caught; the ones it names pass", () => {
+  const speed = misappliedShipping({ text: "Also, good news: Aetrex offers **free US ground shipping** on Speed orthotics (lower 48 states).", knowledgeText: TERMS, lineNames: LINES });
+  assert.deepEqual(speed.map((m) => m.line), ["Speed"]);
+  assert.match(speed[0].offers[0], /^Extreme Comfort Orthotics/, "the offer quoted back, not the ended loyalty one");
+  assert.deepEqual(misappliedShipping({ text: "The Compete and the Premium Casual both ship free in the lower 48.", knowledgeText: TERMS, lineNames: LINES }), []);
+  assert.deepEqual(misappliedShipping({ text: "Casual orthotics ship free.", knowledgeText: TERMS, lineNames: LINES }).map((m) => m.line), ["Casual"], "Casual isn't Premium Casual");
+  assert.deepEqual(misappliedShipping({ text: "The Speed is our running orthotic. Free shipping applies to the Compete.", knowledgeText: TERMS, lineNames: LINES }), [], "only what's said in the free-shipping sentence");
+  assert.deepEqual(misappliedShipping({ text: "The Speed ships free.", knowledgeText: `${TERMS}\nFree shipping on all orders over $75.`, lineNames: LINES }), [], "a store-wide offer may cover it");
+  assert.deepEqual(misappliedShipping({ text: "The Speed ships free.", knowledgeText: "", lineNames: LINES }), [], "no offer at all: nothing to compare to");
+});
+
 console.log("\nengine turn (scripted model)");
 const tu = (id, name, input) => ({ type: "tool_use", id, name, input });
 const txt = (text) => ({ type: "text", text });
@@ -364,6 +404,37 @@ function scripted(responses) {
 }
 const quiet = () => {};
 
+await test("the Speed 'ships free' reply goes back once; the corrected one stands", async () => {
+  const sys = `PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE\n---\n${TERMS}\n---`;
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "speed running orthotic", gender: "men" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [OH["Men's Speed Posted Orthotics"]] })] },
+    { stop_reason: "end_turn", content: [txt("For running with flat arches, the Speed Posted orthotic is the one. Also, good news: Aetrex offers free US ground shipping on Speed orthotics (lower 48 states).")] },
+    { stop_reason: "end_turn", content: [txt("For running with flat arches, the Speed Posted orthotic is the one — it controls overpronation mile after mile.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog: ORTHO, model: "m", messages: [{ role: "user", content: "Running shoes" }], latestUserMessage: "Running shoes", extraSystem: sys, callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*offer_wrong_product/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Speed isn't one of them/);
+  assert.doesNotMatch(r.text, /ship/i);
+  assert.deepEqual(r.cards.map((c) => c.title), ["Men's Speed Posted Orthotics"]);
+});
+await test("free shipping said of the orthotics the offer names: no rewrite", async () => {
+  const sys = `PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE\n---\n${TERMS}\n---`;
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "compete orthotic", gender: "men" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [OH["Men's Compete Orthotics - Insoles for Active Lifestyles"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Compete is built for sports — and Compete orthotics ship free in the lower 48.")] },
+  ]);
+  const r = await runLeanTurn({ catalog: ORTHO, model: "m", messages: [{ role: "user", content: "orthotic for basketball" }], latestUserMessage: "orthotic for basketball", extraSystem: sys, callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, false);
+  assert.deepEqual(r.issues, []);
+});
+await test("the offers block: an offer covers only the products it names", async () => {
+  const { promoPageBlock } = await import("../app/lib/promo-page.js");
+  assert.match(promoPageBlock({ text: TERMS }), /covers only those — never say another product qualifies/);
+});
 await test("wide feet turn: a style made for wide feet can be shown next to the one sold in wide", async () => {
   const search = { query: "wide width sneakers", categories: ["sneakers"], gender: "men", width: "wide" };
   const s = scripted([

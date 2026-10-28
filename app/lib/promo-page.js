@@ -64,7 +64,7 @@ export function promoPageBlock({ text, url = "" } = {}) {
     `PROMOTIONS FROM THE STORE'S PROMOTIONS PAGE${url ? ` (${url})` : ""}`,
     "The current time is given with the customer's latest message.",
     "This is the store's own list of offers, kept up to date by the team. An offer here is running unless its own text says it has ended or its end date and time have passed — check every date against right now. Don't present an ended offer as running.",
-    "Quote an offer's terms as written (who qualifies, limits, exclusions, how to get it). Don't add codes, amounts, products or conditions it doesn't state. If two lines disagree (one says an offer ended, another describes it as running), don't say it's running: say the details are shown at checkout, and link this page.",
+    "Quote an offer's terms as written (who qualifies, limits, exclusions, how to get it). Don't add codes, amounts, products or conditions it doesn't state. An offer that names products (certain orthotics, a collection) covers only those — never say another product qualifies, even the one you're recommending; if they ask, name the products it does cover. If two lines disagree (one says an offer ended, another describes it as running), don't say it's running: say the details are shown at checkout, and link this page.",
     "---",
     body,
     "---",

@@ -103,3 +103,56 @@ export function verifyLeanAnswer({
 
   return issues;
 }
+
+// The store's product lines, as people name them: a shoe by its first word
+// ("Chase"), an orthotic by the words before "Orthotics" ("Speed",
+// "Premium Memory Foam", "Extreme Comfort"). Longest first.
+const LINE_DROP = /\b(posted|orthotics?|insoles?|w\/.*|with .*|first generation|customizable)\b/gi;
+export function productLineNames(products = []) {
+  const names = new Set();
+  for (const p of products) {
+    const title = String(p.title || "");
+    if (/orthotic/i.test(title)) {
+      const head = title.split(/\s[-–—]\s/)[0].split(/\borthotics?\b/i)[0];
+      const words = head.split(/\s+/).filter((w) => w && !GENERIC_FIRST_WORDS.has(w.toLowerCase().replace(/[^a-z'’]/g, "")));
+      const line = words.join(" ").replace(LINE_DROP, " ").replace(/\s+/g, " ").trim();
+      if (line.length >= 4) names.add(line);
+    } else {
+      const f = styleFamily(p.style || title);
+      if (f) names.add(f);
+    }
+  }
+  return [...names].sort((a, b) => b.length - a.length);
+}
+
+const FREE_SHIP = /\bfree\b[^.!?\n]{0,40}\b(ship(ping)?|delivery)\b|\bships?\s+(for\s+)?free\b/i;
+const ENDED = /\b(has ended|ended on|expired|no longer)\b/i;
+const wordRe = (w) => new RegExp(`(^|[^a-z])${w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z]|$)`);
+
+// 5. Free shipping said of a product the store's offer doesn't name: the
+// offer covers certain orthotics, the reply says the Speed ships free. Only
+// when every free-shipping offer the store gave names its products (a
+// store-wide one may well cover the product). → [{ line, offers }] or [].
+export function misappliedShipping({ text = "", knowledgeText = "", lineNames = [] } = {}) {
+  const storeLines = String(knowledgeText || "").split(/\n/).filter((l) => FREE_SHIP.test(l) && !ENDED.test(l));
+  const mentions = (sentence) => {
+    let rest = ` ${sentence.toLowerCase()} `;
+    const found = [];
+    for (const n of lineNames) {
+      const re = wordRe(n);
+      if (re.test(rest)) { found.push(n); rest = rest.replace(new RegExp(re.source, "g"), "$1 $2"); }
+    }
+    return found;
+  };
+  const offers = storeLines.map((l) => ({ text: l.trim(), lines: mentions(l) }));
+  if (!offers.length || offers.some((o) => o.lines.length === 0)) return [];
+  const named = new Set(offers.flatMap((o) => o.lines.map((n) => n.toLowerCase())));
+  const out = [];
+  for (const sentence of String(text || "").split(/(?<=[.!?])\s+|\n+/)) {
+    if (!FREE_SHIP.test(sentence)) continue;
+    for (const n of mentions(sentence)) {
+      if (!named.has(n.toLowerCase()) && !out.some((x) => x.line === n)) out.push({ line: n, offers: offers.map((o) => o.text) });
+    }
+  }
+  return out;
+}
