@@ -260,12 +260,24 @@ const sharesColor = (keys, used) => [...keys].some((k) => used.has(k));
 // A colorway down to its last few sizes never stands in.
 const COLOR_SWAP_SLACK = 0.3;
 
-export function leanSearch(catalog, params = {}) {
-  const { products, ctx, filters, ranked, queryMatched } = rankMatches(catalog, params);
-  const limit = Math.min(Math.max(Number(params.limit) || 6, 1), 10);
-  const byPrice = String(params.sort || "best") !== "best";
+// Wide (or narrow) feet: the store also lists styles for them under "Helps
+// with" (its helps_with field, or a tag like "Wide Feet") — shoes cut to fit
+// those feet that aren't sold in a separate width. "" for other widths.
+export function feetForWidth(width) {
+  const w = lc(width);
+  if (/\bwide\b|^x*w+$/.test(w)) return "wide";
+  if (/\bnarrow\b|^n+$/.test(w)) return "narrow";
+  return "";
+}
+export function helpsWithFeet(p, word) {
+  if (!word) return false;
+  const inHelps = new RegExp(`\\b${word}\\b`);
+  const inTag = new RegExp(`\\b${word}[ -](feet|foot|fit|width)\\b`);
+  return (p.conditions || []).some((c) => inHelps.test(lc(c))) || (p.tags || []).some((t) => inTag.test(lc(t)));
+}
 
-  // One card per style. Each style's colorways in rank order.
+// One card per style, best first, up to limit. Each style's colorways in rank order.
+function onePerStyle(ranked, { products, filters, ctx, limit, byPrice }) {
   const styles = new Map();
   for (const x of ranked) {
     const k = x.p.style.toLowerCase();
@@ -294,6 +306,14 @@ export function leanSearch(catalog, params = {}) {
     picked.push(toModelProduct(pick.p, { otherColors: [...new Set(others)] }));
     if (picked.length >= limit) break;
   }
+  return picked;
+}
+
+export function leanSearch(catalog, params = {}) {
+  const { products, ctx, filters, ranked, queryMatched } = rankMatches(catalog, params);
+  const limit = Math.min(Math.max(Number(params.limit) || 6, 1), 10);
+  const byPrice = String(params.sort || "best") !== "best";
+  const picked = onePerStyle(ranked, { products, filters, ctx, limit, byPrice });
 
   const result = {
     total_matches: ranked.length,
@@ -313,7 +333,32 @@ export function leanSearch(catalog, params = {}) {
       ]),
     );
   }
+  // Asked for a wide (or narrow) width: after the styles sold in it, the
+  // ones the store lists for those feet under "Helps with" — the same
+  // search without the width — so the answer is never just one or two shoes.
+  const word = filters.width ? feetForWidth(filters.width[0]) : "";
+  if (word) {
+    const inWidth = new Set(ranked.map((x) => x.p.style.toLowerCase()));
+    const alt = rankMatches(catalog, { ...params, width: undefined }).ranked
+      .filter((x) => !inWidth.has(x.p.style.toLowerCase()) && helpsWithFeet(x.p, word));
+    if (alt.length) {
+      const noWidth = Object.fromEntries(Object.entries(filters).filter(([k]) => k !== "width"));
+      const label = `${word[0].toUpperCase()}${word.slice(1)} Feet`;
+      result[`also_for_${word}_feet`] = {
+        note: `Not sold in a separate ${word} width, but the store lists "${label}" under Helps with — made to fit ${word} feet. Offer these too, after the ones sold in ${word}, and say which is which.`,
+        styles: new Set(alt.map((x) => x.p.style.toLowerCase())).size,
+        products: onePerStyle(alt, { products, filters: noWidth, ctx, limit: Math.min(limit, 6), byPrice }),
+      };
+    }
+  }
   return result;
+}
+
+// Every product a search result offers: its own, then the ones for wide
+// (or narrow) feet that come with it.
+export function resultHandles(result = {}) {
+  const extra = Object.entries(result).filter(([k, v]) => /^also_for_\w+_feet$/.test(k) && Array.isArray(v?.products)).flatMap(([, v]) => v.products);
+  return [...(result.products || []), ...extra].map((p) => p.handle);
 }
 
 // Every in-stock color of the styles the customer means (any colorway's
@@ -339,17 +384,23 @@ export function styleColorways(catalog, { handles = [], size, width } = {}) {
     const sameLine = (p) => !ref.gender.length || !p.gender.length || p.gender.some((g) => ref.gender.includes(g) || g === "unisex");
     const ways = products.filter((p) => p.style.toLowerCase() === k && sameLine(p));
     const fits = ways.filter((p) => passes(p, filters, ctx));
+    const color = (p) => ({
+      handle: p.handle,
+      color: colorwayName(p),
+      price: p.priceLabel,
+      ...(p.onSale ? { on_sale: true } : {}),
+      ...(p.widths.length ? { widths_in_stock: p.widths } : {}),
+      ...(fewSizesLeft(p) ? { few_sizes_left: true } : {}),
+    });
+    // Asked for wide (or narrow): the colors not sold in that width that the
+    // store still lists for those feet under Helps with (in their size).
+    const word = filters.width ? feetForWidth(filters.width[0]) : "";
+    const forFeet = word ? ways.filter((p) => !fits.includes(p) && helpsWithFeet(p, word) && passes(p, filters, ctx, "width")) : [];
     styles.push({
       style: ref.style,
-      colors: fits.map((p) => ({
-        handle: p.handle,
-        color: colorwayName(p),
-        price: p.priceLabel,
-        ...(p.onSale ? { on_sale: true } : {}),
-        ...(p.widths.length ? { widths_in_stock: p.widths } : {}),
-        ...(fewSizesLeft(p) ? { few_sizes_left: true } : {}),
-      })),
+      colors: fits.map(color),
       ...(asked ? { colors_not_in_that_size_or_width: ways.filter((p) => !fits.includes(p)).map(colorwayName) } : {}),
+      ...(forFeet.length ? { [`also_for_${word}_feet`]: forFeet.map(color) } : {}),
     });
   }
   return {

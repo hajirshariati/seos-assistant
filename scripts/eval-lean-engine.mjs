@@ -22,7 +22,7 @@ const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefine
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
 const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes } = await import("../app/lib/lean/catalog.js");
-const { leanSearch, productDetails, similarProducts, styleColorways } = await import("../app/lib/lean/search.js");
+const { leanSearch, productDetails, similarProducts, styleColorways, feetForWidth, helpsWithFeet, resultHandles } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex } = await import("../app/lib/lean/verify.js");
@@ -270,6 +270,82 @@ await test("products shown in earlier turns count as found", () => {
   assert.deepEqual(issues, []);
 });
 
+console.log("\nwide feet: the true wide width first, then what's made for wide feet");
+// Like Aetrex's men's sneakers: only the Chase in Black/Black is sold in a
+// wide width; the Dash (no width option at all) and the other Chase colors
+// list "Wide Feet" under Helps with; the Graham lists neither.
+const mrow = (title, { widths = [], tags = [], helps = "", cat = "Sneakers", gender = "Men", sizes = ["9 US", "10 US", "11 US"] } = {}) => ({
+  handle: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, ""),
+  title, productType: "Footwear", tags, description: "Arch support sneaker.", status: "ACTIVE", featuredImageUrl: "https://img/x.jpg",
+  attributesJson: { category_for_filter: cat, gender: gender.toLowerCase(), ...(helps ? { helps_with: helps } : {}) },
+  variants: (widths.length ? widths : [null]).flatMap((w) => sizes.map((sz) => ({
+    price: "129.95", inventoryQty: 4,
+    optionsJson: JSON.stringify([...(w ? [{ name: "Width", value: w }] : []), { name: "Size", value: sz }]),
+  }))),
+});
+const MEN_ROWS = [
+  mrow("Chase Arch Support Sneaker - Black/Black", { widths: ["medium", "wide"], tags: ["Wide Feet", "Narrow Feet"] }),
+  mrow("Chase Arch Support Sneaker - White", { widths: ["medium"], tags: ["Wide Feet", "Narrow Feet"] }),
+  mrow("Dash Arch Support Men's Sneaker - Grey", { tags: ["Bunions", "Wide Feet", "Narrow Feet"] }),
+  mrow("Dash Arch Support Men's Sneaker - Navy", { tags: ["Wide Feet"] }),
+  mrow("Miles Arch Support Sneaker - Tan", { helps: "Plantar Fasciitis, Wide Feet" }),
+  mrow("Graham Arch Support Sneaker - Black", { tags: ["Heel Pain"] }),
+  mrow("Danika Arch Support Sneaker - Black", { widths: ["medium", "wide"], tags: ["Wide Feet"], gender: "Women" }),
+  mrow("Daisy Adjustable Slide - Black", { tags: ["Wide Feet"], cat: "Sandals" }),
+];
+const MEN = buildLeanCatalog(MEN_ROWS, { shop: "s.myshopify.com" });
+const MH = Object.fromEntries(MEN.products.map((p) => [p.title, p.handle]));
+
+await test("which widths mean wide or narrow feet", () => {
+  for (const w of ["wide", "Wide", "W", "XW", "extra wide", "WW"]) assert.equal(feetForWidth(w), "wide", w);
+  for (const w of ["narrow", "N"]) assert.equal(feetForWidth(w), "narrow", w);
+  for (const w of ["medium", "M", "regular", ""]) assert.equal(feetForWidth(w), "", w);
+  const dash = MEN.products.find((p) => p.title.startsWith("Dash") && p.title.endsWith("Grey"));
+  assert.ok(helpsWithFeet(dash, "wide") && helpsWithFeet(dash, "narrow"), "a Wide Feet / Narrow Feet tag");
+  assert.ok(helpsWithFeet(MEN.products.find((p) => p.title.startsWith("Miles")), "wide"), "or Helps with itself");
+  assert.ok(!helpsWithFeet(MEN.products.find((p) => p.title.startsWith("Graham")), "wide"));
+});
+await test("men's wide sneakers: the Chase sold in wide, then every style made for wide feet — never just one", () => {
+  const r = leanSearch(MEN, { query: "wide width sneakers", categories: ["sneakers"], gender: "men", width: "wide" });
+  assert.deepEqual(r.products.map((p) => p.title), ["Chase Arch Support Sneaker - Black/Black"], "only one is sold in a wide width");
+  assert.equal(r.total_matches, 1);
+  const also = r.also_for_wide_feet;
+  assert.ok(also, JSON.stringify(r));
+  const titles = also.products.map((p) => p.title);
+  assert.equal(titles.filter((t) => t.startsWith("Dash")).length, 1, "one card per style");
+  assert.ok(titles.some((t) => t.startsWith("Miles")), JSON.stringify(titles));
+  assert.ok(!titles.some((t) => t.startsWith("Chase")), "the Chase is already there, in its wide width");
+  assert.ok(!titles.some((t) => /Graham|Danika|Daisy/.test(t)), "not without Wide Feet, not women's, not sandals");
+  assert.equal(also.styles, 2);
+  assert.match(also.note, /Helps with/);
+  const dash = also.products.find((p) => p.title.startsWith("Dash"));
+  assert.ok(dash.same_style_other_colors.length === 1, "its other colors, without the width");
+  assert.deepEqual(resultHandles(r).length, 3, "all of them can be shown");
+});
+await test("nothing sold in wide at all: still not a dead end", () => {
+  const noWide = buildLeanCatalog(MEN_ROWS.filter((r) => !r.title.includes("Black/Black")), { shop: "s.myshopify.com" });
+  const r = leanSearch(noWide, { query: "sneaker", categories: ["sneakers"], gender: "men", width: "wide", size: "10" });
+  assert.equal(r.products.length, 0);
+  assert.ok(r.if_relaxed, "how to broaden");
+  assert.deepEqual(r.also_for_wide_feet.products.map((p) => p.title.split(" ")[0]).sort(), ["Chase", "Dash", "Miles"], "every style made for wide feet, in their size");
+  assert.ok(!leanSearch(noWide, { query: "sneaker", gender: "men", width: "wide", size: "12" }).also_for_wide_feet, "no size 12 anywhere — nothing to offer");
+});
+await test("medium width, or no width asked: nothing extra", () => {
+  assert.equal(leanSearch(MEN, { query: "sneaker", gender: "men", width: "medium" }).also_for_wide_feet, undefined);
+  assert.ok(!Object.keys(leanSearch(MEN, { query: "sneaker", gender: "men" })).some((k) => k.startsWith("also_for")));
+});
+await test("get_colorways in wide: the colors without the width that are made for wide feet, showable", () => {
+  const r = styleColorways(MEN, { handles: [MH["Chase Arch Support Sneaker - White"]], width: "wide" });
+  assert.deepEqual(r.styles[0].colors.map((c) => c.color), ["Black/Black"]);
+  assert.deepEqual(r.styles[0].also_for_wide_feet.map((c) => c.color), ["White"]);
+  assert.equal(r.styles[0].also_for_wide_feet[0].handle, MH["Chase Arch Support Sneaker - White"]);
+});
+await test("the prompt: wide width first, then the ones made for wide feet, said apart", () => {
+  const p = buildLeanSystemPrompt({ vocab: MEN.vocab });
+  assert.match(p, /also_for_wide_feet/);
+  assert.match(p, /Never stop at one or two shoes/);
+});
+
 console.log("\nengine turn (scripted model)");
 const tu = (id, name, input) => ({ type: "tool_use", id, name, input });
 const txt = (text) => ({ type: "text", text });
@@ -287,6 +363,21 @@ function scripted(responses) {
   };
 }
 const quiet = () => {};
+
+await test("wide feet turn: a style made for wide feet can be shown next to the one sold in wide", async () => {
+  const search = { query: "wide width sneakers", categories: ["sneakers"], gender: "men", width: "wide" };
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", search)] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [MH["Chase Arch Support Sneaker - Black/Black"], MH["Dash Arch Support Men's Sneaker - Grey"], MH["Miles Arch Support Sneaker - Tan"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Chase in Black/Black comes in a true wide width. The Dash and the Miles aren't sold in a separate wide, but they're made to fit wide feet.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog: MEN, model: "m", messages: [{ role: "user", content: "men's wide sneakers" }], latestUserMessage: "men's wide sneakers", callModel: s.callModel, log: (l) => logs.push(l) });
+  assert.deepEqual(r.cards.map((c) => c.title), ["Chase Arch Support Sneaker - Black/Black", "Dash Arch Support Men's Sneaker - Grey", "Miles Arch Support Sneaker - Tan"]);
+  assert.ok(logs.some((l) => /also_for_wide_feet=2/.test(l)), logs.join("\n"));
+  const sent = JSON.stringify(s.requests[1].messages.at(-1));
+  assert.match(sent, /also_for_wide_feet/, "the model sees the styles made for wide feet");
+});
 
 await test("dress-shoe turn: search params reach the catalog untouched; cards = what Claude showed", async () => {
   const search = { query: "dressy", categories: ["wedges/heels", "mary janes"], gender: "women" };

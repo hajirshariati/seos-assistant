@@ -8,7 +8,7 @@
 // `anthropic` client and `lookupStoreInfo` function, so it runs in tests with
 // stubs.
 
-import { leanSearch, allMatches, productDetails, similarProducts, styleColorways } from "./search.js";
+import { leanSearch, allMatches, productDetails, similarProducts, styleColorways, resultHandles } from "./search.js";
 import { viewAllWords, cleanViewAllSearch, pageOf } from "./shop-all.js";
 import { buildViewAllIndex } from "./view-all-index.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
@@ -489,7 +489,8 @@ export async function runLeanTurn({
   const runTool = async (name, input = {}) => {
     if (name === "search_products") {
       const result = leanSearch(catalog, input);
-      markSeen(result.products.map((p) => p.handle));
+      // Its own products and the ones it offers for wide (or narrow) feet.
+      markSeen(resultHandles(result));
       searches.push({ input, handles: new Set(result.products.map((p) => p.handle)) });
       for (const c of input.categories || []) topic("category", c);
       for (const c of input.conditions || []) topic("condition", c);
@@ -500,7 +501,8 @@ export async function runLeanTurn({
       for (const p of result.products.slice(0, 3)) {
         if (!mentions.some((m) => m.handle === p.handle && m.tool === "search_products")) mentions.push({ handle: p.handle, title: p.title, tool: "search_products" });
       }
-      log(`[lean] search ${JSON.stringify(input)} → total=${result.total_matches} returned=${result.products.length}${result.if_relaxed ? ` if_relaxed=${JSON.stringify(result.if_relaxed)}` : ""}`);
+      const feet = Object.entries(result).find(([k]) => /^also_for_\w+_feet$/.test(k));
+      log(`[lean] search ${JSON.stringify(input)} → total=${result.total_matches} returned=${result.products.length}${result.if_relaxed ? ` if_relaxed=${JSON.stringify(result.if_relaxed)}` : ""}${feet ? ` ${feet[0]}=${feet[1].styles}` : ""}`);
       return result;
     }
     if (name === "get_product_details") {
@@ -514,7 +516,7 @@ export async function runLeanTurn({
     }
     if (name === "get_colorways") {
       const r = styleColorways(catalog, input);
-      markSeen(r.styles.flatMap((st) => st.colors.map((c) => c.handle)));
+      markSeen(r.styles.flatMap((st) => [...st.colors, ...(st.also_for_wide_feet || []), ...(st.also_for_narrow_feet || [])].map((c) => c.handle)));
       for (const st of r.styles) topic("product", st.style);
       log(`[lean] colorways ${JSON.stringify(input)} → ${r.styles.map((st) => `${st.style}: ${st.colors.length}`).join("; ") || "none"}`);
       return {
