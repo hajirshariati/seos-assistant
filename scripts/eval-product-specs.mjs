@@ -285,6 +285,10 @@ await test("the page's own words: \"Removable Insole(s): Yes/No/1/4\\\"\", heel 
     { heel_height: "1.25”", shaft_height: '5"', shaft_circumference: "30cm", lining: "Neoprene with plush faux fur" });
   assert.deepEqual(pageFacts({ c: "Removable Insole: None" }), { removable_footbed: "No" });
   assert.deepEqual(pageFacts({ c: "Padded collar for extra comfort" }), {});
+  // Features named in the page's own words: a mention is a yes, a negation isn't.
+  assert.deepEqual(pageFacts({ c: "Adjustability: Hook & loop closures; Met bar pod to help relieve ball-of-foot discomfort" }), { metatarsal_pad: "Yes" });
+  assert.deepEqual(pageFacts({ c: "Metatarsal support to help reduce ball-of-foot discomfort; Slip-resistant outsole" }), { metatarsal_pad: "Yes", slip_resistant: "Yes" });
+  assert.deepEqual(pageFacts({ c: "Not slip resistant on ice; Metal shank for stability" }), {});
 });
 await test("no sheet: products keep only what their pages say — nothing else changes", () => {
   const plain = buildLeanCatalog(rows, { shop: "s.myshopify.com" });
@@ -306,6 +310,15 @@ await test("spec filters find only products that list the spec — not knowing i
   const none = leanSearch(catalog, { query: "", slip_resistant: true, no_pig_products: true, removable_footbed: false, categories: ["footwear"] });
   assert.equal(none.filters_applied.slip_resistant, true);
   assert.equal(none.filters_applied.removable_footbed, undefined, "false is no filter");
+});
+await test("a met pad or slip-resistant sole the page names counts for the filters; the sheet's \"No\" against it is left out and listed", () => {
+  const c = buildLeanCatalog([
+    product("jillian-black-sc450w", "Jillian Sandal - Black", { comfort: "Removable Insole: No; Met bar pod to help relieve ball-of-foot discomfort" }),
+    product("charlotte-black-ca710w", "Charlotte Sneaker - Black", { comfort: "Removable Insole: Yes; Metatarsal support built in" }),
+  ], { specRows: readSpecSheet([{ name: "CA", rows: [["Style #", "Style Name", "Removable Depth", "Includes Met pad"], ["CA710", "Charlotte", '3/16"', "No"]] }]).rows });
+  assert.deepEqual(allMatches(c, { query: "", metatarsal_pad: true }).map((p) => p.handle).sort(), ["charlotte-black-ca710w", "jillian-black-sc450w"]);
+  assert.deepEqual(c.specReport.left.map((l) => [l.handle, l.field, l.sheet, l.page]), [["charlotte-black-ca710w", "metatarsal_pad", "No", "Yes"]]);
+  assert.equal(leanSearch(c, { query: "sandal" }).products[0].specs.metatarsal_pad, "Yes", "search results show it");
 });
 await test("a yes/no field is found by its name; a \"contains…\" one isn't", () => {
   assert.deepEqual(allMatches(catalog, { query: "slip resistant" }).map((p) => p.handle), ["jodie-fur-ivory-bb293w"]);

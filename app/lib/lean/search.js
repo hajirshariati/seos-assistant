@@ -188,11 +188,11 @@ function shortDetails(attrs) {
   return out;
 }
 
-// Spec facts (product-specs.js): the sheet's, plus a removable footbed the
-// page states. keys: which ones (search results carry the few a shopper
-// decides on; full details carry all).
+// Spec facts (product-specs.js): the sheet's, plus the yes/no ones the page
+// states (removable footbed, a met pad, slip resistant). keys: which ones
+// (search results carry the few a shopper decides on; full details all).
 function specsOf(p, keys = null) {
-  const all = { ...(p.specFlags?.removable_footbed ? { removable_footbed: p.specFlags.removable_footbed } : {}), ...(p.specs || {}) };
+  const all = { ...(p.specFlags || {}), ...(p.specs || {}) };
   const out = {};
   for (const [k, v] of Object.entries(all)) if (v && (!keys || keys.includes(k))) out[k] = v;
   return out;

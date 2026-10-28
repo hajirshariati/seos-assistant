@@ -46,6 +46,9 @@ const FIELD = Object.fromEntries(SPEC_FIELDS.map((f) => [f.key, f]));
 // with a product's full details.
 export const SEARCH_SPEC_KEYS = ["removable_footbed", "removable_footbed_depth", "contains_pig_products", "slip_resistant", "metatarsal_pad", "temperature_rating"];
 
+// The yes/no facts search filters read — from the page or the sheet.
+const FLAG_KEYS = ["removable_footbed", "contains_pig_products", "slip_resistant", "metatarsal_pad"];
+
 // Spec filters for search: which products pass. null = not known — never passes.
 export const SPEC_FILTERS = {
   removable_footbed: (f) => f.removable_footbed === "Yes",
@@ -367,10 +370,23 @@ const PAGE_LABELS = [
   [/^(warmth|temperature) rating$/i, "temperature_rating"],
   [/^contains pig products?$/i, "contains_pig_products"],
 ];
+// Features a page names in its own words ("Met bar pod to help relieve
+// ball-of-foot discomfort", "Slip-resistant outsole") — a mention is a yes;
+// a "no"/"not"/"without" in front of it isn't.
+const PAGE_FEATURES = [
+  [/\bmet(?:atarsal)?\.?\s+(?:bar\s+)?(?:pad|pod|support|dome)s?\b/i, "metatarsal_pad"],
+  [/\bslip[\s-]?resist(?:ant|ance)\b/i, "slip_resistant"],
+];
+const NEGATED = /\b(no|not|without|non)\b[^,.;]{0,20}$/i;
+
 export function pageFacts(attributes = {}) {
   const out = {};
   for (const text of Object.values(attributes || {})) {
     for (const bit of String(text).split(/\s*;\s*|\n+/)) {
+      for (const [re, key] of PAGE_FEATURES) {
+        const m = bit.match(re);
+        if (m && out[key] == null && !NEGATED.test(bit.slice(0, m.index))) out[key] = "Yes";
+      }
       const m = bit.match(/^\s*([A-Za-z][A-Za-z ]{2,40}?)\s*:\s*(.{1,80})$/);
       if (!m) continue;
       const hit = PAGE_LABELS.find(([re]) => re.test(m[1].trim()));
@@ -479,7 +495,7 @@ export function indexSpecRows(rows = []) {
 export function specsForProduct(p, index) {
   const page = pageFacts(p.attributes);
   const out = { specs: {}, flags: {}, match: null, codes: [], left: [], nameMismatch: null };
-  for (const key of ["removable_footbed", "contains_pig_products"]) if (page[key]) out.flags[key] = page[key];
+  for (const key of FLAG_KEYS) if (page[key]) out.flags[key] = page[key];
   if (!index?.size) return out;
   const { gender, bases } = productKeys(p);
   let rows = [];
@@ -530,7 +546,7 @@ export function specsForProduct(p, index) {
       if (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) > (key === "heel_height" ? 0.2 : 0.3)) {
         out.left.push({ field: key, reason: "product page says otherwise", sheet: fields[key], page: page[key] });
       }
-    } else if (key === "contains_pig_products" && page[key] !== fields[key]) {
+    } else if (FLAG_KEYS.includes(key) && page[key] !== fields[key]) {
       out.left.push({ field: key, reason: "product page says otherwise", sheet: fields[key], page: page[key] });
     }
     delete fields[key];
@@ -538,7 +554,7 @@ export function specsForProduct(p, index) {
   out.specs = fields;
   out.match = kind;
   out.codes = [...new Set(rows.map((r) => r.code))];
-  for (const key of ["removable_footbed", "contains_pig_products", "slip_resistant", "metatarsal_pad"]) {
+  for (const key of FLAG_KEYS) {
     if (out.flags[key] == null && fields[key]) out.flags[key] = fields[key];
   }
   return out;
