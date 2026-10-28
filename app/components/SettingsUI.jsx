@@ -33,6 +33,11 @@ export const SETTINGS_CSS = `
   .set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
   .set-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .set-grid--app { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .set-app-pic { display: flex; align-items: center; gap: 14px; }
+  .set-app-pic__thumb { flex: none; width: 64px; height: 80px; border-radius: 12px; background: linear-gradient(135deg, #eaf4ff, #f1ecff); display: grid; place-items: center; overflow: visible; }
+  .set-app-pic__thumb img { max-width: 76px; max-height: 92px; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.18)); }
+  .set-app-pic__thumb.is-empty span { font-size: 26px; opacity: 0.6; }
+  .set-app-pic__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .set-switch { all: unset; box-sizing: border-box; position: relative; width: 40px; height: 24px; border-radius: 999px;
     background: #c9cccf; cursor: pointer; transition: background .18s ease; flex: none; }
   .set-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;

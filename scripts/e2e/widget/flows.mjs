@@ -587,6 +587,35 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
     const t = await page.evaluate(() => ({ text: document.querySelector(".ai-appn__txt").textContent, button: document.querySelector("[data-appn]").textContent }));
     check("app message: the text and button set in Settings", t.text === "Get 15% off your first app order" && t.button === "Download", JSON.stringify(t));
   });
+  await run("app picture", "/full?app=img", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await appShown(page);
+    await page.waitForTimeout(600);
+    const pic = await page.evaluate(() => {
+      const r = document.querySelector(".ai-chat-app"), card = r.querySelector(".ai-appn"), img = r.querySelector(".ai-appn__shot img");
+      const c = card.getBoundingClientRect(), i = img ? img.getBoundingClientRect() : null, prev = r.previousElementSibling.getBoundingClientRect();
+      return { img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, icon: !!r.querySelector(".ai-appn__icon"), src: img?.getAttribute("src"),
+        above: i ? Math.round(c.top - i.top) : 0, below: i ? Math.round(i.bottom - c.bottom) : 0, clearOfPrev: i ? i.top >= prev.bottom - 1 : false, alt: img?.getAttribute("alt") };
+    });
+    check("app message: the app's picture in place of the icon, bigger than the card — above and below it", pic.img && pic.loaded && !pic.icon && pic.src === "/apps/hajirai/app-image?v=test1" && pic.above >= 8 && pic.below >= 8 && pic.clearOfPrev && pic.alt === "", JSON.stringify(pic));
+    // Opened at the bottom of a short window: the panel is brought into view.
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages"); m.scrollTop = Math.max(0, m.scrollHeight - m.clientHeight - 0); });
+    await page.waitForTimeout(200);
+    await page.click("[data-appn]");
+    await page.waitForTimeout(700);
+    const seen = await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages").getBoundingClientRect(), p = document.querySelector(".ai-appn__panel").getBoundingClientRect(); return { panelBottom: Math.round(p.bottom), listBottom: Math.round(m.bottom), panelTop: Math.round(p.top), listTop: Math.round(m.top), open: !document.querySelector(".ai-appn__panel").hidden }; });
+    check("app message: Get it scrolls the opened panel fully into view", seen.open && seen.panelBottom <= seen.listBottom + 1 && seen.panelTop >= seen.listTop - 1, JSON.stringify(seen));
+  });
+  await run("app picture missing", "/full?app=imgbad", { viewport: { width: 1280, height: 900 } }, async (page, say) => {
+    await say("show me 2");
+    await say("show me 3");
+    await appShown(page);
+    await page.waitForTimeout(800);
+    const r = await page.evaluate(() => ({ icon: !!document.querySelector(".ai-chat-app .ai-appn__icon"), img: !!document.querySelector(".ai-chat-app .ai-appn__shot") }));
+    check("app message: a picture that doesn't load → the phone icon instead", r.icon && !r.img, JSON.stringify(r));
+  });
   await run("iPhone", "/full?app=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: IPHONE }, async (page, say) => {
     await say("show me 2");
     await say("show me 3");

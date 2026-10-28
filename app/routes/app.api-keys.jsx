@@ -1,6 +1,6 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
-import { appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
+import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
 import { getShopName } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
@@ -125,6 +125,7 @@ export const loader = async ({ request }) => {
     appPromoText: config.appPromoText || "",
     appPromoButton: config.appPromoButton || "",
     appPromoDefaultText: defaultAppText(shopName),
+    appPromoImage: config.appPromoImage || "",
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -182,6 +183,15 @@ export const action = async ({ request }) => {
     if (stored === null || bg === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
     await updateShopConfig(session.shop, { orbColors: stored, orbBackground: bg });
     return { orbSaved: true, colors: parseOrbColors(stored), bg: parseOrbBackground(bg) };
+  }
+
+  // Your app → the app's picture (resized in the browser before it's sent).
+  if (intent === "save_app_image") {
+    const image = String(formData.get("image") || "");
+    const err = appImageError(image);
+    if (err) return { appImageError: err };
+    await updateShopConfig(session.shop, { appPromoImage: image });
+    return { appImageSaved: true, appImage: image };
   }
 
   if (intent === "save_recording") {
@@ -955,6 +965,75 @@ function CareSection({ values, set }) {
   );
 }
 
+// Your app → the app's picture: a PNG (ideally with no background) shown in
+// the chat's app message. Resized here to a small file before it's saved.
+const APP_IMAGE_HEIGHT = 360;
+function resizeAppImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, APP_IMAGE_HEIGHT / img.naturalHeight);
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      const webp = c.toDataURL("image/webp", 0.9);
+      resolve(webp.startsWith("data:image/webp") ? webp : c.toDataURL("image/png"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable")); };
+    img.src = url;
+  });
+}
+function AppPicture({ initial, disabled }) {
+  const fetcher = useFetcher();
+  const inputRef = useRef(null);
+  const [picked, setPicked] = useState(null);
+  const [localError, setLocalError] = useState("");
+  const saved = fetcher.data?.appImageSaved ? fetcher.data.appImage : null;
+  const image = picked ?? saved ?? initial ?? "";
+  const error = localError || fetcher.data?.appImageError || "";
+  const busy = fetcher.state !== "idle";
+  const send = (value) => {
+    const fd = new FormData();
+    fd.set("intent", "save_app_image");
+    fd.set("image", value);
+    fetcher.submit(fd, { method: "post" });
+  };
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setLocalError("");
+    if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { setLocalError("Choose a PNG, WebP or JPEG image."); return; }
+    try {
+      const data = await resizeAppImage(file);
+      setPicked(data);
+      send(data);
+    } catch {
+      setLocalError("That image couldn't be read — try another one.");
+    }
+  };
+  const remove = () => { setPicked(""); send(""); };
+  return (
+    <div className="set-app-pic">
+      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`}>{image ? <img src={image} alt="" /> : <span aria-hidden="true">📱</span>}</div>
+      <div className="set-app-pic__body">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">App picture</Text>
+        <Text as="p" variant="bodySm" tone="subdued">A picture of your app on a phone, shown in the chat's app message. A PNG with no background looks best. Without one, a phone icon is shown.</Text>
+        <InlineStack gap="200" blockAlign="center">
+          <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
+          <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked} disabled={disabled}>{image ? "Replace picture" : "Upload picture"}</Button>
+          {image ? <Button variant="plain" tone="critical" onClick={remove} disabled={disabled || busy}>Remove</Button> : null}
+          {fetcher.data?.appImageSaved && !busy ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
+        </InlineStack>
+        {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
+      </div>
+    </div>
+  );
+}
+
 function ToolsSection({ d, values, set }) {
   const mapId = storepointId(values.storeLocatorMapId);
   return (
@@ -1014,6 +1093,7 @@ function ToolsSection({ d, values, set }) {
               <TextField label="Message" value={values.appPromoText} onChange={set("appPromoText")} placeholder={d.appPromoDefaultText} maxLength={APP_TEXT_MAX} showCharacterCount autoComplete="off" disabled={!values.appPromoOn} helpText="Left blank, the placeholder is used." />
               <TextField label="Button text" value={values.appPromoButton} onChange={set("appPromoButton")} placeholder="Get it" maxLength={APP_BUTTON_MAX} autoComplete="off" disabled={!values.appPromoOn} />
             </div>
+            <AppPicture initial={d.appPromoImage} disabled={!values.appPromoOn} />
             <div className="set-grid">
               <TextField label="App Store link" value={values.appIosUrl} onChange={set("appIosUrl")} placeholder="https://apps.apple.com/us/app/…" autoComplete="off" disabled={!values.appPromoOn} />
               <TextField label="Google Play link" value={values.appAndroidUrl} onChange={set("appAndroidUrl")} placeholder="https://play.google.com/store/apps/details?id=…" autoComplete="off" disabled={!values.appPromoOn} />

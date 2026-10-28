@@ -84,7 +84,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     setTexts(d.chatTexts);
     if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
   }
-  if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||''),text:String(d.appPromo.text||'').slice(0,60),button:String(d.appPromo.button||'').slice(0,16)};
+  if(d.appPromo&&typeof d.appPromo==='object')APP_PROMO={on:d.appPromo.on!==false,ios:String(d.appPromo.ios||''),android:String(d.appPromo.android||''),text:String(d.appPromo.text||'').slice(0,60),button:String(d.appPromo.button||'').slice(0,16),image:/^\/apps\/hajirai\/app-image\?v=[a-z0-9]{1,16}$/.test(String(d.appPromo.image||''))?String(d.appPromo.image):''};
   if(d.seasonalCta&&typeof d.seasonalCta==='object'){
     var seaWas=[SEA_ON,SEA_ICON,SEA_COLOR,SEA_LABEL].join('|');
     try{localStorage.setItem(SEA_KEY,JSON.stringify(d.seasonalCta))}catch(e){}
@@ -2474,7 +2474,7 @@ function tfiShow(btn){
    computers (iPhone or Android, like the footer) and the App Store /
    Google Play buttons on phones. Text and button from Settings; links from
    Settings, else from the store's own footer — with its QR codes and badges. */
-var APP_PROMO={on:true,ios:'',android:'',text:'',button:''},APPN_KEY='hajirai_app_note',APPN_COUNT='hajirai_app_replies',APP_QR_URL='/apps/hajirai/app-qr',APPN_DELAY=900;
+var APP_PROMO={on:true,ios:'',android:'',text:'',button:'',image:''},APPN_KEY='hajirai_app_note',APPN_COUNT='hajirai_app_replies',APP_QR_URL='/apps/hajirai/app-qr',APPN_DELAY=900;
 function appText(){
   if(APP_PROMO.text)return APP_PROMO.text;
   var name=String(C.shopName||'').replace(/\s+/g,' ').trim().slice(0,30);
@@ -2502,7 +2502,10 @@ function appInfo(){
 var appInfoNow=null;
 function appNoteHtml(){
   var id='ai-appn-'+(++ordlSeq);
-  return '<div class="ai-appn"><div class="ai-appn__row"><span class="ai-appn__icon">'+APP_ICON+'</span><span class="ai-appn__txt">'+esc(appText())+'</span>'+
+  /* The store's picture of its app (Settings → Your app), bigger than the
+     card so it stands out above and below it; else the phone icon. */
+  var lead=APP_PROMO.image?'<span class="ai-appn__shot"><img src="'+esc(APP_PROMO.image)+'" alt="" width="64" height="80" decoding="async"></span>':'<span class="ai-appn__icon">'+APP_ICON+'</span>';
+  return '<div class="ai-appn'+(APP_PROMO.image?' has-shot':'')+'"><div class="ai-appn__row">'+lead+'<span class="ai-appn__txt">'+esc(appText())+'</span>'+
     '<button type="button" class="ai-appn__go" data-appn aria-expanded="false" aria-controls="'+id+'">'+esc(appButton())+'</button>'+
     '<button type="button" class="ai-appn__x" data-appn-x aria-label="Not now" title="Not now">'+RATE_ICON.x+'</button></div>'+
     '<div class="ai-appn__panel" id="'+id+'" hidden></div></div>';
@@ -2536,6 +2539,13 @@ function appNoteToggle(btn){
   var open=panel.hidden;
   if(open&&!panel.innerHTML){var info=appInfoNow||appInfo();if(!info)return;panel.__info=info;panel.innerHTML=appPanelHtml(info)}
   panel.hidden=!open;btn.setAttribute('aria-expanded',String(open));
+  /* Opened below the fold: bring all of it into view (again once it has
+     slid in and its pictures have loaded). */
+  if(open){
+    var row=btn.closest('.ai-chat-app')||panel;
+    keepInView(row);setTimeout(function(){keepInView(row)},340);
+    Array.prototype.forEach.call(panel.querySelectorAll('img'),function(im){if(!im.complete)im.addEventListener('load',function(){keepInView(row)},{once:true})});
+  }
 }
 function appNoteSwitch(btn){
   var box=btn.closest('.ai-appn__qrbox'),panel=btn.closest('.ai-appn__panel');if(!box||!panel||!panel.__info)return;
@@ -2564,6 +2574,10 @@ function maybeAppNote(bubble){
     var near=rateNearBottom();
     var row=el('div','ai-chat-app',appNoteHtml());
     row.setAttribute('role','group');row.setAttribute('aria-label',appText());
+    /* A picture that doesn't load: the phone icon in its place. */
+    var shot=row.querySelector('.ai-appn__shot img');
+    if(shot)shot.addEventListener('error',function(){var s=shot.parentNode,card=row.querySelector('.ai-appn');if(!s)return;s.outerHTML='<span class="ai-appn__icon">'+APP_ICON+'</span>';if(card)card.classList.remove('has-shot');row.classList.remove('has-shot')});
+    if(shot)row.classList.add('has-shot');
     msgsEl.appendChild(row);
     void row.offsetWidth;row.classList.add('is-in');
     if(near)keepInView(row);
@@ -2706,7 +2720,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-28 chat-text-settings'}catch(e){}
+try{window.__hajiraiWidget='2026-10-28 app-picture'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */

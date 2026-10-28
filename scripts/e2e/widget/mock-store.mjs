@@ -319,6 +319,11 @@ export function start(port) {
           return setTimeout(() => send(c.error ? 404 : 200, "application/json", JSON.stringify(c.error ? { error: "not_found" } : { ok: true, intro: comparisonIntro(c), comparison: c })), 120);
         }
         // The app's QR code, as routes/app-qr.jsx makes it.
+        // The app's picture (Settings → Your app): a phone on a clear background; ?v=missing is gone.
+        if (u.pathname === "/apps/hajirai/app-image") {
+          if (u.searchParams.get("v") === "missing") return send(404, "text/plain", "Not found");
+          return send(200, "image/svg+xml", '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="120" viewBox="0 0 96 120"><rect x="18" y="4" width="60" height="112" rx="12" fill="#1c1c22"/><rect x="22" y="12" width="52" height="96" rx="6" fill="#2d4a7a"/></svg>');
+        }
         if (u.pathname === "/apps/hajirai/app-qr") {
           appQrLog.push(u.searchParams.get("p"));
           return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
@@ -329,7 +334,7 @@ export function start(port) {
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
-          appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
+          appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=img/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "", image: /[?&]app=imgbad/.test(String(req.headers.referer || "")) ? "/apps/hajirai/app-image?v=missing" : "/apps/hajirai/app-image?v=test1" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }

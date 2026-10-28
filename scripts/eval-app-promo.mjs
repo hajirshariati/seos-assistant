@@ -46,6 +46,25 @@ await test("its message and button: as set, tidied and capped; blank → the wid
   assert.equal(defaultAppText("Aetrex"), "Love Aetrex? You\u2019ll love our app");
   assert.equal(defaultAppText(""), "You\u2019ll love our app");
 });
+await test("the app's picture: PNG / WebP / JPEG up to its size; a new picture gets a new link", async () => {
+  const { appImageData, appImageError, APP_IMAGE_MAX_BYTES } = await import("../app/lib/app-promo.js");
+  const png = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 1, 2, 3]).toString("base64")}`;
+  const webp = `data:image/webp;base64,${Buffer.from("RIFFxxxxWEBP").toString("base64")}`;
+  assert.equal(appImageData(png).type, "image/png");
+  assert.equal(appImageData(webp).type, "image/webp");
+  assert.deepEqual([...Buffer.from(appImageData(png).base64, "base64")], [137, 80, 78, 71, 1, 2, 3]);
+  for (const bad of ["", "data:image/gif;base64,AAAA", "data:image/svg+xml;base64,PHN2Zz4=", "https://x.com/a.png", "data:image/png;base64,***"]) assert.equal(appImageData(bad), null, bad);
+  assert.equal(appImageData(`data:image/png;base64,${Buffer.alloc(APP_IMAGE_MAX_BYTES + 1).toString("base64")}`), null, "too large");
+  assert.equal(appImageError(""), "");
+  assert.equal(appImageError(png), "");
+  assert.match(appImageError("data:image/gif;base64,AAAA"), /PNG, WebP or JPEG/);
+  assert.match(appImageError(`data:image/png;base64,${Buffer.alloc(APP_IMAGE_MAX_BYTES + 1).toString("base64")}`), /too large/);
+  const a = appPromoConfig({ appPromoImage: png }).image, b = appPromoConfig({ appPromoImage: webp }).image;
+  assert.match(a, /^\/apps\/hajirai\/app-image\?v=[a-z0-9]+$/);
+  assert.notEqual(a, b, "a new picture, a new link");
+  assert.equal(appPromoConfig({}).image, undefined, "no picture → none (the phone icon)");
+  assert.deepEqual(appPromoConfig({ appPromoOn: false, appPromoImage: png }), { on: false });
+});
 await test("Settings: a link that isn't the store's page is refused, with why; blank is fine", () => {
   assert.equal(appLinkError("ios", ""), "");
   assert.equal(appLinkError("ios", IOS), "");

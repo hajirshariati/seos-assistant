@@ -192,6 +192,9 @@ model ShopConfig {
   // Its message and button ("" → "Love {store}? You'll love our app" / "Get it").
   appPromoText         String   @default("")
   appPromoButton       String   @default("")
+  // A picture of the app (a data URL, resized in Settings before it's saved),
+  // served to the chat at /apps/hajirai/app-image. "" → the phone icon.
+  appPromoImage        String   @default("")
   // The chat's own words (Settings → Look & feel → Chat text): its name,
   // welcome greetings, the Start here / Popular headings, the chat button and
   // message box text. JSON; a blank one falls back to the theme editor's.
