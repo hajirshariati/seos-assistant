@@ -16,7 +16,7 @@ export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
-  // The app's own name in Shopify ("AVA Aetrex Virtual Assistant" on the
+  // The app's own name in Shopify ("AVA" on the
   // Aetrex app), for the pages' headers; never in the way of a page.
   const facts = await getShopConfigCached(session.shop)
     .then((config) => shopFacts(session.shop, config, { admin }))

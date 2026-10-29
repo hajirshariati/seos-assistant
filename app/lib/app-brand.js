@@ -1,5 +1,5 @@
 // The app's name and brand. Both apps run this same code: the Aetrex app is
-// named "AVA Aetrex Virtual Assistant" (shopify.app.aetrex.toml), the other
+// named "AVA" (shopify.app.aetrex.toml), the other
 // keeps "SEoS Assistant". The admin shows the name Shopify has for the app;
 // the brand — "AVA" for a name that starts with AVA, "SEoS" for any other —
 // names the chat's order tags ("AVA", "AVA Buy now"). Pure.

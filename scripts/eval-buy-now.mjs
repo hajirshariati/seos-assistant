@@ -51,6 +51,7 @@ await test("the Aetrex app (named AVA…) tags AVA and AVA Buy now; any other na
   const attrs = (o) => Object.entries(o).map(([name, value]) => ({ name, value }));
   const sold = chatOrderFlags(attrs({ _seos_attributed: "1" }));
   const bought = chatOrderFlags(attrs({ _seos_attributed: "1", _seos_buy_now: "1" }));
+  assert.equal(appBrand(appName({ title: "AVA" })), "AVA");
   assert.equal(appBrand(appName({ title: "AVA Aetrex Virtual Assistant" })), "AVA");
   assert.deepEqual(chatOrderTags(sold, "AVA"), ["AVA"]);
   assert.deepEqual(chatOrderTags(bought, "AVA"), ["AVA", "AVA Buy now"]);
@@ -62,6 +63,7 @@ await test("the Aetrex app (named AVA…) tags AVA and AVA Buy now; any other na
   assert.deepEqual(chatOrderTags(chatOrderFlags(attrs({ gift: "1" })), "AVA"), [], "not from the chat → no tag");
 });
 await test("pages call the Aetrex app just AVA; the other keeps its full name", () => {
+  assert.deepEqual(appNames("AVA"), { name: "AVA", short: "AVA", brand: "AVA" }, "the Aetrex app's name");
   assert.deepEqual(appNames("AVA Aetrex Virtual Assistant"), { name: "AVA Aetrex Virtual Assistant", short: "AVA", brand: "AVA" });
   assert.deepEqual(appNames("SEoS Assistant"), { name: "SEoS Assistant", short: "SEoS Assistant", brand: "SEoS" });
   assert.deepEqual(appNames(""), { name: "SEoS Assistant", short: "SEoS Assistant", brand: "SEoS" }, "not known yet → as before");

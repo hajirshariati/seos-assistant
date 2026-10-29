@@ -43,7 +43,7 @@ async function seed() {
   await prisma.shopConfig.create({ data: {
     shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514", chatLimitPerMin: 0, chatLimitPerHour: 0,
     // What AVA's Shopify Analytics events need from Shopify, as if already read.
-    appEventsShop: JSON.stringify({ id: "gid://shopify/Shop/777", handle: "hajirai", title: "AVA Aetrex Virtual Assistant", currency: "USD", at: Date.now() }),
+    appEventsShop: JSON.stringify({ id: "gid://shopify/Shop/777", handle: "hajirai", title: "AVA", currency: "USD", at: Date.now() }),
   } });
   // A second store with a tiny limit, for the busy-store checks.
   await prisma.session.create({ data: { id: `offline_${BUSY_SHOP}`, shop: BUSY_SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
@@ -497,13 +497,13 @@ await test("the public pages name the app this server runs — AVA on the Aetrex
   const page = async (p) => (await (await fetch(`http://localhost:${APP_PORT}${p}`)).text()).replace(/<!-- -->/g, "");
   const privacy = await page("/privacy");
   assert.match(privacy, /<title>Privacy Policy — AVA<\/title>/);
-  assert.match(privacy, /AVA Aetrex Virtual Assistant \(&quot;AVA&quot;, &quot;we&quot;/, "full name first, then AVA");
+  assert.match(privacy, /AVA \(&quot;we&quot;, &quot;our&quot;, &quot;the app&quot;\) is operated by Aetrex Technology/, "named once, then we");
   assert.match(privacy, /© Aetrex Technology · AVA/);
   assert.doesNotMatch(privacy, /SEoS Assistant/);
   const guide = await page("/onboarding");
   assert.match(guide, /<title>Setup guide — AVA<\/title>/);
   assert.match(guide, /AVA · Setup guide/);
-  assert.match(guide, /Apps → AVA Aetrex Virtual Assistant in your Shopify admin\./);
+  assert.match(guide, /Apps → AVA in your Shopify admin\./);
   assert.doesNotMatch(guide, /SEoS Assistant/);
 });
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
