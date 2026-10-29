@@ -14,3 +14,15 @@ export function appName(facts) {
 export function appBrand(name) {
   return /^AVA\b/.test(String(name || "").trim()) ? "AVA" : "SEoS";
 }
+
+// What a page calls it: just "AVA" on the Aetrex app; the full name on any
+// other ("SEoS Assistant").
+export function appShortName(name) {
+  return appBrand(name) === "AVA" ? "AVA" : String(name || "").trim() || DEFAULT_APP_NAME;
+}
+
+// Everything a page needs, from the app's name.
+export function appNames(name) {
+  const full = String(name || "").trim() || DEFAULT_APP_NAME;
+  return { name: full, short: appShortName(full), brand: appBrand(full) };
+}

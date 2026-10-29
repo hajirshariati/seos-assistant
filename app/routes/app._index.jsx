@@ -18,7 +18,7 @@ import { getConversionSummary, getConversionDailySeries } from "../models/ChatCo
 import { listDecisionTrees } from "../models/DecisionTree.server";
 import { listStoreKnowledge } from "../lib/store-knowledge/sync.server";
 import seosLogo from "../assets/SEoS.png";
-import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
+import { DEFAULT_APP_NAME, appBrand, appShortName } from "../lib/app-brand.js";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -1653,7 +1653,7 @@ export default function Home() {
 
   return (
     <Page>
-      <TitleBar title={appNameNow} />
+      <TitleBar title={appShortName(appNameNow)} />
       <style>{`
         /* ------------------------------------------------------------------
            Home page — Apple-clean, futuristic-AI styling.

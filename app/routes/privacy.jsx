@@ -3,25 +3,35 @@
 // privacy policy field. The route is intentionally outside `/app/*` so it
 // doesn't go through admin authentication and can be visited by anyone.
 
+import { useLoaderData } from "react-router";
 import seosLogo from "../assets/SEoS.png";
+import { appNames } from "../lib/app-brand.js";
+import { serverAppName } from "../lib/shopify-facts.server.js";
 
 const LAST_UPDATED = "October 29, 2026";
 const SUPPORT_EMAIL = "help@aetrex.com";
 
-export const meta = () => [
-  { title: "Privacy Policy — SEoS Assistant" },
-  { name: "robots", content: "index, follow" },
-  {
-    name: "description",
-    content:
-      "Privacy policy for SEoS Assistant, an AI shopping assistant for Shopify. Describes what data we collect, how we use it, and how merchants can exercise their data rights.",
-  },
-  { name: "viewport", content: "width=device-width, initial-scale=1" },
-];
+// The app this server runs, by its name in Shopify: "AVA Aetrex Virtual
+// Assistant" (AVA) on the Aetrex app's server, "SEoS Assistant" on the other.
+export const loader = async () => appNames(await serverAppName());
+
+export const meta = ({ data }) => {
+  const app = data || appNames("");
+  return [
+    { title: `Privacy Policy — ${app.short}` },
+    { name: "robots", content: "index, follow" },
+    {
+      name: "description",
+      content:
+        `Privacy policy for ${app.name}, an AI shopping assistant for Shopify. Describes what data we collect, how we use it, and how merchants can exercise their data rights.`,
+    },
+    { name: "viewport", content: "width=device-width, initial-scale=1" },
+  ];
+};
 
 export const headers = () => ({
-  // 1 hour CDN, 1 day browser — this page rarely changes and is purely public.
-  "Cache-Control": "public, max-age=86400, s-maxage=3600",
+  // 10 minutes — public, and a new name shows soon.
+  "Cache-Control": "public, max-age=600, s-maxage=600",
 });
 
 const STYLES = `
@@ -133,23 +143,24 @@ const STYLES = `
 `;
 
 export default function PrivacyPolicy() {
+  const app = useLoaderData() || appNames("");
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <main className="privacy">
         <div className="brand">
-          <img src={seosLogo} alt="SEoS" />
-          <span>SEoS Assistant</span>
+          <img src={seosLogo} alt="" />
+          <span>{app.short}</span>
         </div>
         <div className="sheet">
         <header className="head">
-          <h1>SEoS Assistant Privacy Policy</h1>
+          <h1>{app.short} Privacy Policy</h1>
           <p className="meta">Last updated: {LAST_UPDATED}</p>
         </header>
 
         <p>
-          SEoS Assistant (&quot;we&quot;, &quot;our&quot;, &quot;the app&quot;) is operated by Aetrex Technology.
-          This policy describes how SEoS Assistant processes data when a merchant
+          {app.name} ({app.short !== app.name ? <>&quot;{app.short}&quot;, </> : null}&quot;we&quot;, &quot;our&quot;, &quot;the app&quot;) is operated by Aetrex Technology.
+          This policy describes how {app.short} processes data when a merchant
           installs it on a Shopify store, and how responsibility for that data is
           divided between the merchant, Shopify, and us.
         </p>
@@ -177,7 +188,7 @@ export default function PrivacyPolicy() {
         </ul>
 
         <h2>3. Data we process</h2>
-        <p>When a merchant installs SEoS Assistant, we index and store the following from their Shopify store, on the merchant&apos;s instruction:</p>
+        <p>When a merchant installs {app.short}, we index and store the following from their Shopify store, on the merchant&apos;s instruction:</p>
         <ul>
           <li>Product catalog data (titles, descriptions, prices, variants, images, tags, metafields, product types), kept current via Shopify webhooks.</li>
           <li>Product attribute mappings configured by the merchant (metafield mappings and tag prefixes).</li>
@@ -263,7 +274,7 @@ export default function PrivacyPolicy() {
 
         <h2>8. Data deletion</h2>
         <ul>
-          <li>When a merchant uninstalls SEoS Assistant, all associated data is automatically and permanently deleted from our database, including product data, embeddings, knowledge files, the product spec sheet, test recordings and the themes read from them, attribute mappings, search rules, chat usage records, feedback, conversion records, encrypted API keys, configuration, session records, and analytics. No request to us is required.</li>
+          <li>When a merchant uninstalls {app.short}, all associated data is automatically and permanently deleted from our database, including product data, embeddings, knowledge files, the product spec sheet, test recordings and the themes read from them, attribute mappings, search rules, chat usage records, feedback, conversion records, encrypted API keys, configuration, session records, and analytics. No request to us is required.</li>
           <li>We respond automatically to Shopify&apos;s mandatory privacy webhooks — customer data requests, customer redaction, and shop redaction — within the timelines Shopify requires.</li>
           <li>Merchants can delete individual knowledge files, remove the product spec sheet, delete recorded chats one at a time or all at once (with the themes read from them), and clear encrypted API keys at any time from the admin.</li>
         </ul>
@@ -298,7 +309,7 @@ export default function PrivacyPolicy() {
 
         <h2>12. Children&apos;s privacy</h2>
         <p>
-          SEoS Assistant is a business tool for Shopify merchants and is not directed at children under 13 (or the equivalent minimum age in your jurisdiction). We do not knowingly collect personal information from children. If you believe a child has provided personal information through the chat, contact us and we will delete it.
+          {app.short} is a business tool for Shopify merchants and is not directed at children under 13 (or the equivalent minimum age in your jurisdiction). We do not knowingly collect personal information from children. If you believe a child has provided personal information through the chat, contact us and we will delete it.
         </p>
 
         <h2>13. AI-generated content disclaimer</h2>
@@ -315,7 +326,7 @@ export default function PrivacyPolicy() {
 
         <h2>15. Cookies</h2>
         <p>
-          SEoS Assistant does not set any cookies. The chat widget stores conversation history in the shopper&apos;s browser <code>localStorage</code>, which is cleared when the shopper clears their browser data or starts a new chat from the menu. The embedded admin relies on Shopify&apos;s own session mechanisms.
+          {app.short} does not set any cookies. The chat widget stores conversation history in the shopper&apos;s browser <code>localStorage</code>, which is cleared when the shopper clears their browser data or starts a new chat from the menu. The embedded admin relies on Shopify&apos;s own session mechanisms.
         </p>
 
         <h2>16. Changes to this policy</h2>
@@ -329,7 +340,7 @@ export default function PrivacyPolicy() {
         </p>
 
         <footer>
-          © Aetrex Technology · SEoS Assistant
+          © Aetrex Technology · {app.short}
         </footer>
         </div>
       </main>

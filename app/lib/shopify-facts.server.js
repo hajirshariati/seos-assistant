@@ -24,6 +24,7 @@ export function parseShopFacts(raw) {
 }
 
 const cache = new Map(); // shop → { facts, at } | { facts (last copy or null), failedAt }
+let serverName = null; // { name, at }
 let lastWarn = 0;
 
 async function readFromShopify(shop, admin) {
@@ -67,4 +68,28 @@ export async function shopFacts(shop, config, { admin = null } = {}) {
     }
     return last;
   }
+}
+
+// The app this server runs, by its name in Shopify — from the stores' kept
+// copies (a server runs one app). For the pages no store opens: the privacy
+// policy, the setup guide. "" until a store's copy has it; kept 10 minutes.
+export async function serverAppName() {
+  if (serverName && Date.now() - serverName.at < 10 * 60 * 1000) return serverName.name;
+  let name = "";
+  try {
+    const rows = await prisma.shopConfig.findMany({
+      where: { appEventsShop: { not: "" } },
+      select: { appEventsShop: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+    });
+    for (const r of rows) {
+      const t = parseShopFacts(r.appEventsShop)?.title;
+      if (typeof t === "string" && t.trim()) { name = t.trim(); break; }
+    }
+  } catch {
+    name = serverName?.name || "";
+  }
+  serverName = { name, at: Date.now() };
+  return name;
 }

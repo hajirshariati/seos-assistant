@@ -1,6 +1,6 @@
 import { useRouteLoaderData } from "react-router";
 import seosLogo from "../assets/SEoS.png";
-import { DEFAULT_APP_NAME } from "../lib/app-brand.js";
+import { appNames } from "../lib/app-brand.js";
 
 // Shared internal-page header — matches the brand row on the redesigned
 // home page (logo mark, wordmark, page name) with the green gradient
@@ -10,8 +10,8 @@ import { DEFAULT_APP_NAME } from "../lib/app-brand.js";
 // `gutter` controls the bottom margin: pages whose parent layout already
 // supplies spacing (a BlockStack gap) pass gutter={false}.
 export default function BrandHeader({ title, gutter = true }) {
-  // The app's name as Shopify has it (app.jsx's loader).
-  const name = useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME;
+  // What the app is called — "AVA" on the Aetrex app (app.jsx's loader).
+  const name = appNames(useRouteLoaderData("routes/app")?.appName).short;
   return (
     <div style={{ marginBottom: gutter ? "20px" : 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", paddingBottom: "12px" }}>

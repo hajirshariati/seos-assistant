@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 
 const { buyNowConfig, cleanBuyNowCode, buyNowCodeError, chatOrderFlags, chatOrderTags, BUY_NOW_CODE_MAX } = await import("../app/lib/buy-now.js");
-const { appName, appBrand } = await import("../app/lib/app-brand.js");
+const { appName, appBrand, appNames } = await import("../app/lib/app-brand.js");
 
 let passed = 0;
 let failed = 0;
@@ -60,6 +60,11 @@ await test("the Aetrex app (named AVA…) tags AVA and AVA Buy now; any other na
   assert.equal(appName(null), "SEoS Assistant", "Shopify not read yet → the old name");
   assert.deepEqual(chatOrderTags(bought, "anything"), ["SEoS", "SEoS Buy now"], "only AVA or SEoS, never a made-up tag");
   assert.deepEqual(chatOrderTags(chatOrderFlags(attrs({ gift: "1" })), "AVA"), [], "not from the chat → no tag");
+});
+await test("pages call the Aetrex app just AVA; the other keeps its full name", () => {
+  assert.deepEqual(appNames("AVA Aetrex Virtual Assistant"), { name: "AVA Aetrex Virtual Assistant", short: "AVA", brand: "AVA" });
+  assert.deepEqual(appNames("SEoS Assistant"), { name: "SEoS Assistant", short: "SEoS Assistant", brand: "SEoS" });
+  assert.deepEqual(appNames(""), { name: "SEoS Assistant", short: "SEoS Assistant", brand: "SEoS" }, "not known yet → as before");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

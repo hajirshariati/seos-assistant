@@ -10,7 +10,7 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import { authenticate } from "../shopify.server";
 import { getShopConfigCached } from "../models/ShopConfig.server";
 import { shopFacts } from "../lib/shopify-facts.server.js";
-import { appName } from "../lib/app-brand.js";
+import { appName, appNames } from "../lib/app-brand.js";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
@@ -61,7 +61,9 @@ const PolarisLink = forwardRef(function PolarisLink(
 });
 
 export default function App() {
-  const { apiKey } = useLoaderData();
+  const { apiKey, appName: name } = useLoaderData();
+  // "AVA" on the Aetrex app; "SEoS Assistant" on the other.
+  const { short } = appNames(name);
   return (
     <ShopifyAppProvider isEmbeddedApp apiKey={apiKey}>
       <PolarisAppProvider i18n={enTranslations} linkComponent={PolarisLink}>
@@ -148,7 +150,7 @@ export default function App() {
           }
       `}</style>
         <NavMenu>
-          <Link to="/app" rel="home">SEoS Assistant</Link>
+          <Link to="/app" rel="home">{short}</Link>
           <Link to="/app/knowledge">Knowledge</Link>
           <Link to="/app/catalog">Catalog</Link>
           <Link to="/app/recommenders">Smart Recommenders</Link>
@@ -166,7 +168,7 @@ export default function App() {
           }}
         >
           <Text as="p" tone="subdued" variant="bodySm" alignment="center">
-            SEoS Assistant by Aetrex Technology ·{" "}
+            {short} by Aetrex Technology ·{" "}
             <a
               href="/privacy"
               target="_blank"

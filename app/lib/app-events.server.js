@@ -21,8 +21,9 @@ const USER_AGENT = "AVA app events";
 const SEND_TIMEOUT_MS = 5000;
 const MAX_QUEUE = 2000;
 const IN_FLIGHT = 4;
-// After Shopify couldn't give a token, wait this long before trying again.
-const RETRY_LATER_MS = 10 * 60 * 1000;
+// After Shopify couldn't give a token, wait before trying again: 15 seconds,
+// doubling with each failure in a row, up to 10 minutes.
+const tokenRetryMs = (failures) => Math.min(10 * 60 * 1000, 15_000 * 2 ** Math.max(0, failures - 1));
 
 // The part after the app's handle; must match the declaration.
 export const AVA_EVENT = {
@@ -75,33 +76,48 @@ export function cleanAttributes(attrs) {
   return out;
 }
 
+// A connection that drops before an answer (one the other side had just
+// closed, say) is tried once more; an answer of any kind is kept.
+async function fetchOnceMore(url, init) {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
+  } catch (err) {
+    if (err?.name === "TimeoutError") throw err;
+    await new Promise((r) => setTimeout(r, 300));
+    return fetch(url, { ...init, signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
+  }
+}
+
 // ── the app's token (an hour; renewed five minutes before) ──
 let token = null; // { value, until }
 let tokenFailedAt = 0;
+let tokenFailures = 0;
 let tokenLoading = null;
 async function appToken({ fresh = false } = {}) {
   if (!fresh && token && Date.now() < token.until) return token.value;
-  if (Date.now() - tokenFailedAt < RETRY_LATER_MS) return null;
+  if (tokenFailures && Date.now() - tokenFailedAt < tokenRetryMs(tokenFailures)) return null;
   const clientId = process.env.SHOPIFY_API_KEY;
   const clientSecret = process.env.SHOPIFY_API_SECRET;
   if (!clientId || !clientSecret) return null;
   if (!tokenLoading) {
-    tokenLoading = fetch(TOKEN_URL, {
+    tokenLoading = fetchOnceMore(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT },
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" }),
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     })
       .then(async (res) => {
         const json = await res.json().catch(() => null);
         if (!res.ok || typeof json?.access_token !== "string") throw new Error(`token ${res.status}`);
         token = { value: json.access_token, until: Date.now() + 55 * 60 * 1000 };
+        tokenFailures = 0;
         return token.value;
       })
       .catch((err) => {
         token = null;
         tokenFailedAt = Date.now();
-        note("token", `no token from Shopify: ${err?.message || err}`);
+        tokenFailures++;
+        const why = err?.cause?.code || err?.cause?.message || "";
+        note("token", `no token from Shopify: ${err?.message || err}${why ? ` (${why})` : ""}`);
         return null;
       })
       .finally(() => { tokenLoading = null; });
@@ -141,11 +157,10 @@ function note(kind, msg) {
 async function post(body, retried = false) {
   const value = await appToken({ fresh: retried });
   if (!value) return;
-  const res = await fetch(EVENTS_URL, {
+  const res = await fetchOnceMore(EVENTS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${value}`, "User-Agent": USER_AGENT },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
   if (res.ok) return;
   // An expired token: once more with a new one. Still being processed: once

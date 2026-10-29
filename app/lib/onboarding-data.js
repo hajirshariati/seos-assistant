@@ -30,8 +30,8 @@ export const STEPS = [
     phase: "install",
     icon: "📂",
     title: "Open the app",
-    short: "Apps → SEoS Assistant in your Shopify admin.",
-    body: "Open SEoS Assistant from your Shopify admin (Apps → SEoS Assistant). The home page has a setup checklist — each item links to the page that finishes it.",
+    short: "Apps → {app} in your Shopify admin.",
+    body: "Open {app} from your Shopify admin (Apps → {app}). The home page has a setup checklist — each item links to the page that finishes it.",
   },
   {
     phase: "install",
@@ -221,3 +221,11 @@ export const STEPS = [
     tip: "When a customer finds a bad answer, add the conversation to scripts/chat-transcripts.aetrex.json so it's checked on every run.",
   },
 ];
+
+// "{app}" in a step: the app's name in Shopify ("AVA Aetrex Virtual
+// Assistant" on the Aetrex app, "SEoS Assistant" on the other). The theme
+// editor's embed keeps its own label, "SEoS Assistant", on both.
+export function stepsFor(appName) {
+  const fill = (v) => (typeof v === "string" ? v.split("{app}").join(appName) : v);
+  return STEPS.map((step) => ({ ...step, title: fill(step.title), short: fill(step.short), body: fill(step.body) }));
+}

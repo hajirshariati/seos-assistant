@@ -1,19 +1,29 @@
 import { useState, useEffect, useRef } from "react";
-import { PHASES, STEPS, CADENCE_SECTIONS } from "../lib/onboarding-data";
+import { useLoaderData } from "react-router";
+import { PHASES, CADENCE_SECTIONS, stepsFor } from "../lib/onboarding-data";
 import seosLogo from "../assets/SEoS.png";
+import { appNames } from "../lib/app-brand.js";
+import { serverAppName } from "../lib/shopify-facts.server.js";
 
 const SUPPORT_EMAIL = "help@aetrex.com";
 
-export const meta = () => [
-  { title: "Setup guide — SEoS Assistant" },
-  { name: "robots", content: "noindex, nofollow" },
-  {
-    name: "description",
-    content:
-      "Setup guide for SEoS Assistant — the AI shopping assistant for Shopify stores.",
-  },
-  { name: "viewport", content: "width=device-width, initial-scale=1" },
-];
+// The app this server runs, by its name in Shopify: AVA on the Aetrex app's
+// server, "SEoS Assistant" on the other.
+export const loader = async () => appNames(await serverAppName());
+
+export const meta = ({ data }) => {
+  const app = data || appNames("");
+  return [
+    { title: `Setup guide — ${app.short}` },
+    { name: "robots", content: "noindex, nofollow" },
+    {
+      name: "description",
+      content:
+        `Setup guide for ${app.name} — the AI shopping assistant for Shopify stores.`,
+    },
+    { name: "viewport", content: "width=device-width, initial-scale=1" },
+  ];
+};
 
 export const headers = () => ({
   "Cache-Control": "private, no-cache",
@@ -1102,7 +1112,8 @@ function renderMaintainSteps(steps) {
 }
 
 export default function Onboarding() {
-  const grouped = groupByPhase(STEPS);
+  const app = useLoaderData() || appNames("");
+  const grouped = groupByPhase(stepsFor(app.name));
   const [activeId, setActiveId] = useState(grouped[0]?.id || "");
   const active = grouped.find((p) => p.id === activeId) || grouped[0];
   const activeIndex = grouped.findIndex((p) => p.id === activeId);
@@ -1149,7 +1160,7 @@ export default function Onboarding() {
 
   // Egg 4 state — the pop-up assistant bubble.
   const EGG_LINES = [
-    "Hi, I'm SEoS 👋 I help shoppers find the right product before they finish typing.",
+    `Hi, I'm ${app.brand} 👋 I help shoppers find the right product before they finish typing.`,
     "Three clicks? You'd make a great QA tester. Everything I say is fact-checked against the live catalog first.",
     "I never guess. If a product fact isn't in the catalog, it doesn't leave my mouth.",
   ];
@@ -1175,7 +1186,17 @@ export default function Onboarding() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     // Egg 1 — console boot banner. Only fires once per page load.
-    const banner = [
+    const banner = (app.brand === "AVA" ? [
+      "%c      _ __     __ _    ",
+      "     / \\\\ \\   / // \\   ",
+      "    / _ \\\\ \\ / // _ \\  ",
+      "   / ___ \\\\ V // ___ \\ ",
+      "  /_/   \\_\\\\_//_/   \\_\\",
+      "",
+      `  ${app.name}`,
+      "  Built with caffeine and a stubborn refusal to ship hallucinations.",
+      "",
+    ] : [
       "%c   ____   _____      ____  ",
       "  / ___| | ____|___  / ___| ",
       "  \\___ \\ |  _| / _ \\ \\___ \\ ",
@@ -1185,7 +1206,7 @@ export default function Onboarding() {
       "  Search Engine on Steroids · SEoS Assistant",
       "  Built with caffeine and a stubborn refusal to ship hallucinations.",
       "",
-    ].join("\n");
+    ]).join("\n");
     // eslint-disable-next-line no-console
     console.log(banner, "color:#4ade80;font-family:ui-monospace,monospace;font-size:11px;line-height:1.3");
 
@@ -1224,7 +1245,8 @@ export default function Onboarding() {
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, []);
+    // The app's name doesn't change on a page, so the banner prints once.
+  }, [app.brand, app.name]);
 
   return (
     <>
@@ -1263,19 +1285,19 @@ export default function Onboarding() {
             <div className="hero-brand">
               {/* Easter egg (mouse only, decorative). */}
               {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-              <img src={seosLogo} alt="SEoS" onClick={onLogoClick} />
-              <span className="hero-brand-name">SEoS Assistant · Setup guide</span>
+              <img src={seosLogo} alt={app.brand} onClick={onLogoClick} />
+              <span className="hero-brand-name">{app.short} · Setup guide</span>
             </div>
             <h1>
-              {"Set up your "}
+              {app.brand === "AVA" ? "Set up " : "Set up your "}
               {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
               <span
                 className={"seos" + (boosted ? " is-boosted" : "")}
                 onClick={() => setBoosted(true)}
               >
-                SEoS
+                {app.brand}
               </span>
-              {" Assistant."}
+              {app.brand === "AVA" ? "." : " Assistant."}
             </h1>
             <p>
               Everything to install, configure, launch, and maintain the AI
@@ -1396,7 +1418,7 @@ export default function Onboarding() {
             <a href="/privacy">Privacy</a>
             <a href="/app" target="_blank" rel="noopener noreferrer">Open admin</a>
           </div>
-          <div>© Aetrex Technology · SEoS Assistant</div>
+          <div>© Aetrex Technology · {app.short}</div>
         </footer>
       </div>
 
@@ -1405,7 +1427,7 @@ export default function Onboarding() {
         <div className="egg-chat" role="status" onClick={() => setEggMsg(null)}>
           <div className="egg-chat-head">
             <img src={seosLogo} alt="" aria-hidden="true" />
-            <span>SEoS Assistant</span>
+            <span>{app.short}</span>
             <span className="egg-chat-dot" aria-hidden="true" />
           </div>
           <div className="egg-chat-body">{eggMsg}</div>

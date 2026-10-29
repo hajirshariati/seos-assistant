@@ -492,6 +492,20 @@ await test("Shopify Analytics: adds to cart and checkouts from the chat, priced 
   await prisma.productVariant.deleteMany({ where: { productId: p.id } });
   await prisma.product.delete({ where: { id: p.id } });
 });
+await test("the public pages name the app this server runs — AVA on the Aetrex app", async () => {
+  // (React marks where one piece of text meets the next with an empty comment.)
+  const page = async (p) => (await (await fetch(`http://localhost:${APP_PORT}${p}`)).text()).replace(/<!-- -->/g, "");
+  const privacy = await page("/privacy");
+  assert.match(privacy, /<title>Privacy Policy — AVA<\/title>/);
+  assert.match(privacy, /AVA Aetrex Virtual Assistant \(&quot;AVA&quot;, &quot;we&quot;/, "full name first, then AVA");
+  assert.match(privacy, /© Aetrex Technology · AVA/);
+  assert.doesNotMatch(privacy, /SEoS Assistant/);
+  const guide = await page("/onboarding");
+  assert.match(guide, /<title>Setup guide — AVA<\/title>/);
+  assert.match(guide, /AVA · Setup guide/);
+  assert.match(guide, /Apps → AVA Aetrex Virtual Assistant in your Shopify admin\./);
+  assert.doesNotMatch(guide, /SEoS Assistant/);
+});
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
   const cfg = await (await fetch(signed("/widget-config"))).json();
   assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "", text: "", button: "" }, "on by default, links from the footer, the default text");
@@ -668,7 +682,7 @@ await prisma.product.deleteMany({ where: { shop: SHOP } });
 await prisma.$disconnect();
 if (failed) console.log("\n--- server log (tail) ---\n" + serverLog.split("\n").slice(-40).join("\n"));
 // A failure: the server's own lines about it.
-if (failed) console.log(serverLog.split("\n").filter((l) => /app-events|activity|error/i.test(l)).slice(-25).join("\n"));
+if (failed) console.log(serverLog.split("\n").filter((l) => /app-events|shopify-facts|activity|error/i.test(l)).slice(-25).join("\n"));
 console.log(`\n${passed} passed, ${failed} failed`);
 console.log(JSON.stringify({ integration: { passed, failed, results, load, pageViews, products: productCount, at: new Date().toISOString() } }));
 process.exit(failed ? 1 : 0);
