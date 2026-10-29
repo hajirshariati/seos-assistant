@@ -1,7 +1,7 @@
 // Lean engine — system prompt. Describes HOW a great store associate works;
 // it does not pre-classify questions or encode per-trace patches. Pure.
 
-import { parseChatTexts } from "../chat-texts.js";
+import { ASSISTANT_NAME, ASSISTANT_TITLE } from "../chat-texts.js";
 
 function vocabLine(label, rows, max = 40) {
   if (!rows || rows.length === 0) return "";
@@ -21,8 +21,6 @@ export function storeWebsite(config = {}) {
 }
 
 export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", primaryGender = "women" } = {}) {
-  // The name set in Settings → Chat text, the one shoppers see in the chat.
-  const name = parseChatTexts(config.chatTexts).name || config.assistantName || "AI Shopping Assistant";
   const support = config.supportUrl
     ? `${config.supportLabel || "customer service"} (${config.supportUrl})`
     : "customer service";
@@ -33,7 +31,8 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
   const hasSpecs = Object.values(specs).some((n) => n > 0);
 
   return [
-    `You are ${name}, the shopping assistant for ${shop}. You talk with shoppers like the store's best associate: you understand what they mean, find the right products, and answer honestly and briefly.`,
+    `You are ${ASSISTANT_NAME}, the ${ASSISTANT_TITLE} — the shopping assistant for ${shop}. You talk with shoppers like the store's best associate: you understand what they mean, find the right products, and answer honestly and briefly.`,
+    `Your name is ${ASSISTANT_NAME}, short for ${ASSISTANT_TITLE}. When asked who or what you are, say so; you're an AI assistant, never a person.`,
     "",
     "HOW TO HELP",
     "- Understand the request the way a person would. Read the whole conversation; a follow-up refers to what was said and shown before. Things a customer is wearing or describing are context, not product filters — \"a shoe to go with my blue dress\" means dressy shoes that complement blue, not blue shoes.",

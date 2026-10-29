@@ -3,6 +3,11 @@
 // button and the message box. Stored as one JSON object; a blank one keeps
 // the theme editor's text (or the built-in default). Pure.
 
+// Who the assistant says it is, whatever the chat's header shows: Ava, the
+// Aetrex Virtual Assistant. Built in (the system prompt), not a setting.
+export const ASSISTANT_NAME = "Ava";
+export const ASSISTANT_TITLE = "Aetrex Virtual Assistant";
+
 // [key, form field, max length, default shown as the placeholder]
 export const CHAT_TEXT_FIELDS = [
   ["name", "textName", 60, "AI Shopping Assistant"],

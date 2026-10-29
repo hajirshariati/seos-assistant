@@ -1,11 +1,12 @@
 // The chat's own words (Settings → Look & feel → Chat text): tidied and
 // capped, only the ones set reach the widget, a blank one keeps the theme
-// editor's, and the assistant goes by the name set here.
+// editor's. Whatever name the chat shows, the assistant says it's Ava, the
+// Aetrex Virtual Assistant (built into the system prompt).
 //
 // Run: node scripts/eval-chat-texts.mjs
 import assert from "node:assert/strict";
 
-const { CHAT_TEXT_FIELDS, parseChatTexts, chatTextsFromForm, chatTextsForForm, cleanChatText } = await import("../app/lib/chat-texts.js");
+const { CHAT_TEXT_FIELDS, ASSISTANT_NAME, ASSISTANT_TITLE, parseChatTexts, chatTextsFromForm, chatTextsForForm, cleanChatText } = await import("../app/lib/chat-texts.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 
 let passed = 0;
@@ -39,10 +40,15 @@ await test("the Settings form round trip: what's typed is what's shown back; bla
   assert.equal(Object.keys(back).length, CHAT_TEXT_FIELDS.length, "every field");
   assert.equal(chatTextsFromForm(() => ""), "{}", "all blank → nothing set");
 });
-await test("the assistant goes by the name set here; otherwise as before", () => {
-  assert.match(buildLeanSystemPrompt({ shop: "x", config: { chatTexts: '{"name":"Aetrex Shopping Assistant"}' } }), /^You are Aetrex Shopping Assistant,/);
-  assert.match(buildLeanSystemPrompt({ shop: "x", config: { assistantName: "Fit Pro", chatTexts: "{}" } }), /^You are Fit Pro,/);
-  assert.match(buildLeanSystemPrompt({ shop: "x" }), /^You are AI Shopping Assistant,/);
+await test("the assistant is Ava, the Aetrex Virtual Assistant — whatever name the chat shows", () => {
+  assert.equal(ASSISTANT_NAME, "Ava");
+  assert.equal(ASSISTANT_TITLE, "Aetrex Virtual Assistant");
+  for (const config of [{}, { chatTexts: '{"name":"Aetrex Shopping Assistant"}' }, { assistantName: "Fit Pro", chatTexts: "{}" }]) {
+    const p = buildLeanSystemPrompt({ shop: "x", config });
+    assert.match(p, /^You are Ava, the Aetrex Virtual Assistant — the shopping assistant for x\./);
+    assert.match(p, /Your name is Ava, short for Aetrex Virtual Assistant\. When asked who or what you are, say so; you're an AI assistant, never a person\./);
+    assert.doesNotMatch(p, /Aetrex Shopping Assistant|Fit Pro|AI Shopping Assistant/);
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
