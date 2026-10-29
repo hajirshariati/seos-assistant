@@ -1137,7 +1137,7 @@ function FitConfidenceCard({ fit }) {
             <Badge tone={isOn ? "success" : undefined}>{isOn ? "On" : "Off"}</Badge>
           </InlineStack>
           <Text as="p" tone="subdued">
-            A small meter on every shoe and orthotic card in the chat — &quot;Fit ━━━ 92%&quot;, with &quot;Runs small&quot; (or large, narrow, wide) under it when that&apos;s what buyers found — that says how sure a shopper can be the style fits as expected. It&apos;s read from reviewers&apos; own fit answers (Yotpo), the pairs sold and sent back in the last 12 months (Shopify) and why they came back (AfterShip), across all of a style&apos;s colors. A style with too little to go on shows no bar. It never names a size — True Fit does that.
+            A Fit score on every shoe and orthotic card in the chat — a ring with &quot;92%&quot; and &quot;Runs true to size&quot; (or small, large, narrow, wide) — that says how sure a shopper can be the style fits as expected; tapping it shows where the number comes from. It sits beside the size finder (True Fit, or FITFinder on orthotics) in a small panel that opens from &quot;Check fit &amp; size&quot; under Add to cart (the words are in Settings → Look &amp; feel → Chat text). It&apos;s read from reviewers&apos; own fit answers (Yotpo), the pairs sold and sent back in the last 12 months (Shopify) and why they came back (AfterShip), across all of a style&apos;s colors. A style with too little to go on shows only the size finder. It never names a size — True Fit does that.
           </Text>
           <Text as="p" tone="subdued">
             {fit.vip

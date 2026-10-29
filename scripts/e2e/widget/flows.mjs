@@ -2219,75 +2219,304 @@ for (const coop of ["1", "2"]) {
   check("seasonal: switched off, the usual first button comes back", !(await page.$(".is-season")) && offTiles.join("|") === usual.join("|"), offTiles.join(" | "));
   await ctx.close();
 }
-// Fit confidence: one meter row under the price ("Fit ━━━── 92%", the bar
-// taking the card's width) and a short note only when there's more to know
-// ("Runs small", "In your size 9"); said in full to screen readers; no line
-// without a real score; the same in View all and after a reload.
-for (const [label, path, opts] of [["showcase", "/showcase", { viewport: { width: 1280, height: 860 } }], ["row cards", "/horizontal", { viewport: { width: 1280, height: 860 } }], ["phone", "/showcase", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
-  const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 2 });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("http://localhost:4789" + path);
-  await page.click(".ai-chat-launcher");
-  await page.waitForTimeout(400);
-  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fitcards");
-  await page.keyboard.press("Enter");
-  await page.waitForSelector(".ai-chat-fitc", { timeout: 6000 });
-  await page.waitForTimeout(300);
-  const read = (scope = ".ai-chat-messages") => page.evaluate((scope) => [...document.querySelectorAll(`${scope} .ai-chat-product-card`)].map((c) => {
-    const f = c.querySelector(".ai-chat-fitc");
-    if (!f) return { handle: c.dataset.handle, fit: null };
-    const info = c.querySelector(".ai-chat-product-info") || c;
-    const ir = info.getBoundingClientRect(), row = f.querySelector(".ai-chat-fitc__row"), rr = row.getBoundingClientRect();
-    const note = f.querySelector(".ai-chat-fitc__note");
-    const price = c.querySelector(".ai-chat-product-price"), buy = c.querySelector("[data-atc]");
-    return {
-      handle: c.dataset.handle, k: row.querySelector(".ai-chat-fitc__k").textContent, n: row.querySelector(".ai-chat-fitc__n").textContent,
-      note: note ? note.textContent : "", noteWhole: note ? note.scrollWidth <= note.clientWidth + 1 : true,
-      say: f.getAttribute("aria-label"), role: f.getAttribute("role"),
-      bar: row.querySelector(".ai-chat-fitc__bar i").style.width, barW: Math.round(row.querySelector(".ai-chat-fitc__bar").getBoundingClientRect().width),
-      inside: rr.left >= ir.left - 0.5 && rr.right <= ir.right + 0.5, oneRow: rr.height <= 15,
-      order: !!(price.compareDocumentPosition(f) & 4) && !!(f.compareDocumentPosition(buy) & 4),
-      num: getComputedStyle(row.querySelector(".ai-chat-fitc__n")).color, fill: getComputedStyle(row.querySelector(".ai-chat-fitc__bar i")).backgroundColor,
-    };
+// Fit and size, under the buy button: side by side — Fit (a ring with the
+// style's score) and the product's size tool (True Fit / FITFinder); one
+// alone takes the row. They fit every card at every width — the words shown
+// are never cut — and the Fit tile opens where the number comes from.
+{
+  const layouts = [
+    ["showcase desktop", "/showcase?fitc=1", { viewport: { width: 1280, height: 860 } }],
+    ["row cards desktop", "/horizontal?fitc=1", { viewport: { width: 1280, height: 860 } }],
+    ["showcase tablet", "/showcase?fitc=1", { viewport: { width: 768, height: 1024 }, isMobile: true, hasTouch: true }],
+    ["showcase phone", "/showcase?fitc=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+    ["row cards phone", "/horizontal?fitc=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+    ["showcase small phone", "/showcase?fitc=1", { viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true }],
+    ["row cards small phone", "/horizontal?fitc=1", { viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true }],
+  ];
+  // Fit confidence off: the size tool stays a round button beside the buy
+  // button, exactly as before — no tiles.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "show me 3");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-product-card [data-atc]");
+    await page.waitForTimeout(300);
+    const off = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.map((c) => {
+      const b = c.querySelector(".ai-chat-card-fit"), row = c.querySelector(".ai-chat-buy-row");
+      return [c.dataset.handle, b ? (b.dataset.truefit ? "truefit" : b.dataset.helper) : "-", !!row && !!b && b.parentNode === row && !!row.querySelector("[data-atc]"), !!c.querySelector(".ai-tools, .ai-tool, [data-fitq]"), c.querySelector(".ai-chat-view-link")?.textContent || "-"];
+    }));
+    check("tools off: the size tool beside the buy button and View product, as before — no tiles, no fold", JSON.stringify(off) === JSON.stringify([["savannah-red", "truefit", true, false, "View product"], ["jillian-black", "truefit", true, false, "View product"], ["orthotic-one", "fitfinder", true, false, "View product"]]), JSON.stringify(off));
+    await ctx.close();
+  }
+  // On, with no scores in the reply: every card gets the size tile alone.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    await page.goto("http://localhost:4789/showcase?fitc=1");
+    await page.waitForTimeout(500);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "show me 3");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-product-card [data-atc]");
+    await page.waitForTimeout(300);
+    const on = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.map((c) => [c.dataset.handle, c.querySelector(".ai-fitp .ai-tools")?.getAttribute("data-n") || "-", [...c.querySelectorAll(".ai-tool")].map((t) => t.dataset.truefit ? "truefit" : t.dataset.helper).join("+"), !!c.querySelector(".ai-chat-card-fit"), !!c.querySelector(".ai-chat-view-link")]));
+    check("tools on, no scores: the size tile alone on every card, folded under the button — never a mix", JSON.stringify(on) === JSON.stringify([["savannah-red", "1", "truefit", false, false], ["jillian-black", "1", "truefit", false, false], ["orthotic-one", "1", "fitfinder", false, false]]), JSON.stringify(on));
+    await ctx.close();
+  }
+  // On, and the shopper finds their FIT: the orthotic's only tool goes, and
+  // with nothing left to open, its card shows View product again.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789/products/jillian-black?fitc=1");
+    await page.waitForTimeout(400);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea", "show me 3");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelectorAll(".ai-chat-messages .ai-chat-product-card [data-fitq]").length >= 3);
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="orthotic-one"] [data-fitq]');
+    await page.waitForTimeout(400);
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="orthotic-one"] [data-helper="fitfinder"]');
+    await page.waitForFunction(() => document.querySelector(".ai-chat-fit-result"), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const after = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.slice(0, 3).map((c) => [c.dataset.handle, !!c.querySelector("[data-fitq]"), !!c.querySelector(".ai-fitp"), c.querySelector(".ai-chat-view-link")?.textContent || "-"]));
+    const pinned = await page.$$eval(".ai-chat-messages .ai-chat-products", (rs) => rs.some((r) => r.classList.contains("is-fitq-open") || [...r.children].some((c) => c.style.minHeight)));
+    check("fold: a FIT found — the orthotic's fold goes, View product comes back; the shoes keep theirs", JSON.stringify(after) === JSON.stringify([["savannah-red", true, true, "-"], ["jillian-black", true, true, "-"], ["orthotic-one", false, false, "View product"]]) && !pinned, JSON.stringify({ after, pinned }));
+    check("fold: no JS errors after a FIT is found", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The store's own words for the button (Settings → Chat text), and no motion
+  // for shoppers who prefer less.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    await page.goto("http://localhost:4789/showcase?fitc=1&texts=fit");
+    await page.waitForTimeout(500);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fitcards");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-messages [data-fitq]");
+    await page.waitForTimeout(300);
+    const words = await page.$$eval(".ai-chat-messages [data-fitq]", (qs) => qs.slice(0, 2).map((q) => [q.textContent, q.getAttribute("aria-label")]));
+    check("fold: the store's own words on the button, and the shoe's name for screen readers", JSON.stringify(words) === JSON.stringify([["Does this fit?", "Does this fit?, Savannah Adjustable Quarter Strap Sandal - Red"], ["Does this fit?", "Does this fit?, Jillian Braided Quarter Strap Sandal - Black"]]), JSON.stringify(words));
+    const q = '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]';
+    const anim = await page.$eval(".ai-chat-messages .ai-fitp", (p) => getComputedStyle(p).transitionDuration);
+    await page.click(q);
+    const now = await page.$eval(q, (b) => Math.round(document.getElementById(b.getAttribute("aria-controls")).getBoundingClientRect().height));
+    check("fold: reduced motion — it opens at once, nothing slides", /^0s(, 0s)*$/.test(anim) && now > 60, `${anim} / ${now}px`);
+    await ctx.close();
+  }
+  // A lone card: the button centered under the buy button; while the size
+  // picker is open inside the card, it steps aside like View product did.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    await page.goto("http://localhost:4789/showcase?fitc=1");
+    await page.waitForTimeout(500);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fitcard");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-messages [data-fitq]");
+    await page.waitForTimeout(300);
+    const lone = await page.$eval(".ai-chat-messages .ai-chat-product-card", (c) => {
+      const q = c.querySelector("[data-fitq]"), l = q.querySelector(".ai-fitq__label"), cr = c.getBoundingClientRect(), lr = l.getBoundingClientRect(), cta = c.querySelector("[data-atc]").getBoundingClientRect();
+      return { only: c.parentNode.children.length === 1, centered: Math.abs((lr.left + lr.right) / 2 - (cta.left + cta.right) / 2) < 2, view: !!c.querySelector(".ai-chat-view-link"), inside: lr.left >= cr.left && lr.right <= cr.right };
+    });
+    check("fold: a lone card — the button centered under its buy button, no View product", lone.only && lone.centered && !lone.view && lone.inside, JSON.stringify(lone));
+    await page.click(".ai-chat-messages .ai-chat-product-card [data-fitq]");
+    await page.waitForTimeout(400);
+    await page.click(".ai-chat-messages .ai-chat-product-card [data-atc]");
+    await page.waitForSelector(".ai-chat-product-card.has-inline-picker", { timeout: 5000 }).catch(() => {});
+    const aside = await page.$eval(".ai-chat-messages .ai-chat-product-card", (c) => ({ picker: c.classList.contains("has-inline-picker"), q: getComputedStyle(c.querySelector("[data-fitq]")).display, p: getComputedStyle(c.querySelector(".ai-fitp")).display }));
+    check("fold: the size picker inside the card — the button and its tiles step aside", aside.picker && aside.q === "none" && aside.p === "none", JSON.stringify(aside));
+    await ctx.close();
+  }
+  // Every card's tools: where they sit, what they say, whether anything is cut.
+  const readTools = (page, scope) => page.evaluate((scope) => [...document.querySelectorAll(`${scope} .ai-chat-product-card`)].map((c) => {
+    const row = c.querySelector(".ai-tools");
+    if (!row) return { handle: c.dataset.handle, n: 0 };
+    const cr = c.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    const cta = c.querySelector("[data-atc]"), view = c.querySelector(".ai-chat-view-link");
+    const shown = (x) => x && getComputedStyle(x).display !== "none" && x.getBoundingClientRect().width > 0;
+    const tiles = [...row.querySelectorAll(".ai-tool")].map((b) => {
+      const r = b.getBoundingClientRect();
+      const words = [...b.querySelectorAll(".ai-tool__title, .ai-tool__long, .ai-tool__short")].filter(shown);
+      const cut = [...b.querySelectorAll(".ai-tool__title, .ai-tool__sub")].filter(shown).some((x) => x.scrollWidth > x.clientWidth + 1);
+      return { kind: b.classList.contains("ai-tool--fit") ? "fit" : b.dataset.truefit ? "truefit" : b.dataset.helper, text: words.map((x) => x.textContent).join(" / "), pct: b.querySelector(".ai-tool__pct")?.textContent || "", label: b.getAttribute("aria-label"), popup: b.getAttribute("aria-haspopup"), w: Math.round(r.width), h: Math.round(r.height), inside: r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5, cut };
+    });
+    return { handle: c.dataset.handle, n: tiles.length, data: row.getAttribute("data-n"), tiles, rowW: Math.round(rr.width), afterCta: !!(cta.compareDocumentPosition(row) & 4), inFold: !!row.closest(".ai-fitp.is-open"), view: !!view, sameRow: tiles.length === 2 ? Math.abs(row.children[0].getBoundingClientRect().top - row.children[1].getBoundingClientRect().top) < 1 : true };
   }), scope);
-  const dark = await read();
-  await page.screenshot({ path: out(`fit-${label.replace(/\s/g, "-")}-dark`) });
-  const by = Object.fromEntries(dark.map((x) => [x.handle, x]));
-  const a = by["savannah-red"], b = by["jillian-black"], r = by["runs-1"];
-  check(`fit (${label}): "Fit ━━ 92%" on one row under the price, the bar 92% full and as wide as the card allows`, a?.k === "Fit" && a.n === "92%" && a.bar === "92%" && a.barW >= 24 && a.inside && a.oneRow && a.order, JSON.stringify(a));
-  check(`fit (${label}): true to size needs no note; said in full to screen readers`, a?.note === "" && a.role === "img" && a.say === "Fit confidence: 92%, true to size. From 85 reviews and 1,240 pairs sold in the last year.", JSON.stringify(a));
-  check(`fit (${label}): runs small says so under it, whole`, r?.n === "81%" && r.note === "Runs small" && r.noteWhole && r.inside, JSON.stringify(r));
-  check(`fit (${label}): in the shopper's own size — "In your size 9", whole`, b?.n === "78%" && b.note === "In your size 9" && b.noteWhole && /in size 9, the size you’ve kept before: 78%, runs small/.test(b.say), JSON.stringify(b));
-  const noScript = await page.evaluate(() => !document.querySelector(".ai-chat-product-card script, .ai-chat-fitc b b"));
-  check(`fit (${label}): no line without a real score (none sent, 150%, not a number)`, dark.filter((x) => x.fit === null).map((x) => x.handle).join() === "orthotic-one,carly-white,odd-1", JSON.stringify(dark.map((x) => [x.handle, x.n || null, x.note || ""])));
-  check(`fit (${label}): a made-up label or size is left out`, by["odd-2"]?.n === "70%" && by["odd-2"].note === "" && by["odd-2"].say === "Fit confidence: 70%." && noScript, JSON.stringify(by["odd-2"]));
-  check(`fit (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
-  if (label === "showcase") {
-    await page.click(".ai-chat-theme-btn");
-    await page.waitForTimeout(250);
-    const light = await read();
-    await page.screenshot({ path: out(`fit-${label}-light`) });
-    const l = light.find((x) => x.handle === "savannah-red");
-    check("fit: light and dark each have their own colors", l && a && l.num !== a.num && l.fill !== a.fill, JSON.stringify({ light: [l?.num, l?.fill], dark: [a?.num, a?.fill] }));
-    // View all keeps it.
-    await page.click("[data-viewall]");
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: out(`fit-${label}-viewall`) });
-    const sheet = (await read(".ai-chat-fbsheet__list")).map((x) => [x.handle, x.n || null, x.note || ""]);
-    check("fit: View all's cards carry the same line", JSON.stringify(sheet.slice(0, 5)) === JSON.stringify([["savannah-red", "92%", ""], ["jillian-black", "78%", "In your size 9"], ["orthotic-one", null, ""], ["carly-white", null, ""], ["runs-1", "81%", "Runs small"]]), JSON.stringify(sheet));
+  for (const [label, path, opts] of layouts) {
+    const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 2 });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789" + path);
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(400);
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fitcards");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-messages [data-fitq]", { timeout: 6000 });
+    await page.waitForTimeout(300);
+    // Folded at first: one quiet button under the buy button, where View product was.
+    const folds = () => page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.map((c) => {
+      const q = c.querySelector("[data-fitq]"), view = c.querySelector(".ai-chat-view-link");
+      if (!q) return { h: c.dataset.handle, q: false, view: !!view };
+      const p = document.getElementById(q.getAttribute("aria-controls")), cta = c.querySelector("[data-atc]"), info = c.querySelector(".ai-chat-product-info");
+      const qr = q.getBoundingClientRect(), cr = c.getBoundingClientRect(), st = getComputedStyle(info);
+      const room = info.getBoundingClientRect().width - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+      return { h: c.dataset.handle, q: true, view: !!view, text: q.textContent, label: q.getAttribute("aria-label"), exp: q.getAttribute("aria-expanded"), order: !!p && c.contains(p) && !!(cta.compareDocumentPosition(q) & 4) && !!(q.compareDocumentPosition(p) & 4), ph: Math.round(p.getBoundingClientRect().height), hidden: getComputedStyle(p).visibility === "hidden", tall: Math.round(qr.height), full: qr.width >= room - 1, inside: qr.left >= cr.left - 0.5 && qr.right <= cr.right + 0.5, cardH: cr.height };
+    }));
+    const f0 = await folds();
+    check(`fold (${label}): every card folds its tiles under "Check fit & size" — no View product, nothing showing yet`, f0.every((f) => f.q && !f.view && f.text === "Check fit & size" && f.exp === "false" && f.order && f.ph === 0 && f.hidden), JSON.stringify(f0.map((f) => [f.h, f.text, f.exp, f.order, f.ph, f.hidden, f.view])));
+    check(`fold (${label}): the button is the card's whole width, easy to tap, inside the card, and names the shoe for screen readers`, f0.every((f) => f.full && f.tall >= 32 && f.inside) && f0[0].label === "Check fit & size, Savannah Adjustable Quarter Strap Sandal - Red", JSON.stringify(f0.map((f) => [f.h, f.tall, f.full, f.inside, f.label])));
+    // Folded tiles are out of the tab order.
+    await page.focus('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]');
+    await page.keyboard.press("Tab");
+    const skipped = await page.evaluate(() => !document.activeElement.closest('.ai-chat-product-card[data-handle="savannah-red"] .ai-fitp'));
+    check(`fold (${label}): folded, Tab skips its tiles`, skipped);
+    // Opening one card's: only that card grows; the rest of its row keep their height.
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]');
+    await page.waitForTimeout(450);
+    const f1 = await folds();
+    const grew = f1[0].cardH - f0[0].cardH, same = f1.slice(1).every((f, i) => Math.abs(f.cardH - f0[i + 1].cardH) < 0.6);
+    check(`fold (${label}): tapping it opens that card's tiles smoothly — just that card grows`, f1[0].exp === "true" && f1[0].ph > 60 && !f1[0].hidden && grew > 60 && same && f1.slice(1).every((f) => f.exp === "false"), JSON.stringify({ grew, heights: f1.map((f, i) => Math.round(f.cardH - f0[i].cardH)) }));
+    // Tapped again, it folds back.
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]');
+    await page.waitForTimeout(450);
+    const f2 = await folds();
+    const unpinned = await page.$$eval(".ai-chat-messages .ai-chat-products", (rs) => rs.every((r) => !r.classList.contains("is-fitq-open") && [...r.children].every((c) => !c.style.minHeight)));
+    check(`fold (${label}): tapped again, it folds back; the row is as it was`, f2[0].exp === "false" && f2[0].ph === 0 && f2[0].hidden && Math.abs(f2[0].cardH - f0[0].cardH) < 0.6 && unpinned, JSON.stringify({ f2: f2[0], unpinned }));
+    if (label === "showcase desktop") {
+      // The keyboard: Enter and Space open and fold it.
+      await page.focus('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-fitq]');
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(400);
+      const kOpen = await page.$eval('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-fitq]', (q) => q.getAttribute("aria-expanded"));
+      await page.keyboard.press("Space");
+      await page.waitForTimeout(400);
+      const kShut = await page.$eval('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-fitq]', (q) => q.getAttribute("aria-expanded"));
+      check("fold: Enter opens it, Space folds it", kOpen === "true" && kShut === "false", `${kOpen}/${kShut}`);
+    }
+    // Every card open, for the tiles' own checks.
+    for (const h of f0.map((f) => f.h)) await page.click(`.ai-chat-messages .ai-chat-product-card[data-handle="${h}"] [data-fitq]`);
+    await page.waitForTimeout(450);
+    const cards = await readTools(page, ".ai-chat-messages");
+    const by = Object.fromEntries(cards.map((c) => [c.handle, c]));
+    await page.screenshot({ path: out(`tools-${label.replace(/\s/g, "-")}`) });
+    const a = by["savannah-red"];
+    check(`tools (${label}): opened under the buy button — Fit and Size side by side`, a?.n === 2 && a.data === "2" && a.afterCta && a.inFold && !a.view && a.sameRow && a.tiles[0].kind === "fit" && a.tiles[1].kind === "truefit", JSON.stringify(a));
+    check(`tools (${label}): the ring shows the score; the tile says it all to screen readers and opens a dialog`, a?.tiles[0].pct === "92%" && a.tiles[0].popup === "dialog" && a.tiles[0].label === "Fit confidence: 92%, true to size. From 85 reviews and 1,240 pairs sold in the last year. Shows where this comes from.", JSON.stringify(a?.tiles[0]));
+    check(`tools (${label}): every tile inside its card, easy to tap (44px+), no words cut`, cards.every((c) => !c.n || c.tiles.every((t) => t.inside && t.h >= 44 && !t.cut)), JSON.stringify(cards.map((c) => [c.handle, c.rowW, (c.tiles || []).map((t) => `${t.text}@${t.w}x${t.h}${t.cut ? "!" : ""}`)])));
+    // The words follow the card's width: the full ones where they fit, short ones, or the title alone.
+    const w = a.rowW, fitText = a.tiles[0].text, sizeText = a.tiles[1].text;
+    const expect = w >= 212 ? ["Fit / Runs true to size", "Size / Find your size"] : w >= 150 ? ["Fit / True to size", "Size / True Fit"] : ["Fit", "Size"];
+    check(`tools (${label}): the words for a ${w}px row`, fitText === expect[0] && sizeText === expect[1], `${fitText} | ${sizeText}`);
+    const b = by["jillian-black"];
+    check(`tools (${label}): in the shopper's own size`, b?.tiles[0].pct === "78%" && (w < 150 ? b.tiles[0].text === "Fit" : b.tiles[0].text === (w >= 212 ? "Fit / In your size 9" : "Fit / Your size 9")), JSON.stringify(b?.tiles[0]));
+    check(`tools (${label}): one tool alone takes the row (an orthotic's FITFinder, a shoe without a score)`, by["orthotic-one"]?.n === 1 && by["orthotic-one"].tiles[0].kind === "fitfinder" && by["carly-white"]?.n === 1 && by["carly-white"].tiles[0].kind === "truefit" && by["carly-white"].tiles[0].w >= a.rowW - 1, JSON.stringify([by["orthotic-one"], by["carly-white"]]));
+    check(`tools (${label}): no Fit tile without a real score; a made-up label or size is left out`, by["odd-1"]?.tiles.every((t) => t.kind !== "fit") && by["odd-2"]?.tiles[0].kind === "fit" && by["odd-2"].tiles[0].pct === "70%" && by["odd-2"].tiles[0].label === "Fit confidence: 70%. Shows where this comes from.", JSON.stringify([by["odd-1"], by["odd-2"]?.tiles[0]]));
+
+    // Where the number comes from.
+    const tile = '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitx]';
+    await page.click(tile);
+    await page.waitForTimeout(450);
+    const sheet = () => page.evaluate(() => {
+      const sh = document.querySelector(".ai-fitx"), card = sh && sh.querySelector(".ai-fitx__sheet"), p = document.querySelector(".ai-chat-panel");
+      if (!sh || sh.hidden) return { open: false };
+      const r = card.getBoundingClientRect(), pr = p.getBoundingClientRect();
+      return {
+        open: sh.classList.contains("is-open"), role: card.getAttribute("role"), modal: card.getAttribute("aria-modal"), title: card.querySelector("#ai-fitx-title")?.textContent,
+        ring: card.querySelector(".ai-fitx__ring b")?.textContent, prod: card.querySelector(".ai-fitx__prod")?.textContent, pill: card.querySelector(".ai-fitx__pill")?.textContent || "",
+        rows: [...card.querySelectorAll(".ai-fitx__row")].map((x) => x.querySelector(".ai-fitx__rh").textContent + ": " + [...x.querySelectorAll(".ai-fitx__rp, .ai-fitx__key li")].map((y) => y.textContent).join(" | ")),
+        tf: !!card.querySelector(".ai-fitx__tf[data-truefit]"), focus: document.activeElement?.className || "",
+        inside: r.left >= pr.left - 0.5 && r.right <= pr.right + 0.5 && r.bottom <= pr.bottom + 0.5 && r.top >= pr.top - 0.5, sideways: card.scrollWidth > card.clientWidth + 1,
+        behind: document.querySelector(".ai-chat-messages").closest("[inert]") !== null || !!document.querySelector(".ai-chat-panel > [data-fx-inert]"),
+      };
+    });
+    const s1 = await sheet();
+    await page.screenshot({ path: out(`fitx-${label.replace(/\s/g, "-")}`) });
+    check(`fit sheet (${label}): opens over the chat, inside it, focus on its close button, the chat behind out of reach`, s1.open && s1.role === "dialog" && s1.modal === "true" && s1.inside && !s1.sideways && /ai-fitx__x/.test(s1.focus) && s1.behind, JSON.stringify(s1));
+    check(`fit sheet (${label}): the score, the shoe, how it runs`, s1.title === "Fit confidence" && s1.ring === "92%" && s1.prod === "Savannah Adjustable Quarter Strap Sandal - Red" && s1.pill === "Runs true to size", JSON.stringify(s1));
+    check(`fit sheet (${label}): what reviewers said and what buyers kept, in plain numbers; True Fit one tap away`, JSON.stringify(s1.rows) === JSON.stringify([
+      "What reviewers said: 72 of 85 said it’s true to size. | Runs small 8 | True to size 72 | Runs large 5 | Width: 70 of 75 said true to width · 3 runs narrow · 2 runs wide.",
+      "What buyers kept: About 88% of the 1,240 pairs sold in the last year weren’t sent back for fit.",
+    ]) && s1.tf, JSON.stringify(s1.rows));
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    // After a reload, the reply's cards come back with it.
-    await page.reload();
-    await page.waitForTimeout(800);
-    if (!(await page.$(".ai-chat-panel.open"))) await page.click(".ai-chat-launcher");
-    await page.waitForSelector(".ai-chat-fitc", { timeout: 5000 }).catch(() => {});
-    const again = (await read()).map((x) => [x.handle, x.n || null, x.note || ""]);
-    check("fit: after a reload the cards still show it", JSON.stringify(again.slice(0, 2)) === JSON.stringify([["savannah-red", "92%", ""], ["jillian-black", "78%", "In your size 9"]]), JSON.stringify(again));
+    const closed = await page.evaluate(() => ({ hidden: document.querySelector(".ai-fitx").hidden, focus: document.activeElement?.getAttribute("data-fitx") !== null && document.activeElement?.closest(".ai-chat-product-card")?.dataset.handle, chatOpen: !!document.querySelector(".ai-chat-panel.open"), inert: document.querySelectorAll(".ai-chat-panel [data-fx-inert]").length }));
+    check(`fit sheet (${label}): Escape closes it — back on the tile, the chat still open and usable`, closed.hidden && closed.focus === "savannah-red" && closed.chatOpen && closed.inert === 0, JSON.stringify(closed));
+    // The shopper's own size, and no AfterShip reasons: said as they are.
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-fitx]');
+    await page.waitForTimeout(400);
+    const s2 = await sheet();
+    check(`fit sheet (${label}): in the shopper's own size`, s2.pill === "Runs small" && s2.rows[0] === "For your size 9: The size you’ve kept before, from your orders. In size 9, about 84% of 120 pairs weren’t sent back for fit.", JSON.stringify(s2.rows));
+    await page.click(".ai-fitx__scrim", { position: { x: 20, y: 20 } });
+    await page.waitForTimeout(400);
+    check(`fit sheet (${label}): a tap outside closes it`, await page.evaluate(() => document.querySelector(".ai-fitx").hidden));
+    if (label === "showcase desktop") {
+      await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="runs-1"] [data-fitx]');
+      await page.waitForTimeout(400);
+      const s3 = await sheet();
+      check("fit sheet: without AfterShip's reasons, every return counts — said so", s3.rows[1] === "What buyers kept: 85% of the 900 pairs sold in the last year weren’t sent back." && s3.pill === "Runs small", JSON.stringify(s3.rows));
+      await page.click(".ai-fitx__x");
+      await page.waitForTimeout(400);
+      await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="odd-2"] [data-fitx]');
+      await page.waitForTimeout(400);
+      const s4 = await sheet();
+      check("fit sheet: nothing to go on yet — says so, invents nothing (True Fit still there: it's a shoe)",JSON.stringify(s4.rows) === JSON.stringify(["What reviewers said: No reviewer has rated the fit yet.", "What buyers kept: Not enough sales in the last year to go by yet."]) && s4.pill === "" && s4.tf, JSON.stringify(s4));
+      // Tab stays in the sheet.
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      check("fit sheet: Tab keeps focus in the sheet", await page.evaluate(() => !!document.activeElement.closest(".ai-fitx__sheet")));
+      await page.click(".ai-fitx__x");
+      await page.waitForTimeout(400);
+      // In View all: over the list; Escape closes only the sheet.
+      await page.click("[data-viewall]");
+      await page.waitForTimeout(700);
+      const list = (await readTools(page, ".ai-chat-fbsheet__list")).map((c) => [c.handle, (c.tiles || []).map((t) => t.kind).join("+")]);
+      check("fit: View all's cards have the same tools", JSON.stringify(list.slice(0, 4)) === JSON.stringify([["savannah-red", "fit+truefit"], ["jillian-black", "fit+truefit"], ["orthotic-one", "fitfinder"], ["carly-white", "truefit"]]), JSON.stringify(list));
+      check("fold: View all's cards fold theirs too", await page.$$eval(".ai-chat-fbsheet__list .ai-chat-product-card", (cs) => cs.every((c) => c.querySelector("[data-fitq]")?.getAttribute("aria-expanded") === "false" && !c.querySelector(".ai-chat-view-link"))));
+      await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]');
+      await page.waitForTimeout(450);
+      await page.screenshot({ path: out("fold-view-all") });
+      await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="savannah-red"] [data-fitx]');
+      await page.waitForTimeout(450);
+      const over = await page.evaluate(() => { const a = document.querySelector(".ai-fitx"), b = document.querySelector(".ai-chat-fbsheet"); return { open: !a.hidden, above: Number(getComputedStyle(a).zIndex) > Number(getComputedStyle(b).zIndex) }; });
+      await page.screenshot({ path: out("fitx-over-view-all") });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(450);
+      const after = await page.evaluate(() => ({ fitx: document.querySelector(".ai-fitx").hidden, list: !document.querySelector(".ai-chat-fbsheet").hidden }));
+      check("fit sheet: over View all; Escape closes only it", over.open && over.above && after.fitx && after.list, JSON.stringify({ over, after }));
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+      // Light theme: its own colors; after a reload the tiles come back.
+      const ringDark = await page.$eval(".ai-chat-messages .ai-ring__arc", (x) => getComputedStyle(x).stroke);
+      await page.click(".ai-chat-theme-btn");
+      await page.waitForTimeout(250);
+      const ringLight = await page.$eval(".ai-chat-messages .ai-ring__arc", (x) => getComputedStyle(x).stroke);
+      await page.screenshot({ path: out("tools-showcase-light") });
+      check("tools: light and dark each have their own ring color", ringDark !== ringLight, `${ringDark} / ${ringLight}`);
+      await page.reload();
+      await page.waitForTimeout(800);
+      if (!(await page.$(".ai-chat-panel.open"))) await page.click(".ai-chat-launcher");
+      await page.waitForSelector(".ai-chat-messages [data-fitq]", { timeout: 5000 }).catch(() => {});
+      const again = (await readTools(page, ".ai-chat-messages")).map((c) => [c.handle, (c.tiles || []).map((t) => t.kind + (t.pct ? ":" + t.pct : "")).join("+")]);
+      check("tools: after a reload the cards come back with them, folded", JSON.stringify(again.slice(0, 2)) === JSON.stringify([["savannah-red", "fit:92%+truefit"], ["jillian-black", "fit:78%+truefit"]]) && await page.$$eval(".ai-chat-messages [data-fitq]", (qs) => qs.length > 0 && qs.every((q) => q.getAttribute("aria-expanded") === "false")), JSON.stringify(again));
+    }
+    check(`tools (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
   }
-  await ctx.close();
 }
 
 await browser.close();

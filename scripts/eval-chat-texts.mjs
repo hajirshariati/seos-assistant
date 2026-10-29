@@ -40,6 +40,11 @@ await test("the Settings form round trip: what's typed is what's shown back; bla
   assert.equal(Object.keys(back).length, CHAT_TEXT_FIELDS.length, "every field");
   assert.equal(chatTextsFromForm(() => ""), "{}", "all blank → nothing set");
 });
+await test("the cards' fit & size button: short words, set like the rest, & kept", () => {
+  assert.deepEqual(CHAT_TEXT_FIELDS.find(([k]) => k === "fitButton"), ["fitButton", "textFitButton", 24, "Check fit & size"]);
+  assert.deepEqual(parseChatTexts('{"fitButton":"  Does   this fit? "}'), { fitButton: "Does this fit?" });
+  assert.deepEqual(parseChatTexts('{"fitButton":"Fit & size"}'), { fitButton: "Fit & size" });
+});
 await test("the assistant is Ava, the Aetrex Virtual Assistant — whatever name the chat shows", () => {
   assert.equal(ASSISTANT_NAME, "Ava");
   assert.equal(ASSISTANT_TITLE, "Aetrex Virtual Assistant");

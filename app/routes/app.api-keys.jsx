@@ -885,6 +885,9 @@ function LookSection({ d, values, set }) {
               <TextField label="“Popular” heading" value={values.textPopularHeading} onChange={set("textPopularHeading")} placeholder={TEXT_DEFAULT.popularHeading} maxLength={TEXT_MAX.popularHeading} autoComplete="off" />
               <TextField label="Message box" value={values.textInput} onChange={set("textInput")} placeholder={TEXT_DEFAULT.input} maxLength={TEXT_MAX.input} autoComplete="off" />
             </div>
+            <div className="set-grid">
+              <TextField label="Fit & size button" value={values.textFitButton} onChange={set("textFitButton")} placeholder={TEXT_DEFAULT.fitButton} maxLength={TEXT_MAX.fitButton} autoComplete="off" helpText="On product cards, under Add to cart, with Fit confidence on (Recommenders). It opens the Fit score and the size finder." />
+            </div>
           </BlockStack>
         </Row>
       </Group>

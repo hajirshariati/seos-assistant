@@ -329,8 +329,10 @@ export function start(port) {
           return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
         }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
+          // Smart Recommenders → Fit confidence: on for ?fitc=1 pages.
+          ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true } : {}),
           // Settings → Chat text: only on ?texts= pages (?texts=0: none set, as for a store that hasn't).
-          ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : {}),
+          ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : /[?&]texts=fit/.test(String(req.headers.referer || "")) ? { chatTexts: { fitButton: "Does this fit?" } } : {}),
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
@@ -402,19 +404,28 @@ export function start(port) {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
             const fitted = [
-              { ...cards[0], fit: { s: 92, l: "true", r: 85, n: 1240 } },
-              { ...cards[1], fit: { s: 78, l: "small", r: 12, n: 300, z: "9" } },
+              { ...cards[0], fit: { s: 92, l: "true", r: 85, n: 1240, a: [8, 72, 5], w: [3, 70, 2], k: 88, kf: 1 } },
+              { ...cards[1], fit: { s: 78, l: "small", r: 12, n: 300, a: [5, 6, 1], k: 81, kf: 1, z: "9", zn: 120, zk: 84 } },
               cards[2],
               { ...carly, fit: { s: 150, l: "true", r: 1, n: 1 } },
             ];
             const odd = [
-              { ...carly, handle: "runs-1", title: "Runs One - Black", fit: { s: 81, l: "small", r: 40, n: 900 } },
+              { ...carly, handle: "runs-1", title: "Runs One - Black", fit: { s: 81, l: "small", r: 40, n: 900, a: [14, 24, 2], k: 85 } },
               { ...carly, handle: "odd-1", title: "Odd One - Black", fit: { s: "abc" } },
-              { ...carly, handle: "odd-2", title: "Odd Two - Black", fit: { s: 70, l: "<b>x</b>", z: "9<script>", r: -4, n: "lots" } },
+              { ...carly, handle: "odd-2", title: "Odd Two - Black", fit: { s: 70, l: "<b>x</b>", z: "9<script>", r: -4, n: "lots", a: [1, "x", 3], k: 500 } },
             ];
             w({ type: "text", text: "Here are a few to consider." });
             w({ type: "products", products: [...fitted, ...odd] });
             w({ type: "view_all", label: "View all 7 sneakers", title: "Sneakers", total: 7, products: [...fitted, ...odd] });
+            w({ type: "done" });
+            return resp.end();
+          }
+          // One card with its Fit score: the lone card's own layout.
+          if (parsed.message === "fitcard") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "This one fits most people as expected." });
+            w({ type: "products", products: [{ ...cards[0], fit: { s: 92, l: "true", r: 85, n: 1240, a: [8, 72, 5], w: [3, 70, 2], k: 88, kf: 1 } }] });
             w({ type: "done" });
             return resp.end();
           }

@@ -1,6 +1,7 @@
 // The chat's own words, set in Settings → Look & feel → Chat text: its name,
 // the welcome greetings, the "Start here" / "Popular" headings, the chat
-// button and the message box. Stored as one JSON object; a blank one keeps
+// button, the message box and the product cards' fit & size button (shown
+// with Fit confidence on). Stored as one JSON object; a blank one keeps
 // the theme editor's text (or the built-in default). Pure.
 
 // Who the assistant says it is, whatever the chat's header shows: Ava, the
@@ -17,6 +18,7 @@ export const CHAT_TEXT_FIELDS = [
   ["popularHeading", "textPopularHeading", 30, "Popular"],
   ["launcher", "textLauncher", 60, "How can I help you today?"],
   ["input", "textInput", 60, "How can I help you today?"],
+  ["fitButton", "textFitButton", 24, "Check fit & size"],
 ];
 
 export function cleanChatText(value, max) {

@@ -97,6 +97,8 @@ await test("the score, worked by hand: reviewers and buyers, each leaning on the
   assert.equal(r.label, "true");
   assert.equal(r.reviews, 40);
   assert.equal(r.sold, 500);
+  // Where it comes from: the answers, and 1 − 100·share/500 = 90% not sent back for fit.
+  assert.deepEqual(cardFit(r), { s: 89, r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1 });
 });
 await test("too little to go on → no score", () => {
   assert.equal(fitScore(S({ answered: FIT_MIN_ANSWERS - 1, fits: 4, sold: FIT_MIN_SOLD - 1, returned: 0 }), BASE), null);
@@ -139,6 +141,8 @@ await test("one size of the style: its own pairs, leaning on the style's rate; t
   const nine = fitScoreForSize(stats, "9", BASE);
   assert.equal(nine.score, 85);
   assert.equal(nine.size, "9");
+  // In size 9: 1 − 40·share/100 = 80% not sent back for fit; the style's numbers stay.
+  assert.deepEqual(cardFit(nine), { s: 85, r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1, z: "9", zn: 100, zk: 80 });
   assert.equal(fitScoreForSize(stats, "11", BASE), null);
   assert.equal(fitScoreForSize(stats, "12", BASE), null);
 });
@@ -158,8 +162,9 @@ await test("the store's averages are per kind of product", () => {
 console.log("\nwhat a card carries");
 await test("score, words, reviews and pairs; a shopper's own size when there is one; said in full for screen readers", () => {
   assert.deepEqual(cardFit({ score: 92, label: "true", reviews: 85, sold: 1240 }), { s: 92, r: 85, n: 1240, l: "true" });
-  assert.deepEqual(cardFit({ score: 70, label: "", reviews: 0, sold: 300 }), { s: 70, r: 0, n: 300 });
-  assert.deepEqual(cardFit({ score: 94, label: "true", reviews: 85, sold: 400, size: "9" }), { s: 94, r: 85, n: 400, l: "true", z: "9" });
+  assert.deepEqual(cardFit({ score: 70, label: "", reviews: 0, sold: 300, answers: { size: [0, 0, 0], width: [0, 0, 0] }, kept: 81, fitOnly: false }), { s: 70, r: 0, n: 300, k: 81 });
+  assert.deepEqual(cardFit({ score: 94, label: "true", reviews: 85, sold: 1240, answers: { size: [8, 72, 5], width: [3, 70, 2] }, kept: 88, fitOnly: true, size: "9", sizeSold: 412, sizeKept: 90 }),
+    { s: 94, r: 85, n: 1240, l: "true", a: [8, 72, 5], w: [3, 70, 2], k: 88, kf: 1, z: "9", zn: 412, zk: 90 });
   assert.equal(cardFit(null), null);
   assert.equal(fitSentence({ s: 92, l: "true", r: 85, n: 1240 }), "Fit confidence: 92%, true to size. From 85 reviews and 1,240 pairs sold in the last year.");
   assert.equal(fitSentence({ s: 94, r: 1, n: 0, z: "9" }), "Fit confidence in size 9, the size you've kept before: 94%. From 1 review.");

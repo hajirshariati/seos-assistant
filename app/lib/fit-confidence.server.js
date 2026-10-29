@@ -454,9 +454,16 @@ export function forgetFitData(shop) {
   cache.delete(shop);
 }
 
+// A style's card, worked out from what was read (so a change in what a card
+// carries shows without waiting for the next read).
+export function styleCard(data, key) {
+  const s = data?.styles?.[key];
+  return s ? cardFit(fitScore(s, data.base?.[s.kind] || {})) : null;
+}
+
 // The card's fit for a catalog product (null: not enough to say).
 export function productFit(saved, p) {
-  return saved?.data?.styles?.[fitStyleKey(p)]?.card || null;
+  return styleCard(saved?.data, fitStyleKey(p));
 }
 
 // The daily read, for every store with fit confidence on. A store read in
@@ -574,8 +581,9 @@ export async function fitSummary(shop) {
   const saved = await getFitData(shop);
   const styles = Object.entries(saved?.data?.styles || {});
   const scored = styles
-    .filter(([, s]) => s.card)
-    .map(([key, s]) => ({ key, name: s.name || key.split("|")[0], line: LINE_NAMES[key.split("|")[1]] || "", kind: s.kind, ...s.card }));
+    .map(([key, s]) => ({ key, s, card: styleCard(saved.data, key) }))
+    .filter((x) => x.card)
+    .map(({ key, s, card }) => ({ key, name: s.name || key.split("|")[0], line: LINE_NAMES[key.split("|")[1]] || "", kind: s.kind, ...card }));
   scored.sort((a, b) => a.s - b.s || b.n - a.n);
   return {
     readAt: saved?.readAt ? new Date(saved.readAt).toISOString() : null,

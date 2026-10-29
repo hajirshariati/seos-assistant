@@ -79,7 +79,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   if(d.chatTexts&&typeof d.chatTexts==='object'){
-    var txtNow=function(){return [NAME,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
+    var txtNow=function(){return [NAME,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
     try{localStorage.setItem(TXT_KEY,JSON.stringify(d.chatTexts))}catch(e){}
     setTexts(d.chatTexts);
     if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
@@ -99,6 +99,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.klaviyoCompanyId)KLAVIYO_COMPANY_ID=d.klaviyoCompanyId;
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
+  if(typeof d.fitConfidence==='boolean'){FITC_ON=d.fitConfidence;try{localStorage.setItem(FITC_KEY,FITC_ON?'1':'0')}catch(e){}}
   if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
      the server echo (both must agree to enable rotation). When ready,
@@ -150,7 +151,7 @@ var SHOWBAN=C.showBanner!==false;
 /* Settings → Look & feel → Chat text: the store's own words win over the
    theme editor's; a blank one keeps the theme editor's (or the default).
    Remembered, so the next page shows them from the start. */
-var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular';
+var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular',FIT_LBL='Check fit & size';
 var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,launcher:LPLACE,input:IPLACE};
 function setTexts(t){
   t=t&&typeof t==='object'?t:{};
@@ -158,6 +159,7 @@ function setTexts(t){
   NAME=v('name',60)||TXT_BASE.name;GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;
   LPLACE=v('launcher',60)||TXT_BASE.launcher;IPLACE=v('input',60)||TXT_BASE.input;
   START_LBL=v('startHeading',30)||'Start here';POP_LBL=v('popularHeading',30)||'Popular';
+  FIT_LBL=v('fitButton',24)||'Check fit & size';
 }
 try{setTexts(JSON.parse(localStorage.getItem(TXT_KEY)||'null'))}catch(e){}
 var DISCL=C.disclaimerText||'';
@@ -222,6 +224,10 @@ function loginUrl(){return CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?
 // Set from /widget-config response; merchants pick this in the admin.
 // Hydrated synchronously from localStorage so restored history on
 // page refresh renders with the right style before fetch resolves.
+/* Fit confidence on (widget-config, remembered so saved cards draw right
+   from the start): cards show the Fit and size tiles under the buy button. */
+var FITC_KEY='hajirai_fitc',FITC_ON=false;
+try{FITC_ON=localStorage.getItem(FITC_KEY)==='1'}catch(e){}
 var PRODUCT_CARD_STYLE='horizontal';
 try{var _cachedStyle=localStorage.getItem(PCSK);if(_cachedStyle==='showcase')PRODUCT_CARD_STYLE='showcase'}catch(e){}
 /* Helpful / Not helpful under replies — the admin's "feedback buttons" setting. */
@@ -1307,6 +1313,8 @@ function refreshTexts(inWas){
   var wt=$('.ai-chat-welcome__title',panel);if(wt)wt.textContent=welcomeGreetingText()||('Hi, I\'m '+NAME);
   var ls=$('[data-wl="start"]',panel);if(ls)ls.textContent=START_LBL;
   var lp=$('[data-wl="popular"]',panel);if(lp)lp.textContent=POP_LBL;
+  var fq=panel.querySelectorAll('[data-fitq]');
+  for(var i=0;i<fq.length;i++){var fc=fq[i].closest('.ai-chat-product-card');fq[i].innerHTML=fitqLabel();fq[i].setAttribute('aria-label',fitqName(fc?fc.getAttribute('data-title')||'':''))}
 }
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
@@ -1626,6 +1634,7 @@ if(isOpen){
   if(GREETCTA)startGreetCtaRotator();
 }else{
   stopGreetCtaRotator();
+  fitxClose(true);
   panel.classList.remove('open');
   overlay.classList.remove('visible');
   launcher.classList.remove('hidden');placeLauncher();
@@ -2249,6 +2258,11 @@ function fbSheetEl(){
     if(retry){e.preventDefault();var nb=$('[data-va-step="1"]',vaBox);var rc=viewAllStore[vaBox.getAttribute('data-va')];if(rc&&vaFiltered(rc)){vaShowF(rc,vaBox,rc.fpage||1);return}vaGo(vaBox,parseInt(retry.getAttribute('data-va-retry'),10)||1,nb);return}
     var atc=e.target.closest('[data-atc]');
     if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
+    /* Where a card's fit number comes from: over the list. */
+    var fq=e.target.closest('[data-fitq]');
+    if(fq){e.preventDefault();e.stopPropagation();fitqToggle(fq);return}
+    var fx=e.target.closest('[data-fitx]');
+    if(fx){e.preventDefault();e.stopPropagation();fitxOpen(fx);return}
     /* True Fit / FITFinder carry on in the chat: close the list first. */
     var tf=e.target.closest('[data-truefit]');
     if(tf){e.preventDefault();e.stopPropagation();closeFeedback();trueFitFor(tf.getAttribute('data-truefit'),tf.getAttribute('data-title')||'');return}
@@ -2426,6 +2440,7 @@ function closeSheetNow(quiet){
 }
 /* Escape steps back out of a filter panel, then the sheet, then closes the chat. */
 panel.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&fitx&&!fitx.hidden){e.preventDefault();e.stopPropagation();fitxClose();return}
   if(e.key!=='Escape'||!fbSheet||fbSheet.hidden)return;
   e.preventDefault();e.stopPropagation();
   if(vfOpen){vfClose(true);return}
@@ -2724,7 +2739,8 @@ if(products&&products.length){
   var isShowcase=PRODUCT_CARD_STYLE==='showcase';
   var styleSuffix=isShowcase?' ai-chat-products--showcase':'';
   var ph='<div class="ai-chat-products'+styleSuffix+'">';
-  for(var i=0;i<products.length;i++)ph+=prodCard(products[i]);
+  var useTiles=fitcAny(products);
+  for(var i=0;i<products.length;i++)ph+=prodCard(products[i],useTiles);
   ph+='</div>';
   b.insertAdjacentHTML('beforeend',isShowcase?showcaseWrap(ph):ph);
   if(isShowcase){var w=b.querySelector('.ai-chat-products-wrap');if(w)initShowcaseArrows(w)}
@@ -2740,29 +2756,34 @@ return d;
    "View product" a quiet underlined link. When the chat already knows the
    customer's size/width, the card carries it (data-preselect) and shows it
    under the price — one tap adds that exact variant. */
-/* Each card offers the fit tool that belongs to it — True Fit on shoes,
-   FITFinder on orthotics (until the shopper has a FIT), never the other way —
-   as a round icon button beside the buy button, so the card doesn't grow. */
-function cardHelper(p,t){
-  if(!p||!p.handle)return '';
-  if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-fit" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit" title="Find my size \u00b7 True Fit">'+tfLogo(20)+'</button>';
-  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
-  return '';
-}
-/* Fit confidence: how sure a shopper can be the style fits as expected, from
-   its reviews, sales and returns — one meter row under the price
-   ("Fit ━━━━━━━── 92%", the bar taking the card's width), and a short line
-   under it only when there's more to know: how it runs when that isn't true
-   to size ("Runs small"), or that it's for the shopper's own size when
-   they're signed in ("In your size 9"). Screen readers hear all of it.
-   Informational: True Fit gives the size. Nothing shows without a score. */
+/* With Fit confidence on — under the buy button, side by side: the style's
+   Fit (a ring with its score; tap it for where the number comes from) and
+   the size tool that belongs to the product — True Fit on shoes, FITFinder
+   on orthotics (until the shopper has a FIT), never the other way. Either may be missing; one
+   alone takes the whole row. The tiles size themselves to the card (narrow
+   cards: icon and a word or two; wider ones: the full words; the widest:
+   icon beside the words), so no card breaks at any width. */
 var FITC_WORDS={'true':'True to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
+var FITC_LONG={'true':'Runs true to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
+function fitcInt(v,max){var n=Math.round(Number(v));return isFinite(n)&&n>=0?Math.min(n,max):null}
+function fitcTriple(v){
+  if(!Array.isArray(v)||v.length!==3)return null;
+  var o=[fitcInt(v[0],1e7),fitcInt(v[1],1e7),fitcInt(v[2],1e7)];
+  return o[0]===null||o[1]===null||o[2]===null||o[0]+o[1]+o[2]===0?null:o;
+}
 function fitcClean(f){
   if(!f||typeof f!=='object')return null;
   var s=Math.round(Number(f.s));if(!(s>=1&&s<=99))return null;
   var o={s:s,r:Math.max(0,parseInt(f.r,10)||0),n:Math.max(0,parseInt(f.n,10)||0)};
   if(typeof f.l==='string'&&Object.prototype.hasOwnProperty.call(FITC_WORDS,f.l))o.l=f.l;
-  if(typeof f.z==='string'&&/^\d{1,2}(\.5)?$/.test(f.z))o.z=f.z;
+  var a=fitcTriple(f.a),w=fitcTriple(f.w),k=fitcInt(f.k,100);
+  if(a)o.a=a;if(w)o.w=w;
+  if(k!==null&&o.n){o.k=k;if(f.kf===1)o.kf=1}
+  if(typeof f.z==='string'&&/^\d{1,2}(\.5)?$/.test(f.z)){
+    o.z=f.z;
+    var zn=fitcInt(f.zn,1e7),zk=fitcInt(f.zk,100);
+    if(zn){o.zn=zn;if(zk!==null)o.zk=zk}
+  }
   return o;
 }
 function fitcSay(f){
@@ -2770,16 +2791,222 @@ function fitcSay(f){
   var basis=[f.r?n(f.r)+(f.r===1?' review':' reviews'):'',f.n?n(f.n)+(f.n===1?' pair':' pairs')+' sold in the last year':''].filter(Boolean).join(' and ');
   return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+f.s+'%'+(f.l?', '+FITC_WORDS[f.l].toLowerCase():'')+'.'+(basis?' From '+basis+'.':'');
 }
-function fitcHtml(raw){
-  var f=fitcClean(raw);if(!f)return '';
-  var note=f.z?'In your size '+f.z:(f.l&&f.l!=='true'?FITC_WORDS[f.l]:'');
-  var say=esc(fitcSay(f));
-  return '<div class="ai-chat-fitc" role="img" aria-label="'+say+'" title="'+say+'">'+
-    '<div class="ai-chat-fitc__row" aria-hidden="true"><span class="ai-chat-fitc__k">Fit</span><span class="ai-chat-fitc__bar"><i style="width:'+f.s+'%"></i></span><b class="ai-chat-fitc__n">'+f.s+'%</b></div>'+
-    (note?'<div class="ai-chat-fitc__note" aria-hidden="true">'+esc(note)+'</div>':'')+
-  '</div>';
+/* A ring filled to the score. */
+function fitRing(s){
+  var c=2*Math.PI*15.5;
+  return '<svg class="ai-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ai-ring__track" cx="18" cy="18" r="15.5"/><circle class="ai-ring__arc" cx="18" cy="18" r="15.5" stroke-dasharray="'+(c*s/100).toFixed(2)+' '+c.toFixed(2)+'" transform="rotate(-90 18 18)"/></svg>';
 }
-function prodCard(p){
+/* One tile: icon, a title, and words in two lengths (the card's width picks). */
+function toolTile(attrs,icon,title,long,short){
+  return '<button type="button" '+attrs+'><span class="ai-tool__icon" aria-hidden="true">'+icon+'</span><span class="ai-tool__text" aria-hidden="true"><span class="ai-tool__title">'+esc(title)+'</span>'+
+    '<span class="ai-tool__sub"><span class="ai-tool__long">'+esc(long)+'</span><span class="ai-tool__short">'+esc(short)+'</span></span></span></button>';
+}
+function fitTile(raw){
+  var f=fitcClean(raw);if(!f)return '';
+  var long=f.z?'In your size '+f.z:(f.l?FITC_LONG[f.l]:'See how it fits');
+  var short=f.z?'Your size '+f.z:(f.l?FITC_WORDS[f.l]:'Details');
+  return toolTile('class="ai-tool ai-tool--fit" data-fitx="'+esc(JSON.stringify(f))+'" aria-haspopup="dialog" aria-label="'+esc(fitcSay(f)+' Shows where this comes from.')+'"',
+    fitRing(f.s)+'<b class="ai-tool__pct">'+f.s+'%</b>','Fit',long,short);
+}
+/* Fit confidence off: the size tool is a round icon button beside the buy
+   button, so the card doesn't grow (as it always was). */
+function cardHelper(p,t){
+  if(!p||!p.handle)return '';
+  if(p.kind==='footwear'&&tfPayload())return '<button type="button" class="ai-chat-card-fit" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit" title="Find my size \u00b7 True Fit">'+tfLogo(20)+'</button>';
+  if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
+  return '';
+}
+/* Fit confidence on: the size tool as a tile beside the Fit tile. */
+function sizeTile(p,t){
+  if(!p||!p.handle)return '';
+  if(p.kind==='footwear'&&tfPayload())return toolTile('class="ai-tool ai-tool--size" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit"','<span class="ai-tool__badge">'+tfLogo(20)+'</span>','Size','Find your size','True Fit');
+  if(p.kind==='orthotic'&&ff&&!savedFit())return toolTile('class="ai-tool ai-tool--ff" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder"','<span class="ai-tool__badge ai-tool__badge--fit">FIT</span>','FIT','Find your FIT','FITFinder');
+  return '';
+}
+function cardTools(p,t){
+  var tiles=[fitTile(p.fit),sizeTile(p,t)].filter(Boolean);
+  return tiles.length?'<div class="ai-tools" data-n="'+tiles.length+'">'+tiles.join('')+'</div>':'';
+}
+/* The tiles stay folded under one quiet button where "View product" was
+   (the image and the title still open the product): "Check fit & size"
+   (Settings → Chat text) opens them in place, for that card only. A card
+   with nothing to open keeps "View product". */
+var fitqN=0;
+var FITQ_CHEV='<svg class="ai-fitq__chev" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function fitqName(title){return FIT_LBL+(title?', '+title:'')}
+/* The chevron stays with the last word when a narrow card wraps the words. */
+function fitqLabel(){
+  var i=FIT_LBL.lastIndexOf(' ');
+  return '<span class="ai-fitq__label">'+(i>0?esc(FIT_LBL.slice(0,i))+' ':'')+'<span class="ai-fitq__end">'+esc(i>0?FIT_LBL.slice(i+1):FIT_LBL)+FITQ_CHEV+'</span></span>';
+}
+function viewLink(u){return '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'}
+function fitFold(p,t,u){
+  var tools=cardTools(p,t);
+  if(!tools)return viewLink(u);
+  var id='ai-fitp-'+(++fitqN);
+  return '<button type="button" class="ai-fitq" data-fitq aria-expanded="false" aria-controls="'+id+'" aria-label="'+esc(fitqName(p.title||''))+'">'+fitqLabel()+'</button>'+
+    '<div class="ai-fitp" id="'+id+'"><div class="ai-fitp__in">'+tools+'</div></div>';
+}
+/* Open or fold one card's tiles. The other cards in its row keep their
+   height while any is open, so only this one grows. */
+function fitqToggle(btn){
+  var fp=document.getElementById(btn.getAttribute('aria-controls')||'');
+  var card=btn.closest('.ai-chat-product-card');
+  if(!fp||!card)return;
+  var open=btn.getAttribute('aria-expanded')!=='true',row=card.parentNode;
+  if(open)fitqPin(row);
+  btn.setAttribute('aria-expanded',open?'true':'false');
+  fp.classList.toggle('is-open',open);
+  clearTimeout(fp._t);
+  fp._t=setTimeout(function(){if(open)keepInView(fp);else fitqUnpin(row)},320);
+}
+function fitqCards(row){
+  var out=[];
+  for(var c=row&&row.firstElementChild;c;c=c.nextElementSibling)if(c.classList.contains('ai-chat-product-card'))out.push(c);
+  return out;
+}
+function fitqPin(row){
+  if(!row||row.classList.contains('is-fitq-open'))return;
+  /* Only where cards sit side by side (a row of cards, or View all's grid). */
+  if(!row.classList.contains('ai-chat-products--showcase')&&!row.classList.contains('ai-chat-products--grid'))return;
+  var cs=fitqCards(row);
+  if(cs.length<2)return;
+  var hs=cs.map(function(c){
+    var st=getComputedStyle(c),h=c.getBoundingClientRect().height;
+    if(st.boxSizing!=='border-box')h-=parseFloat(st.paddingTop)+parseFloat(st.paddingBottom)+parseFloat(st.borderTopWidth)+parseFloat(st.borderBottomWidth);
+    return h;
+  });
+  for(var i=0;i<cs.length;i++)cs[i].style.minHeight=hs[i]+'px';
+  row.classList.add('is-fitq-open');
+}
+function fitqUnpin(row){
+  if(!row||!row.classList.contains('is-fitq-open')||row.querySelector('.ai-fitp.is-open'))return;
+  var cs=fitqCards(row);
+  for(var i=0;i<cs.length;i++)cs[i].style.minHeight='';
+  row.classList.remove('is-fitq-open');
+}
+/* A FITFinder tile gone (the shopper has a FIT now): the other takes the
+   row; with none left, the card's "View product" comes back. */
+function toolsRelayout(row){
+  if(!row)return;
+  var n=row.querySelectorAll('.ai-tool').length;
+  if(n){row.setAttribute('data-n',String(n));return}
+  var fp=row.closest('.ai-fitp'),card=row.closest('.ai-chat-product-card');
+  row.parentNode.removeChild(row);
+  if(!fp||!card)return;
+  var q=card.querySelector('[data-fitq]');
+  if(q){q.insertAdjacentHTML('beforebegin',viewLink(card.getAttribute('data-url')||'#'));q.parentNode.removeChild(q)}
+  fp.classList.remove('is-open');
+  if(fp.parentNode)fp.parentNode.removeChild(fp);
+  fitqUnpin(card.parentNode);
+}
+
+/* Where the fit number comes from: a small sheet over the chat, opened from
+   the Fit tile — the score, how it runs, what reviewers said, how many pairs
+   were kept, and the shopper's own size when it's theirs. × or a tap outside
+   or Escape closes it, back to the tile. */
+var fitx=null,fitxFrom=null;
+var FX_ICON={
+  star:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.7L12 16.5l-5.1 2.8 1.1-5.7-4.3-4 5.8-.7z"/></svg>',
+  box:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5L12 3.5l8.5 4v9L12 20.5l-8.5-4z"/><path d="M3.5 7.5L12 11.5l8.5-4M12 11.5v9"/></svg>',
+  you:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.3-3.4 4-5 7-5s5.7 1.6 7 5"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+function fxNum(x){return Number(x).toLocaleString('en-US')}
+function fxRow(icon,title,text,extra){
+  return '<li class="ai-fitx__row"><span class="ai-fitx__ico" aria-hidden="true">'+FX_ICON[icon]+'</span><div class="ai-fitx__rt"><div class="ai-fitx__rh">'+esc(title)+'</div><p class="ai-fitx__rp">'+esc(text)+'</p>'+(extra||'')+'</div></li>';
+}
+/* Reviewers' size answers as one bar — runs small · true · runs large — with
+   its key (the counts, read out as a list). */
+function fxSplit(a){
+  var t=a[0]+a[1]+a[2],pc=function(x){return (100*x/t).toFixed(2)+'%'};
+  return '<div class="ai-fitx__split" aria-hidden="true"><i class="is-low" style="width:'+pc(a[0])+'"></i><i class="is-true" style="width:'+pc(a[1])+'"></i><i class="is-high" style="width:'+pc(a[2])+'"></i></div>'+
+    '<ul class="ai-fitx__key"><li class="is-low">Runs small '+fxNum(a[0])+'</li><li class="is-true">True to size '+fxNum(a[1])+'</li><li class="is-high">Runs large '+fxNum(a[2])+'</li></ul>';
+}
+function fxAnswers(a,word,low,high){
+  var t=a[0]+a[1]+a[2];
+  return fxNum(a[1])+' of '+fxNum(t)+' said '+word+(a[0]?' · '+fxNum(a[0])+' '+low:'')+(a[2]?' · '+fxNum(a[2])+' '+high:'')+'.';
+}
+function fitxBody(f,title,tf){
+  var h='<div class="ai-fitx__head"><span class="ai-fitx__ring">'+fitRing(f.s)+'<b>'+f.s+'%</b></span><div class="ai-fitx__hd">'+
+    '<h2 class="ai-fitx__title" id="ai-fitx-title">Fit confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
+    (f.l?'<span class="ai-fitx__pill is-'+f.l+'">'+esc(FITC_LONG[f.l])+'</span>':'')+'</div></div><ul class="ai-fitx__list">';
+  if(f.z)h+=fxRow('you','For your size '+f.z,'The size you’ve kept before, from your orders.'+(f.zn&&f.zk!=null?' In size '+f.z+', '+(f.kf?'about ':'')+f.zk+'% of '+fxNum(f.zn)+' '+(f.zn===1?'pair':'pairs')+' weren’t sent back'+(f.kf?' for fit':'')+'.':''));
+  if(f.a||f.w){
+    var txt=f.a?fxNum(f.a[1])+' of '+fxNum(f.a[0]+f.a[1]+f.a[2])+' said it’s true to size.':'';
+    var wtxt=f.w?'Width: '+fxAnswers(f.w,'true to width','runs narrow','runs wide'):'';
+    h+=fxRow('star','What reviewers said',txt||wtxt,(f.a?fxSplit(f.a):'')+(txt&&wtxt?'<p class="ai-fitx__rp ai-fitx__rp--more">'+esc(wtxt)+'</p>':''));
+  }else h+=fxRow('star','What reviewers said','No reviewer has rated the fit yet.');
+  if(f.n&&f.k!=null)h+=fxRow('box','What buyers kept',(f.kf?'About ':'')+f.k+'% of the '+fxNum(f.n)+' '+(f.n===1?'pair':'pairs')+' sold in the last year '+(f.n===1?'wasn’t':'weren’t')+' sent back'+(f.kf?' for fit':'')+'.');
+  else h+=fxRow('box','What buyers kept','Not enough sales in the last year to go by yet.');
+  h+='</ul><p class="ai-fitx__note">The score blends what reviewers said with what buyers kept, across every color of this style — the more there is to go on, the more it counts. It tells you how the style fits; True Fit finds your size.</p>';
+  if(tf)h+='<button type="button" class="ai-fitx__tf" data-truefit="'+esc(tf.handle)+'" data-title="'+esc(tf.title)+'"><span class="ai-tool__badge" aria-hidden="true">'+tfLogo(18)+'</span><span>Find my size with True Fit</span></button>';
+  return h;
+}
+function fitxEl(){
+  if(fitx)return fitx;
+  fitx=el('div','ai-fitx');fitx.hidden=true;
+  fitx.innerHTML='<div class="ai-fitx__scrim" data-fitx-close="1"></div><div class="ai-fitx__sheet" role="dialog" aria-modal="true" aria-labelledby="ai-fitx-title"><div class="ai-fitx__grip" aria-hidden="true"></div><button type="button" class="ai-fitx__x" data-fitx-close="1" aria-label="Close">'+FX_ICON.x+'</button><div class="ai-fitx__body"></div></div>';
+  fitx.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(e.target.closest('[data-fitx-close]')){e.preventDefault();fitxClose();return}
+    var tf=e.target.closest('[data-truefit]');
+    if(tf){e.preventDefault();var h=tf.getAttribute('data-truefit'),tt=tf.getAttribute('data-title')||'';fitxClose(true);if(fbSheet&&!fbSheet.hidden)closeFeedback();trueFitFor(h,tt)}
+  });
+  fitx.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){e.preventDefault();e.stopPropagation();fitxClose();return}
+    /* Focus stays in the sheet while it's open. */
+    if(e.key!=='Tab')return;
+    var f=fitx.querySelectorAll('button');if(!f.length)return;
+    var first=f[0],last=f[f.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+  });
+  panel.appendChild(fitx);
+  return fitx;
+}
+function fitxBehind(on){
+  for(var c=panel.firstElementChild;c;c=c.nextElementSibling)if(c!==fitx){if(on){if(!c.inert){c.inert=true;c.setAttribute('data-fx-inert','')}}else if(c.hasAttribute('data-fx-inert')){c.inert=false;c.removeAttribute('data-fx-inert')}}
+}
+function fitxOpen(btn){
+  var f=null;try{f=fitcClean(JSON.parse(btn.getAttribute('data-fitx')||'null'))}catch(e){f=null}
+  if(!f)return;
+  var card=btn.closest('.ai-chat-product-card');
+  var title=card?card.getAttribute('data-title')||'':'';
+  var tfb=card&&card.querySelector('[data-truefit]');
+  var sh=fitxEl();
+  $('.ai-fitx__body',sh).innerHTML=fitxBody(f,title,tfb?{handle:tfb.getAttribute('data-truefit'),title:title}:null);
+  $('.ai-fitx__sheet',sh).scrollTop=0;
+  fitxFrom=btn;
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fitxBehind(true);
+  setTimeout(function(){var x=$('.ai-fitx__x',sh);if(x)try{x.focus({preventScroll:true})}catch(e){}},40);
+}
+function fitxClose(quiet){
+  if(!fitx||fitx.hidden)return;
+  var sh=fitx;
+  sh.classList.remove('is-open');fitxBehind(false);
+  var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)gone();else setTimeout(gone,300);
+  var back=fitxFrom;fitxFrom=null;
+  if(!quiet&&back&&document.body.contains(back))try{back.focus({preventScroll:true})}catch(e){}
+}
+
+/* Product card: image + title link to the product; "Add to cart" is the
+   primary action (.ai-chat-product-cta keeps every layout's CTA placement),
+   then "View product", a quiet underlined link — or, with Fit confidence
+   on, "Check fit & size" in its place, opening the Fit and size tiles.
+   When the chat already knows the customer's size/width, the card carries it
+   (data-preselect) and shows it under the price — one tap adds that exact
+   variant. */
+/* The tiles, for every card of a reply (or a View all list) when the store
+   has Fit confidence on or any of its cards carries a score — never a mix. */
+function fitcAny(list){
+  if(FITC_ON)return true;
+  for(var i=0;list&&i<list.length;i++)if(list[i]&&fitcClean(list[i].fit))return true;
+  return false;
+}
+function prodCard(p,useTiles){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
 var u=safeUrl(p.url)||(p.handle?(SHOP_ROOT+'products/'+encodeURIComponent(p.handle)):'#');
@@ -2787,23 +3014,23 @@ var pr=esc(p.price_formatted||(p.price?fmt(p.price):''));
 var cp=p.compare_at_price?esc(fmt(p.compare_at_price)):'';
 var pre=(p.preselect&&typeof p.preselect==='object')?p.preselect:null;
 var preKeys=pre?Object.keys(pre):[];
-var preLabel=preKeys.map(function(k){return esc(String(pre[k]))}).join(' \u00b7 ');
+var preLabel=preKeys.map(function(k){return esc(String(pre[k]))}).join(' · ');
 /* "Select size" until every option the product has (size, width…) is known. */
 var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preKeys.some(function(k){return k.toLowerCase()===String(n).toLowerCase()})});
 /* One short label for every card ("Select size"); the picker asks for the rest. */
 var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
 var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
 var buyBtn='<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>';
-var fitBtn=cardHelper(p,t);
-/* With a fit tool, the buy button and the tool share one row. */
+var tiles=useTiles===true||FITC_ON||!!fitcClean(p.fit);
+var fitBtn=tiles?'':cardHelper(p,t);
+/* Off: with a fit tool, the buy button and the tool share one row. */
 var buyHtml=fitBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row">'+buyBtn+fitBtn+'</div>':buyBtn;
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
   '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
-  fitcHtml(p.fit)+
   buyHtml+
-  '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
+  (tiles?fitFold(p,t,u):viewLink(u))+
 '</div>';
 return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" data-title="'+t+'" data-url="'+esc(u)+'" data-image="'+esc(img)+'"'+(pre?' data-preselect="'+esc(JSON.stringify(pre))+'"':'')+'>'+imgHtml+infoHtml+'</div>';
 }
@@ -2820,7 +3047,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-29 fit-confidence'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 fit-and-size'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2875,7 +3102,7 @@ function vaShow(va,box,n){
   va.page=n;
   var items=va.cache[n]||[],h='';
   va.cards=va.cards||{};
-  for(var i=0;i<items.length;i++){h+=prodCard(items[i]);va.cards[items[i].handle]=items[i]}
+  for(var i=0;i<items.length;i++){h+=prodCard(items[i],fitcAny(va.products));va.cards[items[i].handle]=items[i]}
   var grid=$('.ai-chat-products--grid',box);if(grid)grid.innerHTML=h;
   var empty=$('.ai-va-empty',box);if(empty)empty.hidden=true;
   var cnt=$('.ai-chat-viewall__count',box);if(cnt)cnt.textContent=vaCountText(va);
@@ -3210,7 +3437,7 @@ function vaShowF(va,box,n){
   va.cards=va.cards||{};va.gone=va.gone||{};
   for(var i=0;i<slice.length;i++){
     var hd=slice[i].h,c=va.cards[hd];
-    if(c)h+=prodCard(c);
+    if(c)h+=prodCard(c,fitcAny(va.products));
     else if(!va.gone[hd]){h+='<div class="ai-chat-product-card is-skel" data-skel="'+esc(hd)+'" aria-hidden="true">'+VF_SKEL+'</div>';miss.push(hd)}
   }
   var grid=$('.ai-chat-products--grid',box);if(grid)grid.innerHTML=h;
@@ -3236,7 +3463,7 @@ function vfFill(va,box){
   var sk=box.querySelectorAll('[data-skel]');
   for(var i=0;i<sk.length;i++){
     var h=sk[i].getAttribute('data-skel'),c=va.cards[h];
-    if(c){var tmp=document.createElement('div');tmp.innerHTML=prodCard(c);var card=tmp.firstChild;card.classList.add('is-in');sk[i].replaceWith(card)}
+    if(c){var tmp=document.createElement('div');tmp.innerHTML=prodCard(c,fitcAny(va.products));var card=tmp.firstChild;card.classList.add('is-in');sk[i].replaceWith(card)}
     else if(va.gone[h])sk[i].remove();
   }
 }
@@ -4665,8 +4892,8 @@ function ffSave(key){
   }
   ff.saved=f.key;
   /* They have a FIT now: earlier cards stop offering to find one. */
-  var stale=msgsEl.querySelectorAll('.ai-chat-card-fit[data-helper="fitfinder"]');
-  for(var si=0;si<stale.length;si++)stale[si].parentNode.removeChild(stale[si]);
+  var stale=msgsEl.querySelectorAll('.ai-chat-product-card [data-helper="fitfinder"]');
+  for(var si=0;si<stale.length;si++){var row=stale[si].parentNode;row.removeChild(stale[si]);if(row.classList.contains('ai-tools'))toolsRelayout(row)}
 }
 
 var streamWatchdog=null;
@@ -4888,7 +5115,7 @@ if(Array.isArray(sseChoices)&&sseChoices.length){
 }
 if(cleanText){
   if(!mDiv)mDiv=appendMsg('assistant',cleanText,prods);
-  else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi]);ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}b.insertAdjacentHTML('beforeend',compareCtaHtml(prods))}}}
+  else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi],fitcAny(prods));ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}b.insertAdjacentHTML('beforeend',compareCtaHtml(prods))}}}
   var _saved={role:'assistant',content:cleanText,products:prods||[]};
   if(linkCTA&&linkCTA.url)_saved.linkCTA={url:linkCTA.url,label:linkCTA.label||''};
   /* Order cards come back with the chat (reload, another page). */
@@ -5237,6 +5464,7 @@ inputEl.addEventListener('input',function(){this.style.height='auto';this.style.
    chat itself. */
 document.addEventListener('keydown',function(e){
   if(e.key!=='Escape'||!isOpen)return;
+  if(fitx&&!fitx.hidden){fitxClose();return}
   if(fbSheet&&!fbSheet.hidden){if(vfOpen)vfClose(true);else closeFeedback();return}
   var pk=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.is-cmp-picking');
   if(pk){cmpCancel(pk);return}
@@ -5309,6 +5537,10 @@ var atcBtn=e.target.closest('[data-atc]');
 if(atcBtn){e.preventDefault();e.stopPropagation();startAddToCart(atcBtn.closest('.ai-chat-product-card,.ai-cmp__buy'),atcBtn);return}
 // Handoff support CTA button → live chat (Zendesk/Intercom/Gorgias), Support
 // Hub URL only as fallback.
+var fitqBtn=e.target.closest('[data-fitq]');
+if(fitqBtn){e.preventDefault();e.stopPropagation();fitqToggle(fitqBtn);return;}
+var fitxBtn=e.target.closest('[data-fitx]');
+if(fitxBtn){e.preventDefault();e.stopPropagation();fitxOpen(fitxBtn);return;}
 var helperBtn=e.target.closest('[data-helper]');
 if(helperBtn){e.preventDefault();if(!isStreaming)startHelper(helperBtn.getAttribute('data-helper'));return;}
 var tfBtn=e.target.closest('[data-truefit]');

@@ -99,6 +99,9 @@ export const loader = async ({ request }) => {
         // Shoppers outside the home countries (Global-e / Shopify Markets) don't see the chat.
         international: internationalConfig(config),
         productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
+        // Smart Recommenders → Fit confidence: cards show the Fit and size
+        // tiles under the buy button (off: the size tool beside it, as before).
+        fitConfidence: config.fitConfidenceEnabled !== false,
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,
         welcomeGlowStyle: config.welcomeGlowStyle === "none" ? "none" : "subtle",

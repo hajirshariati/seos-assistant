@@ -230,11 +230,13 @@ export function fitScore(stats, base = {}) {
     const w = answered / (answered + 20);
     sum += w * reviews; weight += w;
   }
+  let keptPct = null;
   if (sold > 0) {
     const share = styleFitShare(stats, base);
     const fitReturns = Math.min(num(stats.returned), sold) * share;
     const baseRate = base.fitReturnRate ?? fitReturns / sold;
     kept = clamp01(1 - (fitReturns + PRIOR_SOLD * baseRate) / (sold + PRIOR_SOLD));
+    keptPct = Math.round(100 * clamp01(1 - fitReturns / sold));
     const w = sold / (sold + 100);
     sum += w * kept; weight += w;
   }
@@ -245,8 +247,15 @@ export function fitScore(stats, base = {}) {
     reviews: answered,
     sold,
     parts: { reviews, kept },
+    // For "where this comes from": how reviewers answered, and the share of
+    // pairs not sent back (for fit, when AfterShip says why; else at all).
+    answers: { size: triple(stats.size), width: triple(stats.width) },
+    kept: keptPct,
+    fitOnly: base.fitShare != null,
   };
 }
+
+const triple = (c) => [num(c?.low), num(c?.true), num(c?.high)];
 
 // The same, for one size of the style (a signed-in shopper's own): the
 // reviewers' view stays the style's; the buyers' view is that size's pairs,
@@ -268,16 +277,41 @@ export function fitScoreForSize(stats, sizeKey, base = {}) {
   }
   const w = sold / (sold + 100);
   sum += w * kept; weight += w;
-  return { score: Math.max(1, Math.min(99, Math.round((sum / weight) * 100))), label: style.label, reviews: style.reviews, sold, size: sizeKey };
+  return {
+    score: Math.max(1, Math.min(99, Math.round((sum / weight) * 100))),
+    label: style.label,
+    reviews: style.reviews,
+    sold: style.sold,
+    answers: style.answers,
+    kept: style.kept,
+    fitOnly: style.fitOnly,
+    size: sizeKey,
+    sizeSold: sold,
+    sizeKept: Math.round(100 * clamp01(1 - (Math.min(num(z.returned), sold) * share) / sold)),
+  };
 }
 
 // What a product card carries: { s: score, l: label key, r: reviews, n: pairs
-// sold } — or, for a shopper's own size, also z: the size.
+// sold }, and for "where this comes from": a / w — reviewers' size / width
+// answers [small, true, large]; k — % of pairs not sent back (kf: 1 when
+// that's for fit, from AfterShip's reasons). For a shopper's own size, also
+// z: the size, zn: its pairs sold, zk: % of them not sent back.
 export function cardFit(score) {
   if (!score || !Number.isFinite(score.score)) return null;
   const out = { s: score.score, r: score.reviews || 0, n: score.sold || 0 };
   if (score.label && FIT_LABELS[score.label]) out.l = score.label;
-  if (score.size) out.z = String(score.size);
+  const total = (a) => (Array.isArray(a) ? a.reduce((n, x) => n + x, 0) : 0);
+  if (total(score.answers?.size)) out.a = score.answers.size;
+  if (total(score.answers?.width)) out.w = score.answers.width;
+  if (Number.isFinite(score.kept)) {
+    out.k = score.kept;
+    if (score.fitOnly) out.kf = 1;
+  }
+  if (score.size) {
+    out.z = String(score.size);
+    out.zn = score.sizeSold || 0;
+    if (Number.isFinite(score.sizeKept)) out.zk = score.sizeKept;
+  }
   return out;
 }
 
