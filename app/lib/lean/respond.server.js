@@ -24,6 +24,7 @@ import { createLimiter } from "../concurrency.js";
 import { seasonalForTurn, seasonalTapNote } from "../seasonal-cta.js";
 import { featuredCollection, collectionView } from "./collections.server.js";
 import { trueFitIntro, TRUE_FIT_INTRO_TEXT, TRUE_FIT_PICK_NOTE } from "./true-fit-intro.js";
+import { tokenGraphql, shopperPurchases, withShopperFit } from "../fit-confidence.server.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -195,7 +196,13 @@ export function leanChatResponse({
           const word = (Array.isArray(resp.content) ? resp.content : []).filter((b) => b.type === "text").map((b) => b.text).join("").trim().toUpperCase();
           return word.startsWith("YES") ? true : word.startsWith("NO") ? false : null;
         };
-        const result = await runLeanTurn({
+        // Fit confidence in the shopper's own size: with VIP mode on, a
+        // signed-in shopper's past sizes are read while the turn runs.
+        const purchases = loggedInCustomerId && accessToken && config.vipModeEnabled === true && config.fitConfidenceEnabled !== false
+          ? shopperPurchases({ shop, customerId: loggedInCustomerId, graphql: tokenGraphql({ shop, accessToken }) })
+          : null;
+        purchases?.catch((err) => console.error("[fit] shopper sizes not read:", err?.message || err));
+        const turn = await runLeanTurn({
           shop,
           config: { ...config, supportUrl: support.url, supportLabel: support.label },
           model,
@@ -221,6 +228,7 @@ export function leanChatResponse({
             );
           },
         });
+        const result = purchases ? { ...turn, cards: await withShopperFit(turn.cards, { shop, catalog, purchases }) } : turn;
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
         for (const ev of result.events || []) send(ev);

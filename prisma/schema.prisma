@@ -152,6 +152,9 @@ model ShopConfig {
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)
   fitPredictorConfig     String   @default("{}")
+  // Fit confidence on every product card (Smart Recommenders → Fit
+  // confidence): a style's score from reviews, sales, returns and why.
+  fitConfidenceEnabled   Boolean  @default(true)
 
   // Semantic search (opt-in per merchant). Provider is one of "", "voyage",
   // or "openai". Empty disables semantic search; keyword search is used.
@@ -520,6 +523,34 @@ model ChatConcern {
   updatedAt   DateTime @updatedAt
 
   @@index([shop])
+}
+
+// Fit confidence (fit-confidence.server.js): what was read for each style —
+// reviewers' fit answers, pairs sold and returned, why they came back — and
+// its score, one row per store, refreshed daily. `status` says what each
+// source gave on the last read (counts or a plain error) for the admin.
+model FitData {
+  shop      String   @id
+  data      Json
+  status    Json?
+  readAt    DateTime
+  updatedAt DateTime @updatedAt
+}
+
+// Items of the store's AfterShip returns (last 12 months): the product, the
+// size, and the kind of reason (too small, too large, too narrow, too wide,
+// another fit reason, or not fit) — no shopper or order details.
+model FitReturnItem {
+  shop       String
+  id         String
+  productId  String
+  variantId  String   @default("")
+  kind       String
+  qty        Int      @default(1)
+  returnedAt DateTime
+
+  @@id([shop, id])
+  @@index([shop, returnedAt])
 }
 
 // One recorded shopper chat that was read: the themes it raised and, for

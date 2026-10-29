@@ -396,6 +396,28 @@ export function start(port) {
             w({ type: "done" });
             return resp.end();
           }
+          // Fit confidence on the cards: a style's score, one in the shopper's
+          // own size, a card without one, and scores that aren't real.
+          if (parsed.message === "fitcards") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            const fitted = [
+              { ...cards[0], fit: { s: 92, l: "true", r: 85, n: 1240 } },
+              { ...cards[1], fit: { s: 78, l: "small", r: 12, n: 300, z: "9" } },
+              cards[2],
+              { ...carly, fit: { s: 150, l: "true", r: 1, n: 1 } },
+            ];
+            const odd = [
+              { ...carly, handle: "runs-1", title: "Runs One - Black", fit: { s: 81, l: "small", r: 40, n: 900 } },
+              { ...carly, handle: "odd-1", title: "Odd One - Black", fit: { s: "abc" } },
+              { ...carly, handle: "odd-2", title: "Odd Two - Black", fit: { s: 70, l: "<b>x</b>", z: "9<script>", r: -4, n: "lots" } },
+            ];
+            w({ type: "text", text: "Here are a few to consider." });
+            w({ type: "products", products: [...fitted, ...odd] });
+            w({ type: "view_all", label: "View all 7 sneakers", title: "Sneakers", total: 7, products: [...fitted, ...odd] });
+            w({ type: "done" });
+            return resp.end();
+          }
           // Four cards of sixty, with View all and Compare (picking 2 or 3).
           if (parsed.message === "fourboots") {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });

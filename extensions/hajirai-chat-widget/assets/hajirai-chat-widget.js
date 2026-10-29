@@ -2749,6 +2749,36 @@ function cardHelper(p,t){
   if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
   return '';
 }
+/* Fit confidence: how sure a shopper can be the style fits as expected, from
+   its reviews, sales and returns — one meter row under the price
+   ("Fit ━━━━━━━── 92%", the bar taking the card's width), and a short line
+   under it only when there's more to know: how it runs when that isn't true
+   to size ("Runs small"), or that it's for the shopper's own size when
+   they're signed in ("In your size 9"). Screen readers hear all of it.
+   Informational: True Fit gives the size. Nothing shows without a score. */
+var FITC_WORDS={'true':'True to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
+function fitcClean(f){
+  if(!f||typeof f!=='object')return null;
+  var s=Math.round(Number(f.s));if(!(s>=1&&s<=99))return null;
+  var o={s:s,r:Math.max(0,parseInt(f.r,10)||0),n:Math.max(0,parseInt(f.n,10)||0)};
+  if(typeof f.l==='string'&&Object.prototype.hasOwnProperty.call(FITC_WORDS,f.l))o.l=f.l;
+  if(typeof f.z==='string'&&/^\d{1,2}(\.5)?$/.test(f.z))o.z=f.z;
+  return o;
+}
+function fitcSay(f){
+  var n=function(x){return x.toLocaleString('en-US')};
+  var basis=[f.r?n(f.r)+(f.r===1?' review':' reviews'):'',f.n?n(f.n)+(f.n===1?' pair':' pairs')+' sold in the last year':''].filter(Boolean).join(' and ');
+  return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+f.s+'%'+(f.l?', '+FITC_WORDS[f.l].toLowerCase():'')+'.'+(basis?' From '+basis+'.':'');
+}
+function fitcHtml(raw){
+  var f=fitcClean(raw);if(!f)return '';
+  var note=f.z?'In your size '+f.z:(f.l&&f.l!=='true'?FITC_WORDS[f.l]:'');
+  var say=esc(fitcSay(f));
+  return '<div class="ai-chat-fitc" role="img" aria-label="'+say+'" title="'+say+'">'+
+    '<div class="ai-chat-fitc__row" aria-hidden="true"><span class="ai-chat-fitc__k">Fit</span><span class="ai-chat-fitc__bar"><i style="width:'+f.s+'%"></i></span><b class="ai-chat-fitc__n">'+f.s+'%</b></div>'+
+    (note?'<div class="ai-chat-fitc__note" aria-hidden="true">'+esc(note)+'</div>':'')+
+  '</div>';
+}
 function prodCard(p){
 var img=p.image||p.featured_image||'';
 var t=esc(p.title||'');
@@ -2771,6 +2801,7 @@ var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" 
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
   '<div class="ai-chat-product-price">'+pr+(cp?'<span class="compare-at">'+cp+'</span>':'')+(preLabel?'<span class="ai-chat-product-variant">'+preLabel+'</span>':'')+'</div>'+
+  fitcHtml(p.fit)+
   buyHtml+
   '<a class="ai-chat-view-link" href="'+esc(u)+'">View product</a>'+
 '</div>';
@@ -2789,7 +2820,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-28 app-picture'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 fit-confidence'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -2811,7 +2842,7 @@ var VA_PREV='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke=
 var VA_NEXT='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>';
 function vaCard(c){
   if(!c||typeof c!=='object'||!c.handle||!c.title)return null;
-  return {handle:String(c.handle),title:String(c.title),url:String(c.url||''),image:String(c.image||''),price:c.price||'',price_formatted:String(c.price_formatted||''),compare_at_price:c.compare_at_price||undefined,kind:c.kind||'',choose:Array.isArray(c.choose)?c.choose.slice(0,4):undefined};
+  return {handle:String(c.handle),title:String(c.title),url:String(c.url||''),image:String(c.image||''),price:c.price||'',price_formatted:String(c.price_formatted||''),compare_at_price:c.compare_at_price||undefined,kind:c.kind||'',choose:Array.isArray(c.choose)?c.choose.slice(0,4):undefined,fit:fitcClean(c.fit)||undefined};
 }
 var VA_ICON='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>';
 function cleanViewAll(p){

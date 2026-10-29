@@ -2681,6 +2681,51 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   color: var(--seos-text);
   font-weight: 600;
 }
+/* Fit confidence under the price: "Fit ━━━━━── 92%" (the bar takes the
+   card's width, up to a point), and a short note under it when there is one. */
+.ai-chat-panel .ai-chat-fitc {
+  min-width: 0;
+  margin: 2px 0 8px;
+  font-size: 11.5px;
+  line-height: 14px;
+  color: var(--seos-text-2);
+}
+.ai-chat-panel .ai-chat-fitc__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+}
+.ai-chat-panel .ai-chat-fitc__k {
+  flex: none;
+}
+.ai-chat-panel .ai-chat-fitc__bar {
+  flex: 1 1 auto;
+  min-width: 24px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--seos-line-strong);
+  overflow: hidden;
+}
+.ai-chat-panel .ai-chat-fitc__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--seos-fit, #2f7d57);
+}
+.ai-chat-panel .ai-chat-fitc__n {
+  flex: none;
+  font-weight: 600;
+  color: var(--seos-text);
+  font-variant-numeric: tabular-nums;
+}
+.ai-chat-panel .ai-chat-fitc__note {
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chat-panel[data-theme="dark"] { --seos-fit: #63c58f; }
 .ai-chat-panel .ai-chat-product-cta,
 .ai-chat-panel .ai-chat-atc-add,
 .ai-chat-panel .ai-chat-atc-primary {

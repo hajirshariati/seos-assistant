@@ -1,7 +1,9 @@
 // Lean engine — loads and caches the shop's catalog view (see catalog.js).
 import prisma from "../../db.server.js";
-import { buildLeanCatalog } from "./catalog.js";
+import { buildLeanCatalog, productKind } from "./catalog.js";
 import { getSpecRows } from "../product-specs.server.js";
+import { getFitData, productFit } from "../fit-confidence.server.js";
+import { getShopConfigCached } from "../../models/ShopConfig.server.js";
 
 const TTL_MS = 5 * 60 * 1000;
 const cache = new Map(); // shop → { at, catalog }
@@ -53,8 +55,31 @@ async function load(shop) {
     take: 10000,
   });
   const catalog = buildLeanCatalog(rows, { shop, specRows });
+  await attachFit(shop, catalog);
   if ((generation.get(shop) || 0) === gen) cache.set(shop, { at: Date.now(), catalog });
   const sr = catalog.specReport;
   console.log(`[lean] catalog loaded shop=${shop} products=${catalog.products.length} categories=${catalog.vocab.categories.length} colors=${catalog.vocab.colors.length}${sr ? ` specs=${sr.byCode}+${sr.byStyle}/${sr.products}` : ""}`);
   return catalog;
+}
+
+// Fit confidence (fit-confidence.server.js): each shoe and orthotic carries
+// its style's score to its cards, while the store has it on. Without a score
+// (or if it can't be read) the cards are as before.
+async function attachFit(shop, catalog) {
+  try {
+    const config = await getShopConfigCached(shop);
+    if (config?.fitConfidenceEnabled === false) return;
+    const saved = await getFitData(shop);
+    if (!saved?.data) return;
+    let n = 0;
+    for (const p of catalog.products) {
+      const kind = productKind(p);
+      if (kind !== "footwear" && kind !== "orthotic") continue;
+      const fit = productFit(saved, p);
+      if (fit) { p.fit = fit; n++; }
+    }
+    if (n) console.log(`[lean] fit confidence shop=${shop} products=${n}`);
+  } catch (err) {
+    console.error(`[lean] fit confidence not attached shop=${shop}:`, err?.message || err);
+  }
 }

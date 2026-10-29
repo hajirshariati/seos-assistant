@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher, useRevalidator } from "react-router";
 import {
   Page,
   Card,
@@ -40,6 +40,9 @@ import { getShopPlan } from "../lib/billing.server";
 import { safeExternalUrl } from "../lib/external-url.js";
 import { PlanGate } from "../components/PlanGate";
 import { RecommenderTables } from "../components/RecommenderEditor";
+import { fitSummary, fitReadDue, startFitRead } from "../lib/fit-confidence.server";
+import { reloadLeanCatalog } from "../lib/lean/catalog.server";
+import { FIT_LABELS } from "../lib/fit-confidence.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -51,6 +54,14 @@ export const loader = async ({ request }) => {
     listDecisionTrees(session.shop),
     getShopPlan(session.shop),
   ]);
+  // Fit confidence: what the last read found; a read starts on its own when
+  // there's none yet or the daily one was missed.
+  const fitEnabled = config.fitConfidenceEnabled !== false;
+  let fit = await fitSummary(session.shop).catch(() => null);
+  if (fitEnabled && fit && !fit.run.running && fitReadDue(fit)) {
+    startFitRead(session.shop, { config });
+    fit = { ...fit, run: { running: true, step: "products", done: 0, total: 0 } };
+  }
   return {
     shop: session.shop,
     decisionTreeEnabled: config.decisionTreeEnabled === true,
@@ -72,6 +83,13 @@ export const loader = async ({ request }) => {
       }
     })(),
     plan: { id: plan.id, name: plan.name, features: plan.features },
+    fitConfidence: {
+      enabled: fitEnabled,
+      vip: config.vipModeEnabled === true,
+      hasYotpo: Boolean(config.yotpoApiKey),
+      hasAftership: Boolean(config.aftershipApiKey),
+      ...(fit || { readAt: null, status: null, scored: 0, lowest: [], run: { running: false } }),
+    },
   };
 };
 
@@ -261,6 +279,20 @@ export const action = async ({ request }) => {
     } catch (err) {
       return { error: "Sync failed: " + (err?.message || "unknown") };
     }
+  }
+
+  if (intent === "toggle_fit_confidence") {
+    const value = formData.get("fitConfidenceEnabled") === "true";
+    await updateShopConfig(session.shop, { fitConfidenceEnabled: value });
+    // The cards show (or stop showing) it from the next message.
+    reloadLeanCatalog(session.shop).catch(() => {});
+    return { saved: true };
+  }
+
+  if (intent === "refresh_fit_confidence") {
+    const config = await getShopConfig(session.shop);
+    startFitRead(session.shop, { config });
+    return { started: true };
   }
 
   if (intent === "toggle_fit_predictor") {
@@ -1035,6 +1067,130 @@ function MappingCsvSection({ treeId, onApplied }) {
   );
 }
 
+// Fit confidence: the bar on every shoe and orthotic card in the chat, and
+// what its scores were read from. The page checks again every few seconds
+// while a read is under way.
+const fmtCount = (n) => Number(n || 0).toLocaleString("en-US");
+const fmtWhen = (iso) => {
+  try {
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+};
+const FIT_STEPS = { products: "Reading products…", sales: "Reading sales and returns…", reviews: "Reading reviews", returns: "Reading return reasons", scores: "Scoring styles…" };
+
+function FitSource({ title, state, ok }) {
+  return (
+    <InlineStack gap="300" blockAlign="start" wrap={false}>
+      <Box minWidth="150px"><Text as="span" variant="bodyMd" fontWeight="semibold">{title}</Text></Box>
+      <Text as="span" tone={ok === false ? "critical" : ok ? undefined : "subdued"}>{state}</Text>
+    </InlineStack>
+  );
+}
+
+function FitConfidenceCard({ fit }) {
+  const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const [isOn, setIsOn] = useState(!!fit.enabled);
+  const running = Boolean(fit.run?.running) || (fetcher.state !== "idle" && fetcher.formData?.get("intent") === "refresh_fit_confidence");
+  const revalidatorRef = useRef(revalidator);
+  revalidatorRef.current = revalidator;
+  useEffect(() => {
+    if (!fit.run?.running) return undefined;
+    const t = setInterval(() => { if (revalidatorRef.current.state === "idle") revalidatorRef.current.revalidate(); }, 4000);
+    return () => clearInterval(t);
+  }, [fit.run?.running]);
+
+  const toggle = (checked) => {
+    setIsOn(checked);
+    const fd = new FormData();
+    fd.set("intent", "toggle_fit_confidence");
+    fd.set("fitConfidenceEnabled", String(checked));
+    fetcher.submit(fd, { method: "post" });
+  };
+  const readNow = () => {
+    const fd = new FormData();
+    fd.set("intent", "refresh_fit_confidence");
+    fetcher.submit(fd, { method: "post" });
+  };
+
+  const st = fit.status || {};
+  const reviews = st.reviews?.ok
+    ? `${fmtCount(st.reviews.answered)} fit answers in ${fmtCount(st.reviews.reviews)} reviews · ${fmtCount(st.reviews.styles)} styles`
+    : st.reviews?.error || (fit.hasYotpo ? "Not read yet." : "Add the Yotpo app key in Settings → Integrations.");
+  const sales = st.sales?.ok
+    ? `${fmtCount(st.sales.sold)} pairs sold, ${fmtCount(st.sales.returned)} returned (last 12 months)`
+    : st.sales?.error || "Not read yet.";
+  const returns = st.returns?.ok
+    ? `${fmtCount(st.returns.items)} returned items read · ${st.returns.items ? Math.round((st.returns.fit / st.returns.items) * 100) : 0}% for size or fit`
+    : st.returns?.error || (fit.hasAftership ? "Not read yet." : "Add the AfterShip API key in Settings → Integrations.");
+  const step = FIT_STEPS[fit.run?.step] || "Reading…";
+  const progress = fit.run?.total > 0 ? ` ${fmtCount(Math.min(fit.run.done, fit.run.total))} of ${fmtCount(fit.run.total)}${fit.run.step === "reviews" ? " styles" : fit.run.step === "returns" ? " weeks" : ""}` : "";
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <BlockStack gap="100">
+          <InlineStack gap="200" blockAlign="center">
+            <Text as="h2" variant="headingMd">Fit confidence</Text>
+            <Badge tone={isOn ? "success" : undefined}>{isOn ? "On" : "Off"}</Badge>
+          </InlineStack>
+          <Text as="p" tone="subdued">
+            A small meter on every shoe and orthotic card in the chat — &quot;Fit ━━━ 92%&quot;, with &quot;Runs small&quot; (or large, narrow, wide) under it when that&apos;s what buyers found — that says how sure a shopper can be the style fits as expected. It&apos;s read from reviewers&apos; own fit answers (Yotpo), the pairs sold and sent back in the last 12 months (Shopify) and why they came back (AfterShip), across all of a style&apos;s colors. A style with too little to go on shows no bar. It never names a size — True Fit does that.
+          </Text>
+          <Text as="p" tone="subdued">
+            {fit.vip
+              ? "Signed-in shoppers see it for the size they've kept before, from their own past orders."
+              : "With VIP mode on (Settings → Integrations), signed-in shoppers see it for the size they've kept before."}
+          </Text>
+        </BlockStack>
+
+        <Checkbox label="Show fit confidence on product cards" checked={isOn} onChange={toggle} />
+
+        <Divider />
+        <BlockStack gap="200">
+          <Text as="h3" variant="headingSm">What it&apos;s read from</Text>
+          <FitSource title="Reviews (Yotpo)" state={reviews} ok={st.reviews ? st.reviews.ok : null} />
+          <FitSource title="Sales (Shopify)" state={sales} ok={st.sales ? st.sales.ok : null} />
+          <FitSource title="Return reasons (AfterShip)" state={returns} ok={st.returns ? st.returns.ok : null} />
+        </BlockStack>
+
+        <InlineStack align="space-between" blockAlign="center" gap="300">
+          <Text as="span" tone="subdued">
+            {running
+              ? `${step}${progress}`
+              : fit.readAt
+                ? `Read ${fmtWhen(fit.readAt)} · ${fmtCount(fit.scored)} ${fit.scored === 1 ? "style has" : "styles have"} a score · read again every day`
+                : "Not read yet."}
+          </Text>
+          <Button onClick={readNow} loading={running} disabled={running}>Read now</Button>
+        </InlineStack>
+
+        {fit.lowest?.length > 0 && (
+          <>
+            <Divider />
+            <BlockStack gap="200">
+              <Text as="h3" variant="headingSm">Lowest fit confidence</Text>
+              <DataTable
+                columnContentTypes={["text", "numeric", "text", "numeric", "numeric"]}
+                headings={["Style", "Fit", "How it fits", "Reviews", "Pairs sold"]}
+                rows={fit.lowest.map((x) => [
+                  [x.name, x.line].filter(Boolean).join(" · "),
+                  `${x.s}%`,
+                  FIT_LABELS[x.l] || "—",
+                  fmtCount(x.r),
+                  fmtCount(x.n),
+                ])}
+              />
+            </BlockStack>
+          </>
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
 // Fit predictor lives on this page now — it's the other "guided answer"
 // surface (size recommendation instead of product recommendation), so
 // merchants manage both recommenders in one place. The form-data shape and
@@ -1205,6 +1361,15 @@ export default function SmartRecommenders() {
             enabled={data.decisionTreeEnabled}
             trees={data.decisionTrees}
           />
+        </BlockStack>
+
+        <BlockStack gap="400">
+          <SectionHeading
+            eyebrow="Fit Confidence"
+            title="Fit on every product card"
+            description="How sure a shopper can be that a style fits as expected, on every shoe and orthotic card in the chat — from reviews, sales, returns and why they came back."
+          />
+          <FitConfidenceCard fit={data.fitConfidence} />
         </BlockStack>
 
         <BlockStack gap="400">

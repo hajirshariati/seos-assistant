@@ -2219,6 +2219,77 @@ for (const coop of ["1", "2"]) {
   check("seasonal: switched off, the usual first button comes back", !(await page.$(".is-season")) && offTiles.join("|") === usual.join("|"), offTiles.join(" | "));
   await ctx.close();
 }
+// Fit confidence: one meter row under the price ("Fit ━━━── 92%", the bar
+// taking the card's width) and a short note only when there's more to know
+// ("Runs small", "In your size 9"); said in full to screen readers; no line
+// without a real score; the same in View all and after a reload.
+for (const [label, path, opts] of [["showcase", "/showcase", { viewport: { width: 1280, height: 860 } }], ["row cards", "/horizontal", { viewport: { width: 1280, height: 860 } }], ["phone", "/showcase", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789" + path);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(400);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "fitcards");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-fitc", { timeout: 6000 });
+  await page.waitForTimeout(300);
+  const read = (scope = ".ai-chat-messages") => page.evaluate((scope) => [...document.querySelectorAll(`${scope} .ai-chat-product-card`)].map((c) => {
+    const f = c.querySelector(".ai-chat-fitc");
+    if (!f) return { handle: c.dataset.handle, fit: null };
+    const info = c.querySelector(".ai-chat-product-info") || c;
+    const ir = info.getBoundingClientRect(), row = f.querySelector(".ai-chat-fitc__row"), rr = row.getBoundingClientRect();
+    const note = f.querySelector(".ai-chat-fitc__note");
+    const price = c.querySelector(".ai-chat-product-price"), buy = c.querySelector("[data-atc]");
+    return {
+      handle: c.dataset.handle, k: row.querySelector(".ai-chat-fitc__k").textContent, n: row.querySelector(".ai-chat-fitc__n").textContent,
+      note: note ? note.textContent : "", noteWhole: note ? note.scrollWidth <= note.clientWidth + 1 : true,
+      say: f.getAttribute("aria-label"), role: f.getAttribute("role"),
+      bar: row.querySelector(".ai-chat-fitc__bar i").style.width, barW: Math.round(row.querySelector(".ai-chat-fitc__bar").getBoundingClientRect().width),
+      inside: rr.left >= ir.left - 0.5 && rr.right <= ir.right + 0.5, oneRow: rr.height <= 15,
+      order: !!(price.compareDocumentPosition(f) & 4) && !!(f.compareDocumentPosition(buy) & 4),
+      num: getComputedStyle(row.querySelector(".ai-chat-fitc__n")).color, fill: getComputedStyle(row.querySelector(".ai-chat-fitc__bar i")).backgroundColor,
+    };
+  }), scope);
+  const dark = await read();
+  await page.screenshot({ path: out(`fit-${label.replace(/\s/g, "-")}-dark`) });
+  const by = Object.fromEntries(dark.map((x) => [x.handle, x]));
+  const a = by["savannah-red"], b = by["jillian-black"], r = by["runs-1"];
+  check(`fit (${label}): "Fit ━━ 92%" on one row under the price, the bar 92% full and as wide as the card allows`, a?.k === "Fit" && a.n === "92%" && a.bar === "92%" && a.barW >= 24 && a.inside && a.oneRow && a.order, JSON.stringify(a));
+  check(`fit (${label}): true to size needs no note; said in full to screen readers`, a?.note === "" && a.role === "img" && a.say === "Fit confidence: 92%, true to size. From 85 reviews and 1,240 pairs sold in the last year.", JSON.stringify(a));
+  check(`fit (${label}): runs small says so under it, whole`, r?.n === "81%" && r.note === "Runs small" && r.noteWhole && r.inside, JSON.stringify(r));
+  check(`fit (${label}): in the shopper's own size — "In your size 9", whole`, b?.n === "78%" && b.note === "In your size 9" && b.noteWhole && /in size 9, the size you’ve kept before: 78%, runs small/.test(b.say), JSON.stringify(b));
+  const noScript = await page.evaluate(() => !document.querySelector(".ai-chat-product-card script, .ai-chat-fitc b b"));
+  check(`fit (${label}): no line without a real score (none sent, 150%, not a number)`, dark.filter((x) => x.fit === null).map((x) => x.handle).join() === "orthotic-one,carly-white,odd-1", JSON.stringify(dark.map((x) => [x.handle, x.n || null, x.note || ""])));
+  check(`fit (${label}): a made-up label or size is left out`, by["odd-2"]?.n === "70%" && by["odd-2"].note === "" && by["odd-2"].say === "Fit confidence: 70%." && noScript, JSON.stringify(by["odd-2"]));
+  check(`fit (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  if (label === "showcase") {
+    await page.click(".ai-chat-theme-btn");
+    await page.waitForTimeout(250);
+    const light = await read();
+    await page.screenshot({ path: out(`fit-${label}-light`) });
+    const l = light.find((x) => x.handle === "savannah-red");
+    check("fit: light and dark each have their own colors", l && a && l.num !== a.num && l.fill !== a.fill, JSON.stringify({ light: [l?.num, l?.fill], dark: [a?.num, a?.fill] }));
+    // View all keeps it.
+    await page.click("[data-viewall]");
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: out(`fit-${label}-viewall`) });
+    const sheet = (await read(".ai-chat-fbsheet__list")).map((x) => [x.handle, x.n || null, x.note || ""]);
+    check("fit: View all's cards carry the same line", JSON.stringify(sheet.slice(0, 5)) === JSON.stringify([["savannah-red", "92%", ""], ["jillian-black", "78%", "In your size 9"], ["orthotic-one", null, ""], ["carly-white", null, ""], ["runs-1", "81%", "Runs small"]]), JSON.stringify(sheet));
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    // After a reload, the reply's cards come back with it.
+    await page.reload();
+    await page.waitForTimeout(800);
+    if (!(await page.$(".ai-chat-panel.open"))) await page.click(".ai-chat-launcher");
+    await page.waitForSelector(".ai-chat-fitc", { timeout: 5000 }).catch(() => {});
+    const again = (await read()).map((x) => [x.handle, x.n || null, x.note || ""]);
+    check("fit: after a reload the cards still show it", JSON.stringify(again.slice(0, 2)) === JSON.stringify([["savannah-red", "92%", ""], ["jillian-black", "78%", "In your size 9"]]), JSON.stringify(again));
+  }
+  await ctx.close();
+}
+
 await browser.close();
 srv.close();
 console.log(results.join("\n"));

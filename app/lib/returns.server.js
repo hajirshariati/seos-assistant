@@ -7,6 +7,7 @@
 import { toCard } from "./lean/engine.js";
 import { loadLeanCatalog } from "./lean/catalog.server.js";
 import { returnPolicy } from "./orders.server.js";
+import { AS_VERSION } from "./aftership.server.js";
 
 // Reasons the chat offers. `change` says how an exchange moves the size.
 export const RETURN_REASONS = [
@@ -83,7 +84,6 @@ export async function exchangeCard({ shop, item, reasonKey }) {
 // isn't documented; the short store key is what matched live, so the full
 // myshopify domain is only tried after a 404 ("Order not found"). Every attempt's error is returned so the log
 // shows what AfterShip said to each.
-const AS_VERSION = process.env.AFTERSHIP_RETURNS_API_VERSION || "2026-01";
 const AS_METHOD = process.env.AFTERSHIP_RETURN_METHOD || "retailer_label";
 
 // How the shopper sends it back, as the chat offers it. AFTERSHIP_RETURN_METHODS

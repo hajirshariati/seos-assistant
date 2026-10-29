@@ -350,6 +350,8 @@ export function toCard(p, preselect = null) {
     compare_at_price: p.onSale ? Math.round(p.compareAtPrice * 100) : undefined,
     // footwear / orthotic / other — decides which fit helper the card offers.
     kind: productKind(p),
+    // Fit confidence: the style's score ({ s, l, r, n }), when there is one.
+    ...(p.fit ? { fit: p.fit } : {}),
   };
 }
 

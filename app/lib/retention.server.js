@@ -6,6 +6,7 @@ import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
+import { refreshAllFitData } from "./fit-confidence.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,6 +49,13 @@ async function runOnce() {
     console.error("[retention] cleanupOldReturns failed:", err?.message || err);
   }
   await cleanupOldHealth();
+  // Fit confidence on product cards: each store's scores read again (a store
+  // read in the last 20 hours is skipped). Last — it can take a few minutes.
+  try {
+    await refreshAllFitData();
+  } catch (err) {
+    console.error("[retention] refreshAllFitData failed:", err?.message || err);
+  }
 }
 
 // Idempotent: a single timer per Node process. The guard survives HMR in dev
