@@ -100,6 +100,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
   if(typeof d.fitConfidence==='boolean'){FITC_ON=d.fitConfidence;try{localStorage.setItem(FITC_KEY,FITC_ON?'1':'0')}catch(e){}}
+  if(Array.isArray(d.fitLevels)){setFitLevels(d.fitLevels);try{localStorage.setItem(FITL_KEY,JSON.stringify(Object.keys(FITC_LEVELS)))}catch(e){}}
   if(d.buyNow&&typeof d.buyNow==='object'){setBuyNow(d.buyNow);try{localStorage.setItem(BUY_KEY,JSON.stringify({on:BUY_ON,code:BUY_CODE}))}catch(e){}}
   if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
@@ -229,6 +230,11 @@ function loginUrl(){return CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?
    from the start): cards show the Fit and size tiles under the buy button. */
 var FITC_KEY='hajirai_fitc',FITC_ON=false;
 try{FITC_ON=localStorage.getItem(FITC_KEY)==='1'}catch(e){}
+/* …and which of its levels the cards show (the store's choice; High and Mid
+   until it says): a style at another level shows only the size tool. */
+var FITL_KEY='hajirai_fitl',FITC_LEVELS={high:1,mid:1};
+function setFitLevels(a){var o={};for(var i=0;Array.isArray(a)&&i<a.length;i++)if(a[i]==='high'||a[i]==='mid'||a[i]==='fair')o[a[i]]=1;FITC_LEVELS=o}
+try{var savedFitl=JSON.parse(localStorage.getItem(FITL_KEY)||'null');if(Array.isArray(savedFitl))setFitLevels(savedFitl)}catch(e){}
 /* Buy now (Settings → Shopping tools, off unless turned on; remembered the
    same way): the cards' one-tap checkout, and the store's code for it. */
 var BUY_KEY='hajirai_buynow',BUY_ON=false,BUY_CODE='';
@@ -2770,14 +2776,17 @@ return d;
    customer's size/width, the card carries it (data-preselect) and shows it
    under the price — one tap adds that exact variant. */
 /* With Fit confidence on — under the buy button, side by side: the style's
-   Fit (a ring with its score; tap it for where the number comes from) and
-   the size tool that belongs to the product — True Fit on shoes, FITFinder
-   on orthotics (until the shopper has a FIT), never the other way. Either may be missing; one
-   alone takes the whole row. The tiles size themselves to the card (narrow
-   cards: icon and a word or two; wider ones: the full words; the widest:
-   icon beside the words), so no card breaks at any width. */
+   Fit and the size tool that belongs to the product — True Fit on shoes,
+   FITFinder on orthotics (until the shopper has a FIT), never the other
+   way. Either may be missing; one alone takes the whole row. Fit is a word,
+   never a number: High, Mid or Fair in a full ring of its color (green,
+   blue, orange), and how it runs ("Runs small") in the same color — that
+   always shows; the level's own words make way when a card is narrow, and
+   tapping it says where it comes from. The tiles size themselves to the
+   card, so no card breaks at any width. */
 var FITC_WORDS={'true':'True to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
 var FITC_LONG={'true':'Runs true to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
+var FITC_LEVEL={high:'High',mid:'Mid',fair:'Fair'};
 function fitcInt(v,max){var n=Math.round(Number(v));return isFinite(n)&&n>=0?Math.min(n,max):null}
 function fitcTriple(v){
   if(!Array.isArray(v)||v.length!==3)return null;
@@ -2787,7 +2796,11 @@ function fitcTriple(v){
 function fitcClean(f){
   if(!f||typeof f!=='object')return null;
   var s=Math.round(Number(f.s));if(!(s>=1&&s<=99))return null;
-  var o={s:s,r:Math.max(0,parseInt(f.r,10)||0),n:Math.max(0,parseInt(f.n,10)||0)};
+  /* The level the server sent; a card saved before it did gets it from the
+     score (the same cutoffs as app/lib/fit-confidence.js). */
+  var v=Object.prototype.hasOwnProperty.call(FITC_LEVEL,f.v)?f.v:(s>=85?'high':s>=70?'mid':'fair');
+  if(!FITC_LEVELS[v])return null;
+  var o={s:s,v:v,r:Math.max(0,parseInt(f.r,10)||0),n:Math.max(0,parseInt(f.n,10)||0)};
   if(typeof f.l==='string'&&Object.prototype.hasOwnProperty.call(FITC_WORDS,f.l))o.l=f.l;
   var a=fitcTriple(f.a),w=fitcTriple(f.w),k=fitcInt(f.k,100);
   if(a)o.a=a;if(w)o.w=w;
@@ -2802,24 +2815,24 @@ function fitcClean(f){
 function fitcSay(f){
   var n=function(x){return x.toLocaleString('en-US')};
   var basis=[f.r?n(f.r)+(f.r===1?' review':' reviews'):'',f.n?n(f.n)+(f.n===1?' pair':' pairs')+' sold in the last year':''].filter(Boolean).join(' and ');
-  return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+f.s+'%'+(f.l?', '+FITC_WORDS[f.l].toLowerCase():'')+'.'+(basis?' From '+basis+'.':'');
+  return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+FITC_LEVEL[f.v]+'.'+(f.l?' '+FITC_LONG[f.l]+'.':'')+(basis?' From '+basis+'.':'');
 }
-/* A ring filled to the score. */
-function fitRing(s){
-  var c=2*Math.PI*15.5;
-  return '<svg class="ai-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ai-ring__track" cx="18" cy="18" r="15.5"/><circle class="ai-ring__arc" cx="18" cy="18" r="15.5" stroke-dasharray="'+(c*s/100).toFixed(2)+' '+c.toFixed(2)+'" transform="rotate(-90 18 18)"/></svg>';
+/* A full ring in the level's color, its word inside. */
+function fitRing(v){
+  return '<svg class="ai-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ai-ring__arc" cx="18" cy="18" r="15.5"/></svg><b class="ai-tool__lvl">'+FITC_LEVEL[v]+'</b>';
 }
-/* One tile: icon, a title, and words in two lengths (the card's width picks). */
-function toolTile(attrs,icon,title,long,short){
-  return '<button type="button" '+attrs+'><span class="ai-tool__icon" aria-hidden="true">'+icon+'</span><span class="ai-tool__text" aria-hidden="true"><span class="ai-tool__title">'+esc(title)+'</span>'+
-    '<span class="ai-tool__sub"><span class="ai-tool__long">'+esc(long)+'</span><span class="ai-tool__short">'+esc(short)+'</span></span></span></button>';
+/* One tile: icon, a title and a line under it, each in two lengths (the
+   card's width picks). */
+function toolTile(attrs,icon,title,titleShort,sub,subShort){
+  var two=function(cls,a,b){return '<span class="'+cls+'"><span class="ai-tool__long">'+esc(a)+'</span><span class="ai-tool__short">'+esc(b)+'</span></span>'};
+  return '<button type="button" '+attrs+'><span class="ai-tool__icon" aria-hidden="true">'+icon+'</span><span class="ai-tool__text" aria-hidden="true">'+two('ai-tool__title',title,titleShort)+two('ai-tool__sub',sub,subShort)+'</span></button>';
 }
 function fitTile(raw){
   var f=fitcClean(raw);if(!f)return '';
-  var long=f.z?'In your size '+f.z:(f.l?FITC_LONG[f.l]:'See how it fits');
-  var short=f.z?'Your size '+f.z:(f.l?FITC_WORDS[f.l]:'Details');
-  return toolTile('class="ai-tool ai-tool--fit" data-fitx="'+esc(JSON.stringify(f))+'" aria-haspopup="dialog" aria-label="'+esc(fitcSay(f)+' Shows where this comes from.')+'"',
-    fitRing(f.s)+'<b class="ai-tool__pct">'+f.s+'%</b>','Fit',long,short);
+  var L=FITC_LEVEL[f.v];
+  return toolTile('class="ai-tool ai-tool--fit is-'+f.v+'" data-fitx="'+esc(JSON.stringify(f))+'" aria-haspopup="dialog" aria-label="'+esc(fitcSay(f)+' Shows where this comes from.')+'"',
+    fitRing(f.v),f.l?FITC_LONG[f.l]:'See how it fits',f.l?FITC_WORDS[f.l]:'How it fits',
+    f.z?L+' fit in your size '+f.z:L+' fit confidence',f.z?'In your size '+f.z:'Fit confidence');
 }
 /* Fit confidence off: the size tool is a round icon button beside the buy
    button, so the card doesn't grow (as it always was). */
@@ -2832,8 +2845,8 @@ function cardHelper(p,t){
 /* Fit confidence on: the size tool as a tile beside the Fit tile. */
 function sizeTile(p,t){
   if(!p||!p.handle)return '';
-  if(p.kind==='footwear'&&tfPayload())return toolTile('class="ai-tool ai-tool--size" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit"','<span class="ai-tool__badge">'+tfLogo(20)+'</span>','Size','Find your size','True Fit');
-  if(p.kind==='orthotic'&&ff&&!savedFit())return toolTile('class="ai-tool ai-tool--ff" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder"','<span class="ai-tool__badge ai-tool__badge--fit">FIT</span>','FIT','Find your FIT','FITFinder');
+  if(p.kind==='footwear'&&tfPayload())return toolTile('class="ai-tool ai-tool--size" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit"','<span class="ai-tool__badge">'+tfLogo(20)+'</span>','Size','Size','Find your size','True Fit');
+  if(p.kind==='orthotic'&&ff&&!savedFit())return toolTile('class="ai-tool ai-tool--ff" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder"','<span class="ai-tool__badge ai-tool__badge--fit">FIT</span>','FIT','FIT','Find your FIT','FITFinder');
   return '';
 }
 function cardTools(p,t){
@@ -2941,9 +2954,9 @@ function fxAnswers(a,word,low,high){
   return fxNum(a[1])+' of '+fxNum(t)+' said '+word+(a[0]?' · '+fxNum(a[0])+' '+low:'')+(a[2]?' · '+fxNum(a[2])+' '+high:'')+'.';
 }
 function fitxBody(f,title,tf){
-  var h='<div class="ai-fitx__head"><span class="ai-fitx__ring">'+fitRing(f.s)+'<b>'+f.s+'%</b></span><div class="ai-fitx__hd">'+
-    '<h2 class="ai-fitx__title" id="ai-fitx-title">Fit confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
-    (f.l?'<span class="ai-fitx__pill is-'+f.l+'">'+esc(FITC_LONG[f.l])+'</span>':'')+'</div></div><ul class="ai-fitx__list">';
+  var h='<div class="ai-fitx__head is-'+f.v+'"><span class="ai-fitx__ring">'+fitRing(f.v)+'</span><div class="ai-fitx__hd">'+
+    '<h2 class="ai-fitx__title" id="ai-fitx-title">'+FITC_LEVEL[f.v]+' fit confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
+    (f.l?'<span class="ai-fitx__pill">'+esc(FITC_LONG[f.l])+'</span>':'')+'</div></div><ul class="ai-fitx__list">';
   if(f.z)h+=fxRow('you','For your size '+f.z,'The size you’ve kept before, from your orders.'+(f.zn&&f.zk!=null?' In size '+f.z+', '+(f.kf?'about ':'')+f.zk+'% of '+fxNum(f.zn)+' '+(f.zn===1?'pair':'pairs')+' weren’t sent back'+(f.kf?' for fit':'')+'.':''));
   if(f.a||f.w){
     var txt=f.a?fxNum(f.a[1])+' of '+fxNum(f.a[0]+f.a[1]+f.a[2])+' said it’s true to size.':'';
@@ -2952,7 +2965,7 @@ function fitxBody(f,title,tf){
   }else h+=fxRow('star','What reviewers said','No reviewer has rated the fit yet.');
   if(f.n&&f.k!=null)h+=fxRow('box','What buyers kept',(f.kf?'About ':'')+f.k+'% of the '+fxNum(f.n)+' '+(f.n===1?'pair':'pairs')+' sold in the last year '+(f.n===1?'wasn’t':'weren’t')+' sent back'+(f.kf?' for fit':'')+'.');
   else h+=fxRow('box','What buyers kept','Not enough sales in the last year to go by yet.');
-  h+='</ul><p class="ai-fitx__note">The score blends what reviewers said with what buyers kept, across every color of this style — the more there is to go on, the more it counts. It tells you how the style fits; True Fit finds your size.</p>';
+  h+='</ul><p class="ai-fitx__note">High, Mid or Fair says how sure we can be that this style fits as expected. It blends what reviewers said with what buyers kept, across every color — the more there is to go on, the more it counts. It tells you how the style fits; True Fit finds your size.</p>';
   if(tf)h+='<button type="button" class="ai-fitx__tf" data-truefit="'+esc(tf.handle)+'" data-title="'+esc(tf.title)+'"><span class="ai-tool__badge" aria-hidden="true">'+tfLogo(18)+'</span><span>Find my size with True Fit</span></button>';
   return h;
 }
@@ -3063,7 +3076,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-29 buy-now'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 fit-levels'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */

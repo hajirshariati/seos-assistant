@@ -236,6 +236,7 @@ await test("widget-config, feedback and See It Styled answer signed requests cor
   const cfg = await (await fetch(signed("/widget-config", { cta: "What can I help you find today?" }))).json();
   assert.equal(cfg.showFeedback, true);
   assert.ok(Array.isArray(cfg.hideOnUrls));
+  assert.deepEqual(cfg.fitLevels, ["high", "mid"], "fit confidence: High and Mid on cards unless the store says");
   const fb = await fetch(signed("/feedback"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ vote: "up", session: "s", botResponse: "ok" }) });
   assert.equal(fb.status, 200);
   const viz = await fetch(signed("/visualize"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ productHandle: "x" }) });

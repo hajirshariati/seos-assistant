@@ -155,6 +155,9 @@ model ShopConfig {
   // Fit confidence on every product card (Smart Recommenders → Fit
   // confidence): a style's score from reviews, sales, returns and why.
   fitConfidenceEnabled   Boolean  @default(true)
+  // Which levels show on the cards ("high,mid,fair"); a style at another
+  // level shows only the size tool.
+  fitConfidenceLevels    String   @default("high,mid")
   // Buy now on the cards (Settings → Shopping tools): off unless turned on;
   // the discount code it applies at checkout ("" = none).
   buyNowEnabled          Boolean  @default(false)

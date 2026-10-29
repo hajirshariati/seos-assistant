@@ -30,6 +30,28 @@ export const FIT_LABELS = {
   wide: "Runs wide",
 };
 
+// The score in a word — what the cards show instead of the number: High from
+// 85, Mid from 70, Fair below. The store picks which levels show on cards
+// (Smart Recommenders → Fit confidence; High and Mid unless it says).
+export const FIT_LEVELS = ["high", "mid", "fair"];
+export const FIT_LEVEL_NAMES = { high: "High", mid: "Mid", fair: "Fair" };
+export const FIT_LEVEL_FROM = { high: 85, mid: 70 };
+export const FIT_LEVELS_DEFAULT = ["high", "mid"];
+
+export function fitLevel(score) {
+  const s = Number(score);
+  if (!Number.isFinite(s)) return null;
+  return s >= FIT_LEVEL_FROM.high ? "high" : s >= FIT_LEVEL_FROM.mid ? "mid" : "fair";
+}
+
+// The levels a store shows, from what's stored ("high,mid"); none stored →
+// the default; "" → none (cards show only the size tool).
+export function parseFitLevels(value) {
+  if (value == null) return [...FIT_LEVELS_DEFAULT];
+  const set = new Set(String(value).split(",").map((x) => x.trim().toLowerCase()));
+  return FIT_LEVELS.filter((l) => set.has(l));
+}
+
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -291,14 +313,14 @@ export function fitScoreForSize(stats, sizeKey, base = {}) {
   };
 }
 
-// What a product card carries: { s: score, l: label key, r: reviews, n: pairs
-// sold }, and for "where this comes from": a / w — reviewers' size / width
+// What a product card carries: { s: score, v: its level (high/mid/fair),
+// l: label key, r: reviews, n: pairs sold }, and for "where this comes from": a / w — reviewers' size / width
 // answers [small, true, large]; k — % of pairs not sent back (kf: 1 when
 // that's for fit, from AfterShip's reasons). For a shopper's own size, also
 // z: the size, zn: its pairs sold, zk: % of them not sent back.
 export function cardFit(score) {
   if (!score || !Number.isFinite(score.score)) return null;
-  const out = { s: score.score, r: score.reviews || 0, n: score.sold || 0 };
+  const out = { s: score.score, v: fitLevel(score.score), r: score.reviews || 0, n: score.sold || 0 };
   if (score.label && FIT_LABELS[score.label]) out.l = score.label;
   const total = (a) => (Array.isArray(a) ? a.reduce((n, x) => n + x, 0) : 0);
   if (total(score.answers?.size)) out.a = score.answers.size;
@@ -322,7 +344,7 @@ export function fitSentence(fit) {
     fit.r ? `${fit.r.toLocaleString("en-US")} ${fit.r === 1 ? "review" : "reviews"}` : "",
     fit.n ? `${fit.n.toLocaleString("en-US")} ${fit.n === 1 ? "pair" : "pairs"} sold in the last year` : "",
   ].filter(Boolean).join(" and ");
-  const label = fit.l && FIT_LABELS[fit.l] ? `, ${FIT_LABELS[fit.l].toLowerCase()}` : "";
+  const label = fit.l && FIT_LABELS[fit.l] ? ` ${FIT_LABELS[fit.l].replace(/^True/, "Runs true")}.` : "";
   const who = fit.z ? ` in size ${fit.z}, the size you've kept before` : "";
-  return `Fit confidence${who}: ${fit.s}%${label}.${basis ? ` From ${basis}.` : ""}`;
+  return `Fit confidence${who}: ${FIT_LEVEL_NAMES[fitLevel(fit.s)]}.${label}${basis ? ` From ${basis}.` : ""}`;
 }

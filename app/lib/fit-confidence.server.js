@@ -589,6 +589,7 @@ export async function fitSummary(shop) {
     readAt: saved?.readAt ? new Date(saved.readAt).toISOString() : null,
     status: saved?.status || null,
     scored: scored.length,
+    levelCounts: { high: scored.filter((x) => x.v === "high").length, mid: scored.filter((x) => x.v === "mid").length, fair: scored.filter((x) => x.v === "fair").length },
     lowest: scored.slice(0, 5),
     run: fitRunState(shop),
   };

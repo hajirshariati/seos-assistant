@@ -731,7 +731,7 @@ function TestChat({ shop }) {
       const ct = res.headers.get("content-type") || "";
       if (!res.ok || !ct.includes("text/event-stream")) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || d.error || "The assistant couldn't reply. Please try again.");
+        throw new Error(d.message || d.error || "AVA couldn't reply. Please try again.");
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -760,7 +760,7 @@ function TestChat({ shop }) {
           } else if (p.type === "choices" && Array.isArray(p.options)) {
             eventChoices = p.options;
           } else if (p.type === "error") {
-            throw new Error(p.message || "The assistant hit an error.");
+            throw new Error(p.message || "AVA hit an error.");
           } else if (p.type === "done") {
             finished = true;
             break;
@@ -834,7 +834,7 @@ function TestChat({ shop }) {
             <div key={i} className={"seos-testchat-row " + (m.role === "user" ? "is-user" : "is-bot")}>
               <div className={"seos-testchat-bubble" + (m.error ? " is-error" : "")}>
                 {m.pending && !m.content ? (
-                  <span className="seos-testchat-typing" aria-label="Assistant is typing">
+                  <span className="seos-testchat-typing" aria-label="AVA is typing">
                     <span /><span /><span />
                   </span>
                 ) : (
@@ -893,8 +893,8 @@ function TestChat({ shop }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Test your assistant — ask anything, just like a customer…"
-          aria-label="Test your assistant"
+          placeholder="Test AVA — ask anything, just like a customer…"
+          aria-label="Test AVA"
         />
         <button type="submit" disabled={!input.trim() || streaming} aria-label="Send">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
@@ -1262,7 +1262,7 @@ function buildSetupItems({
     {
       done: hasApiKey,
       title: "Connect the AI engine",
-      description: "Paste your API key to power the AI assistant. Pay-as-you-go — you only pay for what you use.",
+      description: "Paste your API key to power AVA, your Aetrex Virtual Assistant. Pay-as-you-go — you only pay for what you use.",
       actionLabel: hasApiKey ? "Manage" : "Add key",
       actionUrl: "/app/api-keys#assistant",
     },
@@ -1297,7 +1297,7 @@ function buildSetupItems({
     {
       done: hasSupportLink,
       title: "Add your support link (recommended)",
-      description: "Where the assistant sends customers who need a person — your contact or help page.",
+      description: "Where AVA sends customers who need a person — your contact or help page.",
       actionLabel: hasSupportLink ? "Manage" : "Add link",
       actionUrl: "/app/api-keys#care",
     },
@@ -1320,7 +1320,7 @@ function SetupChecklist(props) {
   const [expanded, setExpanded] = useState(!allDone);
 
   const sub = allDone
-    ? `All ${items.length} steps done. Your assistant is fully configured.`
+    ? `All ${items.length} steps done. AVA is fully configured.`
     : `${doneCount} of ${items.length} done${requiredDone ? "" : " — action needed"}`;
 
   if (inline) {
@@ -1447,7 +1447,7 @@ function SetupCard(props) {
   const requiredDone = hasApiKey && widgetEnabled;
   const headline = allDone ? "Setup complete" : "Setup";
   const sub = allDone
-    ? "Your assistant is fully configured."
+    ? "AVA is fully configured."
     : requiredDone
       ? `${doneCount} of ${total} done · optional steps remain`
       : `${doneCount} of ${total} done · action needed`;
@@ -1564,7 +1564,7 @@ export default function Home() {
     items.push(
       semanticEnabled
         ? { label: "Semantic Search", value: semanticProvider === "voyage" ? "Voyage AI" : "OpenAI", tone: "success", url: "/app/api-keys#integrations", tooltip: "Semantic search active. Customers find products by meaning, not just keywords." }
-        : { label: "Semantic Search", value: "Off", tone: "subdued", url: "/app/api-keys#integrations", tooltip: "Optional. The assistant already searches your catalog with AI — adding a Voyage AI or OpenAI key sharpens matching by meaning (e.g. 'shoes for standing all day'). Works fine without it." }
+        : { label: "Semantic Search", value: "Off", tone: "subdued", url: "/app/api-keys#integrations", tooltip: "Optional. AVA already searches your catalog with AI — adding a Voyage AI or OpenAI key sharpens matching by meaning (e.g. 'shoes for standing all day'). Works fine without it." }
     );
     items.push(
       recommenderActive
@@ -2639,7 +2639,7 @@ export default function Home() {
               <ActionCard
                 art={<ArtSettings />}
                 title="Settings"
-                description="The assistant, its look, integrations — and Peak Mode for your busiest days."
+                description="AVA, its look, integrations — and Peak Mode for your busiest days."
                 cta="Open settings"
                 url="/app/api-keys"
               />

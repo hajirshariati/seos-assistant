@@ -595,7 +595,7 @@ function MetafieldRow({ row, onAdd, onRemove, busy }) {
         <InlineStack gap="200" blockAlign="end" wrap={false}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <TextField
-              label="Name the assistant uses"
+              label="Name AVA uses"
               value={name}
               onChange={setName}
               autoComplete="off"
@@ -781,7 +781,7 @@ function AttributeMappingsCard({ mappings, choices = [], choicesError = null }) 
             <BlockStack gap="300">
               <div className="set-grid set-grid--3">
                 <TextField label="Attribute name" value={attribute} onChange={setAttribute}
-                  helpText="The name the assistant uses (e.g. material, heel_height)." autoComplete="off" />
+                  helpText="The name AVA uses (e.g. material, heel_height)." autoComplete="off" />
                 <Select label="Comes from"
                   options={[{ label: "Metafield", value: "metafield" }, { label: "Product tags with a prefix", value: "tag_prefix" }]}
                   value={sourceType} onChange={setSourceType} />
@@ -818,7 +818,7 @@ const COVERAGE_LABEL = { good: "Ready", partial: "Partial", missing: "Missing", 
 function CatalogCoverageCard({ coverage }) {
   return (
     <Group
-      title="What the assistant can filter on"
+      title="What AVA can filter on"
       badge={coverage.gaps.length > 0 ? <Badge tone="attention">{`${coverage.gaps.length} to improve`}</Badge> : <Badge tone="success">Ready</Badge>}
     >
       <div className="ct-pad">
@@ -912,7 +912,7 @@ function CatalogSyncCard({ data }) {
           <>
             {when ? `${when}. ` : ""}
             {active
-              ? "Syncing now — the assistant keeps using the current catalog until it's done."
+              ? "Syncing now — AVA keeps using the current catalog until it's done."
               : "Product edits sync within seconds; a full check runs nightly."}
           </>
         }
@@ -1051,7 +1051,7 @@ function ProductSpecsCard({ specs, maxBytes }) {
     reader.readAsDataURL(file);
   };
   const remove = () => {
-    if (!window.confirm("Remove the spec sheet? The assistant stops using its specs right away. Facts on your product pages stay.")) return;
+    if (!window.confirm("Remove the spec sheet? AVA stops using its specs right away. Facts on your product pages stay.")) return;
     fetcher.submit({ intent: "remove_specs" }, { method: "post" });
   };
   const download = (kind) => files.submit({ intent: "download_specs", kind }, { method: "post" });
@@ -1060,7 +1060,7 @@ function ProductSpecsCard({ specs, maxBytes }) {
   const notice = problem
     ? { tone: "critical", text: problem }
     : result?.specsError ? { tone: "critical", text: result.specsError }
-      : result?.specsSaved ? { tone: "success", text: `Sheet saved. ${result.specsMatched.toLocaleString()} of ${result.specsProducts.toLocaleString()} products now have specs — the assistant uses them from the next message.` }
+      : result?.specsSaved ? { tone: "success", text: `Sheet saved. ${result.specsMatched.toLocaleString()} of ${result.specsProducts.toLocaleString()} products now have specs — AVA uses them from the next message.` }
         : result?.specsRemoved ? { tone: "info", text: "Spec sheet removed." } : null;
   const noticeKey = notice ? `${notice.tone}:${notice.text}` : "";
   const matched = match ? match.byCode + match.byStyle : 0;
@@ -1195,7 +1195,7 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
       title="“Show me something similar”"
       badge={attrs.length > 0 ? <Badge tone="success">{`${attrs.length} ticked`}</Badge> : <Badge>Off</Badge>}
     >
-      <Row stack help="When a shopper asks for “something like this one” or “similar but cheaper”, the assistant shows other styles from the same category and gender that share what you tick. Nothing ticked turns this off.">
+      <Row stack help="When a shopper asks for “something like this one” or “similar but cheaper”, AVA shows other styles from the same category and gender that share what you tick. Nothing ticked turns this off.">
         <BlockStack gap="300">
           {options.length > 0 ? (
             <div className="ct-ticks">
@@ -1255,7 +1255,7 @@ export default function Catalog() {
 
           <section>
             <SectionHead title="Your products">
-              The assistant reads your Shopify products and stays in sync as you edit them. You only need to act if something looks out of date.
+              AVA reads your Shopify products and stays in sync as you edit them. You only need to act if something looks out of date.
             </SectionHead>
             <BlockStack gap="400">
               <CatalogSyncCard data={data} />
@@ -1265,14 +1265,14 @@ export default function Catalog() {
 
           <section>
             <SectionHead title="Product fields">
-              The Shopify fields (metafields) the assistant uses — material, footbed, heel height. Add one and the assistant can filter by it (“show me cork footbeds”) and answer questions about it; your products update on their own.
+              The Shopify fields (metafields) AVA uses — material, footbed, heel height. Add one and AVA can filter by it (“show me cork footbeds”) and answer questions about it; your products update on their own.
             </SectionHead>
             <AttributeMappingsCard mappings={data.mappings} choices={data.metafieldChoices || []} choicesError={data.metafieldError} />
           </section>
 
           <section>
             <SectionHead title="Product specs">
-              Your technical sheet — removable footbed, pig products, shank, lining, heel-to-toe drop, boot shaft, temperature rating and more, by style code. The assistant answers spec questions from it and can find, for example, shoes for custom orthotics. What a product page already says always wins.
+              Your technical sheet — removable footbed, pig products, shank, lining, heel-to-toe drop, boot shaft, temperature rating and more, by style code. AVA answers spec questions from it and can find, for example, shoes for custom orthotics. What a product page already says always wins.
             </SectionHead>
             <ProductSpecsCard specs={data.specs} maxBytes={data.specFileMaxBytes} />
           </section>

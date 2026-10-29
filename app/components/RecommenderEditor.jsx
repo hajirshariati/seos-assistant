@@ -86,7 +86,7 @@ function QuestionsTable({ definition, onChange }) {
   if (questions.length === 0) {
     return (
       <Text as="p" tone="subdued">
-        No fixed questions — the assistant asks whatever it needs to pick a row from the product table below.
+        No fixed questions — AVA asks whatever it needs to pick a row from the product table below.
       </Text>
     );
   }
@@ -152,7 +152,7 @@ function QuestionsTable({ definition, onChange }) {
             </BlockStack>
             {prompts[n.attribute] !== undefined && (
               <TextField
-                label="How the assistant should ask (and what counts as each answer)"
+                label="How AVA should ask (and what counts as each answer)"
                 helpText="Read by the AI, not shown to customers. Use it for tips like “cleats means any field-sport shoe”."
                 value={prompts[n.attribute] || ""}
                 onChange={(v) => updatePrompt(n.attribute, v)}
@@ -323,7 +323,7 @@ export function RecommenderTables({ definition, onChange }) {
     <BlockStack gap="600">
       <BlockStack gap="300">
         <BlockStack gap="100">
-          <Text as="h4" variant="headingSm">Questions the assistant asks</Text>
+          <Text as="h4" variant="headingSm">Questions AVA asks</Text>
           <Text as="p" tone="subdued" variant="bodySm">
             Customers can tap an answer or just type it — questions they already answered are skipped.
           </Text>
@@ -334,7 +334,7 @@ export function RecommenderTables({ definition, onChange }) {
         <BlockStack gap="100">
           <Text as="h4" variant="headingSm">Which product for which answers</Text>
           <Text as="p" tone="subdued" variant="bodySm">
-            Each row is one product and the answers it's right for. The assistant recommends the row that matches the customer's answers.
+            Each row is one product and the answers it's right for. AVA recommends the row that matches the customer's answers.
           </Text>
         </BlockStack>
         <ProductTable definition={definition} onChange={onChange} />

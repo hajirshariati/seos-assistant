@@ -333,7 +333,8 @@ export function start(port) {
         }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
           // Smart Recommenders → Fit confidence: on for ?fitc=1 pages.
-          ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true } : {}),
+          // …with the levels the cards show: High and Mid, as stored by default (?fitl=all: all three; ?fitl=none: none).
+          ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true, fitLevels: /[?&]fitl=all/.test(String(req.headers.referer || "")) ? ["high", "mid", "fair"] : /[?&]fitl=none/.test(String(req.headers.referer || "")) ? [] : ["high", "mid"] } : {}),
           // Settings → Chat text: only on ?texts= pages (?texts=0: none set, as for a store that hasn't).
           ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : /[?&]texts=fit/.test(String(req.headers.referer || "")) ? { chatTexts: { fitButton: "Does this fit?" } } : {}),
           // Settings → Buy now: on for ?buy=1 (with a code) and ?buy=2 (no code) pages.
@@ -418,6 +419,7 @@ export function start(port) {
               { ...carly, handle: "runs-1", title: "Runs One - Black", fit: { s: 81, l: "small", r: 40, n: 900, a: [14, 24, 2], k: 85 } },
               { ...carly, handle: "odd-1", title: "Odd One - Black", fit: { s: "abc" } },
               { ...carly, handle: "odd-2", title: "Odd Two - Black", fit: { s: 70, l: "<b>x</b>", z: "9<script>", r: -4, n: "lots", a: [1, "x", 3], k: 500 } },
+              { ...carly, handle: "fair-1", title: "Fair One - Black", fit: { s: 62, v: "fair", l: "small", r: 30, n: 400, a: [12, 15, 3], k: 74 } },
             ];
             w({ type: "text", text: "Here are a few to consider." });
             w({ type: "products", products: [...fitted, ...odd] });

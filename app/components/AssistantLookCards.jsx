@@ -103,9 +103,9 @@ export function OrbColorsCard({ initial, initialBg = ORB_DEFAULT_BG }) {
     <Card>
       <BlockStack gap="400">
         <BlockStack gap="100">
-          <Text as="h2" variant="headingMd">Assistant mark colors</Text>
+          <Text as="h2" variant="headingMd">AVA mark colors</Text>
           <Text as="p" tone="subdued">
-            The five colors of the light sheets turning inside the assistant&apos;s mark, and the globe&apos;s own color
+            The five colors of the light sheets turning inside AVA&apos;s mark, and the globe&apos;s own color
             behind them, in the chat bar and the bubble. The light blends where it crosses, so pick colors that work
             together. Changes reach your storefront within a minute.
           </Text>
@@ -177,7 +177,7 @@ export function VoiceInputCard({ initialOn }) {
             <Text as="h2" variant="headingMd">Talk button</Text>
             <Text as="p" tone="subdued">
               A mic in the message box: shoppers tap it and speak, their words appear as they talk, and the message
-              sends when they pause (the mic turns into Send as soon as there are words). The assistant still answers in text. Uses the browser&apos;s built-in speech
+              sends when they pause (the mic turns into Send as soon as there are words). AVA still answers in text. Uses the browser&apos;s built-in speech
               recognition (Chrome, Safari, Edge) and is hidden where that isn&apos;t available.
             </Text>
           </BlockStack>

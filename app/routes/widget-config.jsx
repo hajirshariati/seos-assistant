@@ -2,6 +2,7 @@ import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
 import { appPromoConfig } from "../lib/app-promo.js";
 import { buyNowConfig } from "../lib/buy-now.js";
+import { parseFitLevels } from "../lib/fit-confidence.js";
 import { parseChatTexts } from "../lib/chat-texts.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appearDelayConfig, startTheme, internationalConfig } from "../lib/appear-delay.js";
@@ -103,6 +104,8 @@ export const loader = async ({ request }) => {
         // Smart Recommenders → Fit confidence: cards show the Fit and size
         // tiles under the buy button (off: the size tool beside it, as before).
         fitConfidence: config.fitConfidenceEnabled !== false,
+        // …and which of its levels (High, Mid, Fair) the cards show.
+        fitLevels: parseFitLevels(config.fitConfidenceLevels),
         // Settings → Shopping tools → Buy now: off unless the store turns it on.
         buyNow: buyNowConfig(config),
         rotateGreetingCta: config.rotateGreetingCta !== false,

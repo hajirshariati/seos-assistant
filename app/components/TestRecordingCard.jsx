@@ -36,7 +36,7 @@ export function TestRecordingCard({ initial, shopDomain }) {
             {state.on && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#b42318" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#ff3b30" }} />Recording</span>}
           </InlineStack>
           <Text as="p" tone="subdued">
-            Save every conversation while your team tests the assistant, to review answers later. Recording turns itself
+            Save every conversation while your team tests AVA, to review answers later. Recording turns itself
             off after two weeks, and recordings are deleted after 30 days. People being recorded see a small
             &quot;Test recording on&quot; note in the chat.
           </Text>

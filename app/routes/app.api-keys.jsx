@@ -492,7 +492,7 @@ export const action = async ({ request }) => {
 // ── Page ─────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: "assistant", label: "Assistant", icon: MagicIcon },
+  { id: "assistant", label: "AVA", icon: MagicIcon },
   { id: "look", label: "Look & feel", icon: PaintBrushFlatIcon },
   { id: "seasonal", label: "Seasonal button", icon: FlowerIcon },
   { id: "visibility", label: "Where it shows", icon: ViewIcon },
@@ -668,7 +668,7 @@ function VisualizeLook({ initialEnabled, initialProvider, initialLabel, hasGemin
   return (
     <Row
       title="See It Styled"
-      help="When the assistant picks one product, shoppers can tap for an AI styling preview of it. You bring an image-provider key and pay per image."
+      help="When AVA picks one product, shoppers can tap for an AI styling preview of it. You bring an image-provider key and pay per image."
       toggle
       checked={enabled}
       onChange={setEnabled}
@@ -797,7 +797,7 @@ export default function Settings() {
                 <PeakSection d={d} values={values} set={set} draftPeak={draftPeak} mounted={mounted} onRefresh={() => revalidator.revalidate()} refreshing={revalidator.state !== "idle"} />
               </div>
               <div hidden={section !== "testing"}>
-                <SectionHead title="Testing">Record conversations while your team tests the assistant, then review them under Test recordings.</SectionHead>
+                <SectionHead title="Testing">Record conversations while your team tests AVA, then review them under Test recordings.</SectionHead>
                 <TestRecordingCard initial={d.recording} shopDomain={d.shopDomain} />
               </div>
               {section !== "testing" && isDirty && (
@@ -829,7 +829,7 @@ export default function Settings() {
 function AssistantSection({ d, values, set }) {
   return (
     <BlockStack gap="400">
-      <SectionHead title="Assistant">The AI behind the chat, and what it adds to its answers.</SectionHead>
+      <SectionHead title="AVA">AVA, your Aetrex Virtual Assistant: the AI behind the chat, and what it adds to its answers.</SectionHead>
       <Group title="AI engine" badge={<Connected on={d.hasAnthropicKey} />}>
         <Row stack>
           <div className="set-grid">
@@ -853,7 +853,7 @@ function AssistantSection({ d, values, set }) {
         </Row>
       </Group>
       <Group title="In the chat">
-        <Row title="Follow-up questions" help="2–3 tappable follow-ups after each answer — only ones the assistant can answer." toggle checked={values.showFollowUps} onChange={set("showFollowUps")} />
+        <Row title="Follow-up questions" help="2–3 tappable follow-ups after each answer — only ones AVA can answer." toggle checked={values.showFollowUps} onChange={set("showFollowUps")} />
         <Row title="Helpful / Not helpful" help="Thumbs under product answers. Feedback shows in Analytics." toggle checked={values.showFeedback} onChange={set("showFeedback")} />
         <Row title="Ask how the chat went" help="A quiet “How's the chat going?” after a few replies, once per chat. Ratings and comments show in Analytics." toggle checked={values.chatRatingOn} onChange={set("chatRatingOn")}>
           <div style={{ maxWidth: 220 }}>
@@ -871,7 +871,7 @@ const TEXT_MAX = Object.fromEntries(CHAT_TEXT_FIELDS.map(([key, , max]) => [key,
 function LookSection({ d, values, set }) {
   return (
     <BlockStack gap="400">
-      <SectionHead title="Look & feel">How the assistant looks and moves on your store.</SectionHead>
+      <SectionHead title="Look & feel">How AVA looks and moves on your store.</SectionHead>
       <Group>
         <Row
           title="Starts in"
@@ -885,7 +885,7 @@ function LookSection({ d, values, set }) {
         <Row stack help="The words shoppers see in the chat. Left blank, the chat uses what's set in the theme editor (or the default shown).">
           <BlockStack gap="300">
             <div className="set-grid">
-              <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={TEXT_DEFAULT.name} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat; the assistant goes by it too." />
+              <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={TEXT_DEFAULT.name} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat. In its replies, AVA always introduces itself as Ava, the Aetrex Virtual Assistant." />
               <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={TEXT_DEFAULT.launcher} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
             </div>
             <div className="set-grid">
@@ -923,7 +923,7 @@ function VisibilitySection({ values, set }) {
             <TextField label="Home countries" value={values.homeCountries} onChange={set("homeCountries")} placeholder="US" autoComplete="off" helpText="Two-letter codes, separated by commas (e.g. US, PR)." />
           </div>
         </Row>
-        <Row title="Hide the Zendesk chat button" help="Removes the separate live chat button from the corner. Live chat still opens from the assistant when a shopper asks for a person." toggle checked={values.hideLiveChatButton} onChange={set("hideLiveChatButton")} />
+        <Row title="Hide the Zendesk chat button" help="Removes the separate live chat button from the corner. Live chat still opens from AVA when a shopper asks for a person." toggle checked={values.hideLiveChatButton} onChange={set("hideLiveChatButton")} />
       </Group>
       <Group title="Hidden on these pages">
         <Row stack help="The chat stays off pages whose link is (or contains) one of these.">
@@ -939,7 +939,7 @@ function CareSection({ values, set }) {
     <BlockStack gap="400">
       <SectionHead title="Customer care">Handing shoppers to your team, and their orders and returns.</SectionHead>
       <Group title="Support">
-        <Row stack help="When a shopper needs a person, the assistant shows a button that opens your live chat (Zendesk, Intercom or Gorgias), or this page if there isn't one.">
+        <Row stack help="When a shopper needs a person, AVA shows a button that opens your live chat (Zendesk, Intercom or Gorgias), or this page if there isn't one.">
           <div className="set-grid">
             <TextField label="Support page" value={values.supportUrl} onChange={set("supportUrl")} placeholder="https://yourstore.com/pages/contact" autoComplete="off" helpText="Blank: the theme editor's Support URL." />
             <TextField label="Button label" value={values.supportLabel} onChange={set("supportLabel")} placeholder="Chat with Aetrex Support" autoComplete="off" />
@@ -962,7 +962,7 @@ function CareSection({ values, set }) {
         />
         <Row
           title="Return window"
-          help="Older orders don't get a return button, and the assistant explains why. 0 = no limit."
+          help="Older orders don't get a return button, and AVA explains why. 0 = no limit."
           control={<div style={{ width: 130 }}><TextField label="Return window" labelHidden type="number" min={0} max={365} value={values.returnWindowDays} onChange={set("returnWindowDays")} autoComplete="off" suffix="days" /></div>}
         />
         <Row title="Only after delivery" help={values.returnsDeliveredOnly ? "The return button appears once the order is delivered." : "The return button appears as soon as the order ships."} toggle checked={values.returnsDeliveredOnly} onChange={set("returnsDeliveredOnly")} />
@@ -1070,7 +1070,7 @@ function ToolsSection({ d, values, set }) {
         </Row>
       </Group>
       <Group>
-        <Row title="Promotions page" help="The assistant reads your offers page live (every 15 minutes), so it knows what's running." stack>
+        <Row title="Promotions page" help="AVA reads your offers page live (every 15 minutes), so it knows what's running." stack>
           <div className="set-grid">
             <TextField label="Page link" value={values.promoPageUrl} onChange={set("promoPageUrl")} placeholder="https://www.aetrex.com/pages/terms-conditions" autoComplete="off" />
             <TextField label="Offers end at this line" value={values.promoPageStop} onChange={set("promoPageStop")} placeholder="STANDARD TERMS AND CONDITIONS OF SALE" autoComplete="off" disabled={!values.promoPageUrl.trim()} helpText="Only text above it counts as offers." />
@@ -1188,7 +1188,7 @@ function IntegrationsSection({ d, values, set }) {
       </Group>
       <Group title="Signed-in shoppers">
         <Row title="Login button in the chat" help="“Login” for visitors, “Hi [name]!” for signed-in shoppers." toggle checked={values.showLoginPill} onChange={set("showLoginPill")} />
-        <Row title="VIP mode" help="The assistant uses a signed-in shopper's order history to personalize sizes and suggestions. No email, address or payment details are ever shown." toggle checked={values.vipModeEnabled} onChange={set("vipModeEnabled")} />
+        <Row title="VIP mode" help="AVA uses a signed-in shopper's order history to personalize sizes and suggestions. No email, address or payment details are ever shown." toggle checked={values.vipModeEnabled} onChange={set("vipModeEnabled")} />
       </Group>
     </BlockStack>
   );
@@ -1238,7 +1238,7 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
           </BlockStack>
         </div>
         <Row title="Higher chat limits" help={`${limitText(peakMin, peakHour)} — set below.`} control={<span aria-label="Included"><Icon source={CheckCircleIcon} tone="success" /></span>} />
-        <Row title="Lift the daily message cap" help={values.dailyCapEnabled ? "The assistant never goes quiet on your busiest day." : "Only matters when the daily cap below is on."} toggle checked={values.peakLiftDailyCap} onChange={set("peakLiftDailyCap")} />
+        <Row title="Lift the daily message cap" help={values.dailyCapEnabled ? "AVA never goes quiet on your busiest day." : "Only matters when the daily cap below is on."} toggle checked={values.peakLiftDailyCap} onChange={set("peakLiftDailyCap")} />
         <Row title="Pause the nightly catalog refresh" help="The full re-sync sits out. Product and stock changes still reach the chat live." toggle checked={values.peakPauseSync} onChange={set("peakPauseSync")} />
       </Group>
 
@@ -1293,7 +1293,7 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
       <Group title="Daily message cap">
         <Row
           title="Stop for the day after a set number of messages"
-          help={`Off for most stores. When it's reached, the assistant says it's back tomorrow (resets at midnight UTC).${values.peakLiftDailyCap ? " Lifted while Peak Mode is on." : ""}`}
+          help={`Off for most stores. When it's reached, AVA says it's back tomorrow (resets at midnight UTC).${values.peakLiftDailyCap ? " Lifted while Peak Mode is on." : ""}`}
           toggle
           checked={values.dailyCapEnabled}
           onChange={set("dailyCapEnabled")}

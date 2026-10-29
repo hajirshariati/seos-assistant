@@ -42,7 +42,7 @@ import { PlanGate } from "../components/PlanGate";
 import { RecommenderTables } from "../components/RecommenderEditor";
 import { fitSummary, fitReadDue, startFitRead } from "../lib/fit-confidence.server";
 import { reloadLeanCatalog } from "../lib/lean/catalog.server";
-import { FIT_LABELS } from "../lib/fit-confidence.js";
+import { FIT_LABELS, FIT_LEVELS, FIT_LEVEL_NAMES, FIT_LEVEL_FROM, parseFitLevels } from "../lib/fit-confidence.js";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
@@ -85,6 +85,7 @@ export const loader = async ({ request }) => {
     plan: { id: plan.id, name: plan.name, features: plan.features },
     fitConfidence: {
       enabled: fitEnabled,
+      levels: parseFitLevels(config.fitConfidenceLevels),
       vip: config.vipModeEnabled === true,
       hasYotpo: Boolean(config.yotpoApiKey),
       hasAftership: Boolean(config.aftershipApiKey),
@@ -289,6 +290,13 @@ export const action = async ({ request }) => {
     return { saved: true };
   }
 
+  if (intent === "fit_levels") {
+    const levels = FIT_LEVELS.filter((l) => formData.get(l) === "true");
+    // The cards follow at once (the chat reads it with its settings).
+    await updateShopConfig(session.shop, { fitConfidenceLevels: levels.join(",") });
+    return { saved: true };
+  }
+
   if (intent === "refresh_fit_confidence") {
     const config = await getShopConfig(session.shop);
     startFitRead(session.shop, { config });
@@ -377,8 +385,8 @@ function HowItWorksCard() {
             shopper already said, with tap-to-answer choices.
           </Bullet>
           <Bullet>
-            <strong>The AI picks the line, the rules pick the version.</strong> The
-            assistant matches the shoes and needs to a line using each line's own
+            <strong>The AI picks the line, the rules pick the version.</strong> AVA
+            matches the shoes and needs to a line using each line's own
             “Best for”; the exact product then follows Aetrex's SKU rule
             (00/05 medium-high arch, 20/25 flat-low arch, 05/25 metatarsal pad).
           </Bullet>
@@ -541,12 +549,12 @@ function DecisionTreesCard({ enabled, trees }) {
             />
           </InlineStack>
           <Text as="p" tone="subdued">
-            When a shopper wants help choosing an orthotic, the assistant asks
+            When a shopper wants help choosing an orthotic, AVA asks
             up to four tap-to-answer questions (who it's for, which shoes, arch
             type, ball-of-foot pain), picks the line that suits their shoes and
             then the exact version for their arch — and shows that one product.
             Setup: click <strong>Sync from Shopify</strong> once and switch this
-            ON. Turned OFF, the assistant still recommends orthotics — just
+            ON. Turned OFF, AVA still recommends orthotics — just
             without the guided questions.
           </Text>
         </BlockStack>
@@ -795,7 +803,7 @@ function FinderLines({ definition, onChange }) {
         {lines.length} lines from your catalog · last synced {synced}. To change one, edit the products in Shopify, then sync.
       </Text>
       <Text as="p" tone="subdued" variant="bodySm">
-        <strong>Recommend</strong> sets how the assistant uses each line: <em>Lead with this</em> is its first choice when more than one line suits the shopper;
+        <strong>Recommend</strong> sets how AVA uses each line: <em>Lead with this</em> is its first choice when more than one line suits the shopper;
         <em> Only when they mention…</em> is offered only after the shopper brings up one of those conditions; <em>Never recommend</em> is never offered.
         Save to apply. Rules stay through syncs.
       </Text>
@@ -1093,6 +1101,7 @@ function FitConfidenceCard({ fit }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const [isOn, setIsOn] = useState(!!fit.enabled);
+  const [levels, setLevels] = useState(() => new Set(fit.levels || []));
   const running = Boolean(fit.run?.running) || (fetcher.state !== "idle" && fetcher.formData?.get("intent") === "refresh_fit_confidence");
   const revalidatorRef = useRef(revalidator);
   revalidatorRef.current = revalidator;
@@ -1114,6 +1123,17 @@ function FitConfidenceCard({ fit }) {
     fd.set("intent", "refresh_fit_confidence");
     fetcher.submit(fd, { method: "post" });
   };
+  const toggleLevel = (level) => (checked) => {
+    const next = new Set(levels);
+    if (checked) next.add(level); else next.delete(level);
+    setLevels(next);
+    const fd = new FormData();
+    fd.set("intent", "fit_levels");
+    for (const l of FIT_LEVELS) fd.set(l, String(next.has(l)));
+    fetcher.submit(fd, { method: "post" });
+  };
+  const LEVEL_RANGE = { high: `${FIT_LEVEL_FROM.high} and up`, mid: `${FIT_LEVEL_FROM.mid}–${FIT_LEVEL_FROM.high - 1}`, fair: `under ${FIT_LEVEL_FROM.mid}` };
+  const LEVEL_COLOR = { high: "green", mid: "blue", fair: "orange" };
 
   const st = fit.status || {};
   const reviews = st.reviews?.ok
@@ -1137,7 +1157,7 @@ function FitConfidenceCard({ fit }) {
             <Badge tone={isOn ? "success" : undefined}>{isOn ? "On" : "Off"}</Badge>
           </InlineStack>
           <Text as="p" tone="subdued">
-            A Fit score on every shoe and orthotic card in the chat — a ring with &quot;92%&quot; and &quot;Runs true to size&quot; (or small, large, narrow, wide) — that says how sure a shopper can be the style fits as expected; tapping it shows where the number comes from. It sits beside the size finder (True Fit, or FITFinder on orthotics) in a small panel that opens from &quot;Check fit &amp; size&quot; under Add to cart (the words are in Settings → Look &amp; feel → Chat text). It&apos;s read from reviewers&apos; own fit answers (Yotpo), the pairs sold and sent back in the last 12 months (Shopify) and why they came back (AfterShip), across all of a style&apos;s colors. A style with too little to go on shows only the size finder. It never names a size — True Fit does that.
+            A fit rating on every shoe and orthotic card in the chat — High, Mid or Fair in a colored ring (green, blue, orange), with &quot;Runs true to size&quot; (or small, large, narrow, wide) in the same color — that says how sure a shopper can be the style fits as expected; tapping it shows where it comes from. Shoppers see the word, never the number. It sits beside the size finder (True Fit, or FITFinder on orthotics) in a small panel that opens from &quot;Check fit &amp; size&quot; under Add to cart (the words are in Settings → Look &amp; feel → Chat text). It&apos;s read from reviewers&apos; own fit answers (Yotpo), the pairs sold and sent back in the last 12 months (Shopify) and why they came back (AfterShip), across all of a style&apos;s colors. A style with too little to go on shows only the size finder. It never names a size — True Fit does that.
           </Text>
           <Text as="p" tone="subdued">
             {fit.vip
@@ -1147,6 +1167,23 @@ function FitConfidenceCard({ fit }) {
         </BlockStack>
 
         <Checkbox label="Show fit confidence on product cards" checked={isOn} onChange={toggle} />
+        <BlockStack gap="150">
+          <Text as="h3" variant="headingSm">Which levels show on cards</Text>
+          <InlineStack gap="500" wrap>
+            {FIT_LEVELS.map((l) => (
+              <Checkbox
+                key={l}
+                label={`${FIT_LEVEL_NAMES[l]} (${LEVEL_RANGE[l]}, ${LEVEL_COLOR[l]})${fit.readAt ? ` · ${fmtCount(fit.levelCounts?.[l] ?? 0)} styles` : ""}`}
+                checked={levels.has(l)}
+                onChange={toggleLevel(l)}
+                disabled={!isOn}
+              />
+            ))}
+          </InlineStack>
+          <Text as="p" tone="subdued">
+            A style at a level that&apos;s off shows only the size finder (True Fit, or FITFinder on orthotics) in its card&apos;s Check fit &amp; size.
+          </Text>
+        </BlockStack>
 
         <Divider />
         <BlockStack gap="200">
@@ -1173,11 +1210,11 @@ function FitConfidenceCard({ fit }) {
             <BlockStack gap="200">
               <Text as="h3" variant="headingSm">Lowest fit confidence</Text>
               <DataTable
-                columnContentTypes={["text", "numeric", "text", "numeric", "numeric"]}
+                columnContentTypes={["text", "text", "text", "numeric", "numeric"]}
                 headings={["Style", "Fit", "How it fits", "Reviews", "Pairs sold"]}
                 rows={fit.lowest.map((x) => [
                   [x.name, x.line].filter(Boolean).join(" · "),
-                  `${x.s}%`,
+                  `${FIT_LEVEL_NAMES[x.v] || "—"} · ${x.s}`,
                   FIT_LABELS[x.l] || "—",
                   fmtCount(x.r),
                   fmtCount(x.n),

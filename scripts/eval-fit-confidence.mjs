@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import {
   fitStyleKey, reviewFit, tallyReviewFit, returnReasonKind, emptyFitStats, fitBaselines, fitDirection,
-  fitScore, fitScoreForSize, cardFit, fitSentence, FIT_LABELS, FIT_MIN_ANSWERS, FIT_MIN_SOLD,
+  fitScore, fitScoreForSize, cardFit, fitSentence, fitLevel, parseFitLevels, FIT_LABELS, FIT_MIN_ANSWERS, FIT_MIN_SOLD,
 } from "../app/lib/fit-confidence.js";
 
 let passed = 0;
@@ -98,7 +98,7 @@ await test("the score, worked by hand: reviewers and buyers, each leaning on the
   assert.equal(r.reviews, 40);
   assert.equal(r.sold, 500);
   // Where it comes from: the answers, and 1 − 100·share/500 = 90% not sent back for fit.
-  assert.deepEqual(cardFit(r), { s: 89, r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1 });
+  assert.deepEqual(cardFit(r), { s: 89, v: "high", r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1 });
 });
 await test("too little to go on → no score", () => {
   assert.equal(fitScore(S({ answered: FIT_MIN_ANSWERS - 1, fits: 4, sold: FIT_MIN_SOLD - 1, returned: 0 }), BASE), null);
@@ -142,7 +142,7 @@ await test("one size of the style: its own pairs, leaning on the style's rate; t
   assert.equal(nine.score, 85);
   assert.equal(nine.size, "9");
   // In size 9: 1 − 40·share/100 = 80% not sent back for fit; the style's numbers stay.
-  assert.deepEqual(cardFit(nine), { s: 85, r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1, z: "9", zn: 100, zk: 80 });
+  assert.deepEqual(cardFit(nine), { s: 85, v: "high", r: 40, n: 500, l: "true", a: [2, 36, 2], k: 90, kf: 1, z: "9", zn: 100, zk: 80 });
   assert.equal(fitScoreForSize(stats, "11", BASE), null);
   assert.equal(fitScoreForSize(stats, "12", BASE), null);
 });
@@ -160,14 +160,25 @@ await test("the store's averages are per kind of product", () => {
 });
 
 console.log("\nwhat a card carries");
+await test("the score in a word: High from 85, Mid from 70, Fair below; the store's choice of levels, High and Mid unless it says", () => {
+  assert.deepEqual([99, 85, 84, 70, 69, 1].map(fitLevel), ["high", "high", "mid", "mid", "fair", "fair"]);
+  assert.equal(fitLevel(undefined), null);
+  assert.equal(fitLevel("abc"), null);
+  assert.deepEqual(parseFitLevels(undefined), ["high", "mid"]);
+  assert.deepEqual(parseFitLevels(null), ["high", "mid"]);
+  assert.deepEqual(parseFitLevels("fair, HIGH"), ["high", "fair"], "in order, tidied");
+  assert.deepEqual(parseFitLevels("high,mid,fair,extra"), ["high", "mid", "fair"]);
+  assert.deepEqual(parseFitLevels(""), [], "none ticked → none");
+});
 await test("score, words, reviews and pairs; a shopper's own size when there is one; said in full for screen readers", () => {
-  assert.deepEqual(cardFit({ score: 92, label: "true", reviews: 85, sold: 1240 }), { s: 92, r: 85, n: 1240, l: "true" });
-  assert.deepEqual(cardFit({ score: 70, label: "", reviews: 0, sold: 300, answers: { size: [0, 0, 0], width: [0, 0, 0] }, kept: 81, fitOnly: false }), { s: 70, r: 0, n: 300, k: 81 });
+  assert.deepEqual(cardFit({ score: 92, label: "true", reviews: 85, sold: 1240 }), { s: 92, v: "high", r: 85, n: 1240, l: "true" });
+  assert.deepEqual(cardFit({ score: 70, label: "", reviews: 0, sold: 300, answers: { size: [0, 0, 0], width: [0, 0, 0] }, kept: 81, fitOnly: false }), { s: 70, v: "mid", r: 0, n: 300, k: 81 });
   assert.deepEqual(cardFit({ score: 94, label: "true", reviews: 85, sold: 1240, answers: { size: [8, 72, 5], width: [3, 70, 2] }, kept: 88, fitOnly: true, size: "9", sizeSold: 412, sizeKept: 90 }),
-    { s: 94, r: 85, n: 1240, l: "true", a: [8, 72, 5], w: [3, 70, 2], k: 88, kf: 1, z: "9", zn: 412, zk: 90 });
+    { s: 94, v: "high", r: 85, n: 1240, l: "true", a: [8, 72, 5], w: [3, 70, 2], k: 88, kf: 1, z: "9", zn: 412, zk: 90 });
   assert.equal(cardFit(null), null);
-  assert.equal(fitSentence({ s: 92, l: "true", r: 85, n: 1240 }), "Fit confidence: 92%, true to size. From 85 reviews and 1,240 pairs sold in the last year.");
-  assert.equal(fitSentence({ s: 94, r: 1, n: 0, z: "9" }), "Fit confidence in size 9, the size you've kept before: 94%. From 1 review.");
+  assert.equal(fitSentence({ s: 92, l: "true", r: 85, n: 1240 }), "Fit confidence: High. Runs true to size. From 85 reviews and 1,240 pairs sold in the last year.");
+  assert.equal(fitSentence({ s: 64, l: "small", r: 20, n: 0 }), "Fit confidence: Fair. Runs small. From 20 reviews.");
+  assert.equal(fitSentence({ s: 94, r: 1, n: 0, z: "9" }), "Fit confidence in size 9, the size you've kept before: High. From 1 review.");
   assert.deepEqual(Object.keys(FIT_LABELS), ["true", "small", "large", "narrow", "wide"]);
 });
 

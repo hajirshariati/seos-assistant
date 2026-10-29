@@ -639,7 +639,7 @@ function KnowledgeFilesCard({ files, check }) {
   };
 
   const handleDelete = (file) => {
-    if (!window.confirm(`Delete ${file.fileName}? The assistant stops using it right away.`)) return;
+    if (!window.confirm(`Delete ${file.fileName}? AVA stops using it right away.`)) return;
     const fd = new FormData();
     fd.set("intent", "delete_file");
     fd.set("fileId", file.id);
@@ -723,7 +723,7 @@ function KnowledgeFilesCard({ files, check }) {
                 <div className="kn-tpl__hint">
                   {currentType?.columns
                     ? <>Columns: <code>{currentType.columns}</code></>
-                    : "Keep the ═══ dividers — each section becomes its own piece the assistant can look up."}
+                    : "Keep the ═══ dividers — each section becomes its own piece AVA can look up."}
                 </div>
               </div>
               <Button size="slim" onClick={downloadTemplate} accessibilityLabel={`Download ${currentType?.templateName}`}>Download</Button>
@@ -930,7 +930,7 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
           );
         })
       ) : (
-        <Row help="No promotions yet. Add one below — the assistant starts mentioning it when its start time arrives." />
+        <Row help="No promotions yet. Add one below — AVA starts mentioning it when its start time arrives." />
       )}
 
       <Row
@@ -954,13 +954,13 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
             <TextField label="Ends" type="datetime-local" value={endsAt} onChange={setEndsAt} autoComplete="off" helpText="Must be after the start." />
           </div>
           <TextField
-            label="What the assistant should know"
+            label="What AVA should know"
             labelAction={{ content: showTemplate ? "Hide template" : "Show template", onAction: () => setShowTemplate((v) => !v) }}
             value={content}
             onChange={setContent}
             multiline={5}
             autoComplete="off"
-            helpText="Plain text or markdown. The assistant quotes from this when shoppers ask about the sale, codes or terms — no internal-only notes."
+            helpText="Plain text or markdown. AVA quotes from this when shoppers ask about the sale, codes or terms — no internal-only notes."
           />
           <InlineStack gap="200">
             <Button variant="primary" onClick={submit} disabled={!validForm || submitting} loading={submitting}>
@@ -1128,7 +1128,7 @@ export default function Knowledge() {
           <BrandHeader title="Knowledge" gutter={false} />
 
           <section>
-            <SectionHead title="What your assistant knows">
+            <SectionHead title="What AVA knows">
               Your website, plus your team's notes. When the two disagree, your notes win.
             </SectionHead>
             <div className="kn-overview">
@@ -1154,7 +1154,7 @@ export default function Knowledge() {
 
           <section id="kn-notes" className="kn-sec">
             <SectionHead title="Your team's notes">
-              What the website doesn't say, or says differently — FAQs, sizing advice, brand voice. The assistant looks things up here, and these notes win over the website. A Rules &amp; Guidelines file is followed on every chat.
+              What the website doesn't say, or says differently — FAQs, sizing advice, brand voice. AVA looks things up here, and these notes win over the website. A Rules &amp; Guidelines file is followed on every chat.
             </SectionHead>
             <KnowledgeFilesCard files={files} check={data.knowledgeCheck} />
           </section>
@@ -1167,7 +1167,7 @@ export default function Knowledge() {
             </Button>
             <span className="kn-note">
               {livePromos ? `${livePromos} live. ` : ""}
-              {promoPage ? `Not needed — the assistant reads your offers from ${promoPage} (Settings → Shopping tools).` : "Offers can also be read from a page on your site: Settings → Shopping tools."}
+              {promoPage ? `Not needed — AVA reads your offers from ${promoPage} (Settings → Shopping tools).` : "Offers can also be read from a page on your site: Settings → Shopping tools."}
             </span>
             <div id="kn-promos-body" className="kn-promos-body" hidden={!promosOpen}>
               <Card padding="0">

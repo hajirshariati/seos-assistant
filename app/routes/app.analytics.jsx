@@ -358,7 +358,7 @@ function WeekCard({ week }) {
             <div className="an-callout">
               <strong>Couldn't answer from your store info:</strong>{" "}
               {week.unanswered.map((u) => `${u.label}${u.count > 1 ? ` (${u.count})` : ""}`).join(" · ")}.{" "}
-              Add the answer in <Link to="/app/knowledge">Knowledge → Your team's notes</Link> and the assistant uses it right away.
+              Add the answer in <Link to="/app/knowledge">Knowledge → Your team's notes</Link> and AVA uses it right away.
             </div>
           )}
           {lists.length > 0 ? (
@@ -415,7 +415,7 @@ function ConversationRow({ row, mounted }) {
       </div>
       {(row.lastUserQuestion || row.question) && <div className="an-convo__q an-clamp">{row.lastUserQuestion || row.question}</div>}
       {row.comment && <div className="an-convo__line"><b>Comment:</b> {row.comment}</div>}
-      {row.flaggedAiResponse && <div className="an-convo__line an-clamp"><b>Assistant said:</b> {row.flaggedAiResponse}</div>}
+      {row.flaggedAiResponse && <div className="an-convo__line an-clamp"><b>AVA said:</b> {row.flaggedAiResponse}</div>}
       {transcript.length > 0 && (
         <button type="button" className="an-convo__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           {open ? "Hide conversation" : `Read the conversation (${transcript.length} message${transcript.length > 1 ? "s" : ""})`}
@@ -665,7 +665,7 @@ export default function Analytics() {
 
           {!hasData && (
             <Banner tone="info" title="No conversations in this range yet">
-              <p>Pick a wider range, or wait for customers to start chatting — numbers appear here as soon as the assistant is live.</p>
+              <p>Pick a wider range, or wait for customers to start chatting — numbers appear here as soon as AVA is live.</p>
             </Banner>
           )}
 

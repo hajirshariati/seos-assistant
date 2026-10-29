@@ -267,7 +267,7 @@ export default function CostEstimator({ traffic = null, modeled = null, measured
           <div>
             <div className="seos-calc-title">Cost estimator</div>
             <div className="seos-calc-desc">
-              What the assistant will cost at your store&rsquo;s real traffic. Every figure below can be changed.
+              What AVA will cost at your store&rsquo;s real traffic. Every figure below can be changed.
             </div>
           </div>
 
