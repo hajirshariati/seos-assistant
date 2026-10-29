@@ -1095,7 +1095,7 @@ function ToolsSection({ d, values, set }) {
         <Row
           title="Store locator"
           help={values.storeLocatorStores === "scanner"
-            ? "Your Storepoint map, opened in the chat for foot scans and fittings. To buy a style in person, the chat suggests calling or visiting a local shoe store — and shopping here, where everything is in one place."
+            ? "Your Storepoint map, opened in the chat for foot scans and fittings. A shopper who asks about stores first gets help buying here — the right size, your returns, the styles — and the map only if they still want a store."
             : "Your Storepoint map, opened in the chat when a shopper asks where to buy or try on in person."}
           stack
         >

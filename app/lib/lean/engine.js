@@ -14,6 +14,7 @@ import { buildViewAllIndex } from "./view-all-index.js";
 import { buildComparison, comparisonFacts } from "./compare.js";
 import { buildLeanTools } from "./tools.js";
 import { buildLeanSystemPrompt } from "./prompt.js";
+import { storeLocatorConfig } from "../feedback-survey.js";
 import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { productKind, codesInText } from "./catalog.js";
@@ -767,7 +768,10 @@ export async function runLeanTurn({
     if (shopping) {
       issues.push({
         code: "locator_without_products",
-        detail: `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and say warmly that each store picks its own selection while the full range — every style, color, size and width — is online, ready to order right here.`,
+        detail: storeLocatorConfig(config)?.stores === "scanner"
+          // Its stores have the foot scanner; only some sell the shoes.
+          ? `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and keep the door open online in one short sentence — the full range, every style, color, size and width, is online, ready to order right here.`
+          : `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and say warmly that each store picks its own selection while the full range — every style, color, size and width — is online, ready to order right here.`,
       });
     }
     // Free shipping said of a product the store's offer doesn't name.

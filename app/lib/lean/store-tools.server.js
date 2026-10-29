@@ -225,12 +225,12 @@ export async function buildLeanStoreExtras({
       name: "show_store_locator",
       description:
         "Show a button that opens the store locator map right inside the chat. Its locations have the store's foot scanner — for getting feet scanned or fitted — and some also carry orthotics; not every one sells the store's shoes. " +
-        "Use it when the customer asks where to get their feet scanned or fitted, about the scanner, or about trying orthotics in person, or asks for the store locator. " +
-        "Not for buying or finding a style in a store: then say they can call or visit their local shoe stores to ask whether they have it in stock, and that the full range is all in one place online — they can order right here in the chat. Never promise a product is in stock at a location.",
+        "Use it when the customer asks where to get their feet scanned or fitted, about the scanner, or about trying orthotics in person, or asks for the store locator — or when they still want a store after you've offered help online. " +
+        "Not the first answer to buying or trying on a style in a store: first help them buy with confidence right here — the right-size help you have (True Fit for shoes, the orthotic finder or their FIT for orthotics), the store's returns as its info says them, a few products — and that they can call or visit their local shoe stores to ask whether they have it in stock. Never promise a product is in stock at a location.",
       input_schema: { type: "object", properties: {} },
     }, async () => ({
       ok: true,
-      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly: a short sentence that they can find a location with the foot scanner there — some also carry orthotics, so calling ahead is best; then that the full range is all in one place ${online}, and they can order right here in the chat. Don't add the store locator link, never say a location has a product in stock, and never name or guess which stores carry the brand.`,
+      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly: a short sentence that they can find a location with the foot scanner there — some also carry orthotics, so calling ahead is best; then, in one short sentence, keep the door open online: the full range is all in one place ${online}, and they can order right here in the chat. Don't add the store locator link, never say a location has a product in stock, and never name or guess which stores carry the brand.`,
       _events: [{ type: "map_cta", mapId: locator.mapId, label: locator.label, url: locator.url }],
     }));
   } else if (locator) {

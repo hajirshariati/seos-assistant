@@ -1642,26 +1642,29 @@ await test("asked about stores: the locator, and warmly, the full range online �
   assert.match(ran.note, /the full range is online at aetrex\.com — and they can order right here in the chat/);
   assert.match(ran.note, /show a few products for what they're shopping for/);
 });
-await test("stores on the map have the foot scanner: never sent there to buy — call a local shoe store, and everything is online", async () => {
+await test("stores on the map have the foot scanner: buy here with confidence first — size help, returns, products; the map only if they insist (or for a scan)", async () => {
   const config = { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner", storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" };
   const p = buildLeanSystemPrompt({ shop: "x", config });
-  assert.match(p, /don't show the store locator for this — its locations have the foot scanner, and not every one sells these shoes/);
+  assert.match(p, /be the store's best associate and help them buy with confidence right here — don't show the store locator for this/);
+  assert.match(p, /offer the right-size help you have — True Fit for their size in a shoe \(open_true_fit, when there is one\), the orthotic finder or their FIT for orthotics — and that each card shows how the style fits/);
+  assert.match(p, /the store's returns as its info says them \(search_store_info first — a free first return for a new customer, a satisfaction guarantee — only what it actually says, never more\)/);
+  assert.match(p, /all in one place online at aetrex\.com/);
   assert.match(p, /call or visit their local shoe stores to ask whether they have that style in stock/);
-  assert.match(p, /all in one place online at aetrex\.com, where they can order right here in the chat/);
   assert.match(p, /never name or guess which stores carry the brand/);
+  assert.match(p, /When they still want a store after that — they ask again, or insist on trying on in person — show the store locator/);
   assert.match(p, /Foot scans and fittings .*: show the store locator — its locations have the foot scanner, and some also carry orthotics, so calling ahead is best/);
   assert.match(p, /the store locator for "where can I get my feet scanned\?"/);
   assert.doesNotMatch(p, /each store picks its own selection/);
   const { buildLeanStoreExtras } = await import("../app/lib/lean/store-tools.server.js");
   const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config, messages: [{ role: "user", content: "where can I get my feet scanned?" }], latestUserMessage: "where can I get my feet scanned?" });
   const loc = ex.tools.find((t) => t.definition.name === "show_store_locator");
-  assert.ok(loc, "the map is still offered — for scans and fittings");
+  assert.ok(loc, "the map is still offered — for scans, or when they insist");
   assert.match(loc.definition.description, /Its locations have the store's foot scanner/);
-  assert.match(loc.definition.description, /Not for buying or finding a style in a store: then say they can call or visit their local shoe stores/);
-  assert.doesNotMatch(loc.definition.description, /buying or trying on in person, getting fitted/);
+  assert.match(loc.definition.description, /or when they still want a store after you've offered help online/);
+  assert.match(loc.definition.description, /Not the first answer to buying or trying on a style in a store: first help them buy with confidence right here/);
   const ran = await loc.run({});
   assert.match(ran.note, /find a location with the foot scanner there — some also carry orthotics, so calling ahead is best/);
-  assert.match(ran.note, /the full range is all in one place online at aetrex\.com/);
+  assert.match(ran.note, /keep the door open online: the full range is all in one place online at aetrex\.com/);
   assert.equal(ran._events[0].type, "map_cta");
 });
 await test("the store's website, from a link set in Settings", async () => {
@@ -1696,6 +1699,22 @@ await test("\"Can I buy your sandals in a store?\" — the locator alone goes ba
   assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /shopping for sandals/);
   assert.deepEqual(r.cards.map((c) => c.title), ["Savannah Adjustable Quarter Strap Sandal - Red"]);
   assert.ok(r.events.some((e) => e.type === "map_cta"), "the locator stays");
+});
+await test("scanner stores: the locator alone (after they insisted) goes back once — products online, no \"each store picks\" line", async () => {
+  const msg = "i still want to try the sandals on in a store";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "show_store_locator", {})] },
+    { stop_reason: "end_turn", content: [txt("Here's the map of locations near you.")] },
+    { stop_reason: "tool_use", content: [tu("t2", "search_products", { query: "sandal", gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt("Here's the map — locations have the foot scanner and some carry orthotics, so call ahead. And the Savannah is ready to order right here.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }, messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, extraTools: [locatorTool], log: quiet });
+  assert.equal(r.retried, true);
+  const back = JSON.stringify(s.requests[2].messages.at(-1));
+  assert.match(back, /shopping for sandals/);
+  assert.match(back, /keep the door open online in one short sentence/);
+  assert.doesNotMatch(back, /each store picks its own selection/);
 });
 await test("\"Is there a store near me?\" — the locator, no rewrite (it asks what they're shopping for)", async () => {
   const msg = "is there a store near me?";
