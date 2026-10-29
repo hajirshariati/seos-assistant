@@ -4,7 +4,7 @@ import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX
 import { getShopName } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
-import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
+import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator, useRouteLoaderData } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -42,6 +42,7 @@ import { backfillShopEmbeddings } from "../lib/embeddings.server";
 import prisma from "../db.server";
 import { getShopPlan } from "../lib/billing.server";
 import BrandHeader from "../components/BrandHeader";
+import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { OrbColorsCard } from "../components/AssistantLookCards";
 import { TestRecordingCard } from "../components/TestRecordingCard";
 import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch } from "../components/SettingsUI";
@@ -1055,6 +1056,8 @@ function AppPicture({ initial, disabled }) {
 
 function ToolsSection({ d, values, set }) {
   const mapId = storepointId(values.storeLocatorMapId);
+  // The chat's order tags carry the app's brand (AVA on the Aetrex app).
+  const tag = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME);
   return (
     <BlockStack gap="400">
       <SectionHead title="Shopping tools">Helpers shoppers can open right inside the chat.</SectionHead>
@@ -1062,7 +1065,7 @@ function ToolsSection({ d, values, set }) {
         <Row
           title="Buy now"
           help={values.buyNowEnabled
-            ? "Product cards add Buy now next to Add to cart once the shopper's size, width and everything else are known. It goes straight to checkout with the item and your code; anything already in the shopper's cart stays. The order is credited to the chat, tagged SEoS and SEoS Buy now."
+            ? `Product cards add Buy now next to Add to cart once the shopper's size, width and everything else are known. It goes straight to checkout with the item and your code; anything already in the shopper's cart stays. The order is credited to the chat, tagged ${tag} and ${tag} Buy now.`
             : "Off: product cards offer Add to cart only."}
           toggle
           checked={values.buyNowEnabled}

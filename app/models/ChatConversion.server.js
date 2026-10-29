@@ -11,7 +11,7 @@ function resolveRange(arg) {
 }
 
 // Idempotent — same (shop, orderId) twice is a no-op. Called by the
-// orders/create webhook AFTER the SEoS tag is applied successfully.
+// orders/create webhook AFTER the chat's order tag is applied successfully.
 export async function recordChatConversion({ shop, orderId, orderName, totalAmount, currency, customerId }) {
   if (!shop || !orderId) return;
   try {

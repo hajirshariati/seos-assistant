@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLoaderData, useFetcher, Link } from "react-router";
+import { useLoaderData, useFetcher, Link, useRouteLoaderData } from "react-router";
 import {
   Page,
   BlockStack,
@@ -18,6 +18,7 @@ import { getConversionSummary, getConversionDailySeries } from "../models/ChatCo
 import { listDecisionTrees } from "../models/DecisionTree.server";
 import { listStoreKnowledge } from "../lib/store-knowledge/sync.server";
 import seosLogo from "../assets/SEoS.png";
+import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -1512,6 +1513,11 @@ export default function Home() {
     recommenderActive, enabledRecommenderCount,
     dailySeries, conversionSeries, userFirstName,
   } = useLoaderData();
+  // The app's name in Shopify, and its brand: the tag on the chat's orders
+  // ("AVA" on the Aetrex app; orders from before the rename keep "SEoS").
+  const appNameNow = useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME;
+  const orderTag = appBrand(appNameNow);
+  const tagSaid = orderTag === "SEoS" ? '"SEoS"' : `"${orderTag}" (earlier ones "SEoS")`;
 
   // Server renders with server-clock greeting; correct to the merchant's
   // local time after mount. The swap happens before the entrance
@@ -1598,8 +1604,8 @@ export default function Home() {
         value: convToday.count > 0 ? formatRevenue(convToday.revenue, conversionCurrency) : "—",
         totalValue: conversionCount > 0 ? formatRevenue(conversionRevenue, conversionCurrency) : "—",
         sublabel: conversionCount > 0
-          ? `${conversionCount} order${conversionCount === 1 ? "" : "s"} attributed to chat (tagged "SEoS") in 30 days`
-          : 'Tracked via the SEoS order tag — awaiting first chat-attributed order',
+          ? `${conversionCount} order${conversionCount === 1 ? "" : "s"} attributed to chat (tagged ${tagSaid}) in 30 days`
+          : `Tracked via the ${orderTag} order tag — awaiting first chat-attributed order`,
         series: conv.map((d) => ({ date: d.date, value: d.revenue })),
         format: (v) => formatRevenue(v, conversionCurrency),
       },
@@ -1607,7 +1613,7 @@ export default function Home() {
         label: "Chat-driven orders",
         value: String(convToday.count || 0),
         totalValue: String(conversionCount || 0),
-        sublabel: conversionCount > 0 ? 'Orders tagged "SEoS" in Shopify' : "Awaiting first chat-attributed order",
+        sublabel: conversionCount > 0 ? `Orders tagged ${tagSaid} in Shopify` : "Awaiting first chat-attributed order",
         series: conv.map((d) => ({ date: d.date, value: d.count })),
         format: fmtInt,
       },
@@ -1636,7 +1642,7 @@ export default function Home() {
         format: (v) => formatCost(v),
       },
     ];
-  }, [dailySeries, conversionSeries, conversionCount, conversionRevenue, conversionCurrency, totalMessages, avgCostPerMessage, feedbackTotal, satisfactionRate, totalCost]);
+  }, [dailySeries, conversionSeries, conversionCount, conversionRevenue, conversionCurrency, totalMessages, avgCostPerMessage, feedbackTotal, satisfactionRate, totalCost, orderTag, tagSaid]);
 
   const rateFetcher = useFetcher();
   const rateDismissed = rateFetcher.state !== "idle" || rateFetcher.data?.dismissed;
@@ -1647,7 +1653,7 @@ export default function Home() {
 
   return (
     <Page>
-      <TitleBar title="SEoS Assistant" />
+      <TitleBar title={appNameNow} />
       <style>{`
         /* ------------------------------------------------------------------
            Home page — Apple-clean, futuristic-AI styling.
@@ -2658,7 +2664,7 @@ export default function Home() {
             </div>
             <div className="seos-pagefoot-item">
               <span className="seos-pagefoot-label">Attribution</span>
-              <span className="seos-pagefoot-value">Orders tagged &ldquo;SEoS&rdquo;</span>
+              <span className="seos-pagefoot-value">Orders tagged &ldquo;{orderTag}&rdquo;</span>
             </div>
             <div className="seos-pagefoot-item">
               <span className="seos-pagefoot-label">Privacy</span>

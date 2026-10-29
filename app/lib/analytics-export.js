@@ -24,7 +24,7 @@ export function summaryRows({ range, usage = {}, feedback = {}, conversions = {}
     ["From", range?.startDate ? new Date(range.startDate).toISOString().slice(0, 10) : "", ""],
     ["To", range?.endDate ? new Date(range.endDate).toISOString().slice(0, 10) : "", ""],
     ["Conversations", usage.totalMessages || 0, "Assistant replies"],
-    ["Chat-driven orders", conversions.count || 0, "Orders tagged SEoS"],
+    ["Chat-driven orders", conversions.count || 0, "Orders credited to the chat"],
     [`Chat-driven revenue (${currency})`, money(conversions.revenue), ""],
     [`Average order value (${currency})`, money(conversions.aov), ""],
     ["Satisfaction (%)", feedback.total > 0 ? feedback.satisfactionRate : "", feedback.total > 0 ? "" : "No votes yet"],

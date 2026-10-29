@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useLoaderData, useSearchParams, Link } from "react-router";
+import { useLoaderData, useSearchParams, Link, useRouteLoaderData } from "react-router";
+import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
   Page, Card, BlockStack, InlineStack, Box, Button, Badge, Banner, Popover, DatePicker, ActionList,
@@ -588,6 +589,8 @@ function ExportMenu({ onExport, exporting }) {
 
 export default function Analytics() {
   const { usage, feedback, productsByTool, recentQuestions, daily, conversions, previous, range, estimator, week } = useLoaderData();
+  // The chat's order tag carries the app's brand (AVA on the Aetrex app).
+  const orderTag = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME);
   const [searchParams] = useSearchParams();
   const shopify = useAppBridge();
   const mounted = useMounted();
@@ -676,7 +679,7 @@ export default function Analytics() {
               value={conversions.count > 0 ? formatRevenue(conversions.revenue, conversions.currency) : "—"}
               sub={conversions.count > 0
                 ? `${conversions.count.toLocaleString()} order${conversions.count === 1 ? "" : "s"} · avg ${formatRevenue(conversions.aov, conversions.currency)}`
-                : "Orders tagged “SEoS” show here"}
+                : `Orders tagged “${orderTag}” show here`}
               curr={conversions.revenue}
               prev={previous.conversionRevenue}
             />

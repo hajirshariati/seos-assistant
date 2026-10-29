@@ -1,12 +1,13 @@
 // Buy now (Settings → Shopping tools): off unless the store turns it on; the
 // code goes into a link as it is or is refused with why; and an order the
-// chat sold is credited exactly as before — "SEoS" — with "SEoS Buy now"
-// added only when it came through Buy now.
+// chat sold is credited exactly as before — "SEoS" ("AVA" on the Aetrex
+// app, named AVA…) — with "… Buy now" added only when it came through Buy now.
 //
 // Run: node scripts/eval-buy-now.mjs
 import assert from "node:assert/strict";
 
 const { buyNowConfig, cleanBuyNowCode, buyNowCodeError, chatOrderFlags, chatOrderTags, BUY_NOW_CODE_MAX } = await import("../app/lib/buy-now.js");
+const { appName, appBrand } = await import("../app/lib/app-brand.js");
 
 let passed = 0;
 let failed = 0;
@@ -45,6 +46,20 @@ await test("an order the chat sold is tagged SEoS exactly as before; Buy now add
   }
   assert.deepEqual(chatOrderFlags(null), { chat: false, buyNow: false });
   assert.deepEqual(chatOrderFlags([{ name: "_seos_attributed", value: 0 }]), { chat: false, buyNow: false });
+});
+await test("the Aetrex app (named AVA…) tags AVA and AVA Buy now; any other name keeps SEoS", () => {
+  const attrs = (o) => Object.entries(o).map(([name, value]) => ({ name, value }));
+  const sold = chatOrderFlags(attrs({ _seos_attributed: "1" }));
+  const bought = chatOrderFlags(attrs({ _seos_attributed: "1", _seos_buy_now: "1" }));
+  assert.equal(appBrand(appName({ title: "AVA Aetrex Virtual Assistant" })), "AVA");
+  assert.deepEqual(chatOrderTags(sold, "AVA"), ["AVA"]);
+  assert.deepEqual(chatOrderTags(bought, "AVA"), ["AVA", "AVA Buy now"]);
+  for (const name of ["SEoS Assistant", "Avalon Helper", "My AVA app", "", null]) {
+    assert.equal(appBrand(appName({ title: name })), "SEoS", String(name));
+  }
+  assert.equal(appName(null), "SEoS Assistant", "Shopify not read yet → the old name");
+  assert.deepEqual(chatOrderTags(bought, "anything"), ["SEoS", "SEoS Buy now"], "only AVA or SEoS, never a made-up tag");
+  assert.deepEqual(chatOrderTags(chatOrderFlags(attrs({ gift: "1" })), "AVA"), [], "not from the chat → no tag");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

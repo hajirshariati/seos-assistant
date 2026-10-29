@@ -3,8 +3,10 @@
 // size, width and everything else are known; it goes straight to checkout
 // with the item, the store's code if one is set, and the chat's credit on the
 // order: the same `_seos_attributed` flag Add to cart sets, plus
-// `_seos_buy_now`, so the order is tagged "SEoS" and "SEoS Buy now" and
-// counts as a sale from the chat exactly as before. Pure.
+// `_seos_buy_now`, so the order is tagged with the app's brand and "… Buy
+// now" ("AVA", "AVA Buy now" on the Aetrex app; "SEoS", "SEoS Buy now" on
+// the other — app/lib/app-brand.js) and counts as a sale from the chat
+// exactly as before. Pure.
 
 export const BUY_NOW_CODE_MAX = 64;
 // Letters, numbers, - _ and . — a code that goes into a link as it is.
@@ -34,8 +36,11 @@ export function buyNowConfig(config) {
 // Buy now. "0", "false" or empty don't count (as the order webhook always read them).
 export const CHAT_ATTR = "_seos_attributed";
 export const BUY_NOW_ATTR = "_seos_buy_now";
-export const ORDER_TAG = "SEoS";
-export const BUY_NOW_TAG = "SEoS Buy now";
+// The chat's order tags for the app's brand ("SEoS" unless told).
+export function orderTags(brand = "SEoS") {
+  const b = brand === "AVA" ? "AVA" : "SEoS";
+  return { order: b, buyNow: `${b} Buy now` };
+}
 
 function flagged(list, name) {
   return list.some((a) => {
@@ -51,7 +56,8 @@ export function chatOrderFlags(noteAttributes) {
   return { chat, buyNow: chat && flagged(list, BUY_NOW_ATTR) };
 }
 
-export function chatOrderTags(flags) {
+export function chatOrderTags(flags, brand = "SEoS") {
   if (!flags?.chat) return [];
-  return flags.buyNow ? [ORDER_TAG, BUY_NOW_TAG] : [ORDER_TAG];
+  const t = orderTags(brand);
+  return flags.buyNow ? [t.order, t.buyNow] : [t.order];
 }

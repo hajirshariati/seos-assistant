@@ -1,13 +1,17 @@
 import { authenticate } from "../shopify.server";
 import { recordChatConversion } from "../models/ChatConversion.server";
 import { chatOrderFlags, chatOrderTags } from "../lib/buy-now.js";
+import { getShopConfigCached } from "../models/ShopConfig.server";
+import { shopFacts } from "../lib/shopify-facts.server.js";
+import { appBrand, appName } from "../lib/app-brand.js";
 
 // orders/create webhook → if the order's note_attributes contain the
 // `_seos_attributed=1` flag the widget set on a chat product-link
-// click, append the "SEoS" tag to the order. Lets merchants filter
+// click, append the app's brand as a tag ("AVA" on the Aetrex app,
+// "SEoS" on the other — app/lib/app-brand.js). Lets merchants filter
 // chat-driven sales in Shopify Orders via the standard tag filter.
 // An order placed through the cards' Buy now also carries
-// `_seos_buy_now=1` and gets "SEoS Buy now" as well.
+// `_seos_buy_now=1` and gets "AVA Buy now" (or "SEoS Buy now") as well.
 //
 // Best-effort: any failure (auth, GraphQL, malformed payload) is
 // logged and swallowed. Tagging is observability — a failure must
@@ -16,8 +20,8 @@ export const action = async ({ request }) => {
   const { shop, payload, topic, admin } = await authenticate.webhook(request);
 
   try {
-    const tags = chatOrderTags(chatOrderFlags(payload?.note_attributes));
-    if (!tags.length) {
+    const flags = chatOrderFlags(payload?.note_attributes);
+    if (!flags.chat) {
       return new Response();
     }
 
@@ -26,6 +30,9 @@ export const action = async ({ request }) => {
       console.warn(`[webhook ${topic}] no admin client for ${shop} — skipping tag for ${orderGid}`);
       return new Response();
     }
+    // The app's name in Shopify decides the brand of the tags.
+    const facts = await shopFacts(shop, await getShopConfigCached(shop), { admin }).catch(() => null);
+    const tags = chatOrderTags(flags, appBrand(appName(facts)));
 
     const result = await admin.graphql(
       `#graphql

@@ -43,7 +43,7 @@ async function seed() {
   await prisma.shopConfig.create({ data: {
     shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514", chatLimitPerMin: 0, chatLimitPerHour: 0,
     // What AVA's Shopify Analytics events need from Shopify, as if already read.
-    appEventsShop: JSON.stringify({ id: "gid://shopify/Shop/777", handle: "hajirai", currency: "USD", at: Date.now() }),
+    appEventsShop: JSON.stringify({ id: "gid://shopify/Shop/777", handle: "hajirai", title: "AVA Aetrex Virtual Assistant", currency: "USD", at: Date.now() }),
   } });
   // A second store with a tiny limit, for the busy-store checks.
   await prisma.session.create({ data: { id: `offline_${BUSY_SHOP}`, shop: BUSY_SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });

@@ -8,12 +8,20 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import { authenticate } from "../shopify.server";
+import { getShopConfigCached } from "../models/ShopConfig.server";
+import { shopFacts } from "../lib/shopify-facts.server.js";
+import { appName } from "../lib/app-brand.js";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  const { session, admin } = await authenticate.admin(request);
+  // The app's own name in Shopify ("AVA Aetrex Virtual Assistant" on the
+  // Aetrex app), for the pages' headers; never in the way of a page.
+  const facts = await getShopConfigCached(session.shop)
+    .then((config) => shopFacts(session.shop, config, { admin }))
+    .catch(() => null);
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", appName: appName(facts) };
 };
 
 // Polaris components that take a `url` prop (Button, Banner action, ActionList,

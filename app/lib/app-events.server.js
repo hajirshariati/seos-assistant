@@ -11,18 +11,17 @@
 // handles, a quantity, a value, how the chat started.
 import crypto from "node:crypto";
 import prisma from "../db.server.js";
-import { getShopConfigCached, forgetShopConfig } from "../models/ShopConfig.server.js";
+import { getShopConfigCached } from "../models/ShopConfig.server.js";
+import { shopFacts } from "./shopify-facts.server.js";
 
 const API_VERSION = "2026-10";
 const TOKEN_URL = process.env.APP_EVENTS_TOKEN_URL || "https://api.shopify.com/auth/access_token";
 const EVENTS_URL = process.env.APP_EVENTS_URL || `https://api.shopify.com/app/${API_VERSION}/events`;
-const USER_AGENT = "SEoS Assistant (AVA app events)";
+const USER_AGENT = "AVA app events";
 const SEND_TIMEOUT_MS = 5000;
 const MAX_QUEUE = 2000;
 const IN_FLIGHT = 4;
-// What the events need from Shopify is read again after a week.
-const SHOP_FACTS_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
-// After Shopify couldn't be reached, wait this long before trying again.
+// After Shopify couldn't give a token, wait this long before trying again.
 const RETRY_LATER_MS = 10 * 60 * 1000;
 
 // The part after the app's handle; must match the declaration.
@@ -74,49 +73,6 @@ export function cleanAttributes(attrs) {
     else if (type === "int" && Number.isSafeInteger(v) && v >= 0) out[k] = v;
   }
   return out;
-}
-
-// ── what the events need from Shopify, kept with the store's settings ──
-const factsCache = new Map(); // shop → { facts, at } | { failedAt }
-function parseFacts(raw) {
-  try {
-    const f = JSON.parse(raw || "");
-    return f && typeof f.id === "string" && typeof f.handle === "string" && Number.isFinite(f.at) ? f : null;
-  } catch {
-    return null;
-  }
-}
-async function readFactsFromShopify(shop) {
-  const { unauthenticated } = await import("../shopify.server");
-  const { admin } = await unauthenticated.admin(shop);
-  const res = await admin.graphql("query AvaAppEventsShop { shop { id currencyCode } currentAppInstallation { app { handle } } }");
-  const json = await res.json();
-  const id = json?.data?.shop?.id;
-  const handle = json?.data?.currentAppInstallation?.app?.handle;
-  if (typeof id !== "string" || typeof handle !== "string") throw new Error("shop or app handle missing");
-  return { id, handle, currency: String(json.data.shop.currencyCode || ""), at: Date.now() };
-}
-export async function shopFacts(shop, config) {
-  const hit = factsCache.get(shop);
-  if (hit?.facts && Date.now() - hit.facts.at < SHOP_FACTS_MAX_AGE_MS) return hit.facts;
-  if (hit?.failedAt && Date.now() - hit.failedAt < RETRY_LATER_MS) return null;
-  const saved = parseFacts(config?.appEventsShop);
-  if (saved && Date.now() - saved.at < SHOP_FACTS_MAX_AGE_MS) {
-    factsCache.set(shop, { facts: saved });
-    return saved;
-  }
-  try {
-    const facts = await readFactsFromShopify(shop);
-    factsCache.set(shop, { facts });
-    await prisma.shopConfig.updateMany({ where: { shop }, data: { appEventsShop: JSON.stringify(facts) } });
-    forgetShopConfig(shop);
-    return facts;
-  } catch (err) {
-    factsCache.set(shop, { failedAt: Date.now() });
-    note("shop", `couldn't read the store's details for ${shop}: ${err?.message || err}`);
-    // A week-old copy still names the right shop and handle.
-    return saved;
-  }
 }
 
 // ── the app's token (an hour; renewed five minutes before) ──
