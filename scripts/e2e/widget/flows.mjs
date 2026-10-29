@@ -2449,7 +2449,7 @@ for (const coop of ["1", "2"]) {
     const a = by["savannah-red"];
     const w = a.rowW;
     check(`tools (${label}): opened under the buy button — Fit above Size (${w}px; side by side only from 340px)`, a?.n === 2 && a.data === "2" && a.afterCta && a.inFold && !a.view && (w >= 340 ? a.sameRow : a.stacked) && a.tiles[0].kind === "fit" && a.tiles[1].kind === "truefit", JSON.stringify(a));
-    check(`tools (${label}): a word, not a number — High, with ⓘ (more behind it) and no chevron; the row says it all to screen readers and opens a dialog`, a?.tiles[0].lvl === "High" && a.tiles[0].info && !a.tiles[0].go && a.tiles[0].popup === "dialog" && a.tiles[0].label === "Fit confidence: High. Runs true to size. From 85 reviews and 1,240 pairs sold in the last year. Shows where this comes from.", JSON.stringify(a?.tiles[0]));
+    check(`tools (${label}): a word, not a number — High, with ⓘ (more behind it) and no chevron; the row says it all to screen readers and opens a dialog`, a?.tiles[0].lvl === "High" && a.tiles[0].info && !a.tiles[0].go && a.tiles[0].popup === "dialog" && a.tiles[0].label === "Fit confidence: High. Runs true to size. From reviews, sales and return history. Shows where this comes from.", JSON.stringify(a?.tiles[0]));
     // Each level its own color — only the ⓘ ring and how it runs; the rows stay a quiet grey.
     const LEVEL_COLORS = a.dark
       ? { high: ["rgb(79, 208, 129)", "rgb(111, 227, 154)"], mid: ["rgb(110, 164, 255)", "rgb(156, 192, 255)"], row: "rgba(255, 255, 255, 0.07)" }
@@ -2491,10 +2491,10 @@ for (const coop of ["1", "2"]) {
     await page.screenshot({ path: out(`fitx-${label.replace(/\s/g, "-")}`) });
     check(`fit sheet (${label}): opens over the chat, inside it, focus on its close button, the chat behind out of reach`, s1.open && s1.role === "dialog" && s1.modal === "true" && s1.inside && !s1.sideways && /ai-fitx__x/.test(s1.focus) && s1.behind, JSON.stringify(s1));
     check(`fit sheet (${label}): the level, the shoe, how it runs — in the level's color`, s1.title === "High confidence" && s1.ring === "High" && s1.prod === "Savannah Adjustable Quarter Strap Sandal - Red" && s1.pill === "Runs true to size" && s1.ringColor === LEVEL_COLORS.high[0] && s1.pillColor === LEVEL_COLORS.high[1], JSON.stringify(s1));
-    check(`fit sheet (${label}): what reviewers said and what buyers kept, in plain numbers; True Fit one tap away`, JSON.stringify(s1.rows) === JSON.stringify([
-      "What reviewers said: 72 of 85 said it’s true to size. | Runs small 8 | True to size 72 | Runs large 5 | Width: 70 of 75 said true to width · 3 runs narrow · 2 runs wide.",
-      "What buyers kept: About 88% of the 1,240 pairs sold in the last year weren’t sent back for fit.",
-    ]) && s1.tf, JSON.stringify(s1.rows));
+    check(`fit sheet (${label}): what reviewers said and what buyers kept, in words — no counts or percentages; True Fit one tap away`, JSON.stringify(s1.rows) === JSON.stringify([
+      "What reviewers said: Most say it’s true to size. | Runs small | True to size | Runs large | Width: most say it’s true to width.",
+      "What buyers kept: From sales and return history, most pairs aren’t sent back for fit.",
+    ]) && s1.tf && !/\d/.test(s1.rows.join(" ")), JSON.stringify(s1.rows));
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
     const closed = await page.evaluate(() => ({ hidden: document.querySelector(".ai-fitx").hidden, focus: document.activeElement?.getAttribute("data-fitx") !== null && document.activeElement?.closest(".ai-chat-product-card")?.dataset.handle, chatOpen: !!document.querySelector(".ai-chat-panel.open"), inert: document.querySelectorAll(".ai-chat-panel [data-fx-inert]").length }));
@@ -2503,7 +2503,7 @@ for (const coop of ["1", "2"]) {
     await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-fitx]');
     await page.waitForTimeout(400);
     const s2 = await sheet();
-    check(`fit sheet (${label}): in the shopper's own size`, s2.pill === "Runs small" && s2.rows[0] === "For your size 9: The size you’ve kept before, from your orders. In size 9, about 84% of 120 pairs weren’t sent back for fit.", JSON.stringify(s2.rows));
+    check(`fit sheet (${label}): in the shopper's own size`, s2.pill === "Runs small" && s2.rows[0] === "For your size 9: The size you’ve kept before, from your orders. In size 9, most pairs aren’t sent back for fit.", JSON.stringify(s2.rows));
     await page.click(".ai-fitx__scrim", { position: { x: 20, y: 20 } });
     await page.waitForTimeout(400);
     check(`fit sheet (${label}): a tap outside closes it`, await page.evaluate(() => document.querySelector(".ai-fitx").hidden));
@@ -2511,7 +2511,7 @@ for (const coop of ["1", "2"]) {
       await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="runs-1"] [data-fitx]');
       await page.waitForTimeout(400);
       const s3 = await sheet();
-      check("fit sheet: without AfterShip's reasons, every return counts — said so", s3.rows[1] === "What buyers kept: 85% of the 900 pairs sold in the last year weren’t sent back." && s3.pill === "Runs small", JSON.stringify(s3.rows));
+      check("fit sheet: without AfterShip's reasons, every return counts — said so", s3.rows[1] === "What buyers kept: From sales and return history, most pairs aren’t sent back." && s3.pill === "Runs small", JSON.stringify(s3.rows));
       await page.click(".ai-fitx__x");
       await page.waitForTimeout(400);
       await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="odd-2"] [data-fitx]');

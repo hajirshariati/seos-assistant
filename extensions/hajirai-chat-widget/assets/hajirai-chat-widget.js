@@ -2832,8 +2832,7 @@ function fitcClean(f){
   return o;
 }
 function fitcSay(f){
-  var n=function(x){return x.toLocaleString('en-US')};
-  var basis=[f.r?n(f.r)+(f.r===1?' review':' reviews'):'',f.n?n(f.n)+(f.n===1?' pair':' pairs')+' sold in the last year':''].filter(Boolean).join(' and ');
+  var basis=[f.r?'reviews':'',f.n?'sales and return history':''].filter(Boolean).join(', ');
   return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+FITC_LEVEL[f.v]+'.'+(f.l?' '+FITC_LONG[f.l]+'.':'')+(basis?' From '+basis+'.':'');
 }
 /* A full ring in the level's color, its word inside (the details sheet). */
@@ -2960,32 +2959,43 @@ var FX_ICON={
   you:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.3-3.4 4-5 7-5s5.7 1.6 7 5"/></svg>',
   x:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 };
-function fxNum(x){return Number(x).toLocaleString('en-US')}
 function fxRow(icon,title,text,extra){
   return '<li class="ai-fitx__row"><span class="ai-fitx__ico" aria-hidden="true">'+FX_ICON[icon]+'</span><div class="ai-fitx__rt"><div class="ai-fitx__rh">'+esc(title)+'</div><p class="ai-fitx__rp">'+esc(text)+'</p>'+(extra||'')+'</div></li>';
 }
-/* Reviewers' size answers as one bar — runs small · true · runs large — with
-   its key (the counts, read out as a list). */
+/* The sheet says where the fit comes from in words, never counts or shares:
+   what most reviewers said, and how sales and returns went. */
+/* Reviewers' size answers as one bar — runs small · true · runs large — and
+   its key. */
 function fxSplit(a){
   var t=a[0]+a[1]+a[2],pc=function(x){return (100*x/t).toFixed(2)+'%'};
   return '<div class="ai-fitx__split" aria-hidden="true"><i class="is-low" style="width:'+pc(a[0])+'"></i><i class="is-true" style="width:'+pc(a[1])+'"></i><i class="is-high" style="width:'+pc(a[2])+'"></i></div>'+
-    '<ul class="ai-fitx__key"><li class="is-low">Runs small '+fxNum(a[0])+'</li><li class="is-true">True to size '+fxNum(a[1])+'</li><li class="is-high">Runs large '+fxNum(a[2])+'</li></ul>';
+    '<ul class="ai-fitx__key"><li class="is-low">Runs small</li><li class="is-true">True to size</li><li class="is-high">Runs large</li></ul>';
 }
-function fxAnswers(a,word,low,high){
-  var t=a[0]+a[1]+a[2];
-  return fxNum(a[1])+' of '+fxNum(t)+' said '+word+(a[0]?' · '+fxNum(a[0])+' '+low:'')+(a[2]?' · '+fxNum(a[2])+' '+high:'')+'.';
+var FX_SIZE={say:['it runs small','it’s true to size','it runs large'],lean:['small','true to size','large']};
+var FX_WIDTH={say:['it runs narrow','it’s true to width','it runs wide'],lean:['narrow','true to width','wide']};
+/* What reviewers said, [low, true, high]: most of them (more than half), the
+   way they lean, or split between two. */
+function fxSays(a,w,width){
+  var t=a[0]+a[1]+a[2],m=Math.max(a[0],a[1],a[2]),i=a.indexOf(m),p=width?'Width: ':'';
+  var cap=function(x){return width?x:x.charAt(0).toUpperCase()+x.slice(1)};
+  if(a.indexOf(m,i+1)>-1)return p+cap('reviewers are split.');
+  return p+(2*m>t?cap('most say ')+w.say[i]:cap('reviewers are mixed, leaning ')+w.lean[i])+'.';
+}
+/* How sales and returns went, from the share of pairs kept. */
+function fxKept(k,fit){
+  return (k>=90?'very few pairs are sent back':k>=70?'most pairs aren’t sent back':k>=50?'more pairs are kept than sent back':'many pairs are sent back')+(fit?' for fit':'')+'.';
 }
 function fitxBody(f,title,tf){
   var h='<div class="ai-fitx__head is-'+f.v+'"><span class="ai-fitx__ring">'+fitRing(f.v)+'</span><div class="ai-fitx__hd">'+
     '<h2 class="ai-fitx__title" id="ai-fitx-title">'+FITC_LEVEL[f.v]+' confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
     (f.l?'<span class="ai-fitx__pill">'+esc(FITC_LONG[f.l])+'</span>':'')+'</div></div><ul class="ai-fitx__list">';
-  if(f.z)h+=fxRow('you','For your size '+f.z,'The size you’ve kept before, from your orders.'+(f.zn&&f.zk!=null?' In size '+f.z+', '+(f.kf?'about ':'')+f.zk+'% of '+fxNum(f.zn)+' '+(f.zn===1?'pair':'pairs')+' weren’t sent back'+(f.kf?' for fit':'')+'.':''));
+  if(f.z)h+=fxRow('you','For your size '+f.z,'The size you’ve kept before, from your orders.'+(f.zn&&f.zk!=null?' In size '+f.z+', '+fxKept(f.zk,f.kf):''));
   if(f.a||f.w){
-    var txt=f.a?fxNum(f.a[1])+' of '+fxNum(f.a[0]+f.a[1]+f.a[2])+' said it’s true to size.':'';
-    var wtxt=f.w?'Width: '+fxAnswers(f.w,'true to width','runs narrow','runs wide'):'';
+    var txt=f.a?fxSays(f.a,FX_SIZE):'';
+    var wtxt=f.w?fxSays(f.w,FX_WIDTH,true):'';
     h+=fxRow('star','What reviewers said',txt||wtxt,(f.a?fxSplit(f.a):'')+(txt&&wtxt?'<p class="ai-fitx__rp ai-fitx__rp--more">'+esc(wtxt)+'</p>':''));
   }else h+=fxRow('star','What reviewers said','No reviewer has rated the fit yet.');
-  if(f.n&&f.k!=null)h+=fxRow('box','What buyers kept',(f.kf?'About ':'')+f.k+'% of the '+fxNum(f.n)+' '+(f.n===1?'pair':'pairs')+' sold in the last year '+(f.n===1?'wasn’t':'weren’t')+' sent back'+(f.kf?' for fit':'')+'.');
+  if(f.n&&f.k!=null)h+=fxRow('box','What buyers kept','From sales and return history, '+fxKept(f.k,f.kf));
   else h+=fxRow('box','What buyers kept','Not enough sales in the last year to go by yet.');
   h+='</ul><p class="ai-fitx__note">High, Mid or Fair says how sure we can be that this style fits as expected. It blends what reviewers said with what buyers kept, across every color — the more there is to go on, the more it counts. It tells you how the style fits; True Fit finds your size.</p>';
   if(tf)h+='<button type="button" class="ai-fitx__tf" data-truefit="'+esc(tf.handle)+'" data-title="'+esc(tf.title)+'"><span class="ai-tool__badge" aria-hidden="true">'+tfLogo(18)+'</span><span>Find my size with True Fit</span></button>';
