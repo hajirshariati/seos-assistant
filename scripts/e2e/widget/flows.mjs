@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS } = await import("./mock-store.mjs");
+const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -2517,6 +2517,150 @@ for (const coop of ["1", "2"]) {
     check(`tools (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
+}
+
+// Buy now (Settings → Shopping tools): off unless the store turns it on; only
+// on a card that already knows everything (size, width…); straight to
+// checkout with the item, the store's code and the chat's credit — and a
+// cart with other things in it is kept, never replaced.
+{
+  const SAV = vidFor("savannah-red", "8 US", "Medium");
+  const CREDIT = "attributes%5B_seos_attributed%5D=1&attributes%5B_seos_buy_now%5D=1&ref=ava-chat";
+  const open = async (path, msg = "show me 3", opts = { viewport: { width: 1280, height: 860 } }) => {
+    const ctx = await browser.newContext(opts);
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789" + path);
+    await page.waitForTimeout(500);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", msg);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-messages .ai-chat-product-card [data-atc]");
+    await page.waitForTimeout(400);
+    return { ctx, page, errors };
+  };
+  const tapTo = async (page, sel, url) => { await Promise.all([page.waitForURL(url, { timeout: 8000 }), page.click(sel)]).catch(() => {}); return page.url(); };
+  // Off by default (and off is exactly as before).
+  {
+    const { ctx, page } = await open("/showcase");
+    check("buy now: off by default — no card shows it", (await page.$$("[data-buynow], .ai-buynow")).length === 0);
+    await ctx.close();
+  }
+  // Which cards, and how it sits, at every width and layout.
+  const layouts = [
+    ["showcase desktop", "/showcase?buy=1", { viewport: { width: 1280, height: 860 } }],
+    ["showcase phone", "/showcase?buy=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+    ["showcase small phone", "/showcase?buy=1", { viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true }],
+    ["row cards desktop", "/horizontal?buy=1", { viewport: { width: 1280, height: 860 } }],
+    ["row cards phone", "/horizontal?buy=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+    ["row cards small phone", "/horizontal?buy=1", { viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true }],
+    ["fit confidence on, phone", "/showcase?buy=1&fitc=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }],
+    ["fit confidence on, row cards small phone", "/horizontal?buy=1&fitc=1", { viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true }],
+  ];
+  for (const [label, path, opts] of layouts) {
+    for (const msg of ["show me 3", "show me 1"]) {
+      const { ctx, page, errors } = await open(path, msg, { ...opts, deviceScaleFactor: 2 });
+      const cards = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.map((c) => {
+        const b = c.querySelector("[data-buynow]"), cta = c.querySelector("[data-atc]");
+        if (!b) return { h: c.dataset.handle, b: false };
+        const r = b.getBoundingClientRect(), a = cta.getBoundingClientRect(), cr = c.getBoundingClientRect();
+        const cut = (x) => x.scrollWidth > x.clientWidth + 1;
+        return { h: c.dataset.handle, b: true, text: b.textContent, label: b.getAttribute("aria-label"), hh: Math.round(r.height), ch: Math.round(a.height),
+          inside: r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5, overlap: !(r.right <= a.left + 0.5 || r.left >= a.right - 0.5 || r.bottom <= a.top + 0.5 || r.top >= a.bottom - 0.5),
+          beside: Math.abs(r.top - a.top) < 2, below: r.top >= a.bottom - 0.5, cut: cut(b) || cut(cta), row: Math.round(b.parentNode.getBoundingClientRect().width), tool: !!c.querySelector(".ai-chat-card-fit") };
+      }));
+      const tag = `${label}, ${msg === "show me 1" ? "one card" : "three cards"}`;
+      const by = Object.fromEntries(cards.map((c) => [c.h, c]));
+      const s = by["savannah-red"];
+      await page.screenshot({ path: out(`buynow-${tag.replace(/[ ,]+/g, "-")}`) });
+      check(`buy now (${tag}): on the cards that know everything — not on one still to choose`, s?.b && (msg === "show me 1" || (by["jillian-black"] && !by["jillian-black"].b && by["orthotic-one"]?.b)), JSON.stringify(cards.map((c) => [c.h, c.b])));
+      check(`buy now (${tag}): says Buy now, names the shoe and size for screen readers, as tall as Add to cart, inside the card, nothing cut or overlapping`, s?.text === "Buy now" && s.label === "Buy now, Savannah Adjustable Quarter Strap Sandal - Red, 8 US · Medium: straight to checkout" && s.hh >= 40 && Math.abs(s.hh - s.ch) <= 1 && s.inside && !s.overlap && !s.cut, JSON.stringify(s));
+      const wide = s?.row >= (s?.tool ? 268 : 220);
+      check(`buy now (${tag}): beside Add to cart where the row has room (${s?.row}px), under it where not`, wide ? s.beside : s.below, JSON.stringify(s));
+      check(`buy now (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
+      await ctx.close();
+    }
+  }
+  // Empty cart: one link carries it all — the item, the code, the chat's credit.
+  {
+    mockCtl.cartCount = 0;
+    const adds = cartLog.length;
+    const { ctx, page } = await open("/showcase?buy=1");
+    const url = await tapTo(page, '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]', /\/cart\/\d+:1/);
+    check("buy now, empty cart: straight to checkout by a cart link — the item, the chat's credit, the code; nothing added the slow way", buyNowLog.at(-1) === `/cart/${SAV}:1?${CREDIT}&discount=CHAT10` && /\/cart\//.test(url) && cartLog.length === adds, JSON.stringify({ last: buyNowLog.at(-1), url }));
+    await ctx.close();
+  }
+  // A cart with other things in it is kept: the item joins it, credited, then checkout with the code.
+  {
+    mockCtl.cartCount = 2;
+    const { ctx, page } = await open("/showcase?buy=1");
+    const url = await tapTo(page, '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]', /\/discount\//);
+    check("buy now, cart with other things: they're kept — the item joins them, the order credited to the chat, then checkout with the code", cartLog.at(-1) === SAV && JSON.stringify(cartUpdates.at(-1)) === JSON.stringify({ attributes: { _seos_attributed: "1", _seos_buy_now: "1" } }) && buyNowLog.at(-1) === "/discount/CHAT10?redirect=%2Fcheckout" && /\/discount\/CHAT10/.test(url), JSON.stringify({ add: cartLog.at(-1), upd: cartUpdates.at(-1), last: buyNowLog.at(-1) }));
+    await ctx.close();
+  }
+  // No code set: the same, without one.
+  {
+    mockCtl.cartCount = 0;
+    let { ctx, page } = await open("/showcase?buy=2");
+    await tapTo(page, '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]', /\/cart\/\d+:1/);
+    const a = buyNowLog.at(-1);
+    await ctx.close();
+    mockCtl.cartCount = 2;
+    ({ ctx, page } = await open("/showcase?buy=2"));
+    await tapTo(page, '.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]', /\/checkout/);
+    const b = buyNowLog.at(-1);
+    check("buy now, no code set: the cart link and checkout carry none", a === `/cart/${SAV}:1?${CREDIT}` && b === "/checkout", JSON.stringify([a, b]));
+    await ctx.close();
+  }
+  // In the size picker: once the size and width are chosen, Buy now beside Add to cart.
+  {
+    mockCtl.cartCount = 0;
+    const { ctx, page, errors } = await open("/showcase?buy=1", "show me 3", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="jillian-black"] [data-atc]');
+    await page.waitForSelector(".ai-chat-atc-panel .ai-chat-atc-val");
+    const before = await page.$$(".ai-chat-atc-panel [data-atc-buynow]");
+    await page.click('.ai-chat-atc-panel [data-opt="Size"][data-val="8 US"]');
+    await page.click('.ai-chat-atc-panel [data-opt="Width"][data-val="Medium"]');
+    await page.waitForTimeout(300);
+    const row = await page.$eval(".ai-chat-atc-addrow", (r) => {
+      const add = r.querySelector("[data-atc-add]"), now = r.querySelector("[data-atc-buynow]"), rr = r.getBoundingClientRect(), list = document.querySelector(".ai-chat-messages").getBoundingClientRect();
+      const inside = (x) => { const q = x.getBoundingClientRect(); return q.left >= rr.left - 0.5 && q.right <= rr.right + 0.5; };
+      return { now: !!now, text: now?.textContent, inside: !!now && inside(add) && inside(now), cut: !!now && (now.scrollWidth > now.clientWidth + 1 || add.scrollWidth > add.clientWidth + 1), h: now ? Math.round(now.getBoundingClientRect().height) : 0, inView: !!now && now.getBoundingClientRect().bottom <= list.bottom + 0.5 && add.getBoundingClientRect().top >= list.top - 0.5 };
+    });
+    await page.screenshot({ path: out("buynow-picker-phone") });
+    check("buy now, picker: shown only once the choice is complete, with Add to cart, both in view, nothing cut", before.length === 0 && row.now && row.text === "Buy now" && row.inside && !row.cut && row.h >= 40 && row.inView, JSON.stringify(row));
+    await tapTo(page, ".ai-chat-atc-panel [data-atc-buynow]", /\/cart\/\d+:1/);
+    check("buy now, picker: goes straight to checkout with the size chosen", buyNowLog.at(-1) === `/cart/${vidFor("jillian-black", "8 US", "Medium")}:1?${CREDIT}&discount=CHAT10`, buyNowLog.at(-1));
+    check("buy now, picker: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The size the card names is sold out: the picker opens to choose another — no checkout.
+  {
+    mockCtl.cartCount = 0;
+    const n = buyNowLog.length;
+    const { ctx, page } = await open("/showcase?buy=1", "buysoldout");
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]');
+    await page.waitForSelector(".ai-chat-atc-panel", { timeout: 5000 }).catch(() => {});
+    const note = await page.textContent(".ai-chat-atc-panel .ai-chat-atc-note").catch(() => "");
+    check("buy now, sold out: the picker opens to choose another; nowhere else", /sold out right now/.test(note) && buyNowLog.length === n && /\/showcase/.test(page.url()), JSON.stringify({ note, url: page.url() }));
+    await ctx.close();
+  }
+  // The cart can't be reached: said so, and Buy now is ready to try again.
+  {
+    mockCtl.cartFail = true;
+    const n = buyNowLog.length;
+    const { ctx, page } = await open("/showcase?buy=1");
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]');
+    await page.waitForSelector(".ai-chat-atc-panel .ai-chat-atc-note.is-error", { timeout: 5000 }).catch(() => {});
+    const err = await page.textContent(".ai-chat-atc-panel .ai-chat-atc-note.is-error").catch(() => "");
+    const ready = await page.$eval('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]', (b) => !b.disabled && !b.classList.contains("is-busy"));
+    check("buy now, cart unreachable: the shopper is told, stays put, and can try again", /couldn’t start checkout/.test(err) && ready && buyNowLog.length === n, JSON.stringify({ err, ready }));
+    await ctx.close();
+    mockCtl.cartFail = false;
+  }
+  mockCtl.cartCount = null;
 }
 
 await browser.close();

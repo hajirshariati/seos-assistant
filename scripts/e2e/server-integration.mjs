@@ -361,6 +361,18 @@ await test("order status without signing in: signed requests only, JSON only, ma
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { guestOrderLookup: true } });
   await configCacheExpiry();
 });
+await test("Buy now: widget-config says off until the store turns it on; then on, with its code", async () => {
+  const off = (await (await fetch(signed("/widget-config"))).json()).buyNow;
+  assert.deepEqual(off, { on: false, code: "" }, "off by default, no code sent");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { buyNowCode: "CHAT10" } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).buyNow, { on: false, code: "" }, "a code alone doesn't turn it on, or travel");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { buyNowEnabled: true } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).buyNow, { on: true, code: "CHAT10" });
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { buyNowEnabled: false, buyNowCode: "" } });
+  await configCacheExpiry();
+});
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
   const cfg = await (await fetch(signed("/widget-config"))).json();
   assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "", text: "", button: "" }, "on by default, links from the footer, the default text");

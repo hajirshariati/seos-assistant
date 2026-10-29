@@ -6,6 +6,9 @@ import fs from "node:fs";
 import QRCode from "qrcode";
 const W = new URL("../../../extensions/hajirai-chat-widget/assets/", import.meta.url).pathname;
 export const cartLog = [];
+// Buy now: where the page was sent (cart links, discount links, checkout) and what the cart was told.
+export const buyNowLog = [];
+export const cartUpdates = [];
 export const chatBodies = [];
 export const fitSaves = [];
 export const returnBodies = [];
@@ -13,7 +16,7 @@ export const returnBodies = [];
 export const startedReturns = {};
 // Test switches: drop the connection after the next return is created (the
 // shopper never hears back), or make the next request slow.
-export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150 };
+export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150, cartCount: null, cartFail: false };
 export const compareLog = [];
 // "View all" pages the widget asked for ({ page, search }), its filter
 // index requests and the cards it asked for by handle.
@@ -333,6 +336,8 @@ export function start(port) {
           ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true } : {}),
           // Settings → Chat text: only on ?texts= pages (?texts=0: none set, as for a store that hasn't).
           ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : /[?&]texts=fit/.test(String(req.headers.referer || "")) ? { chatTexts: { fitButton: "Does this fit?" } } : {}),
+          // Settings → Buy now: on for ?buy=1 (with a code) and ?buy=2 (no code) pages.
+          ...(/[?&]buy=1/.test(String(req.headers.referer || "")) ? { buyNow: { on: true, code: "CHAT10" } } : /[?&]buy=2/.test(String(req.headers.referer || "")) ? { buyNow: { on: true, code: "" } } : {}),
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
@@ -417,6 +422,15 @@ export function start(port) {
             w({ type: "text", text: "Here are a few to consider." });
             w({ type: "products", products: [...fitted, ...odd] });
             w({ type: "view_all", label: "View all 7 sneakers", title: "Sneakers", total: 7, products: [...fitted, ...odd] });
+            w({ type: "done" });
+            return resp.end();
+          }
+          // A card naming a size that's sold out (Savannah 9 US / Medium).
+          if (parsed.message === "buysoldout") {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "Here's the Savannah in your size." });
+            w({ type: "products", products: [{ ...cards[0], preselect: { Size: "9 US", Width: "Medium" } }, cards[1]] });
             w({ type: "done" });
             return resp.end();
           }
@@ -555,8 +569,13 @@ export function start(port) {
           if (items[0].id === 999999) return send(422, "application/json", JSON.stringify({ status: 422, description: "Sold out" }));
           return send(200, "application/json", JSON.stringify({ items }));
         }
-        if (u.pathname === "/cart.js") return send(200, "application/json", JSON.stringify({ item_count: cartLog.length }));
-        if (u.pathname === "/cart/update.js") return send(200, "application/json", "{}");
+        if (u.pathname === "/cart.js") return mockCtl.cartFail ? send(500, "application/json", "{}") : send(200, "application/json", JSON.stringify({ item_count: mockCtl.cartCount ?? cartLog.length }));
+        if (u.pathname === "/cart/update.js") { cartUpdates.push(JSON.parse(body || "{}")); return send(200, "application/json", "{}"); }
+        // Where Buy now sends the shopper: a cart link, a discount link, checkout.
+        if (/^\/cart\/\d+:\d+$/.test(u.pathname) || u.pathname.startsWith("/discount/") || u.pathname === "/checkout") {
+          buyNowLog.push(u.pathname + u.search);
+          return send(200, "text/html", "<!doctype html><title>Checkout</title><h1>Checkout</h1>");
+        }
         send(404, "text/plain", "nf " + u.pathname);
       });
     });

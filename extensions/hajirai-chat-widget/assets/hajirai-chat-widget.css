@@ -2902,6 +2902,76 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   .ai-chat-panel .ai-fitq__chev { transition: none !important; }
 }
 
+/* ---------- Buy now (Settings → Shopping tools) ----------
+   One tap to checkout, once a card knows the size, width and the rest: an
+   outlined pill, the same height as Add to cart. In the card's buy row it
+   sits beside Add to cart where the row has room and under it where it
+   doesn't; in the size picker it follows Add to cart. */
+.ai-chat-panel .ai-buynow {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--seos-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The outline drawn inside, so it takes no width beside Add to cart. */
+  box-shadow: inset 0 0 0 1.5px var(--seos-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+@media (hover: hover) {
+  .ai-chat-panel .ai-buynow:hover { background: var(--seos-ink); color: #fff; }
+}
+.ai-chat-panel .ai-buynow:active { transform: scale(0.98); }
+.ai-chat-panel .ai-buynow:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-buynow.is-busy { opacity: 0.6; cursor: progress; }
+/* The card's buy row sizes itself to the card (container aibuy). */
+.ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row { container: aibuy / inline-size; width: 100%; }
+.ai-chat-panel .ai-chat-product-card .ai-chat-buy-row.has-buynow .ai-buynow { flex: 1 0 100%; order: 2; }
+.ai-chat-panel .ai-chat-product-card .ai-chat-buy-row.has-buynow .ai-chat-card-fit { order: 1; }
+@container aibuy (min-width: 220px) {
+  .ai-chat-panel .ai-chat-product-card .ai-chat-buy-row.has-buynow:not(.has-tool) .ai-buynow { flex: 1 1 0%; order: 1; }
+  .ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row.has-buynow:not(.has-tool) :is(.ai-chat-product-cta, .ai-buynow) { padding-left: 12px !important; padding-right: 12px !important; }
+}
+@container aibuy (min-width: 268px) {
+  .ai-chat-panel .ai-chat-product-card .ai-chat-buy-row.has-buynow.has-tool .ai-buynow { flex: 1 1 0%; order: 1; }
+  .ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row.has-buynow.has-tool :is(.ai-chat-product-cta, .ai-buynow) { padding-left: 12px !important; padding-right: 12px !important; }
+}
+/* Beside the round size button, a narrow card's buy button gets a little
+   more room for its words; too narrow for both, it takes the whole line and
+   the round button goes under it (after Buy now). Nothing is ever cut. */
+@container aibuy (max-width: 159.98px) {
+  .ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row.has-tool .ai-chat-product-cta { padding-left: 10px !important; padding-right: 10px !important; }
+}
+@container aibuy (max-width: 139.98px) {
+  .ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row.has-tool .ai-chat-product-cta { flex: 1 0 100% !important; }
+  .ai-chat-panel .ai-chat-product-card .ai-chat-viz-actions.ai-chat-buy-row.has-tool .ai-chat-card-fit { order: 4; margin-left: auto; margin-right: auto; }
+}
+.ai-chat-atc-addrow.has-buynow { flex-wrap: wrap; gap: 8px 12px; }
+.ai-chat-atc-addrow.has-buynow .ai-chat-atc-add { flex: 1 1 170px; }
+.ai-chat-panel .ai-chat-atc-addrow.has-buynow .ai-buynow { flex: 1 1 110px; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-buynow { transition: none; }
+}
+
 /* ---------- Where the fit number comes from (opened from the Fit tile) ---------- */
 .ai-chat-panel .ai-fitx {
   position: absolute;
@@ -6849,4 +6919,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-fitq__label { text-decoration-color: rgba(255, 255, 255, 0.28); }
 @media (hover: hover) {
   .ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-fitq:hover { color: var(--seos-text); }
+}
+.ai-chat-panel[data-theme="dark"] .ai-buynow { box-shadow: inset 0 0 0 1.5px var(--seos-ink); color: var(--seos-ink); background: transparent; }
+@media (hover: hover) {
+  .ai-chat-panel[data-theme="dark"] .ai-buynow:hover { background: var(--seos-ink); color: #0d0d12; }
 }

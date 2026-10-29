@@ -3,6 +3,7 @@ import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
 import { getShopName } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
+import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -126,6 +127,8 @@ export const loader = async ({ request }) => {
     appPromoButton: config.appPromoButton || "",
     appPromoDefaultText: defaultAppText(shopName),
     appPromoImage: config.appPromoImage || "",
+    buyNowEnabled: config.buyNowEnabled === true,
+    buyNowCode: config.buyNowCode || "",
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -361,6 +364,14 @@ export const action = async ({ request }) => {
   if (appText !== null) data.appPromoText = cleanAppText(appText);
   const appButton = formData.get("appPromoButton");
   if (appButton !== null) data.appPromoButton = cleanAppText(appButton, APP_BUTTON_MAX);
+  // Buy now: off by default; its code goes into a link as it is.
+  bool("buyNowEnabled");
+  const buyCode = formData.get("buyNowCode");
+  if (buyCode !== null) {
+    const err = buyNowCodeError(buyCode);
+    if (err) return fail(err, "tools");
+    data.buyNowCode = String(buyCode).trim();
+  }
 
   // Seasonal button
   bool("seasonalCtaOn");
@@ -508,6 +519,7 @@ const FIELDS = {
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
   appPromoOn: ["tools", "bool"], appIosUrl: ["tools"], appAndroidUrl: ["tools"], appPromoText: ["tools"], appPromoButton: ["tools"],
+  buyNowEnabled: ["tools", "bool"], buyNowCode: ["tools"],
   seasonalCtaOn: ["seasonal", "bool"], seasonalCtaIcon: ["seasonal"], seasonalCtaColor: ["seasonal"],
   seasonalCtaLabel: ["seasonal"], seasonalCtaCollection: ["seasonal"],
   yotpoApiKey: ["integrations", "secret"], yotpoLoyaltyApiKey: ["integrations", "secret"], yotpoLoyaltyGuid: ["integrations"],
@@ -1042,6 +1054,21 @@ function ToolsSection({ d, values, set }) {
   return (
     <BlockStack gap="400">
       <SectionHead title="Shopping tools">Helpers shoppers can open right inside the chat.</SectionHead>
+      <Group>
+        <Row
+          title="Buy now"
+          help={values.buyNowEnabled
+            ? "Product cards add Buy now next to Add to cart once the shopper's size, width and everything else are known. It goes straight to checkout with the item and your code; anything already in the shopper's cart stays. The order is credited to the chat, tagged SEoS and SEoS Buy now."
+            : "Off: product cards offer Add to cart only."}
+          toggle
+          checked={values.buyNowEnabled}
+          onChange={set("buyNowEnabled")}
+        >
+          <div className="set-grid">
+            <TextField label="Discount code" value={values.buyNowCode} onChange={set("buyNowCode")} placeholder="None" maxLength={BUY_NOW_CODE_MAX} autoComplete="off" disabled={!values.buyNowEnabled} helpText="Optional. A code from Shopify → Discounts, applied at checkout, where shoppers will see it. Blank: no code." />
+          </div>
+        </Row>
+      </Group>
       <Group>
         <Row title="Promotions page" help="The assistant reads your offers page live (every 15 minutes), so it knows what's running." stack>
           <div className="set-grid">

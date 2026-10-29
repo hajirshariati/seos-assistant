@@ -509,6 +509,29 @@ for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 3
   await axe(page, `${name}: bubble`);
   await ctx.close();
 }
+// The cards with Buy now on: with Fit confidence off (the round size button
+// beside the buy button), and on — the fit & size tiles opened, and where the
+// fit number comes from.
+for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
+  const tf = () => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } };
+  let { ctx, page } = await open("/showcase?buy=1", { viewport: vp, init: tf });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "show me 3");
+  await axe(page, `${name}: cards with Buy now`);
+  await ctx.close();
+  ({ ctx, page } = await open("/showcase?buy=1&fitc=1", { viewport: vp, init: tf }));
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  await say(page, "fitcards");
+  await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitq]');
+  await page.waitForTimeout(450);
+  await axe(page, `${name}: Buy now, fit & size tiles open`);
+  await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-fitx]');
+  await page.waitForTimeout(450);
+  await axe(page, `${name}: where the fit number comes from`);
+  await ctx.close();
+}
 // View all with its filters, and a filter's panel open.
 for (const [vp, name] of [[{ width: 1280, height: 900 }, "desktop"], [{ width: 390, height: 844 }, "mobile"]]) {
   const { ctx, page } = await open("/showcase", { viewport: vp });

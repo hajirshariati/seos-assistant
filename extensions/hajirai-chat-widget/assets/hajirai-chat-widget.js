@@ -100,6 +100,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.klaviyoListId)KLAVIYO_LIST_ID=d.klaviyoListId;
   if(typeof d.productCardStyle==='string')PRODUCT_CARD_STYLE=d.productCardStyle==='showcase'?'showcase':'horizontal';
   if(typeof d.fitConfidence==='boolean'){FITC_ON=d.fitConfidence;try{localStorage.setItem(FITC_KEY,FITC_ON?'1':'0')}catch(e){}}
+  if(d.buyNow&&typeof d.buyNow==='object'){setBuyNow(d.buyNow);try{localStorage.setItem(BUY_KEY,JSON.stringify({on:BUY_ON,code:BUY_CODE}))}catch(e){}}
   if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
      the server echo (both must agree to enable rotation). When ready,
@@ -228,6 +229,15 @@ function loginUrl(){return CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?
    from the start): cards show the Fit and size tiles under the buy button. */
 var FITC_KEY='hajirai_fitc',FITC_ON=false;
 try{FITC_ON=localStorage.getItem(FITC_KEY)==='1'}catch(e){}
+/* Buy now (Settings → Shopping tools, off unless turned on; remembered the
+   same way): the cards' one-tap checkout, and the store's code for it. */
+var BUY_KEY='hajirai_buynow',BUY_ON=false,BUY_CODE='';
+function setBuyNow(b){
+  b=b&&typeof b==='object'?b:{};
+  BUY_ON=b.on===true;
+  BUY_CODE=BUY_ON&&typeof b.code==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(b.code)?b.code:'';
+}
+try{setBuyNow(JSON.parse(localStorage.getItem(BUY_KEY)||'null'))}catch(e){}
 var PRODUCT_CARD_STYLE='horizontal';
 try{var _cachedStyle=localStorage.getItem(PCSK);if(_cachedStyle==='showcase')PRODUCT_CARD_STYLE='showcase'}catch(e){}
 /* Helpful / Not helpful under replies — the admin's "feedback buttons" setting. */
@@ -2258,9 +2268,12 @@ function fbSheetEl(){
     if(retry){e.preventDefault();var nb=$('[data-va-step="1"]',vaBox);var rc=viewAllStore[vaBox.getAttribute('data-va')];if(rc&&vaFiltered(rc)){vaShowF(rc,vaBox,rc.fpage||1);return}vaGo(vaBox,parseInt(retry.getAttribute('data-va-retry'),10)||1,nb);return}
     var atc=e.target.closest('[data-atc]');
     if(atc){e.preventDefault();e.stopPropagation();startAddToCart(atc.closest('.ai-chat-product-card'),atc);return}
-    /* Where a card's fit number comes from: over the list. */
+    var bn=e.target.closest('[data-buynow]');
+    if(bn){e.preventDefault();e.stopPropagation();startBuyNow(bn.closest('.ai-chat-product-card'),bn);return}
+    /* A card's fit & size tiles open and fold in place. */
     var fq=e.target.closest('[data-fitq]');
     if(fq){e.preventDefault();e.stopPropagation();fitqToggle(fq);return}
+    /* Where a card's fit number comes from: over the list. */
     var fx=e.target.closest('[data-fitx]');
     if(fx){e.preventDefault();e.stopPropagation();fitxOpen(fx);return}
     /* True Fit / FITFinder carry on in the chat: close the list first. */
@@ -3021,10 +3034,13 @@ var toPick=(Array.isArray(p.choose)?p.choose:[]).filter(function(n){return !preK
 var firstPick=toPick.filter(function(n){return /size/i.test(n)})[0]||toPick[0];
 var ctaText=toPick.length?'Select '+String(firstPick).toLowerCase():'Add to cart';
 var buyBtn='<button type="button" class="ai-chat-product-cta ai-chat-atc" data-atc aria-label="'+(toPick.length?esc(ctaText)+' for '+t:'Add '+t+(preLabel?', '+preLabel+',':'')+' to cart')+'">'+esc(ctaText)+'</button>';
+/* Buy now only once nothing is left to choose (size, width, the rest). */
+var nowBtn=BUY_ON&&!toPick.length&&p.handle?'<button type="button" class="ai-buynow" data-buynow aria-label="Buy now, '+t+(preLabel?', '+preLabel:'')+': straight to checkout">Buy now</button>':'';
 var tiles=useTiles===true||FITC_ON||!!fitcClean(p.fit);
 var fitBtn=tiles?'':cardHelper(p,t);
-/* Off: with a fit tool, the buy button and the tool share one row. */
-var buyHtml=fitBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row">'+buyBtn+fitBtn+'</div>':buyBtn;
+/* Off: with a fit tool, the buy button and the tool share one row; Buy now
+   joins them (beside the buy button where there's room, under it where not). */
+var buyHtml=fitBtn||nowBtn?'<div class="ai-chat-viz-actions ai-chat-buy-row'+(nowBtn?' has-buynow':'')+(fitBtn?' has-tool':'')+'">'+buyBtn+nowBtn+fitBtn+'</div>':buyBtn;
 var imgHtml=img?'<a class="ai-chat-product-img" href="'+esc(u)+'" tabindex="-1" aria-hidden="true"><img src="'+esc(img)+'" alt="" loading="lazy"></a>':'';
 var infoHtml='<div class="ai-chat-product-info">'+
   '<a class="ai-chat-product-title" href="'+esc(u)+'">'+t+'</a>'+
@@ -3047,7 +3063,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-29 fit-and-size'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 buy-now'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4085,6 +4101,55 @@ function startAddToCart(card,btn){
     openAtcPanel(card,null,null,{},{error:'We couldn\u2019t load the sizes right now.'});
   });
 }
+/* Buy now on a card: the variant the card already names (sold out → the
+   picker, to choose another), straight to checkout. */
+function startBuyNow(card,btn){
+  if(!card||btn.classList.contains('is-busy'))return;
+  var handle=card.getAttribute('data-handle');
+  var pre=null;try{pre=JSON.parse(card.getAttribute('data-preselect')||'null')}catch(_){}
+  setBusy(btn,true);
+  fetchProductJs(handle).then(function(product){
+    var m=optModel(product),sel=initialSelection(m,pre);
+    var v=selectionComplete(m,sel)?variantFor(m,sel):null;
+    if(v&&v.available)return buyNowGo(v.id).catch(function(err){setBusy(btn,false);openAtcPanel(card,product,m,sel,{error:err.message||'We couldn\u2019t start checkout. Please try again.'})});
+    setBusy(btn,false);
+    var keep={};m.opts.forEach(function(op){if(op.values.length===1)keep[op.name]=sel[op.name]});
+    openAtcPanel(card,product,m,keep,{note:'That one is sold out right now \u2014 choose another.'});
+  }).catch(function(){
+    setBusy(btn,false);
+    openAtcPanel(card,null,null,{},{error:'We couldn\u2019t load the sizes right now.'});
+  });
+}
+/* Straight to checkout with one item, credited to the chat (the order's
+   _seos_attributed, as Add to cart sets, and _seos_buy_now; "ava-chat" as
+   its referral code), with the store's code. An empty cart goes by a cart
+   link that carries all of it; a cart with other things in it is kept — the
+   item joins it, then checkout. Rejects with what to tell the shopper; on
+   success the page leaves. */
+function buyNowGo(vid){
+  var id=parseInt(vid,10),code=BUY_CODE;
+  if(!(id>0))return Promise.reject(new Error('That one can\u2019t be bought here right now.'));
+  var JS={'Content-Type':'application/json','Accept':'application/json'};
+  var link=SHOP_ROOT+'cart/'+id+':1?attributes%5B_seos_attributed%5D=1&attributes%5B_seos_buy_now%5D=1&ref=ava-chat'+(code?'&discount='+encodeURIComponent(code):'');
+  var checkout=code?SHOP_ROOT+'discount/'+encodeURIComponent(code)+'?redirect='+encodeURIComponent(SHOP_ROOT+'checkout'):SHOP_ROOT+'checkout';
+  var fail=function(r,d){var err=new Error((d&&(d.description||d.message))||'We couldn\u2019t start checkout. Please try again.');err.status=r&&r.status;throw err};
+  return fetch(SHOP_ROOT+'cart.js',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():fail(r)})
+    .then(function(cart){
+      if(cart&&cart.item_count===0)return link;
+      return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',headers:JS,body:JSON.stringify({items:[{id:id,quantity:1}]})})
+        .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok)fail(r,d)})})
+        .then(function(){return fetch(SHOP_ROOT+'cart/update.js',{method:'POST',credentials:'same-origin',headers:JS,body:JSON.stringify({attributes:{_seos_attributed:'1',_seos_buy_now:'1'}})})})
+        .then(function(r){if(!r.ok)fail(r);return checkout});
+    })
+    .then(function(url){location.assign(url)});
+}
+/* Back from checkout (the page restored as it was left): Buy now is ready again. */
+window.addEventListener('pageshow',function(e){
+  if(!e.persisted)return;
+  var b=document.querySelectorAll('.ai-buynow.is-busy');
+  for(var i=0;i<b.length;i++)setBusy(b[i],false);
+});
 function closeAtcPanel(panel){
   if(!panel)return;
   var card=panel._card;if(card){card.classList.remove('is-picking');card.classList.remove('has-inline-picker')}
@@ -4168,8 +4233,9 @@ function openAtcPanel(card,product,m,sel,state){
     panel.innerHTML=head()+
       (st.note||st.error?'<div class="ai-chat-atc-note'+(st.error?' is-error':'')+'" role="'+(st.error?'alert':'status')+'">'+esc(st.error||st.note)+'</div>':'')+
       groups+
-      '<div class="ai-chat-atc-addrow">'+
+      '<div class="ai-chat-atc-addrow'+(canAdd&&BUY_ON?' has-buynow':'')+'">'+
         '<button type="button" class="ai-chat-atc-add" data-atc-add'+(canAdd?'':' disabled')+'>'+addLabel+'</button>'+
+        (canAdd&&BUY_ON?'<button type="button" class="ai-buynow ai-buynow--picker" data-atc-buynow aria-label="Buy now, '+esc(title)+': straight to checkout">Buy now</button>':'')+
         (inline?'<button type="button" class="ai-chat-atc-text" data-atc-close>Cancel</button>':'')+
       '</div>';
   }
@@ -4187,6 +4253,18 @@ function openAtcPanel(card,product,m,sel,state){
       render({});
       var again=panel.querySelector('[data-opt="'+(window.CSS&&CSS.escape?CSS.escape(name):name)+'"][data-val="'+(window.CSS&&CSS.escape?CSS.escape(value):value)+'"]');
       if(again)again.focus();
+      /* All chosen, with Buy now: both buttons in view. */
+      var addRow=panel.querySelector('.ai-chat-atc-addrow.has-buynow');
+      if(addRow)keepInView(addRow);
+      return;
+    }
+    var now=e.target.closest('[data-atc-buynow]');
+    if(now&&!now.classList.contains('is-busy')){
+      e.preventDefault();
+      var bv=variantFor(m,sel);
+      if(!bv||!bv.available)return;
+      setBusy(now,true);
+      buyNowGo(bv.id).catch(function(err){setBusy(now,false);delete productJsCache[card.getAttribute('data-handle')];render({error:err.message||'We couldn\u2019t start checkout. Please try again.'})});
       return;
     }
     var add=e.target.closest('[data-atc-add]');
@@ -5535,6 +5613,8 @@ var pickCard=e.target.closest('.is-cmp-picking .ai-chat-product-card[data-handle
 if(pickCard){e.preventDefault();e.stopPropagation();cmpToggle(pickCard);return}
 var atcBtn=e.target.closest('[data-atc]');
 if(atcBtn){e.preventDefault();e.stopPropagation();startAddToCart(atcBtn.closest('.ai-chat-product-card,.ai-cmp__buy'),atcBtn);return}
+var nowBtn=e.target.closest('[data-buynow]');
+if(nowBtn){e.preventDefault();e.stopPropagation();startBuyNow(nowBtn.closest('.ai-chat-product-card'),nowBtn);return}
 // Handoff support CTA button → live chat (Zendesk/Intercom/Gorgias), Support
 // Hub URL only as fallback.
 var fitqBtn=e.target.closest('[data-fitq]');

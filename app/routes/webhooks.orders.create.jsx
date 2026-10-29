@@ -1,13 +1,13 @@
 import { authenticate } from "../shopify.server";
 import { recordChatConversion } from "../models/ChatConversion.server";
-
-const ATTR_NAME = "_seos_attributed";
-const ORDER_TAG = "SEoS";
+import { chatOrderFlags, chatOrderTags } from "../lib/buy-now.js";
 
 // orders/create webhook → if the order's note_attributes contain the
 // `_seos_attributed=1` flag the widget set on a chat product-link
 // click, append the "SEoS" tag to the order. Lets merchants filter
 // chat-driven sales in Shopify Orders via the standard tag filter.
+// An order placed through the cards' Buy now also carries
+// `_seos_buy_now=1` and gets "SEoS Buy now" as well.
 //
 // Best-effort: any failure (auth, GraphQL, malformed payload) is
 // logged and swallowed. Tagging is observability — a failure must
@@ -16,14 +16,8 @@ export const action = async ({ request }) => {
   const { shop, payload, topic, admin } = await authenticate.webhook(request);
 
   try {
-    const noteAttrs = Array.isArray(payload?.note_attributes) ? payload.note_attributes : [];
-    const attributed = noteAttrs.some((a) =>
-      String(a?.name || "").toLowerCase() === ATTR_NAME &&
-      String(a?.value || "").toLowerCase() !== "0" &&
-      String(a?.value || "").toLowerCase() !== "false" &&
-      String(a?.value || "") !== "",
-    );
-    if (!attributed) {
+    const tags = chatOrderTags(chatOrderFlags(payload?.note_attributes));
+    if (!tags.length) {
       return new Response();
     }
 
@@ -41,14 +35,14 @@ export const action = async ({ request }) => {
           userErrors { field message }
         }
       }`,
-      { variables: { id: orderGid, tags: [ORDER_TAG] } },
+      { variables: { id: orderGid, tags } },
     );
     const json = await result.json().catch(() => null);
     const errs = json?.data?.tagsAdd?.userErrors || [];
     if (errs.length > 0) {
       console.warn(`[webhook ${topic}] tagsAdd userErrors for ${orderGid}:`, errs);
     } else {
-      console.log(`[webhook ${topic}] tagged ${orderGid} with ${ORDER_TAG}`);
+      console.log(`[webhook ${topic}] tagged ${orderGid} with ${tags.join(", ")}`);
     }
 
     // Mirror the conversion into our own DB so the analytics +
