@@ -923,6 +923,8 @@ function inConsentUi(el){for(var a=el;a&&a!==document.body;a=a.parentElement){if
 var PHONE_BAR=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
 function phoneBar(){return !!(PHONE_BAR&&PHONE_BAR.matches)&&!launcher.classList.contains('is-bubble')}
 function placeLauncher(){
+  /* Behind a drawer or pop-up: stay put (its rows aren't buttons to clear). */
+  if(underLayer)return;
   launcher.style.bottom='';
   if(launcher.classList.contains('hidden')){liftFloaters(false);return}
   var phone=phoneBar(),vw=window.innerWidth;
@@ -997,6 +999,70 @@ window.addEventListener('scroll',function(){
   if(placeFrame||!phoneBar())return;
   placeFrame=requestAnimationFrame(function(){placeFrame=0;placeLauncher()});
 },{passive:true});
+
+/* A drawer, pop-up or modal of the page opened over the bar (the theme's
+   menu, search or filters, a quick view, another app's pop-up): the bar
+   steps behind it, as it does for the cart drawer. Seen from the bar's own
+   spot: the topmost thing there, other than the bar, is a layer fixed to the
+   screen that covers most of it and takes taps (a closed drawer is
+   invisible, or lets taps through). The bar drops just below that layer's
+   level; when that isn't enough to get under it, it fades out until the
+   layer closes. Only while the chat is closed — the open chat is on top. */
+var underLayer=false;
+function ownEl(el){return launcher.contains(el)||panel.contains(el)||el===overlay||!!(el.closest&&el.closest('[class^="ai-chat"],[class*=" ai-chat"]'))}
+function coverAt(list){
+  var vw=window.innerWidth,vh=window.innerHeight;
+  for(var i=0;i<list.length;i++){
+    var el=list[i];
+    if(el===document.body||el===document.documentElement||ownEl(el))continue;
+    if(inConsentUi(el))return null;/* consent banners cover the bar on their own */
+    for(var a=el;a&&a!==document.body&&a!==document.documentElement;a=a.parentElement){
+      if(getComputedStyle(a).position!=='fixed')continue;
+      var b=a.getBoundingClientRect();
+      if(b.width<vw*0.6||b.height<vh*0.5)return null;
+      /* A backdrop the page draws behind itself (a negative z-index) isn't over anything. */
+      var z=layerZ(a);
+      return z!==null&&z<0?null:{el:el,layer:a,at:i};
+    }
+    return null;/* page content is the top thing there: nothing covers the bar */
+  }
+  return null;
+}
+/* The z-index a layer competes with at the page's top level. */
+function layerZ(el){
+  var z=null;
+  for(var a=el;a&&a!==document.body&&a!==document.documentElement;a=a.parentElement){
+    var cs=getComputedStyle(a);
+    if(cs.position!=='static'&&cs.zIndex!=='auto'){var n=parseInt(cs.zIndex,10);if(!isNaN(n))z=n}
+  }
+  return z;
+}
+function barIndex(list){for(var i=0;i<list.length;i++)if(launcher.contains(list[i]))return i;return -1}
+function setUnder(mode,z){
+  launcher.classList.toggle('is-under',mode==='hide');
+  if(mode==='z')launcher.style.setProperty('z-index',String(z),'important');else launcher.style.removeProperty('z-index');
+  underLayer=!!mode;
+}
+function stepBehind(){
+  if(isOpen||launcher.classList.contains('hidden')||!document.elementsFromPoint){if(underLayer)setUnder(null);return}
+  var r=launcher.getBoundingClientRect();
+  if(!r.width||!r.height){if(underLayer)setUnder(null);return}
+  var x=r.left+r.width/2,y=r.top+r.height/2;
+  var list=document.elementsFromPoint(x,y),c=coverAt(list);
+  if(!c){if(underLayer)setUnder(null);return}
+  var bar=barIndex(list);
+  if(bar===-1||bar>c.at)return;/* already under it (or faded out) */
+  var z=layerZ(c.layer);
+  if(z!==null&&z>1&&z<=1000){
+    setUnder('z',z-1);
+    list=document.elementsFromPoint(x,y);
+    var cc=coverAt(list);bar=barIndex(list);
+    if(cc&&bar!==-1&&bar<cc.at)setUnder('hide');
+  }else setUnder('hide');
+}
+setInterval(function(){if(!document.hidden)stepBehind()},300);
+/* Drawers open on a tap: look right after it, and again once they've slid in. */
+['click','keyup'].forEach(function(t){document.addEventListener(t,function(){setTimeout(stepBehind,60);setTimeout(stepBehind,450)},true)});
 
 /* Hide on mobile if configured */
 var isMobileHidden=false;

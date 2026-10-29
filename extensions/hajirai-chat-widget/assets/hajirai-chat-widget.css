@@ -1335,6 +1335,15 @@
   visibility: visible;
 }
 
+/* ---------- A drawer or pop-up of the page is over the bar ----------
+   The script found a layer over the bar it couldn't get under by z-index:
+   the bar fades out until the layer closes. */
+.ai-chat-launcher.is-under {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* ---------- Cart drawer open: the chat steps behind it ----------
    Only while the drawer is open — Dawn-style themes keep #CartDrawer in
    the page (never [hidden]), so "exists" would mean "always". */

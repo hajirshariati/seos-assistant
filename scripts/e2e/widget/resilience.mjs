@@ -191,6 +191,59 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await ctx.close();
 }
 
+// 8b2. Phone: the theme's own drawers (menu, search) sit at a low level
+// (Aetrex's search drawer is z-index 35). Opened over the chat bar, the bar
+// steps behind them, and comes back when they close. A drawer the bar can't
+// get under by z-index (inside a header that makes its own layer) fades the
+// bar out instead. A small button or a backdrop behind the page doesn't count.
+{
+  const { ctx, page, errors } = await open("/full", { viewport: { width: 390, height: 844 } });
+  const barCenter = () => page.evaluate(() => { const r = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const topAt = (p) => page.evaluate(({ x, y }) => { const el = document.elementFromPoint(x, y); return el ? (el.closest(".ai-chat-launcher") ? "bar" : el.closest("[data-t]")?.getAttribute("data-t") || el.tagName) : null; }, p);
+  const barShown = () => page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const cs = getComputedStyle(l); return cs.visibility !== "hidden" && +cs.opacity > 0; });
+  await page.evaluate(() => {
+    const sd = document.createElement("search-drawer");
+    sd.setAttribute("data-t", "search"); sd.setAttribute("role", "dialog"); sd.setAttribute("aria-modal", "true"); sd.hidden = true;
+    sd.style.cssText = "position:fixed;left:0;bottom:0;width:100%;height:100%;z-index:35;pointer-events:none";
+    sd.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.4);visibility:hidden" class="ov"></div><div class="in" style="position:absolute;inset:0;background:#fff;transform:translateY(100%)"></div>';
+    document.body.appendChild(sd);
+  });
+  const p0 = await barCenter();
+  check("layers: with nothing open, the chat bar is on top", (await topAt(p0)) === "bar" && await barShown());
+  // Open the search drawer the way the theme does (hidden off, open on, taps on).
+  await page.evaluate(() => { const sd = document.querySelector('[data-t="search"]'); sd.hidden = false; sd.setAttribute("open", ""); sd.style.pointerEvents = "auto"; sd.querySelector(".ov").style.visibility = "visible"; sd.querySelector(".in").style.transform = "none"; document.body.click(); });
+  await page.waitForTimeout(700);
+  check("layers: the theme's search drawer (z-index 35) covers the chat bar", (await topAt(await barCenter())) === "search", String(await topAt(await barCenter())));
+  // Close it: the bar is back on top.
+  await page.evaluate(() => { const sd = document.querySelector('[data-t="search"]'); sd.removeAttribute("open"); sd.style.pointerEvents = "none"; sd.querySelector(".ov").style.visibility = "hidden"; sd.querySelector(".in").style.transform = "translateY(100%)"; sd.hidden = true; document.body.click(); });
+  await page.waitForTimeout(700);
+  check("layers: once the search drawer closes, the chat bar is back on top", (await topAt(await barCenter())) === "bar" && await barShown());
+  // A menu drawer inside a header that makes its own layer (transform): no
+  // z-index gets the bar under it, so the bar fades out — and comes back.
+  await page.evaluate(() => {
+    const h = document.createElement("header"); h.style.cssText = "position:sticky;top:0;transform:translateZ(0)";
+    h.innerHTML = '<div data-t="menu" style="position:fixed;left:0;top:0;width:88vw;height:100vh;background:#fafafa;z-index:50;display:none"></div>';
+    document.body.prepend(h);
+    const ov = document.createElement("div"); ov.setAttribute("data-t", "menu-overlay"); ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;display:none"; h.appendChild(ov);
+  });
+  await page.evaluate(() => { document.querySelector('[data-t="menu"]').style.display = "block"; document.querySelector('[data-t="menu-overlay"]').style.display = "block"; document.body.click(); });
+  await page.waitForTimeout(800);
+  const menuTop = await topAt(await barCenter());
+  check("layers: a menu drawer inside the header covers the chat bar (the bar fades out)", (menuTop === "menu" || menuTop === "menu-overlay") && !(await barShown()), `${menuTop} shown=${await barShown()}`);
+  await page.evaluate(() => { document.querySelector('[data-t="menu"]').style.display = "none"; document.querySelector('[data-t="menu-overlay"]').style.display = "none"; document.body.click(); });
+  await page.waitForTimeout(800);
+  check("layers: once the menu closes, the chat bar is back", (await topAt(await barCenter())) === "bar" && await barShown());
+  // Not covers: a backdrop drawn behind the page, and a small button.
+  await page.evaluate(() => {
+    const bg = document.createElement("div"); bg.setAttribute("data-t", "bg"); bg.style.cssText = "position:fixed;inset:0;z-index:-1;background:#f3f3f3"; document.body.appendChild(bg);
+    document.body.click();
+  });
+  await page.waitForTimeout(700);
+  check("layers: a backdrop behind the page doesn't hide the chat bar", (await topAt(await barCenter())) === "bar" && await barShown());
+  check("layers: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
 // 8c. Phone: the chat bar is the bottom row. Other apps' small buttons (a
 // Feedback tab, a help "Chat" button) are lifted above it; a full-width
 // sticky Add to cart bar stays at the bottom with the chat bar right on top
