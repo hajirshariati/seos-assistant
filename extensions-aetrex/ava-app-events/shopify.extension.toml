@@ -1,0 +1,134 @@
+# AVA's activity in Shopify Analytics: the app's own custom events, so no
+# Shopify metric and no other app's numbers move. Loaded by the Aetrex app
+# only (shopify.app.aetrex.toml → extension_directories): the "hajirai."
+# prefix must be that app's handle. The server sends them
+# (app/lib/app-events.server.js); Settings → Integrations turns them off.
+#
+# Once released, keep every event name, attribute (and its type), metric and
+# the currency as they are; add new ones beside them.
+
+[[extensions]]
+type = "analytics_app_events"
+handle = "ava-app-events"
+
+# ── A shopper's first message in a chat ──
+[[extensions.events]]
+name = "hajirai.ava_chat_started"
+kind = "custom"
+label = "AVA chat started"
+category = "Discovery"
+
+[extensions.events.dimensions.started_by]
+label = "AVA chat started by"
+type = "string"
+
+[extensions.events.dimensions.signed_in]
+label = "Signed in"
+type = "boolean"
+
+[[extensions.metrics]]
+handle = "ava_chats_started"
+label = "AVA chats started"
+aggregation = "count"
+source = { event = "hajirai.ava_chat_started" }
+
+# ── A product card in one of AVA's replies ──
+[[extensions.events]]
+name = "hajirai.ava_product_shown"
+kind = "custom"
+label = "AVA product shown"
+category = "Discovery"
+
+[extensions.events.dimensions.product_id]
+label = "Product ID"
+type = "int"
+
+[extensions.events.dimensions.product_handle]
+label = "Product handle"
+type = "string"
+
+[extensions.events.dimensions.position]
+label = "Card position"
+type = "int"
+
+[[extensions.metrics]]
+handle = "ava_products_shown"
+label = "AVA products shown"
+aggregation = "count"
+source = { event = "hajirai.ava_product_shown" }
+
+# ── Added to the cart from the chat ──
+[[extensions.events]]
+name = "hajirai.ava_added_to_cart"
+kind = "custom"
+label = "AVA added to cart"
+category = "Discovery"
+currency = "USD"
+
+[extensions.events.dimensions.product_id]
+label = "Product ID"
+type = "int"
+
+[extensions.events.dimensions.product_handle]
+label = "Product handle"
+type = "string"
+
+[extensions.events.dimensions.variant_id]
+label = "Variant ID"
+type = "int"
+
+[extensions.events.dimensions.quantity]
+label = "Quantity"
+type = "int"
+
+[extensions.events.dimensions.added_value]
+label = "Value added to cart"
+type = "int"
+semantic_type = "money"
+
+[[extensions.metrics]]
+handle = "ava_adds_to_cart"
+label = "AVA adds to cart"
+aggregation = "count"
+source = { event = "hajirai.ava_added_to_cart" }
+
+[[extensions.metrics]]
+handle = "ava_units_added_to_cart"
+label = "AVA units added to cart"
+aggregation = "sum"
+source = { event = "hajirai.ava_added_to_cart", field = "quantity" }
+
+[[extensions.metrics]]
+handle = "ava_added_to_cart_value"
+label = "AVA added-to-cart value"
+aggregation = "sum"
+source = { event = "hajirai.ava_added_to_cart", field = "added_value" }
+
+# ── Off to checkout from the chat (Buy now, or Checkout after adding) ──
+[[extensions.events]]
+name = "hajirai.ava_checkout_started"
+kind = "custom"
+label = "AVA checkout started"
+category = "Discovery"
+
+[extensions.events.dimensions.source]
+label = "AVA checkout from"
+type = "string"
+
+[extensions.events.dimensions.product_id]
+label = "Product ID"
+type = "int"
+
+[extensions.events.dimensions.product_handle]
+label = "Product handle"
+type = "string"
+
+[extensions.events.dimensions.variant_id]
+label = "Variant ID"
+type = "int"
+
+[[extensions.metrics]]
+handle = "ava_checkouts_started"
+label = "AVA checkouts started"
+aggregation = "count"
+source = { event = "hajirai.ava_checkout_started" }

@@ -5,7 +5,7 @@
 
 import seosLogo from "../assets/SEoS.png";
 
-const LAST_UPDATED = "October 27, 2026";
+const LAST_UPDATED = "October 29, 2026";
 const SUPPORT_EMAIL = "help@aetrex.com";
 
 export const meta = () => [
@@ -236,7 +236,7 @@ export default function PrivacyPolicy() {
         <p><strong>Infrastructure we use to run the app:</strong></p>
         <ul>
           <li><strong>Railway</strong> — application hosting and PostgreSQL database (AWS US region).</li>
-          <li><strong>Shopify</strong> — platform, Admin API, App Bridge authentication, and billing.</li>
+          <li><strong>Shopify</strong> — platform, Admin API, App Bridge authentication, and billing. Unless the merchant turns it off, the app also reports counts of the chat&apos;s activity to Shopify Analytics for the merchant&apos;s own store (App Events: a chat started, a product shown, an item added to the cart or a checkout started from the chat, with product and variant identifiers, quantity and list-price value). No shopper names, emails, customer IDs, messages or other personal data are included.</li>
         </ul>
         <p>
           Where personal data is transferred from the European Economic Area, the United Kingdom, or Switzerland to the United States, transfers rely on Standard Contractual Clauses (SCCs) approved by the European Commission (and their UK and Swiss equivalents) or the receiving provider&apos;s equivalent recognized transfer mechanism.

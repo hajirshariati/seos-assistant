@@ -108,6 +108,9 @@ export const loader = async ({ request }) => {
         fitLevels: parseFitLevels(config.fitConfidenceLevels),
         // Settings → Shopping tools → Buy now: off unless the store turns it on.
         buyNow: buyNowConfig(config),
+        // Settings → Integrations → AVA in Shopify Analytics: the widget says
+        // when a shopper adds to the cart or heads to checkout from the chat.
+        appEvents: config.appEventsEnabled !== false,
         rotateGreetingCta: config.rotateGreetingCta !== false,
         greetingCtaTranslations,
         welcomeGlowStyle: config.welcomeGlowStyle === "none" ? "none" : "subtle",

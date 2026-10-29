@@ -15,6 +15,7 @@ import { sanitizeSizeFinder } from "../lib/lean/size-finder.server.js";
 import { checkIpShopRate, checkStoreChatRate, clientIp } from "../lib/rate-limit.server.js";
 import { recordHealth } from "../models/ChatHealth.server";
 import { storeChatLimits, dailyCapApplies, busyMessage } from "../lib/peak-mode.js";
+import { avaChatStarted } from "../lib/app-events.server.js";
 
 // Real questions are short; very long pastes would crowd out the context.
 const MAX_MESSAGE_CHARS = 2000;
@@ -127,6 +128,17 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
   const loggedInCustomerId = internal ? null : new URL(request.url).searchParams.get("logged_in_customer_id") || null;
   // The library keeps the shop's offline token current on app proxy requests.
   const accessToken = sessionAccessToken || null;
+
+  // Shopify Analytics: a shopper's first message is a chat started (the admin
+  // test chat never counts). A note the chat showed first doesn't change that.
+  if (!internal && !messages.slice(0, -1).some((m) => m.role === "user")) {
+    avaChatStarted(shop, {
+      sessionId: typeof body.session_id === "string" ? body.session_id.slice(0, 100) : "",
+      message,
+      typed: typeof body.typed === "boolean" ? body.typed : null,
+      signedIn: !!loggedInCustomerId,
+    });
+  }
 
   return leanChatResponse({
     shop,

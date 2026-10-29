@@ -14,6 +14,7 @@ var CHAT_URL='/apps/hajirai/chat';
 var FEEDBACK_URL='/apps/hajirai/feedback';
 var CONFIG_URL='/apps/hajirai/widget-config';
 var VISUALIZE_URL='/apps/hajirai/visualize';
+var ACTIVITY_URL='/apps/hajirai/activity';
 (function(){try{if(document.getElementById('ai-chat-viz-keyframes-style'))return;var st=document.createElement('style');st.id='ai-chat-viz-keyframes-style';st.textContent='@keyframes aiChatViz{0%{background-position:100% 0}100%{background-position:-100% 0}}@keyframes aiChatVizSpin{to{transform:rotate(360deg)}}';(document.head||document.documentElement).appendChild(st)}catch(e){}})();
 var HRK='hajirai_hide_rules';
 var PCSK='hajirai_product_card_style';
@@ -102,6 +103,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(typeof d.fitConfidence==='boolean'){FITC_ON=d.fitConfidence;try{localStorage.setItem(FITC_KEY,FITC_ON?'1':'0')}catch(e){}}
   if(Array.isArray(d.fitLevels)){setFitLevels(d.fitLevels);try{localStorage.setItem(FITL_KEY,JSON.stringify(Object.keys(FITC_LEVELS)))}catch(e){}}
   if(d.buyNow&&typeof d.buyNow==='object'){setBuyNow(d.buyNow);try{localStorage.setItem(BUY_KEY,JSON.stringify({on:BUY_ON,code:BUY_CODE}))}catch(e){}}
+  if(typeof d.appEvents==='boolean'){APP_EVENTS=d.appEvents;try{localStorage.setItem(AEV_KEY,APP_EVENTS?'1':'0')}catch(e){}}
   if(typeof d.welcomeGlowStyle==='string')WELCOME_INTRO=d.welcomeGlowStyle!=='none';
   /* Welcome-CTA translations from server. Theme block toggle wins over
      the server echo (both must agree to enable rotation). When ready,
@@ -244,6 +246,21 @@ function setBuyNow(b){
   BUY_CODE=BUY_ON&&typeof b.code==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(b.code)?b.code:'';
 }
 try{setBuyNow(JSON.parse(localStorage.getItem(BUY_KEY)||'null'))}catch(e){}
+/* AVA in Shopify Analytics (Settings → Integrations, on unless turned off;
+   remembered the same way): the chat says when a shopper adds to the cart or
+   heads to checkout from it — the server builds the event from the store's
+   own catalog. Never waits, never in the way, gone with the page if need be. */
+var AEV_KEY='hajirai_appev',APP_EVENTS=true;
+try{if(localStorage.getItem(AEV_KEY)==='0')APP_EVENTS=false}catch(e){}
+function avaActivity(o){
+  if(!APP_EVENTS)return;
+  try{
+    o.id=((window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,12)).replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);
+    var body=JSON.stringify(o);
+    if(navigator.sendBeacon&&navigator.sendBeacon(ACTIVITY_URL,new Blob([body],{type:'text/plain'})))return;
+    fetch(ACTIVITY_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:body,keepalive:true,credentials:'same-origin'}).catch(function(){});
+  }catch(e){}
+}
 var PRODUCT_CARD_STYLE='horizontal';
 try{var _cachedStyle=localStorage.getItem(PCSK);if(_cachedStyle==='showcase')PRODUCT_CARD_STYLE='showcase'}catch(e){}
 /* Helpful / Not helpful under replies — the admin's "feedback buttons" setting. */
@@ -350,7 +367,7 @@ function markChatAttributed(){
 function addToCart(vid,qty){
 return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})})
 .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var err=new Error(d.description||d.message||'Could not add to cart');err.status=r.status;throw err}return d})})
-.then(function(d){markChatAttributed();return syncThemeCart().then(function(){return d},function(){return d})})
+.then(function(d){markChatAttributed();avaActivity({kind:'add_to_cart',variant:String(vid),quantity:qty||1});return syncThemeCart().then(function(){return d},function(){return d})})
 }
 /* After an add from the chat, bring the store's own cart UI up to date in
    the background — header and dock counts, the cart drawer's contents — so
@@ -2300,8 +2317,9 @@ function fbSheetEl(){
   return fbSheet;
 }
 function fbBehind(on){
-  /* The conversation under the sheet: out of reach while it's up. */
-  for(var c=panel.firstElementChild;c;c=c.nextElementSibling)if(c!==fbSheet&&c!==menu){if(on){c.inert=true;c.setAttribute('data-fb-inert','')}else if(c.hasAttribute('data-fb-inert')){c.inert=false;c.removeAttribute('data-fb-inert')}}
+  /* The conversation under the sheet: out of reach while it's up. A card's
+     fit details open over the sheet, so they never are. */
+  for(var c=panel.firstElementChild;c;c=c.nextElementSibling)if(c!==fbSheet&&c!==menu&&c!==fitx){if(on){c.inert=true;c.setAttribute('data-fb-inert','')}else if(c.hasAttribute('data-fb-inert')){c.inert=false;c.removeAttribute('data-fb-inert')}}
 }
 function openFeedback(opener){
   if(!FB_ON)return;
@@ -3080,7 +3098,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-29 fit-levels'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 ava-events'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4159,8 +4177,13 @@ function buyNowGo(vid){
         .then(function(){return fetch(SHOP_ROOT+'cart/update.js',{method:'POST',credentials:'same-origin',headers:JS,body:JSON.stringify({attributes:{_seos_attributed:'1',_seos_buy_now:'1'}})})})
         .then(function(r){if(!r.ok)fail(r);return checkout});
     })
-    .then(function(url){location.assign(url)});
+    .then(function(url){avaActivity({kind:'checkout',source:'buy_now',variant:String(id)});location.assign(url)});
 }
+/* Checkout from the size picker, after adding (Shopify Analytics). */
+document.addEventListener('click',function(e){
+  var a=e.target&&e.target.closest&&e.target.closest('.ai-chat-atc-primary');
+  if(a&&panel&&panel.contains(a))avaActivity({kind:'checkout',source:'checkout'});
+},true);
 /* Back from checkout (the page restored as it was left): Buy now is ready again. */
 window.addEventListener('pageshow',function(e){
   if(!e.persisted)return;

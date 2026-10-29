@@ -129,6 +129,7 @@ export const loader = async ({ request }) => {
     appPromoImage: config.appPromoImage || "",
     buyNowEnabled: config.buyNowEnabled === true,
     buyNowCode: config.buyNowCode || "",
+    appEventsEnabled: config.appEventsEnabled !== false,
     hideLiveChatButton: config.hideLiveChatButton === true,
     appearDelayOn: config.appearDelayOn === true,
     appearDelaySec: clampDelay(config.appearDelaySec),
@@ -366,6 +367,8 @@ export const action = async ({ request }) => {
   if (appButton !== null) data.appPromoButton = cleanAppText(appButton, APP_BUTTON_MAX);
   // Buy now: off by default; its code goes into a link as it is.
   bool("buyNowEnabled");
+  // AVA in Shopify Analytics: on unless the store turns it off.
+  bool("appEventsEnabled");
   const buyCode = formData.get("buyNowCode");
   if (buyCode !== null) {
     const err = buyNowCodeError(buyCode);
@@ -527,6 +530,7 @@ const FIELDS = {
   referralPageUrl: ["integrations"], aftershipApiKey: ["integrations", "secret"], klaviyoCompanyId: ["integrations"],
   klaviyoListId: ["integrations"], embeddingProvider: ["integrations"], voyageApiKey: ["integrations", "secret"],
   openaiApiKey: ["integrations", "secret"], showLoginPill: ["integrations", "bool"], vipModeEnabled: ["integrations", "bool"],
+  appEventsEnabled: ["integrations", "bool"],
   peakMode: ["peak"], peakStartsAt: ["peak"], peakEndsAt: ["peak"], chatLimitPerMin: ["peak"], chatLimitPerHour: ["peak"],
   peakLimitPerMin: ["peak"], peakLimitPerHour: ["peak"], peakLiftDailyCap: ["peak", "bool"], peakPauseSync: ["peak", "bool"],
   dailyCapEnabled: ["peak", "bool"], dailyCapMessages: ["peak"],
@@ -1185,6 +1189,17 @@ function IntegrationsSection({ d, values, set }) {
             )}
           </div>
         </Integration>
+      </Group>
+      <Group title="Shopify">
+        <Row
+          title="AVA in Shopify Analytics"
+          help={values.appEventsEnabled
+            ? "Chats started, products shown, adds to cart (and their value) and checkouts started appear in Shopify Analytics as AVA metrics, beside your sales. They're AVA's own, so no other number changes. No name, email or other personal detail is sent."
+            : "Off: nothing about the chat goes to Shopify Analytics."}
+          toggle
+          checked={values.appEventsEnabled}
+          onChange={set("appEventsEnabled")}
+        />
       </Group>
       <Group title="Signed-in shoppers">
         <Row title="Login button in the chat" help="“Login” for visitors, “Hi [name]!” for signed-in shoppers." toggle checked={values.showLoginPill} onChange={set("showLoginPill")} />

@@ -162,6 +162,12 @@ model ShopConfig {
   // the discount code it applies at checkout ("" = none).
   buyNowEnabled          Boolean  @default(false)
   buyNowCode             String   @default("")
+  // AVA's activity in Shopify Analytics (Settings → Integrations): chats
+  // started, products shown, adds to cart, checkouts started — as the app's
+  // own custom events, so no other metric changes. What the events need from
+  // Shopify (shop ID, the app's handle, the store's currency), kept as JSON.
+  appEventsEnabled       Boolean  @default(true)
+  appEventsShop          String   @default("")
 
   // Semantic search (opt-in per merchant). Provider is one of "", "voyage",
   // or "openai". Empty disables semantic search; keyword search is used.

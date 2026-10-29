@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS } = await import("./mock-store.mjs");
+const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -2707,6 +2707,73 @@ for (const coop of ["1", "2"]) {
     check("buy now, cart unreachable: the shopper is told, stays put, and can try again", /couldn’t start checkout/.test(err) && ready && buyNowLog.length === n, JSON.stringify({ err, ready }));
     await ctx.close();
     mockCtl.cartFail = false;
+  }
+  mockCtl.cartCount = null;
+}
+
+// AVA in Shopify Analytics (Settings → Integrations): the chat tells the
+// server when a shopper adds to the cart or heads to checkout from it — the
+// variant and quantity, never a price or anything about the shopper — and
+// nothing at all when the store has it off.
+{
+  const SAV = String(vidFor("savannah-red", "8 US", "Medium"));
+  const go = async (path) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem("hajirai_tf_site", "1"); } catch { /* */ } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789" + path);
+    await page.waitForTimeout(500);
+    await page.click(".ai-chat-launcher");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "show me 3");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".ai-chat-messages .ai-chat-product-card [data-atc]");
+    await page.waitForTimeout(400);
+    return { ctx, page, errors };
+  };
+  const fields = (a) => Object.keys(a).filter((k) => k !== "ct").sort().join(",");
+  // Add to cart, then Checkout from the picker.
+  {
+    mockCtl.cartCount = 2;
+    const n = activityLog.length;
+    const { ctx, page, errors } = await go("/showcase?buy=1");
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-atc]');
+    await page.waitForSelector(".ai-chat-messages .ai-chat-atc-panel .ai-chat-atc-primary", { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const added = activityLog.slice(n);
+    check("shopify analytics: an add to cart from the chat is told — its variant, quantity and a one-off id, nothing else", added.length === 1 && added[0].kind === "add_to_cart" && added[0].variant === SAV && added[0].quantity === 1 && /^[A-Za-z0-9_-]{8,64}$/.test(added[0].id) && fields(added[0]) === "id,kind,quantity,variant", JSON.stringify(added));
+    const m = activityLog.length;
+    await Promise.all([page.waitForURL(/\/checkout/, { timeout: 8000 }).catch(() => {}), page.click(".ai-chat-messages .ai-chat-atc-panel .ai-chat-atc-primary")]);
+    await page.waitForTimeout(400);
+    const out = activityLog.slice(m);
+    check("shopify analytics: Checkout after adding is told as a checkout from the chat", out.length === 1 && out[0].kind === "checkout" && out[0].source === "checkout" && fields(out[0]) === "id,kind,source", JSON.stringify(out));
+    check("shopify analytics: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Buy now: told as it leaves for checkout, with the variant.
+  {
+    mockCtl.cartCount = 0;
+    const n = activityLog.length;
+    const { ctx, page } = await go("/showcase?buy=1");
+    await Promise.all([page.waitForURL(/\/cart\/\d+:1/, { timeout: 8000 }).catch(() => {}), page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-buynow]')]);
+    await page.waitForTimeout(400);
+    const out = activityLog.slice(n);
+    check("shopify analytics: Buy now is told as a checkout from the chat, with its variant — nothing counted as an add", out.length === 1 && out[0].kind === "checkout" && out[0].source === "buy_now" && out[0].variant === SAV, JSON.stringify(out));
+    await ctx.close();
+  }
+  // The store has it off: nothing told, the rest exactly as before.
+  {
+    mockCtl.cartCount = 2;
+    const n = activityLog.length;
+    const { ctx, page } = await go("/showcase?buy=1&aev=0");
+    await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="savannah-red"] [data-atc]');
+    await page.waitForSelector(".ai-chat-messages .ai-chat-atc-panel .ai-chat-atc-primary", { timeout: 5000 }).catch(() => {});
+    const done = await page.$(".ai-chat-messages .ai-chat-atc-panel .ai-chat-atc-primary");
+    await Promise.all([page.waitForURL(/\/checkout/, { timeout: 8000 }).catch(() => {}), page.click(".ai-chat-messages .ai-chat-atc-panel .ai-chat-atc-primary").catch(() => {})]);
+    await page.waitForTimeout(400);
+    check("shopify analytics off: added and off to checkout as usual — nothing told", !!done && activityLog.length === n && /\/checkout/.test(page.url()), JSON.stringify({ told: activityLog.slice(n), url: page.url() }));
+    await ctx.close();
   }
   mockCtl.cartCount = null;
 }

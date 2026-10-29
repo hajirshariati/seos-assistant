@@ -2,6 +2,9 @@ client_id = "0448b3c2fd7ca4393b467d01ced74cd4"
 name = "SEoS Assistant"
 application_url = "https://hajirai-app-production.up.railway.app"
 embedded = true
+# The chat widget (extensions/) for both apps; AVA's Shopify Analytics events
+# (extensions-aetrex/) for this app only — their names start with its handle.
+extension_directories = ["extensions/*", "extensions-aetrex/*"]
 
 [build]
 automatically_update_urls_on_dev = true

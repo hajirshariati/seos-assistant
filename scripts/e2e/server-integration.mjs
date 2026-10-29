@@ -26,6 +26,7 @@ const BUSY_SHOP = `integration-busy-${Date.now()}.myshopify.com`;
 const PAGE_VIEWS = Number((process.argv.find((a) => a.startsWith("--pageviews=")) || "--pageviews=2000").split("=")[1]);
 const APP_PORT = 3990 + Math.floor(Math.random() * 9);
 const MODEL_PORT = APP_PORT + 100;
+const EVENTS_PORT = APP_PORT + 200;
 const MODEL_DELAY_MS = 400; // per model call — a fast real Claude step is ~1-3s
 
 process.env.DATABASE_URL = DB;
@@ -39,10 +40,14 @@ const CATS = ["Sandals", "Sneakers", "Boots", "Wedges/Heels", "Loafers"];
 async function seed() {
   await prisma.session.create({ data: { id: `offline_${SHOP}`, shop: SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
   // No store-wide limit here: the load test sends far more than a store would.
-  await prisma.shopConfig.create({ data: { shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514", chatLimitPerMin: 0, chatLimitPerHour: 0 } });
+  await prisma.shopConfig.create({ data: {
+    shop: SHOP, anthropicApiKey: encrypt("sk-ant-test"), anthropicModel: "claude-sonnet-4-20250514", chatLimitPerMin: 0, chatLimitPerHour: 0,
+    // What AVA's Shopify Analytics events need from Shopify, as if already read.
+    appEventsShop: JSON.stringify({ id: "gid://shopify/Shop/777", handle: "hajirai", currency: "USD", at: Date.now() }),
+  } });
   // A second store with a tiny limit, for the busy-store checks.
   await prisma.session.create({ data: { id: `offline_${BUSY_SHOP}`, shop: BUSY_SHOP, state: "x", isOnline: false, accessToken: "shpat_test", scope: "read_products" } });
-  await prisma.shopConfig.create({ data: { shop: BUSY_SHOP, anthropicApiKey: encrypt("sk-ant-test"), chatLimitPerMin: 2, chatLimitPerHour: 100, peakLimitPerMin: 10 } });
+  await prisma.shopConfig.create({ data: { shop: BUSY_SHOP, anthropicApiKey: encrypt("sk-ant-test"), chatLimitPerMin: 2, chatLimitPerHour: 100, peakLimitPerMin: 10, appEventsEnabled: false } });
   const rows = [];
   for (let i = 0; i < 300; i++) {
     for (const color of COLORS) {
@@ -111,6 +116,27 @@ function modelServer() {
   }).listen(MODEL_PORT);
 }
 
+// ── stand-in Shopify App Events API (token + events) ──
+const appEvents = [];
+const tokenRequests = [];
+function appEventsServer() {
+  return http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      const json = JSON.parse(body || "{}");
+      if (req.url === "/auth/access_token") {
+        tokenRequests.push(json);
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ access_token: "app-events-token", token_type: "Bearer" }));
+      }
+      appEvents.push({ ...json, auth: req.headers.authorization, ua: req.headers["user-agent"] });
+      res.writeHead(202, { "content-type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+    });
+  }).listen(EVENTS_PORT);
+}
+
 // ── signed app-proxy requests ──
 function signed(pathname, extra = {}, shop = SHOP) {
   const p = new URLSearchParams({ shop, logged_in_customer_id: "", path_prefix: "/apps/hajirai", timestamp: String(Math.floor(Date.now() / 1000)), ...extra });
@@ -142,12 +168,14 @@ const configCacheExpiry = () => new Promise((r) => setTimeout(r, 1100));
 
 const productCount = await seed();
 const mock = modelServer();
+const eventsMock = appEventsServer();
 const server = spawn(process.execPath, ["server.mjs"], {
   cwd: ROOT,
   env: {
     ...process.env, NODE_ENV: "production", PORT: String(APP_PORT), DATABASE_URL: DB, ENCRYPTION_KEY,
     SHOPIFY_API_KEY: "integration-key", SHOPIFY_API_SECRET: SECRET, SHOPIFY_APP_URL: `http://localhost:${APP_PORT}`, SCOPES: "read_products",
     ANTHROPIC_BASE_URL: `http://localhost:${MODEL_PORT}`, DISABLE_CATALOG_SYNC_SCHEDULER: "true",
+    APP_EVENTS_TOKEN_URL: `http://localhost:${EVENTS_PORT}/auth/access_token`, APP_EVENTS_URL: `http://localhost:${EVENTS_PORT}/app/2026-10/events`,
     // Settings changes made straight in the database show within a second.
     SHOP_CONFIG_CACHE_MS: "1000",
   },
@@ -374,6 +402,96 @@ await test("Buy now: widget-config says off until the store turns it on; then on
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { buyNowEnabled: false, buyNowCode: "" } });
   await configCacheExpiry();
 });
+// Events go out in the background: wait (up to 5s) until this many have come.
+const eventsFrom = async (from, count) => {
+  for (let i = 0; i < 50 && appEvents.length - from < count; i++) await new Promise((r) => setTimeout(r, 100));
+  return appEvents.slice(from);
+};
+await test("Shopify Analytics: a first message is an AVA chat started, each card an AVA product shown — the app's own events, nothing personal", async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 400));
+  const from = appEvents.length;
+  const r = await chat("i need supportive sandals", { ip: "198.51.100.70", extra: { session_id: "sess-ae-1", typed: true } });
+  await eventsFrom(from, 3);
+  await settle();
+  const sent = appEvents.slice(from);
+  const started = sent.filter((e) => e.event_handle === "hajirai.ava_chat_started");
+  const shown = sent.filter((e) => e.event_handle === "hajirai.ava_product_shown");
+  assert.equal(started.length, 1, `chat started: ${started.length}`);
+  assert.deepEqual(started[0].attributes, { started_by: "typed", signed_in: false });
+  const cards = r.events.find((e) => e.type === "products").products;
+  assert.deepEqual(shown.map((e) => e.attributes.product_handle), cards.map((c) => c.handle), "one per card, in order");
+  assert.deepEqual(shown.map((e) => e.attributes.position), [1, 2]);
+  const ids = await prisma.product.findMany({ where: { shop: SHOP, handle: { in: cards.map((c) => c.handle) } }, select: { handle: true, shopifyId: true } });
+  // The product's own Shopify ID (a made-up "00" in this test catalog is left out, not sent as 0).
+  for (const e of shown) {
+    const gid = ids.find((x) => x.handle === e.attributes.product_handle).shopifyId;
+    const n = Number(gid.split("/").pop());
+    assert.equal(e.attributes.product_id, n > 0 ? n : undefined, `${gid} → ${e.attributes.product_id}`);
+  }
+  for (const e of [...started, ...shown]) {
+    assert.equal(e.shop_id, "gid://shopify/Shop/777");
+    assert.equal(e.auth, "Bearer app-events-token");
+    assert.ok(e.ua, "a User-Agent");
+    assert.ok(e.idempotency_key.length <= 64 && /^ava_/.test(e.idempotency_key), e.idempotency_key);
+    assert.ok(Math.abs(Date.parse(e.timestamp) - Date.now()) < 60_000);
+    assert.doesNotMatch(JSON.stringify(e.attributes), /sess-ae-1|sandals|198\.51/, "no session, message or address");
+  }
+  assert.equal(new Set(shown.map((e) => e.idempotency_key)).size, shown.length, "each card its own key");
+  assert.deepEqual(tokenRequests.at(-1), { client_id: "integration-key", client_secret: SECRET, grant_type: "client_credentials" }, "the app's own credentials");
+  // A follow-up in the same chat isn't a new chat.
+  const before = appEvents.length;
+  await chat("any in black?", { ip: "198.51.100.70", history: [{ role: "user", content: "i need supportive sandals" }, { role: "assistant", content: "Here are two." }], extra: { session_id: "sess-ae-1", typed: true } });
+  await eventsFrom(before, 2);
+  await settle();
+  assert.equal(appEvents.slice(before).filter((e) => e.event_handle === "hajirai.ava_chat_started").length, 0, "follow-up → no chat started");
+  assert.ok(appEvents.slice(before).some((e) => e.event_handle === "hajirai.ava_product_shown"), "its cards still count");
+});
+await test("Shopify Analytics: adds to cart and checkouts from the chat, priced from the catalog; bad requests refused; off → nothing sent", async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 400));
+  const p = await prisma.product.create({ data: { shop: SHOP, shopifyId: "gid://shopify/Product/9001", handle: "ae-test-sneaker", title: "AE Test Sneaker", status: "ACTIVE", tags: [] } });
+  await prisma.productVariant.create({ data: { productId: p.id, shopifyId: "gid://shopify/ProductVariant/424242", price: "129.95", inventoryQty: 3 } });
+  const post = (body, ip = "198.51.100.71") => fetch(signed("/activity"), { method: "POST", headers: { "content-type": "text/plain", "x-forwarded-for": ip }, body: JSON.stringify(body) });
+  const from = appEvents.length;
+  const add = await post({ kind: "add_to_cart", variant: "424242", quantity: 2, id: "evt-atc-0001" });
+  assert.equal(add.status, 200);
+  assert.deepEqual(await add.json(), { ok: true, sent: true });
+  const out = await post({ kind: "checkout", source: "buy_now", variant: "gid://shopify/ProductVariant/424242", id: "evt-co-0001" });
+  assert.deepEqual(await out.json(), { ok: true, sent: true });
+  const cart = await post({ kind: "checkout", source: "checkout", id: "evt-co-0002" });
+  assert.deepEqual(await cart.json(), { ok: true, sent: true });
+  const sent = await eventsFrom(from, 3);
+  assert.deepEqual(sent.map((e) => e.event_handle), ["hajirai.ava_added_to_cart", "hajirai.ava_checkout_started", "hajirai.ava_checkout_started"]);
+  assert.deepEqual(sent[0].attributes, { product_id: 9001, product_handle: "ae-test-sneaker", variant_id: 424242, quantity: 2, added_value: 25990 }, "the catalog's price × quantity, in cents");
+  assert.deepEqual(sent[1].attributes, { source: "buy_now", product_id: 9001, product_handle: "ae-test-sneaker", variant_id: 424242 });
+  assert.deepEqual(sent[2].attributes, { source: "checkout" });
+  // The same tap told twice: the same key, so Shopify keeps one.
+  const again = appEvents.length;
+  await post({ kind: "add_to_cart", variant: "424242", quantity: 2, id: "evt-atc-0001" });
+  await eventsFrom(again, 1);
+  assert.equal(appEvents.at(-1).idempotency_key, sent[0].idempotency_key);
+  // Refused or ignored: an unknown variant, a made-up kind or source, junk, an unsigned request.
+  const n = appEvents.length;
+  assert.deepEqual(await (await post({ kind: "add_to_cart", variant: "999999999" })).json(), { ok: true, sent: false });
+  assert.deepEqual(await (await post({ kind: "checkout", source: "elsewhere" })).json(), { ok: true, sent: false });
+  assert.equal((await post({ kind: "refund" })).status, 400);
+  assert.equal((await fetch(signed("/activity"), { method: "POST", body: "not json" })).status, 400);
+  assert.ok((await fetch(`http://localhost:${APP_PORT}/activity?shop=${SHOP}`, { method: "POST", body: "{}" })).status >= 400, "unsigned refused");
+  await settle();
+  assert.equal(appEvents.length, n, "nothing sent for those");
+  // The store turns it off (Settings → Integrations): nothing at all.
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appEventsEnabled: false } });
+  await configCacheExpiry();
+  assert.equal((await (await fetch(signed("/widget-config"))).json()).appEvents, false, "the widget is told");
+  assert.deepEqual(await (await post({ kind: "add_to_cart", variant: "424242" })).json(), { ok: true, sent: false });
+  await chat("i need supportive sandals", { ip: "198.51.100.72", extra: { session_id: "sess-ae-2" } });
+  await settle();
+  assert.equal(appEvents.length, n, "off → no events at all");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appEventsEnabled: true } });
+  await configCacheExpiry();
+  assert.equal((await (await fetch(signed("/widget-config"))).json()).appEvents, true);
+  await prisma.productVariant.deleteMany({ where: { productId: p.id } });
+  await prisma.product.delete({ where: { id: p.id } });
+});
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
   const cfg = await (await fetch(signed("/widget-config"))).json();
   assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "", text: "", button: "" }, "on by default, links from the footer, the default text");
@@ -542,12 +660,15 @@ await test("on SIGTERM the server takes no new work but finishes a chat in progr
 
 server.kill();
 mock.close();
+eventsMock.close();
 for (const shop of [SHOP, BUSY_SHOP]) {
   for (const m of ["chatHealthEvent", "chatUsage", "chatFeedback", "chatTopic", "chatProductMention", "chatRecording", "shopConfig", "session"]) await prisma[m].deleteMany({ where: { shop } });
 }
 await prisma.product.deleteMany({ where: { shop: SHOP } });
 await prisma.$disconnect();
 if (failed) console.log("\n--- server log (tail) ---\n" + serverLog.split("\n").slice(-40).join("\n"));
+// A failure: the server's own lines about it.
+if (failed) console.log(serverLog.split("\n").filter((l) => /app-events|activity|error/i.test(l)).slice(-25).join("\n"));
 console.log(`\n${passed} passed, ${failed} failed`);
 console.log(JSON.stringify({ integration: { passed, failed, results, load, pageViews, products: productCount, at: new Date().toISOString() } }));
 process.exit(failed ? 1 : 0);

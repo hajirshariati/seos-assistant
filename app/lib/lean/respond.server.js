@@ -25,6 +25,7 @@ import { seasonalForTurn, seasonalTapNote } from "../seasonal-cta.js";
 import { featuredCollection, collectionView } from "./collections.server.js";
 import { trueFitIntro, TRUE_FIT_INTRO_TEXT, TRUE_FIT_PICK_NOTE } from "./true-fit-intro.js";
 import { tokenGraphql, shopperPurchases, withShopperFit } from "../fit-confidence.server.js";
+import { avaProductsShown } from "../app-events.server.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -268,6 +269,8 @@ export function leanChatResponse({
             ...result.cards.map((c) => ({ handle: c.handle, title: c.title, tool: "show_products" })),
           ]).catch(() => {});
           logTopics(shop, result.topics).catch(() => {});
+          // Shopify Analytics: each product card in the reply.
+          avaProductsShown(shop, result.cards);
         }
       } catch (err) {
         if (abort.signal.aborted) {

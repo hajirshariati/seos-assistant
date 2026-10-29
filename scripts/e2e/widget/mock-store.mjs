@@ -8,6 +8,8 @@ const W = new URL("../../../extensions/hajirai-chat-widget/assets/", import.meta
 export const cartLog = [];
 // Buy now: where the page was sent (cart links, discount links, checkout) and what the cart was told.
 export const buyNowLog = [];
+// What the chat told /apps/hajirai/activity (AVA in Shopify Analytics).
+export const activityLog = [];
 export const cartUpdates = [];
 export const chatBodies = [];
 export const fitSaves = [];
@@ -287,6 +289,12 @@ export function start(port) {
         if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
+        if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {
+          let a = null;
+          try { a = JSON.parse(body || "{}"); } catch { a = { unreadable: body }; }
+          activityLog.push({ ...a, ct: String(req.headers["content-type"] || "") });
+          return send(200, "application/json", '{"ok":true,"sent":true}');
+        }
         if (u.pathname === "/apps/hajirai/feedback") {
           feedbackBodies.push(JSON.parse(body || "{}"));
           return send(200, "application/json", '{"ok":true}');
@@ -337,6 +345,8 @@ export function start(port) {
           ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true, fitLevels: /[?&]fitl=all/.test(String(req.headers.referer || "")) ? ["high", "mid", "fair"] : /[?&]fitl=none/.test(String(req.headers.referer || "")) ? [] : ["high", "mid"] } : {}),
           // Settings → Chat text: only on ?texts= pages (?texts=0: none set, as for a store that hasn't).
           ...(/[?&]texts=1/.test(String(req.headers.referer || "")) ? { chatTexts: { name: "Aetrex Shopping Assistant", greeting: "Hello there!", startHeading: "Get started", popularHeading: "Trending now", launcher: "Ask Aetrex anything", input: "Type your question" } } : /[?&]texts=0/.test(String(req.headers.referer || "")) ? { chatTexts: {} } : /[?&]texts=fit/.test(String(req.headers.referer || "")) ? { chatTexts: { fitButton: "Does this fit?" } } : {}),
+          // Settings → AVA in Shopify Analytics: on, as stored by default; off for ?aev=0 pages.
+          ...(/[?&]aev=0/.test(String(req.headers.referer || "")) ? { appEvents: false } : { appEvents: true }),
           // Settings → Buy now: on for ?buy=1 (with a code) and ?buy=2 (no code) pages.
           ...(/[?&]buy=1/.test(String(req.headers.referer || "")) ? { buyNow: { on: true, code: "CHAT10" } } : /[?&]buy=2/.test(String(req.headers.referer || "")) ? { buyNow: { on: true, code: "" } } : {}),
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
