@@ -2781,8 +2781,8 @@ return d;
    way. Either may be missing; one alone is the only row. Fit is a word,
    never a number: a band tinted in its level's color (High green, Mid
    blue, Fair orange) with ⓘ in a ring of that color, how the style runs
-   ("Runs small") in it — that always shows — and the level under it where
-   there's room; tapping it says where it comes from. The size tool is a
+   ("Runs small") in it — that always shows — and "Mid confidence" under
+   it where there's room; tapping it says where it comes from. The size tool is a
    quiet row with its logo and a chevron. The rows size themselves to the
    card, so no card breaks at any width. */
 var FITC_WORDS={'true':'True to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
@@ -2836,7 +2836,7 @@ function fitTile(raw){
   var L=FITC_LEVEL[f.v];
   return toolTile('class="ai-tool ai-tool--fit is-'+f.v+'" data-fitx="'+esc(JSON.stringify(f))+'" aria-haspopup="dialog" aria-label="'+esc(fitcSay(f)+' Shows where this comes from.')+'"',
     TOOL_INFO,f.l?FITC_LONG[f.l]:'See how it fits',f.l?FITC_WORDS[f.l]:'How it fits',
-    f.z?L+' fit in your size '+f.z:L+' fit confidence',f.z?L+' · your size '+f.z:L+' confidence');
+    L+' confidence',L+' confidence');
 }
 /* Fit confidence off: the size tool is a round icon button beside the buy
    button, so the card doesn't grow (as it always was). */
@@ -2959,7 +2959,7 @@ function fxAnswers(a,word,low,high){
 }
 function fitxBody(f,title,tf){
   var h='<div class="ai-fitx__head is-'+f.v+'"><span class="ai-fitx__ring">'+fitRing(f.v)+'</span><div class="ai-fitx__hd">'+
-    '<h2 class="ai-fitx__title" id="ai-fitx-title">'+FITC_LEVEL[f.v]+' fit confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
+    '<h2 class="ai-fitx__title" id="ai-fitx-title">'+FITC_LEVEL[f.v]+' confidence</h2>'+(title?'<p class="ai-fitx__prod">'+esc(title)+'</p>':'')+
     (f.l?'<span class="ai-fitx__pill">'+esc(FITC_LONG[f.l])+'</span>':'')+'</div></div><ul class="ai-fitx__list">';
   if(f.z)h+=fxRow('you','For your size '+f.z,'The size you’ve kept before, from your orders.'+(f.zn&&f.zk!=null?' In size '+f.z+', '+(f.kf?'about ':'')+f.zk+'% of '+fxNum(f.zn)+' '+(f.zn===1?'pair':'pairs')+' weren’t sent back'+(f.kf?' for fit':'')+'.':''));
   if(f.a||f.w){

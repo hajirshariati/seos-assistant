@@ -2462,10 +2462,10 @@ for (const coop of ["1", "2"]) {
     // How it runs always shows; the line under it and the long words come in as the card widens.
     const fitText = a.tiles[0].text, sizeText = a.tiles[1].text;
     const long = w >= 420 || (w >= 196 && w < 340);
-    const expect = long ? ["Runs true to size / High fit confidence", "Find your size / with True Fit"] : w >= 140 ? ["True to size / High confidence", "Your size / True Fit"] : ["True to size", "Your size"];
+    const expect = long ? ["Runs true to size / High confidence", "Find your size / with True Fit"] : w >= 140 ? ["True to size / High confidence", "Your size / True Fit"] : ["True to size", "Your size"];
     check(`tools (${label}): the words for a ${w}px row`, fitText === expect[0] && sizeText === expect[1], `${fitText} | ${sizeText}`);
     const b = by["jillian-black"];
-    check(`tools (${label}): in the shopper's own size`, b?.tiles[0].lvl === "Mid" && b.tiles[0].text === (long ? "Runs small / Mid fit in your size 9" : w >= 140 ? "Runs small / Mid · your size 9" : "Runs small"), JSON.stringify(b?.tiles[0]));
+    check(`tools (${label}): in the shopper's own size`, b?.tiles[0].lvl === "Mid" && b.tiles[0].text === (w >= 140 ? "Runs small / Mid confidence" : "Runs small"), JSON.stringify(b?.tiles[0]));
     check(`tools (${label}): one tool alone takes the row (an orthotic's FITFinder, a shoe without a score)`, by["orthotic-one"]?.n === 1 && by["orthotic-one"].tiles[0].kind === "fitfinder" && by["carly-white"]?.n === 1 && by["carly-white"].tiles[0].kind === "truefit" && by["carly-white"].tiles[0].w >= a.rowW - 1, JSON.stringify([by["orthotic-one"], by["carly-white"]]));
     check(`tools (${label}): no Fit tile without a real score; a made-up label or size is left out`, by["odd-1"]?.tiles.every((t) => t.kind !== "fit") && by["odd-2"]?.tiles[0].kind === "fit" && by["odd-2"].tiles[0].lvl === "Mid" && by["odd-2"].tiles[0].label === "Fit confidence: Mid. Shows where this comes from.", JSON.stringify([by["odd-1"], by["odd-2"]?.tiles[0]]));
 
@@ -2490,7 +2490,7 @@ for (const coop of ["1", "2"]) {
     const s1 = await sheet();
     await page.screenshot({ path: out(`fitx-${label.replace(/\s/g, "-")}`) });
     check(`fit sheet (${label}): opens over the chat, inside it, focus on its close button, the chat behind out of reach`, s1.open && s1.role === "dialog" && s1.modal === "true" && s1.inside && !s1.sideways && /ai-fitx__x/.test(s1.focus) && s1.behind, JSON.stringify(s1));
-    check(`fit sheet (${label}): the level, the shoe, how it runs — in the level's color`, s1.title === "High fit confidence" && s1.ring === "High" && s1.prod === "Savannah Adjustable Quarter Strap Sandal - Red" && s1.pill === "Runs true to size" && s1.ringColor === LEVEL_COLORS.high[0] && s1.pillColor === LEVEL_COLORS.high[1], JSON.stringify(s1));
+    check(`fit sheet (${label}): the level, the shoe, how it runs — in the level's color`, s1.title === "High confidence" && s1.ring === "High" && s1.prod === "Savannah Adjustable Quarter Strap Sandal - Red" && s1.pill === "Runs true to size" && s1.ringColor === LEVEL_COLORS.high[0] && s1.pillColor === LEVEL_COLORS.high[1], JSON.stringify(s1));
     check(`fit sheet (${label}): what reviewers said and what buyers kept, in plain numbers; True Fit one tap away`, JSON.stringify(s1.rows) === JSON.stringify([
       "What reviewers said: 72 of 85 said it’s true to size. | Runs small 8 | True to size 72 | Runs large 5 | Width: 70 of 75 said true to width · 3 runs narrow · 2 runs wide.",
       "What buyers kept: About 88% of the 1,240 pairs sold in the last year weren’t sent back for fit.",
