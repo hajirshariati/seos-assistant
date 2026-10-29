@@ -2775,14 +2775,15 @@ return d;
    "View product" a quiet underlined link. When the chat already knows the
    customer's size/width, the card carries it (data-preselect) and shows it
    under the price — one tap adds that exact variant. */
-/* With Fit confidence on — under the buy button, side by side: the style's
-   Fit and the size tool that belongs to the product — True Fit on shoes,
+/* With Fit confidence on — in "Check fit & size", two rows: the style's Fit
+   and the size tool that belongs to the product — True Fit on shoes,
    FITFinder on orthotics (until the shopper has a FIT), never the other
-   way. Either may be missing; one alone takes the whole row. Fit is a word,
-   never a number: High, Mid or Fair in a full ring of its color (green,
-   blue, orange), and how it runs ("Runs small") in the same color — that
-   always shows; the level's own words make way when a card is narrow, and
-   tapping it says where it comes from. The tiles size themselves to the
+   way. Either may be missing; one alone is the only row. Fit is a word,
+   never a number: a band tinted in its level's color (High green, Mid
+   blue, Fair orange) with ⓘ in a ring of that color, how the style runs
+   ("Runs small") in it — that always shows — and the level under it where
+   there's room; tapping it says where it comes from. The size tool is a
+   quiet row with its logo and a chevron. The rows size themselves to the
    card, so no card breaks at any width. */
 var FITC_WORDS={'true':'True to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
 var FITC_LONG={'true':'Runs true to size',small:'Runs small',large:'Runs large',narrow:'Runs narrow',wide:'Runs wide'};
@@ -2817,22 +2818,25 @@ function fitcSay(f){
   var basis=[f.r?n(f.r)+(f.r===1?' review':' reviews'):'',f.n?n(f.n)+(f.n===1?' pair':' pairs')+' sold in the last year':''].filter(Boolean).join(' and ');
   return 'Fit confidence'+(f.z?' in size '+f.z+', the size you’ve kept before':'')+': '+FITC_LEVEL[f.v]+'.'+(f.l?' '+FITC_LONG[f.l]+'.':'')+(basis?' From '+basis+'.':'');
 }
-/* A full ring in the level's color, its word inside. */
+/* A full ring in the level's color, its word inside (the details sheet). */
 function fitRing(v){
   return '<svg class="ai-ring" viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ai-ring__arc" cx="18" cy="18" r="15.5"/></svg><b class="ai-tool__lvl">'+FITC_LEVEL[v]+'</b>';
 }
-/* One tile: icon, a title and a line under it, each in two lengths (the
-   card's width picks). */
-function toolTile(attrs,icon,title,titleShort,sub,subShort){
+/* ⓘ in a ring of the level's color: there's more to read behind it. */
+var TOOL_INFO='<svg class="ai-tool__info" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 11v6"/><circle cx="12" cy="7.4" r="1.15" fill="currentColor" stroke="none"/></svg>';
+var TOOL_GO='<svg class="ai-tool__go" viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1.5 1.5L6.5 7l-5 5.5"/></svg>';
+/* One row: icon, a title and a line under it, each in two lengths (the
+   card's width picks), and a chevron where it leads somewhere. */
+function toolTile(attrs,icon,title,titleShort,sub,subShort,go){
   var two=function(cls,a,b){return '<span class="'+cls+'"><span class="ai-tool__long">'+esc(a)+'</span><span class="ai-tool__short">'+esc(b)+'</span></span>'};
-  return '<button type="button" '+attrs+'><span class="ai-tool__icon" aria-hidden="true">'+icon+'</span><span class="ai-tool__text" aria-hidden="true">'+two('ai-tool__title',title,titleShort)+two('ai-tool__sub',sub,subShort)+'</span></button>';
+  return '<button type="button" '+attrs+'><span class="ai-tool__icon" aria-hidden="true">'+icon+'</span><span class="ai-tool__text" aria-hidden="true">'+two('ai-tool__title',title,titleShort)+two('ai-tool__sub',sub,subShort)+'</span>'+(go?TOOL_GO:'')+'</button>';
 }
 function fitTile(raw){
   var f=fitcClean(raw);if(!f)return '';
   var L=FITC_LEVEL[f.v];
   return toolTile('class="ai-tool ai-tool--fit is-'+f.v+'" data-fitx="'+esc(JSON.stringify(f))+'" aria-haspopup="dialog" aria-label="'+esc(fitcSay(f)+' Shows where this comes from.')+'"',
-    fitRing(f.v),f.l?FITC_LONG[f.l]:'See how it fits',f.l?FITC_WORDS[f.l]:'How it fits',
-    f.z?L+' fit in your size '+f.z:L+' fit confidence',f.z?'In your size '+f.z:'Fit confidence');
+    TOOL_INFO,f.l?FITC_LONG[f.l]:'See how it fits',f.l?FITC_WORDS[f.l]:'How it fits',
+    f.z?L+' fit in your size '+f.z:L+' fit confidence',f.z?L+' · your size '+f.z:L+' confidence');
 }
 /* Fit confidence off: the size tool is a round icon button beside the buy
    button, so the card doesn't grow (as it always was). */
@@ -2842,11 +2846,11 @@ function cardHelper(p,t){
   if(p.kind==='orthotic'&&ff&&!savedFit())return '<button type="button" class="ai-chat-card-fit ai-chat-card-fit--fit" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder" title="Find my FIT \u00b7 FITFinder"><span aria-hidden="true">FIT</span></button>';
   return '';
 }
-/* Fit confidence on: the size tool as a tile beside the Fit tile. */
+/* Fit confidence on: the size tool as a row under the Fit row. */
 function sizeTile(p,t){
   if(!p||!p.handle)return '';
-  if(p.kind==='footwear'&&tfPayload())return toolTile('class="ai-tool ai-tool--size" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit"','<span class="ai-tool__badge">'+tfLogo(20)+'</span>','Size','Size','Find your size','True Fit');
-  if(p.kind==='orthotic'&&ff&&!savedFit())return toolTile('class="ai-tool ai-tool--ff" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder"','<span class="ai-tool__badge ai-tool__badge--fit">FIT</span>','FIT','FIT','Find your FIT','FITFinder');
+  if(p.kind==='footwear'&&tfPayload())return toolTile('class="ai-tool ai-tool--size" data-truefit="'+esc(p.handle)+'" data-title="'+t+'" aria-label="Find my size with True Fit"','<span class="ai-tool__badge">'+tfLogo(20)+'</span>','Find your size','Your size','with True Fit','True Fit',true);
+  if(p.kind==='orthotic'&&ff&&!savedFit())return toolTile('class="ai-tool ai-tool--ff" data-helper="fitfinder" aria-label="Find my orthotic FIT with FITFinder"','<span class="ai-tool__badge ai-tool__badge--fit">FIT</span>','Find your FIT','Your FIT','with FITFinder','FITFinder',true);
   return '';
 }
 function cardTools(p,t){

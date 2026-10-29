@@ -2681,16 +2681,15 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   color: var(--seos-text);
   font-weight: 600;
 }
-/* ---------- Fit and size tiles, in "Check fit & size" ----------
-   Fit — High, Mid or Fair in a full ring of its color (green, blue,
-   orange), and how the style runs ("Runs small") in the same color — and
-   the product's size tool (True Fit, or FITFinder on orthotics). How it
-   runs always shows; the longer words and the line under it come in as the
-   card widens. Narrow cards put the tiles one above the other; wider ones
-   side by side; the widest put the icon beside the words. One tile alone
-   is a row across the card. (Sized by the fold, container aitools.) */
-.ai-chat-panel { --seos-fit: #2fa65b; --seos-fit-track: rgba(0, 0, 0, 0.09); --seos-tool-badge: #f1ece4; }
-.ai-chat-panel[data-theme="dark"] { --seos-fit: #4fd081; --seos-fit-track: rgba(255, 255, 255, 0.14); }
+/* ---------- Fit and size rows, in "Check fit & size" ----------
+   Two quiet grey rows. Fit: ⓘ in a ring of its level's color (High green,
+   Mid blue, Fair orange) and how the style runs ("Runs small") in it — the
+   only color — with the level under it. The product's size tool (True Fit,
+   or FITFinder on orthotics): its logo and a chevron. How it runs always shows; the line under it, the chevron
+   and the longer words come in as the card widens, and the widest cards
+   set the two side by side. (Sized by the fold, container aitools.) */
+.ai-chat-panel { --seos-fit: #2fa65b; --seos-fit-track: rgba(0, 0, 0, 0.09); --seos-tool-badge: #f1ece4; --seos-tool-bg: #f2f2f5; --seos-tool-bg-h: #e8e8ed; }
+.ai-chat-panel[data-theme="dark"] { --seos-fit: #4fd081; --seos-fit-track: rgba(255, 255, 255, 0.14); --seos-tool-bg: rgba(255, 255, 255, 0.07); --seos-tool-bg-h: rgba(255, 255, 255, 0.12); }
 .ai-chat-panel :is(.ai-tool--fit, .ai-fitx__head).is-high { --fit-c: #2fa65b; --fit-t: #157a3b; --fit-bg: rgba(47, 166, 91, 0.12); }
 .ai-chat-panel :is(.ai-tool--fit, .ai-fitx__head).is-mid { --fit-c: #3b7bf0; --fit-t: #1f5fcf; --fit-bg: rgba(59, 123, 240, 0.12); }
 .ai-chat-panel :is(.ai-tool--fit, .ai-fitx__head).is-fair { --fit-c: #f08c2a; --fit-t: #b25a07; --fit-bg: rgba(240, 140, 42, 0.14); }
@@ -2712,17 +2711,17 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   width: 100%;
   min-width: 0;
   height: auto;
-  min-height: 52px;
+  min-height: 44px;
   margin: 0;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--seos-line-strong);
-  border-radius: 14px;
-  background: #fff;
+  gap: 7px;
+  padding: 6px 8px 6px 7px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--seos-tool-bg);
   color: var(--seos-text);
   font: inherit;
   line-height: 1.2;
@@ -2732,21 +2731,23 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   box-shadow: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.12s ease;
+  transition: background-color 0.15s ease, transform 0.12s ease;
 }
 @media (hover: hover) {
-  .ai-chat-panel .ai-tool:hover { border-color: var(--seos-ink); }
+  .ai-chat-panel .ai-tool:hover { background: var(--seos-tool-bg-h); }
 }
-.ai-chat-panel .ai-tool:active { transform: scale(0.97); }
+.ai-chat-panel .ai-tool:active { transform: scale(0.98); }
 .ai-chat-panel .ai-tool:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
 .ai-chat-panel .ai-tool__icon {
   position: relative;
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
 }
+.ai-chat-panel .ai-tool__info { display: block; width: 21px; height: 21px; color: var(--fit-c); }
+/* The details sheet's ring: a full circle in the level's color, its word inside. */
 .ai-chat-panel .ai-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ai-chat-panel .ai-ring__arc { fill: none; stroke: var(--fit-c, var(--seos-fit)); stroke-width: 3; }
 .ai-chat-panel .ai-tool__lvl {
@@ -2767,8 +2768,8 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   color: #1d1d1f;
 }
 .ai-chat-panel .ai-tool__badge img,
-.ai-chat-panel .ai-tool__badge svg { display: block; width: 18px; height: 18px; }
-.ai-chat-panel .ai-tool__badge--fit { font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; }
+.ai-chat-panel .ai-tool__badge svg { display: block; width: 15px; height: 15px; }
+.ai-chat-panel .ai-tool__badge--fit { font-size: 8px; font-weight: 800; letter-spacing: 0.03em; }
 .ai-chat-panel .ai-tool__text {
   display: flex;
   flex-direction: column;
@@ -2780,9 +2781,10 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
 }
 .ai-chat-panel .ai-tool__title {
   max-width: 100%;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 15px;
+  letter-spacing: -0.005em;
   color: var(--seos-text);
   overflow-wrap: break-word;
   text-wrap: balance;
@@ -2798,40 +2800,42 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ai-chat-panel .ai-tool__go { display: none; flex: none; width: 7px; height: 12px; margin-left: auto; color: var(--seos-text-2); opacity: 0.75; }
 .ai-chat-panel .ai-tool__long { display: none; }
-/* One above the other: the line under the title once there's room for it. */
+/* The chevron, once there's room beside the words. */
+@container aitools (min-width: 120px) {
+  .ai-chat-panel .ai-tool__go { display: block; }
+}
+/* The line under the title. */
 @container aitools (min-width: 140px) {
+  .ai-chat-panel .ai-tool { gap: 9px; padding: 7px 11px 7px 9px; }
+  .ai-chat-panel .ai-tool__icon { width: 26px; height: 26px; }
+  .ai-chat-panel .ai-tool__info { width: 22px; height: 22px; }
+  .ai-chat-panel .ai-tool__title { font-size: 12.5px; }
   .ai-chat-panel .ai-tool__sub { display: block; }
 }
-/* Side by side: icon over the words. */
-@container aitools (min-width: 212px) {
-  .ai-chat-panel .ai-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ai-chat-panel .ai-tool { flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 64px; padding: 9px 6px 8px; text-align: center; }
-  .ai-chat-panel .ai-tool__text { flex: none; align-items: center; }
-}
-/* The widest: icon beside the words, all of them. */
-@container aitools (min-width: 344px) {
-  .ai-chat-panel .ai-tool { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 60px; padding: 10px 14px; text-align: left; }
-  .ai-chat-panel .ai-tool__icon { width: 38px; height: 38px; }
-  .ai-chat-panel .ai-tool__lvl { font-size: 10.5px; }
-  .ai-chat-panel .ai-tool__text { flex: 1 1 auto; align-items: flex-start; padding-left: 12px; border-left: 1px solid var(--seos-line); }
-  .ai-chat-panel .ai-tool__title { font-size: 13.5px; line-height: 17px; }
-  .ai-chat-panel .ai-tool__sub { font-size: 12px; line-height: 15px; }
+/* All the words, a little larger. */
+@container aitools (min-width: 196px) {
+  .ai-chat-panel .ai-tool { min-height: 48px; gap: 10px; padding: 8px 14px 8px 10px; }
+  .ai-chat-panel .ai-tool__icon { width: 28px; height: 28px; }
+  .ai-chat-panel .ai-tool__info { width: 24px; height: 24px; }
+  .ai-chat-panel .ai-tool__badge img,
+  .ai-chat-panel .ai-tool__badge svg { width: 16px; height: 16px; }
+  .ai-chat-panel .ai-tool__badge--fit { font-size: 8.5px; }
+  .ai-chat-panel .ai-tool__title { font-size: 13px; line-height: 16px; }
+  .ai-chat-panel .ai-tool__sub { font-size: 11.5px; line-height: 15px; }
   .ai-chat-panel .ai-tool__long { display: inline; }
   .ai-chat-panel .ai-tool__short { display: none; }
 }
-/* One tile alone: a row across the card at every width. */
-.ai-chat-panel .ai-tools[data-n="1"] .ai-tool { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 52px; padding: 8px 12px; text-align: left; }
-.ai-chat-panel .ai-tools[data-n="1"] .ai-tool__text { flex: 1 1 auto; align-items: flex-start; }
-@container aitools (min-width: 150px) {
-  .ai-chat-panel .ai-tools[data-n="1"] .ai-tool__sub { display: block; }
+/* The widest: side by side, the shorter words until each has room. */
+@container aitools (min-width: 340px) {
+  .ai-chat-panel .ai-tools[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ai-chat-panel .ai-tools[data-n="2"] .ai-tool__long { display: none; }
+  .ai-chat-panel .ai-tools[data-n="2"] .ai-tool__short { display: inline; }
 }
-@container aitools (min-width: 212px) {
-  .ai-chat-panel .ai-tools[data-n="1"] { grid-template-columns: minmax(0, 1fr); }
-}
-@container aitools (min-width: 220px) {
-  .ai-chat-panel .ai-tools[data-n="1"] .ai-tool__long { display: inline; }
-  .ai-chat-panel .ai-tools[data-n="1"] .ai-tool__short { display: none; }
+@container aitools (min-width: 420px) {
+  .ai-chat-panel .ai-tools[data-n="2"] .ai-tool__long { display: inline; }
+  .ai-chat-panel .ai-tools[data-n="2"] .ai-tool__short { display: none; }
 }
 
 /* ---------- "Check fit & size": the tiles, folded ----------
@@ -5956,7 +5960,21 @@ button.ai-chat-launcher__text {
 }
 .ai-chat-panel.is-va-morph .ai-chat-fbsheet { right: auto; bottom: auto; width: var(--va-w); height: var(--va-h); }
 /* The conversation steps out of the layout while the list covers it. */
-.ai-chat-panel.is-va-full > :not(.ai-chat-fbsheet):not(.ai-chat-menu) { display: none !important; }
+.ai-chat-panel.is-va-full > :not(.ai-chat-fbsheet):not(.ai-chat-menu):not(.ai-fitx) { display: none !important; }
+/* A card's fit details over the wide view: a centered card, not a bottom sheet. */
+.ai-chat-panel.is-wide .ai-fitx { justify-content: center; align-items: center; padding: 32px; }
+.ai-chat-panel.is-wide .ai-fitx__sheet {
+  max-width: 440px;
+  max-height: calc(100% - 64px);
+  padding-bottom: 22px;
+  border-radius: 22px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ai-chat-panel.is-wide .ai-fitx.is-open .ai-fitx__sheet { opacity: 1; transform: none; }
+.ai-chat-panel.is-wide .ai-fitx__grip { visibility: hidden; }
 .ai-chat-panel.is-wide .ai-chat-fbsheet { transform: none; opacity: 0; transition: opacity 0.2s ease, visibility 0s linear 0.2s; }
 .ai-chat-panel.is-wide .ai-chat-fbsheet.is-open { opacity: 1; transition: opacity 0.16s ease, visibility 0s; }
 .ai-chat-panel.is-wide .ai-chat-fbsheet > .ai-chat-fbsheet__bar,
@@ -6929,13 +6947,9 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-cta-pair__in .ai-cmp-cta .ai-cmp-cta__btn { padding-left: 14px; }
 }
 
-/* Fit and size tiles, and their explainer, on the dark theme. */
-.ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-tool { background: rgba(255, 255, 255, 0.04); border-color: var(--seos-line-strong); color: var(--seos-text); }
-@media (hover: hover) {
-  .ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-tool:hover { border-color: rgba(255, 255, 255, 0.45); }
-}
-.ai-chat-panel[data-theme="dark"] .ai-chat-product-card .ai-tool__text { border-color: var(--seos-line); }
+/* Fit and size rows' explainer on the dark theme (the rows take theirs from the theme's colors). */
 .ai-chat-panel[data-theme="dark"] .ai-fitx__sheet { background: var(--seos-bg-raised, #1c1c21); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5); }
+.ai-chat-panel.is-wide[data-theme="dark"] .ai-fitx__sheet { box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06); }
 .ai-chat-panel[data-theme="dark"] .ai-fitx__scrim { background: rgba(0, 0, 0, 0.55); }
 .ai-chat-panel[data-theme="dark"] .ai-fitx__tf { background: transparent; color: var(--seos-text); border-color: var(--seos-line-strong); }
 

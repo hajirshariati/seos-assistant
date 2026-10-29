@@ -2330,7 +2330,8 @@ for (const coop of ["1", "2"]) {
       await page.waitForTimeout(300);
       const res = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.map((c) => {
         const f = c.querySelector(".ai-tool--fit");
-        return { h: c.dataset.handle, fit: f ? f.querySelector(".ai-tool__lvl").textContent : "", ring: f ? getComputedStyle(f.querySelector(".ai-ring__arc")).stroke : "", color: f ? getComputedStyle(f.querySelector(".ai-tool__title")).color : "", runs: f ? f.querySelector(".ai-tool__title .ai-tool__short").textContent : "", tools: c.querySelectorAll(".ai-fitp .ai-tool").length, dark: c.closest(".ai-chat-panel").getAttribute("data-theme") === "dark" };
+        const lv = f ? ["high", "mid", "fair"].find((v) => f.classList.contains("is-" + v)) : "";
+        return { h: c.dataset.handle, fit: lv ? lv[0].toUpperCase() + lv.slice(1) : "", ring: f ? getComputedStyle(f.querySelector(".ai-tool__info")).color : "", color: f ? getComputedStyle(f.querySelector(".ai-tool__title")).color : "", runs: f ? f.querySelector(".ai-tool__title .ai-tool__short").textContent : "", tools: c.querySelectorAll(".ai-fitp .ai-tool").length, dark: c.closest(".ai-chat-panel").getAttribute("data-theme") === "dark" };
       }));
       await ctx.close();
       return Object.fromEntries(res.map((r) => [r.h, r]));
@@ -2378,9 +2379,10 @@ for (const coop of ["1", "2"]) {
     const tiles = [...row.querySelectorAll(".ai-tool")].map((b) => {
       const r = b.getBoundingClientRect();
       const words = [...b.querySelectorAll(".ai-tool__long, .ai-tool__short")].filter(shown);
-      const cut = [...b.querySelectorAll(".ai-tool__title, .ai-tool__sub, .ai-tool__lvl")].filter(shown).some((x) => x.scrollWidth > x.clientWidth + 1);
-      const arc = b.querySelector(".ai-ring__arc"), ttl = b.querySelector(".ai-tool__title");
-      return { kind: b.classList.contains("ai-tool--fit") ? "fit" : b.dataset.truefit ? "truefit" : b.dataset.helper, text: words.map((x) => x.textContent).join(" / "), lvl: b.querySelector(".ai-tool__lvl")?.textContent || "", ring: arc ? getComputedStyle(arc).stroke : "", dash: arc?.getAttribute("stroke-dasharray") || "", color: ttl ? getComputedStyle(ttl).color : "", label: b.getAttribute("aria-label"), popup: b.getAttribute("aria-haspopup"), w: Math.round(r.width), h: Math.round(r.height), inside: r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5, cut };
+      const cut = [...b.querySelectorAll(".ai-tool__title, .ai-tool__sub")].filter(shown).some((x) => x.scrollWidth > x.clientWidth + 1);
+      const info = b.querySelector(".ai-tool__info"), go = b.querySelector(".ai-tool__go"), ttl = b.querySelector(".ai-tool__title");
+      const lv = ["high", "mid", "fair"].find((v) => b.classList.contains("ai-tool--fit") && b.classList.contains("is-" + v));
+      return { kind: b.classList.contains("ai-tool--fit") ? "fit" : b.dataset.truefit ? "truefit" : b.dataset.helper, text: words.map((x) => x.textContent).join(" / "), lvl: lv ? lv[0].toUpperCase() + lv.slice(1) : "", info: shown(info), ring: info ? getComputedStyle(info).color : "", go: shown(go), band: getComputedStyle(b).backgroundColor, color: ttl ? getComputedStyle(ttl).color : "", label: b.getAttribute("aria-label"), popup: b.getAttribute("aria-haspopup"), w: Math.round(r.width), h: Math.round(r.height), inside: r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5, cut };
     });
     const t0 = row.children[0]?.getBoundingClientRect(), t1 = row.children[1]?.getBoundingClientRect();
     return { handle: c.dataset.handle, n: tiles.length, data: row.getAttribute("data-n"), tiles, rowW: Math.round(rr.width), afterCta: !!(cta.compareDocumentPosition(row) & 4), inFold: !!row.closest(".ai-fitp.is-open"), view: !!view, dark: c.closest(".ai-chat-panel")?.getAttribute("data-theme") === "dark", sameRow: tiles.length === 2 ? Math.abs(t0.top - t1.top) < 1 : true, stacked: tiles.length === 2 ? t1.top >= t0.bottom - 0.5 && Math.abs(t0.left - t1.left) < 1 : true };
@@ -2446,22 +2448,24 @@ for (const coop of ["1", "2"]) {
     await page.screenshot({ path: out(`tools-${label.replace(/\s/g, "-")}`) });
     const a = by["savannah-red"];
     const w = a.rowW;
-    check(`tools (${label}): opened under the buy button — Fit and Size side by side where there's room (${w}px), one above the other where not`, a?.n === 2 && a.data === "2" && a.afterCta && a.inFold && !a.view && (w >= 212 ? a.sameRow : a.stacked) && a.tiles[0].kind === "fit" && a.tiles[1].kind === "truefit", JSON.stringify(a));
-    check(`tools (${label}): a word, not a number — High in a full ring; the tile says it all to screen readers and opens a dialog`, a?.tiles[0].lvl === "High" && !a.tiles[0].dash && a.tiles[0].popup === "dialog" && a.tiles[0].label === "Fit confidence: High. Runs true to size. From 85 reviews and 1,240 pairs sold in the last year. Shows where this comes from.", JSON.stringify(a?.tiles[0]));
-    // Each level its own color — the ring and how it runs, in it.
+    check(`tools (${label}): opened under the buy button — Fit above Size (${w}px; side by side only from 340px)`, a?.n === 2 && a.data === "2" && a.afterCta && a.inFold && !a.view && (w >= 340 ? a.sameRow : a.stacked) && a.tiles[0].kind === "fit" && a.tiles[1].kind === "truefit", JSON.stringify(a));
+    check(`tools (${label}): a word, not a number — High, with ⓘ (more behind it) and no chevron; the row says it all to screen readers and opens a dialog`, a?.tiles[0].lvl === "High" && a.tiles[0].info && !a.tiles[0].go && a.tiles[0].popup === "dialog" && a.tiles[0].label === "Fit confidence: High. Runs true to size. From 85 reviews and 1,240 pairs sold in the last year. Shows where this comes from.", JSON.stringify(a?.tiles[0]));
+    // Each level its own color — only the ⓘ ring and how it runs; the rows stay a quiet grey.
     const LEVEL_COLORS = a.dark
-      ? { high: ["rgb(79, 208, 129)", "rgb(111, 227, 154)"], mid: ["rgb(110, 164, 255)", "rgb(156, 192, 255)"] }
-      : { high: ["rgb(47, 166, 91)", "rgb(21, 122, 59)"], mid: ["rgb(59, 123, 240)", "rgb(31, 95, 207)"] };
+      ? { high: ["rgb(79, 208, 129)", "rgb(111, 227, 154)"], mid: ["rgb(110, 164, 255)", "rgb(156, 192, 255)"], row: "rgba(255, 255, 255, 0.07)" }
+      : { high: ["rgb(47, 166, 91)", "rgb(21, 122, 59)"], mid: ["rgb(59, 123, 240)", "rgb(31, 95, 207)"], row: "rgb(242, 242, 245)" };
     const jt = by["jillian-black"]?.tiles[0];
-    check(`tools (${label}): High is green, Mid is blue — the ring and the words`, a.tiles[0].ring === LEVEL_COLORS.high[0] && a.tiles[0].color === LEVEL_COLORS.high[1] && jt?.ring === LEVEL_COLORS.mid[0] && jt.color === LEVEL_COLORS.mid[1], JSON.stringify([a.tiles[0], jt]));
+    check(`tools (${label}): High is green, Mid is blue — the ⓘ ring and the words, nothing more`, a.tiles[0].ring === LEVEL_COLORS.high[0] && a.tiles[0].color === LEVEL_COLORS.high[1] && jt?.ring === LEVEL_COLORS.mid[0] && jt.color === LEVEL_COLORS.mid[1] && a.tiles[0].band === LEVEL_COLORS.row && jt.band === LEVEL_COLORS.row, JSON.stringify([a.tiles[0], jt]));
+    check(`tools (${label}): True Fit is the same quiet grey row, with a chevron where there's room (${w}px)`, a.tiles[1].band === LEVEL_COLORS.row && a.tiles[1].go === (w >= 120) && !a.tiles[1].info, JSON.stringify(a.tiles[1]));
     check(`tools (${label}): a Fair style (not shown by default) has only the size tool`, by["fair-1"]?.n === 1 && by["fair-1"].tiles[0].kind === "truefit", JSON.stringify(by["fair-1"]));
     check(`tools (${label}): every tile inside its card, easy to tap (44px+), no words cut`, cards.every((c) => !c.n || c.tiles.every((t) => t.inside && t.h >= 44 && !t.cut)), JSON.stringify(cards.map((c) => [c.handle, c.rowW, (c.tiles || []).map((t) => `${t.text}@${t.w}x${t.h}${t.cut ? "!" : ""}`)])));
     // How it runs always shows; the line under it and the long words come in as the card widens.
     const fitText = a.tiles[0].text, sizeText = a.tiles[1].text;
-    const expect = w >= 344 ? ["Runs true to size / High fit confidence", "Size / Find your size"] : w >= 140 ? ["True to size / Fit confidence", "Size / True Fit"] : ["True to size", "Size"];
+    const long = w >= 420 || (w >= 196 && w < 340);
+    const expect = long ? ["Runs true to size / High fit confidence", "Find your size / with True Fit"] : w >= 140 ? ["True to size / High confidence", "Your size / True Fit"] : ["True to size", "Your size"];
     check(`tools (${label}): the words for a ${w}px row`, fitText === expect[0] && sizeText === expect[1], `${fitText} | ${sizeText}`);
     const b = by["jillian-black"];
-    check(`tools (${label}): in the shopper's own size`, b?.tiles[0].lvl === "Mid" && b.tiles[0].text === (w >= 344 ? "Runs small / Mid fit in your size 9" : w >= 140 ? "Runs small / In your size 9" : "Runs small"), JSON.stringify(b?.tiles[0]));
+    check(`tools (${label}): in the shopper's own size`, b?.tiles[0].lvl === "Mid" && b.tiles[0].text === (long ? "Runs small / Mid fit in your size 9" : w >= 140 ? "Runs small / Mid · your size 9" : "Runs small"), JSON.stringify(b?.tiles[0]));
     check(`tools (${label}): one tool alone takes the row (an orthotic's FITFinder, a shoe without a score)`, by["orthotic-one"]?.n === 1 && by["orthotic-one"].tiles[0].kind === "fitfinder" && by["carly-white"]?.n === 1 && by["carly-white"].tiles[0].kind === "truefit" && by["carly-white"].tiles[0].w >= a.rowW - 1, JSON.stringify([by["orthotic-one"], by["carly-white"]]));
     check(`tools (${label}): no Fit tile without a real score; a made-up label or size is left out`, by["odd-1"]?.tiles.every((t) => t.kind !== "fit") && by["odd-2"]?.tiles[0].kind === "fit" && by["odd-2"].tiles[0].lvl === "Mid" && by["odd-2"].tiles[0].label === "Fit confidence: Mid. Shows where this comes from.", JSON.stringify([by["odd-1"], by["odd-2"]?.tiles[0]]));
 
@@ -2531,19 +2535,24 @@ for (const coop of ["1", "2"]) {
       await page.screenshot({ path: out("fold-view-all") });
       await page.click('.ai-chat-fbsheet__list .ai-chat-product-card[data-handle="savannah-red"] [data-fitx]');
       await page.waitForTimeout(450);
-      const over = await page.evaluate(() => { const a = document.querySelector(".ai-fitx"), b = document.querySelector(".ai-chat-fbsheet"); return { open: !a.hidden, above: Number(getComputedStyle(a).zIndex) > Number(getComputedStyle(b).zIndex) }; });
+      // Really over it: shown, on top where it's tapped, the list behind out of reach.
+      const over = await page.evaluate(() => {
+        const a = document.querySelector(".ai-fitx"), b = document.querySelector(".ai-chat-fbsheet"), r = a.querySelector(".ai-fitx__sheet").getBoundingClientRect();
+        const hit = r.width > 0 ? document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(40, r.height / 2)) : null;
+        return { open: !a.hidden && getComputedStyle(a).display !== "none", above: Number(getComputedStyle(a).zIndex) > Number(getComputedStyle(b).zIndex), onTop: !!hit && !!hit.closest(".ai-fitx__sheet"), wide: document.querySelector(".ai-chat-panel").classList.contains("is-wide"), listInert: !!b.inert };
+      });
       await page.screenshot({ path: out("fitx-over-view-all") });
       await page.keyboard.press("Escape");
       await page.waitForTimeout(450);
-      const after = await page.evaluate(() => ({ fitx: document.querySelector(".ai-fitx").hidden, list: !document.querySelector(".ai-chat-fbsheet").hidden }));
-      check("fit sheet: over View all; Escape closes only it", over.open && over.above && after.fitx && after.list, JSON.stringify({ over, after }));
+      const after = await page.evaluate(() => ({ fitx: document.querySelector(".ai-fitx").hidden, list: !document.querySelector(".ai-chat-fbsheet").hidden, listInert: !!document.querySelector(".ai-chat-fbsheet").inert }));
+      check("fit sheet: over View all (wide too) — seen and on top, the list out of reach; Escape closes only it, the list usable again", over.open && over.above && over.onTop && over.listInert && after.fitx && after.list && !after.listInert, JSON.stringify({ over, after }));
       await page.keyboard.press("Escape");
       await page.waitForTimeout(400);
       // Light theme: its own colors; after a reload the tiles come back.
-      const ringDark = await page.$eval(".ai-chat-messages .ai-ring__arc", (x) => getComputedStyle(x).stroke);
+      const ringDark = await page.$eval(".ai-chat-messages .ai-tool__info", (x) => getComputedStyle(x).color);
       await page.click(".ai-chat-theme-btn");
       await page.waitForTimeout(250);
-      const ringLight = await page.$eval(".ai-chat-messages .ai-ring__arc", (x) => getComputedStyle(x).stroke);
+      const ringLight = await page.$eval(".ai-chat-messages .ai-tool__info", (x) => getComputedStyle(x).color);
       await page.screenshot({ path: out("tools-showcase-light") });
       check("tools: light and dark each have their own ring color", ringDark !== ringLight, `${ringDark} / ${ringLight}`);
       await page.reload();
