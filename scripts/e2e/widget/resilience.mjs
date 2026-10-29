@@ -233,6 +233,27 @@ const lastBubble = (page) => page.$$eval(".ai-chat-msg--assistant .ai-chat-msg-b
   await page.evaluate(() => { document.querySelector('[data-t="menu"]').style.display = "none"; document.querySelector('[data-t="menu-overlay"]').style.display = "none"; document.body.click(); });
   await page.waitForTimeout(800);
   check("layers: once the menu closes, the chat bar is back", (await topAt(await barCenter())) === "bar" && await barShown());
+  // Aetrex's own markers: its menu drawer (z-30) is marked [open] and the
+  // body .has-modal-opening → .has-modal-open until the closing slide ends.
+  // The bar is behind the moment it starts opening, stays behind while it
+  // slides closed, and is back on top after.
+  await page.evaluate(() => {
+    const st = document.createElement("style"); st.textContent = ".drawer{pointer-events:none}.drawer[open]{pointer-events:auto}"; document.head.appendChild(st);
+    const md = document.createElement("menu-drawer"); md.id = "MenuDrawer"; md.className = "menu-drawer drawer drawer--start z-30"; md.setAttribute("data-t", "theme-menu"); md.hidden = true;
+    md.style.cssText = "position:fixed;left:0;bottom:0;width:100%;height:100%;z-index:30;background:#fff";
+    document.body.appendChild(md);
+  });
+  const zNow = () => page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-launcher")).zIndex);
+  const atOnce = await page.evaluate(() => { document.body.classList.add("has-modal-opening"); const md = document.getElementById("MenuDrawer"); md.hidden = false; md.setAttribute("open", ""); return getComputedStyle(document.querySelector(".ai-chat-launcher")).zIndex; });
+  check("layers: Aetrex's menu drawer starting to open puts the chat bar behind it at once", atOnce === "25", atOnce);
+  await page.evaluate(() => { document.body.classList.replace("has-modal-opening", "has-modal-open"); document.getElementById("MenuDrawer").setAttribute("active", ""); });
+  await page.waitForTimeout(150);
+  check("layers: …the open menu drawer covers the chat bar", (await topAt(await barCenter())) === "theme-menu", String(await topAt(await barCenter())));
+  await page.evaluate(() => { const md = document.getElementById("MenuDrawer"); md.removeAttribute("open"); md.removeAttribute("active"); });
+  check("layers: …while it slides closed the chat bar stays behind", (await zNow()) === "25", await zNow());
+  await page.evaluate(() => { document.body.classList.remove("has-modal-open"); document.getElementById("MenuDrawer").hidden = true; document.body.click(); });
+  await page.waitForTimeout(700);
+  check("layers: …and once it's closed the chat bar is back on top", (await topAt(await barCenter())) === "bar" && await barShown());
   // Not covers: a backdrop drawn behind the page, and a small button.
   await page.evaluate(() => {
     const bg = document.createElement("div"); bg.setAttribute("data-t", "bg"); bg.style.cssText = "position:fixed;inset:0;z-index:-1;background:#f3f3f3"; document.body.appendChild(bg);

@@ -1344,6 +1344,22 @@
   pointer-events: none !important;
 }
 
+/* ---------- The theme's drawers and pop-ups: the bar steps behind ----------
+   At once, from the theme's own markers, so it never shows over a drawer
+   as it slides in or out: Aetrex-style themes mark every drawer and modal
+   [open] (then [active]) and the body .has-modal-opening → .has-modal-open
+   until the closing slide ends (menu z-30, search z-35, size chart, help,
+   back in stock, quick view…); the announcement bar's sheet is .show with
+   the body .ab-scroll-locked (z-28). Level 25 sits under all of them and
+   still above the page. Anything else (another app's pop-up, a filter
+   panel) is caught by the script: stepBehind() in the widget. */
+body.has-modal-opening .ai-chat-launcher,
+body.has-modal-open .ai-chat-launcher,
+body.ab-scroll-locked .ai-chat-launcher,
+body:has(.drawer[open], .drawer[active], menu-drawer[open], search-drawer[open], x-modal[open], drawer-element[open], .notification-banner-popup.show) .ai-chat-launcher {
+  z-index: 25 !important;
+}
+
 /* ---------- Cart drawer open: the chat steps behind it ----------
    Only while the drawer is open — Dawn-style themes keep #CartDrawer in
    the page (never [hidden]), so "exists" would mean "always". */
