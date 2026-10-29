@@ -13,7 +13,7 @@ const test = (name, fn) => {
 const usage = { totalMessages: 120, totalCost: 3.456789, avgCostPerMessage: 0.0288, embeddingCost: 0.12, imageCount: 4, imageCost: 0.16, totalToolCalls: 310, totalInputTokens: 1_200_000, totalOutputTokens: 90_000 };
 const rows = summaryRows({
   range: { startDate: new Date("2026-09-27T12:00:00Z"), endDate: new Date("2026-10-27T12:00:00Z") },
-  usage, feedback: { total: 10, up: 8, down: 2, satisfactionRate: 80 },
+  usage, feedback: { total: 10, up: 8, down: 2, satisfactionRate: 80, reasons: { wrong_product: 1, too_slow: 1 } },
   conversions: { count: 3, revenue: 412.5, aov: 137.5, currency: "USD" },
   interest: { searches: 200, views: 60, shown: 150, total: 410 },
   daily: [{ messages: 5 }, { messages: 0 }, { messages: 7 }],
@@ -34,6 +34,13 @@ test("summary: what left the page is all there", () => {
   }
   assert.equal(get("Active days"), "2 of 3");
   assert.equal(get("Input tokens"), 1_200_000);
+});
+test("summary: why not helpful, every reason (none picked → 0)", () => {
+  assert.equal(get("Not helpful: Wrong product"), 1);
+  assert.equal(get("Not helpful: Too slow"), 1);
+  assert.equal(get("Not helpful: Info was wrong"), 0);
+  assert.equal(get("Not helpful: Didn't answer the question"), 0);
+  assert.equal(get("Not helpful: Something else"), 0);
 });
 test("summary: no votes → blank satisfaction, said why", () => {
   const r = summaryRows({ range: {}, usage: {}, feedback: { total: 0 }, conversions: {}, interest: {}, daily: [] });

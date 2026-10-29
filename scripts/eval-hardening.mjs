@@ -106,7 +106,10 @@ test("store locator: the Storepoint ID from an ID or the embed code; links only 
   assert.equal(locatorPageUrl("https://www.aetrex.com/pages/store-locator"), "https://www.aetrex.com/pages/store-locator");
   for (const bad of ["javascript:alert(1)", "//evil.example", "http://x.example", "/a b"]) assert.equal(locatorPageUrl(bad), "", bad);
   assert.equal(storeLocatorConfig({}), null);
-  assert.deepEqual(storeLocatorConfig({ storeLocatorMapId: "15ecd30bd8acd4", storeLocatorLabel: "", storeLocatorUrl: "javascript:x" }), { mapId: "15ecd30bd8acd4", label: "Find a store near you", url: "" });
+  assert.deepEqual(storeLocatorConfig({ storeLocatorMapId: "15ecd30bd8acd4", storeLocatorLabel: "", storeLocatorUrl: "javascript:x" }), { mapId: "15ecd30bd8acd4", label: "Find a store near you", url: "", stores: "retail" });
+  // What the stores on the map are: "scanner" when set, anything else is "retail".
+  assert.equal(storeLocatorConfig({ storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }).stores, "scanner");
+  assert.equal(storeLocatorConfig({ storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "<b>" }).stores, "retail");
 });
 test("which-orthotic quiz: on only with a valid Typeform, label defaulted and capped", () => {
   assert.equal(whichOrthoticConfig({}), null);

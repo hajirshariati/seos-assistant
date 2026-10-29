@@ -1,6 +1,6 @@
 import { authenticate } from "../shopify.server";
 import { recordFeedback, recordChatRating } from "../models/ChatFeedback.server";
-import { cleanComment } from "../lib/chat-rating.js";
+import { cleanComment, cleanReason, cleanMoment, cleanVoteKey } from "../lib/chat-rating.js";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -26,6 +26,9 @@ export const action = async ({ request }) => {
       return Response.json({ error: "Invalid vote" }, { status: 400 });
     }
 
+    // A reason only goes with a thumbs-down.
+    const reason = body.vote === "down" ? cleanReason(body.reason) : null;
+
     // The "How's the chat going?" check-in: the whole conversation.
     if (body.kind === "chat") {
       await recordChatRating({
@@ -33,6 +36,8 @@ export const action = async ({ request }) => {
         sessionId: String(body.session || "").slice(0, 100),
         vote: body.vote,
         comment: cleanComment(body.comment),
+        reason,
+        moment: cleanMoment(body.moment, "chat"),
         conversation: Array.isArray(body.conversation) ? body.conversation : null,
         ip,
       });
@@ -43,6 +48,9 @@ export const action = async ({ request }) => {
       shop: session.shop,
       sessionId: String(body.session || "").slice(0, 100),
       vote: body.vote,
+      reason,
+      moment: cleanMoment(body.moment),
+      clientKey: cleanVoteKey(body.key),
       botResponse: String(body.botResponse || ""),
       products: Array.isArray(body.products) ? body.products : [],
       conversation: Array.isArray(body.conversation) ? body.conversation : null,

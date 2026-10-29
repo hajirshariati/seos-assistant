@@ -51,6 +51,15 @@ export function locatorPageUrl(value) {
   return "";
 }
 
+// What the stores on the map are: "retail" — they sell the store's
+// products — or "scanner" — they have its foot scanner, and only some sell
+// its products, so the map is for scans and fittings, never for finding a
+// style to buy.
+export const LOCATOR_STORES = ["retail", "scanner"];
+export function locatorStores(value) {
+  return LOCATOR_STORES.includes(value) ? value : "retail";
+}
+
 export function storeLocatorConfig(config = {}) {
   const mapId = storepointId(config.storeLocatorMapId);
   if (!mapId) return null;
@@ -58,5 +67,6 @@ export function storeLocatorConfig(config = {}) {
     mapId,
     label: String(config.storeLocatorLabel || "").trim().slice(0, 40) || "Find a store near you",
     url: locatorPageUrl(config.storeLocatorUrl),
+    stores: locatorStores(config.storeLocatorStores),
   };
 }

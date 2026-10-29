@@ -214,9 +214,26 @@ export async function buildLeanStoreExtras({
     }));
   }
 
-  // The store locator (Storepoint), opened in the chat from a button.
+  // The store locator (Storepoint), opened in the chat from a button. Its
+  // stores either sell the store's products, or (Settings) have its foot
+  // scanner — then the map is for scans and fittings, never for buying.
   const locator = storeLocatorConfig(config);
-  if (locator) {
+  if (locator && locator.stores === "scanner") {
+    const site = storeWebsite(config);
+    const online = site ? `online at ${site}` : "online";
+    wrap({
+      name: "show_store_locator",
+      description:
+        "Show a button that opens the store locator map right inside the chat. Its locations have the store's foot scanner — for getting feet scanned or fitted — and some also carry orthotics; not every one sells the store's shoes. " +
+        "Use it when the customer asks where to get their feet scanned or fitted, about the scanner, or about trying orthotics in person, or asks for the store locator. " +
+        "Not for buying or finding a style in a store: then say they can call or visit their local shoe stores to ask whether they have it in stock, and that the full range is all in one place online — they can order right here in the chat. Never promise a product is in stock at a location.",
+      input_schema: { type: "object", properties: {} },
+    }, async () => ({
+      ok: true,
+      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly: a short sentence that they can find a location with the foot scanner there — some also carry orthotics, so calling ahead is best; then that the full range is all in one place ${online}, and they can order right here in the chat. Don't add the store locator link, never say a location has a product in stock, and never name or guess which stores carry the brand.`,
+      _events: [{ type: "map_cta", mapId: locator.mapId, label: locator.label, url: locator.url }],
+    }));
+  } else if (locator) {
     const site = storeWebsite(config);
     wrap({
       name: "show_store_locator",

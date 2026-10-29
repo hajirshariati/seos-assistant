@@ -5,6 +5,7 @@ import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
+import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
 import { listRecordings } from "../models/ChatRecording.server";
 import { getConversionSummary } from "../models/ChatConversion.server";
@@ -106,10 +107,11 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
   if (section === "feedback") {
     const fb = await getFeedbackSummary(shop, rangeArg);
     return toCsv(
-      ["Date", "Vote", "User Hash", "Bot Response", "Products"],
+      ["Date", "Vote", "Reason", "User Hash", "Bot Response", "Products"],
       fb.negativeFeedback.map((f) => [
         new Date(f.createdAt).toISOString(),
         f.vote,
+        FEEDBACK_REASONS[f.reason] || "",
         f.userHash || "",
         f.botResponse || "",
         (f.products || []).join(" | "),
@@ -134,11 +136,13 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
           ? qs.filter((q) => q.comment)
           : qs;
     return toCsv(
-      ["Date", "Vote", "Rated", "Comment", "First Question", "Last Question", "Flagged AI Response", "Products", "Conversation"],
+      ["Date", "Vote", "Rated", "Asked", "Reason", "Comment", "First Question", "Last Question", "Flagged AI Response", "Products", "Conversation"],
       rows.map((q) => [
         new Date(q.date).toISOString(),
         q.vote || "",
         q.kind === "chat" ? "Whole chat" : "One answer",
+        FEEDBACK_MOMENTS[q.moment] || "",
+        FEEDBACK_REASONS[q.reason] || "",
         q.comment || "",
         q.question || "",
         q.lastUserQuestion || "",

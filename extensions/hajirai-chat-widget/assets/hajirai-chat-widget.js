@@ -64,7 +64,7 @@ function hideAssistant(){
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
 fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
-  if(d.showFeedback===false)SHOW_FEEDBACK=false;
+  if(d.showFeedback===false){SHOW_FEEDBACK=false;var _fr=msgsEl.querySelectorAll('.ai-chat-feedback');for(var _fi=0;_fi<_fr.length;_fi++)_fr[_fi].remove()}
   if(d.chatRating&&typeof d.chatRating==='object'){RATE_ON=d.chatRating.on!==false;var _ra=parseInt(d.chatRating.after,10);if(_ra>=2&&_ra<=8)RATE_AFTER=_ra}
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
@@ -367,7 +367,7 @@ function markChatAttributed(){
 function addToCart(vid,qty){
 return fetch(SHOP_ROOT+'cart/add.js',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({items:[{id:parseInt(vid,10),quantity:qty||1}]})})
 .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var err=new Error(d.description||d.message||'Could not add to cart');err.status=r.status;throw err}return d})})
-.then(function(d){markChatAttributed();avaActivity({kind:'add_to_cart',variant:String(vid),quantity:qty||1});return syncThemeCart().then(function(){return d},function(){return d})})
+.then(function(d){markChatAttributed();avaActivity({kind:'add_to_cart',variant:String(vid),quantity:qty||1});rateNote('cart');later(maybeAskRating,0);return syncThemeCart().then(function(){return d},function(){return d})})
 }
 /* After an add from the chat, bring the store's own cart UI up to date in
    the background — header and dock counts, the cart drawer's contents — so
@@ -1665,6 +1665,8 @@ if(isOpen){
   setTimeout(function(){inputEl.focus()},800);
   playWelcomeIntro();
   if(GREETCTA)startGreetCtaRotator();
+  /* Back from checkout (Buy now): how did it go? */
+  if(messages.length&&ratePending())maybeAskRating();
 }else{
   stopGreetCtaRotator();
   fitxClose(true);
@@ -2459,6 +2461,8 @@ function closeSheetNow(quiet){
   if(!fbSheet||fbSheet.hidden)return;
   var sh=fbSheet;
   sh.classList.remove('is-open');fbBehind(false);
+  /* Added to the cart from View all: asked once the sheet's away. */
+  if(isOpen&&ratePending())maybeAskRating();
   var gone=function(){if(!sh.classList.contains('is-open'))sh.hidden=true};
   if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)gone();else setTimeout(gone,420);
   /* Sent and kept: the form starts afresh next time. */
@@ -3108,7 +3112,7 @@ return '<div class="ai-chat-product-card" data-handle="'+esc(p.handle||'')+'" da
    is filled in. Each column has its own Add to cart (live sizes and stock). */
 var COMPARE_URL='/apps/hajirai/compare';
 /* Which widget build the store is serving (console: window.__hajiraiWidget). */
-try{window.__hajiraiWidget='2026-10-29 ava-events'}catch(e){}
+try{window.__hajiraiWidget='2026-10-29 feedback'}catch(e){}
 var CMP_MAX=3;
 /* On a phone you pick two; a three-way comparison (when the shopper names
    three) scrolls sideways there. */
@@ -4187,7 +4191,7 @@ function buyNowGo(vid){
         .then(function(){return fetch(SHOP_ROOT+'cart/update.js',{method:'POST',credentials:'same-origin',headers:JS,body:JSON.stringify({attributes:{_seos_attributed:'1',_seos_buy_now:'1'}})})})
         .then(function(r){if(!r.ok)fail(r);return checkout});
     })
-    .then(function(url){avaActivity({kind:'checkout',source:'buy_now',variant:String(id)});location.assign(url)});
+    .then(function(url){avaActivity({kind:'checkout',source:'buy_now',variant:String(id)});rateNote('buy_now');location.assign(url)});
 }
 /* Checkout from the size picker, after adding (Shopify Analytics). */
 document.addEventListener('click',function(e){
@@ -4199,6 +4203,8 @@ window.addEventListener('pageshow',function(e){
   if(!e.persisted)return;
   var b=document.querySelectorAll('.ai-buynow.is-busy');
   for(var i=0;i<b.length;i++)setBusy(b[i],false);
+  /* The chat still open: how did it go? */
+  if(isOpen&&ratePending())maybeAskRating();
 });
 function closeAtcPanel(panel){
   if(!panel)return;
@@ -4527,6 +4533,7 @@ function ordlSubmit(form){
 function ordlShow(card,o){
   if(!card)return;
   o.guest=true;o.id='guest-'+String(o.number).replace(/[^A-Za-z0-9-]/g,'');
+  var bubble=card.closest('.ai-chat-msg-bubble');
   var wrap=document.createElement('div');wrap.className='ai-ordl-done';
   wrap.innerHTML='<div class="ai-ords">'+orderCardHtml(o)+'</div>'+
     '<div class="ai-ordl__after"><span>'+ORD_ICON.lock+'This order only \u00b7 not saved</span><button type="button" class="ai-ordl__again" data-ordl-again>Look up another order</button></div>';
@@ -4535,6 +4542,7 @@ function ordlShow(card,o){
   var items=(o.items||[]).map(function(i){return i.title}).slice(0,4).join(', ');
   messages.push({role:'assistant',guestOrder:true,content:'Order #'+o.number+' (looked up with its number and email): '+o.stageLabel+(when?', '+when:'')+(o.carrier?' via '+o.carrier:'')+'.'+(items?' Items: '+items+'.':'')+' Returns need sign-in.'});
   var head=wrap.querySelector('.ai-ord__num');if(head){head.setAttribute('tabindex','-1');try{head.focus({preventScroll:true})}catch(e){}}
+  fbOrderShown(bubble);
 }
 /* Sign-in: Shopify's own sign-in in a small window; it lands on a page that
    tells the chat and closes. Blocked pop-up: same tab, and the chat picks up
@@ -4837,6 +4845,7 @@ var byButton=BTN_SEND;BTN_SEND=false;
 if(!text||isStreaming)return;
 SENT_TYPED=!byButton;
 rateStepAside();
+fbRetire();
 var w=$('.ai-chat-welcome',msgsEl);
 if(w)w.remove();
 msgsEl.classList.remove('is-welcome');
@@ -5156,9 +5165,11 @@ function handleJSON(d){
 typingEl.classList.remove('visible');
 var c=d.message||d.response||d.text||'Sorry, no response. Try again.';
 var p=d.products||[];
-messages.push({role:'assistant',content:c,products:p});
-appendMsg('assistant',c,p);saveH(messages);
+var saved={role:'assistant',content:c,products:p,ai:1};
+messages.push(saved);
+var md=appendMsg('assistant',c,p);md.__msg=saved;saveH(messages);
 isStreaming=false;sendBtn.disabled=false;
+fbAttach(md,{text:c,prods:p,q:lastUserMessage});
 }
 
 function fitSnippetHtml(fr){
@@ -5244,7 +5255,9 @@ if(Array.isArray(sseChoices)&&sseChoices.length){
 if(cleanText){
   if(!mDiv)mDiv=appendMsg('assistant',cleanText,prods);
   else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi],fitcAny(prods));ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}b.insertAdjacentHTML('beforeend',compareCtaHtml(prods))}}}
-  var _saved={role:'assistant',content:cleanText,products:prods||[]};
+  /* ai: an answer from the assistant (thumbs come back with it after a reload). */
+  var _saved={role:'assistant',content:cleanText,products:prods||[],ai:1};
+  if(mDiv)mDiv.__msg=_saved;
   if(linkCTA&&linkCTA.url)_saved.linkCTA={url:linkCTA.url,label:linkCTA.label||''};
   /* Order cards come back with the chat (reload, another page). */
   if(pendingOrders){_saved.orders=pendingOrders.slice(0,3);if(RET_METHODS.length)_saved.returnMethods=RET_METHODS}
@@ -5362,38 +5375,148 @@ if(sugg&&sugg.length>0&&mDiv){
   // recognize as 'tap to send' and works for any reply shape.
   if(sb){var sg='<div class="ai-chat-suggestions"><div class="ai-chat-suggestions-label">Quick replies</div>';for(var si=0;si<sugg.length;si++){sg+='<button class="ai-chat-suggest-btn" data-message="'+esc(sugg[si])+'"><span class="suggest-plus">+</span> '+esc(sugg[si])+'</button>'}sg+='</div>';sb.insertAdjacentHTML('beforeend',sg)}
 }
-if(prods&&prods.length>0&&mDiv){
-  var fb=$('.ai-chat-msg-bubble',mDiv);
-  if(SHOW_FEEDBACK&&fb&&!$('.ai-chat-feedback',fb)){
-    fb.insertAdjacentHTML('beforeend','<div class="ai-chat-feedback"><button class="ai-chat-fb-btn" data-vote="up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg> Helpful</button><button class="ai-chat-fb-btn" data-vote="down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg> Not helpful</button></div>');
-    fb.querySelectorAll('.ai-chat-fb-btn').forEach(function(btn){
-      btn.addEventListener('click',function(){
-        var vote=this.getAttribute('data-vote');
-        var wrap=this.closest('.ai-chat-feedback');
-        wrap.innerHTML='<span class="ai-chat-fb-thanks">'+(vote==='up'?'Thanks for the feedback!':'Sorry about that, we\'ll improve!')+'</span>';
-        var payload={vote:vote,session:getSess(),botResponse:(text||'').slice(0,500),products:(prods||[]).map(function(p){return p.title||''}).slice(0,5)};
-        if(vote==='down'){payload.conversation=messages.slice(-10).map(function(m){return{role:m.role,content:(m.content||'').slice(0,300)}})}
-        try{fetch(FEEDBACK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})}catch(e){}
-      });
-    });
-  }
-}
+/* Thumbs under every answer (the newest one only). */
+if(cleanText&&mDiv)fbAttach(mDiv,{text:cleanText,prods:prods||[],q:lastUserMessage});
 var appSoon=!!(mDiv&&cleanText)&&maybeAppNote($('.ai-chat-msg-bubble',mDiv));
 scrollMsgTop(mDiv);
 if(!appSoon)maybeAskRating();
 }
 
+/* ── Was this answer helpful? ─────────────────────────────────────────
+   Quiet thumbs at the foot of the newest answer — every answer, not only
+   ones with products — that fold away once the shopper writes again. An
+   answer about an order (its status, tracking, a return, shipping) asks in
+   words: "Did that answer your question?". A thumbs-down offers a few
+   one-tap reasons. A vote is kept with the answer in this browser, so a
+   reload never asks again. Settings → "Helpful / Not helpful". */
+var FB_WHY=[['wrong_product','Wrong product'],['not_answered','Didn’t answer my question'],['wrong_info','Info was wrong'],['too_slow','Too slow'],['other','Something else']];
+var FB_ORDER_Q=/\b(where(?:'s|’s| is) my|track(?:ing)?|deliver(?:y|ed)?|shipping|ship(?:ped)?|package|returns?|returning|exchange|refund)\b/i;
+function thumbSvg(dir,on){
+  var s=RATE_ICON[dir];
+  return on?s.replace('fill="none"','fill="currentColor"'):s;
+}
+/* A key that ties a vote to the reason picked after it. */
+function fbKey(){
+  try{if(window.crypto&&crypto.randomUUID)return 'v_'+crypto.randomUUID().replace(/-/g,'')}catch(e){}
+  return 'v_'+Date.now().toString(36)+Math.random().toString(36).slice(2,12);
+}
+/* Asked in words: an answer about an order — order cards, or a reply (not
+   a short question back) to a question about tracking, shipping or a
+   return. Never on a reply that's waiting for the shopper (sign in, look up
+   an order, pick a choice) or on product picks. */
+function fbAsks(b,info){
+  if(b.querySelector('.ai-ords'))return true;
+  if(b.querySelector('.ai-chat-product-card,.ai-ordl,.ai-ord--signin,.ai-chat-choices'))return false;
+  if(!FB_ORDER_Q.test(String(info.q||'')))return false;
+  var t=String(info.text||'').trim();
+  return !(/\?\s*$/.test(t)&&t.length<160);
+}
+function fbRowHtml(ask){
+  return (ask?'<span class="ai-chat-feedback__q">Did that answer your question?</span>':'')+
+    '<span class="ai-chat-feedback__btns"><button type="button" class="ai-chat-fb-btn" data-vote="up" aria-label="Helpful" title="Helpful">'+thumbSvg('up')+'</button>'+
+    '<button type="button" class="ai-chat-fb-btn" data-vote="down" aria-label="Not helpful" title="Not helpful">'+thumbSvg('down')+'</button></span>';
+}
+function fbLabel(row,ask){
+  row.classList.toggle('is-ask',!!ask);
+  row.setAttribute('aria-label',ask?'Did that answer your question?':'Was this answer helpful?');
+}
+/* The thumbs row of the newest answer, if it has one. */
+function fbNewest(){var r=msgsEl.querySelectorAll('.ai-chat-feedback:not(.is-out)');return r.length?r[r.length-1]:null}
+/* Older answers stay clean: their rows fold away (a vote is already sent). */
+function fbRetire(keep){
+  var rows=msgsEl.querySelectorAll('.ai-chat-feedback:not(.is-out)');
+  for(var i=0;i<rows.length;i++){if(keep&&keep.contains(rows[i]))continue;foldAway(rows[i])}
+}
+function fbAttach(md,info){
+  if(!SHOW_FEEDBACK||!md)return;
+  var b=$('.ai-chat-msg-bubble',md);
+  if(!b||$('.ai-chat-feedback',b))return;
+  fbRetire(md);
+  var ask=fbAsks(b,info);
+  var row=el('div','ai-chat-feedback',fbRowHtml(ask));
+  row.setAttribute('role','group');fbLabel(row,ask);
+  row.__fb={text:String(info.text||''),prods:(info.prods||[]).map(function(p){return String(p&&p.title||'')}).filter(Boolean).slice(0,5),ask:ask,key:fbKey()};
+  /* Under the answer, above its quick replies. */
+  var sg=b.querySelector('.ai-chat-suggestions');
+  if(sg&&sg.parentNode===b)b.insertBefore(row,sg);else b.appendChild(row);
+}
+/* An order looked up in the answer's card: it's an order answer now. */
+function fbOrderShown(b){
+  var row=b&&$('.ai-chat-feedback:not(.is-out)',b);
+  if(!row||row.getAttribute('data-voted')||(row.__fb&&row.__fb.ask))return;
+  if(row.__fb)row.__fb.ask=true;
+  row.innerHTML=fbRowHtml(true);fbLabel(row,true);
+}
+function fbSend(row,vote,reason){
+  var f=row.__fb||{};
+  var p={vote:vote,key:f.key||fbKey(),session:getSess(),botResponse:String(f.text||'').slice(0,500),products:f.prods||[]};
+  if(f.ask)p.moment='order';
+  if(reason)p.reason=reason;
+  if(vote==='down')p.conversation=messages.slice(-10).map(function(m){return{role:m.role,content:String(m.content||'').slice(0,300)}});
+  try{fetch(FEEDBACK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}).catch(function(){})}catch(e){}
+}
+function fbSay(row){
+  var s=$('.ai-chat-fb-say',row);
+  if(s)try{s.focus({preventScroll:true})}catch(e){}
+  return s;
+}
+function fbVote(row,vote){
+  if(row.getAttribute('data-voted'))return;
+  var hadFocus=row.contains(document.activeElement);
+  row.setAttribute('data-voted',vote);
+  var md=row.closest('.ai-chat-msg');
+  if(md&&md.__msg){md.__msg.fb=vote;saveH(messages)}
+  fbSend(row,vote,'');
+  var keep=rateNearBottom();
+  if(vote==='up'){
+    row.innerHTML='<span class="ai-chat-fb-mark" aria-hidden="true">'+thumbSvg('up',1)+'</span><span class="ai-chat-fb-say" role="status" tabindex="-1">Thanks for the feedback</span>';
+  }else{
+    var hasProds=!!(row.__fb&&row.__fb.prods&&row.__fb.prods.length);
+    var why=FB_WHY.filter(function(w){return w[0]!=='wrong_product'||hasProds});
+    row.classList.add('is-why');
+    row.innerHTML='<div class="ai-chat-fb-top"><span class="ai-chat-fb-mark" aria-hidden="true">'+thumbSvg('down',1)+'</span><span class="ai-chat-fb-say" role="status" tabindex="-1">Sorry about that. What went wrong?</span></div>'+
+      '<div class="ai-chat-fb-why" role="group" aria-label="What went wrong?">'+why.map(function(w){return '<button type="button" class="ai-chat-fb-chip" data-why="'+w[0]+'">'+esc(w[1])+'</button>'}).join('')+'</div>';
+  }
+  if(keep)keepInView(row);
+  if(hadFocus){
+    var first=$('.ai-chat-fb-chip',row);
+    if(first)try{first.focus({preventScroll:true})}catch(e){}else fbSay(row);
+  }
+}
+function fbWhy(row,reason){
+  if(row.getAttribute('data-why')||row.getAttribute('data-voted')!=='down')return;
+  var hadFocus=row.contains(document.activeElement);
+  row.setAttribute('data-why',reason);
+  fbSend(row,'down',reason);
+  row.classList.remove('is-why');
+  row.innerHTML='<span class="ai-chat-fb-mark" aria-hidden="true">'+thumbSvg('down',1)+'</span><span class="ai-chat-fb-say" role="status" tabindex="-1">Thanks — this helps us get better</span>';
+  if(hadFocus)fbSay(row);
+}
+msgsEl.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('.ai-chat-feedback [data-vote],.ai-chat-feedback [data-why]');
+  if(!t)return;
+  var row=t.closest('.ai-chat-feedback');
+  if(!row||row.classList.contains('is-out'))return;
+  if(t.hasAttribute('data-vote'))fbVote(row,t.getAttribute('data-vote')==='down'?'down':'up');
+  else fbWhy(row,t.getAttribute('data-why'));
+});
+
 /* Delayed UI for the current chat only — "Clear chat" cancels it. */
 var chatGen=0;
 function later(fn,ms){var g=chatGen;setTimeout(function(){if(g===chatGen)fn()},ms)}
 /* ── "How's the chat going?" ──────────────────────────────────────────
-   After a few replies, one quiet note under the conversation — not a chat
-   bubble: thumbs up or down for the whole chat, then an optional comment.
-   Asked once per conversation; once a shopper answers or closes it, not
-   again for two weeks. Never while a reply is coming, while they're typing,
-   or with a sheet open; and it never pulls them away from what they're
-   reading. Settings → "Ask how the chat went". */
+   One quiet note under the conversation — not a chat bubble: thumbs up or
+   down for the whole chat. Asked at the moments that matter: right after
+   an add to cart ("Did AVA help you find it?") — or, for Buy
+   now, which leaves for checkout, when the shopper is back in the chat —
+   or else after the store's number of replies. A thumbs-down offers
+   one-tap reasons; then an optional comment. Asked once per conversation;
+   once a shopper answers or closes it, not again for two weeks. Never while
+   a reply is coming, while they're typing, or with a sheet open; never
+   right after they rated the answer above; and it never pulls them away
+   from what they're reading. Settings → "Ask how the chat went". */
 var RATE_ON=true,RATE_AFTER=3,RATE_DONE='hajirai_rate_done',RATE_QUIET=14*864e5;
+var RATE_MOMENT='hajirai_rate_moment',RATE_MOMENT_MS=3*864e5;
 var RATE_ICON={
   up:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3z"/><path d="M7 10l4.2-7.2a1.8 1.8 0 0 1 3.3 1.3L13.6 9H19a2 2 0 0 1 2 2.3l-1.2 7.5A2.6 2.6 0 0 1 17.2 21H7"/></svg>',
   down:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3z"/><path d="M17 14l-4.2 7.2a1.8 1.8 0 0 1-3.3-1.3l.9-4.9H5a2 2 0 0 1-2-2.3l1.2-7.5A2.6 2.6 0 0 1 6.8 3H17"/></svg>',
@@ -5405,29 +5528,61 @@ function rateShownKey(){return 'hajirai_rate_'+getSess()}
 /* Asked in this conversation already, or answered / closed lately. */
 function rateQuiet(){try{return !!localStorage.getItem(rateShownKey())||Date.now()-(+localStorage.getItem(RATE_DONE)||0)<RATE_QUIET}catch(e){return true}}
 function rateNearBottom(){return msgsEl.scrollHeight-msgsEl.scrollTop-msgsEl.clientHeight<90}
-function rateAskHtml(){
-  return '<div class="ai-chat-rate__card"><span class="ai-chat-rate__q">How’s the chat going?</span>'+
-    '<span class="ai-chat-rate__btns"><button type="button" class="ai-chat-rate__vote" data-rate="up" aria-label="Going well" title="Going well">'+RATE_ICON.up+'</button>'+
-    '<button type="button" class="ai-chat-rate__vote" data-rate="down" aria-label="Not great" title="Not great">'+RATE_ICON.down+'</button></span>'+
+/* A moment worth asking about — "cart" (added from the chat) or "buy_now"
+   (off to checkout) — kept until it's asked, for this conversation and a
+   few days at most. */
+function rateNote(m){
+  if(!RATE_ON)return;
+  try{localStorage.setItem(RATE_MOMENT,JSON.stringify({m:m,s:getSess(),at:Date.now()}))}catch(e){}
+}
+function ratePending(){
+  try{
+    var p=JSON.parse(localStorage.getItem(RATE_MOMENT)||'null');
+    if(p&&(p.m==='cart'||p.m==='buy_now')&&p.s===getSess()&&Date.now()-(+p.at||0)<RATE_MOMENT_MS)return p.m;
+    if(p)localStorage.removeItem(RATE_MOMENT);
+  }catch(e){}
+  return '';
+}
+function rateForget(){try{localStorage.removeItem(RATE_MOMENT)}catch(e){}}
+function rateQuestion(m){
+  if(m!=='cart'&&m!=='buy_now')return 'How’s the chat going?';
+  /* The assistant's name when it's a short one ("AVA"). */
+  var n=String(NAME||'').trim();
+  return /^[^\s]{1,12}$/.test(n)?'Did '+n+' help you find it?':'Did the chat help you find it?';
+}
+function rateAskHtml(m){
+  var moment=m==='cart'||m==='buy_now',yes=moment?'Yes, it helped':'Going well',no=moment?'No, it didn’t':'Not great';
+  return '<div class="ai-chat-rate__card"><span class="ai-chat-rate__q">'+esc(rateQuestion(m))+'</span>'+
+    '<span class="ai-chat-rate__btns"><button type="button" class="ai-chat-rate__vote" data-rate="up" aria-label="'+yes+'" title="'+yes+'">'+RATE_ICON.up+'</button>'+
+    '<button type="button" class="ai-chat-rate__vote" data-rate="down" aria-label="'+no+'" title="'+no+'">'+RATE_ICON.down+'</button></span>'+
     '<button type="button" class="ai-chat-rate__x" data-rate-x aria-label="No thanks" title="No thanks">'+RATE_ICON.x+'</button></div>';
 }
+/* After a thumbs-down: what went wrong, one tap. */
+function rateWhyHtml(prods){
+  var why=FB_WHY.filter(function(w){return w[0]!=='wrong_product'||prods});
+  return '<div class="ai-chat-rate__card is-voted is-why"><div class="ai-chat-rate__top"><span class="ai-chat-rate__mark">'+thumbSvg('down',1)+'</span>'+
+    '<span class="ai-chat-rate__q" role="status">Sorry about that. What went wrong?</span>'+
+    '<button type="button" class="ai-chat-rate__x" data-rate-x aria-label="Skip" title="Skip">'+RATE_ICON.x+'</button></div>'+
+    '<div class="ai-chat-rate__why" role="group" aria-label="What went wrong?">'+why.map(function(w){return '<button type="button" class="ai-chat-rate__chip" data-rate-why="'+w[0]+'">'+esc(w[1])+'</button>'}).join('')+'</div></div>';
+}
 function rateCommentHtml(vote){
-  return '<div class="ai-chat-rate__card is-voted"><div class="ai-chat-rate__top"><span class="ai-chat-rate__mark">'+RATE_ICON[vote]+'</span>'+
-    '<span class="ai-chat-rate__q" role="status">'+(vote==='up'?'Thanks! Anything to add?':'Sorry about that. What could we do better?')+'</span>'+
+  return '<div class="ai-chat-rate__card is-voted"><div class="ai-chat-rate__top"><span class="ai-chat-rate__mark">'+thumbSvg(vote,1)+'</span>'+
+    '<span class="ai-chat-rate__q" role="status">'+(vote==='up'?'Thanks! Anything to add?':'Thanks. Anything to add?')+'</span>'+
     '<button type="button" class="ai-chat-rate__x" data-rate-x aria-label="Skip" title="Skip">'+RATE_ICON.x+'</button></div>'+
     '<form class="ai-chat-rate__form" novalidate><input class="ai-chat-rate__input" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" placeholder="Add a comment (optional)" aria-label="Add a comment (optional)">'+
     '<button type="submit" class="ai-chat-rate__send" aria-label="Send comment" disabled>'+RATE_ICON.send+'</button></form></div>';
 }
 function rateDoneHtml(){return '<div class="ai-chat-rate__card is-done" role="status"><span class="ai-chat-rate__check">'+RATE_ICON.check+'</span><span class="ai-chat-rate__q">Thanks for the feedback</span></div>'}
-function ratePost(vote,comment){
-  var p={kind:'chat',vote:vote,session:getSess(),conversation:messages.slice(-10).map(function(m){return{role:m.role,content:String(m.content||'').slice(0,300)}})};
+function ratePost(row,vote,comment,reason){
+  var p={kind:'chat',vote:vote,session:getSess(),moment:row.getAttribute('data-moment')||'replies',conversation:messages.slice(-10).map(function(m){return{role:m.role,content:String(m.content||'').slice(0,300)}})};
   if(comment)p.comment=comment;
+  if(reason)p.reason=reason;
   try{fetch(FEEDBACK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p),keepalive:true}).catch(function(){})}catch(e){}
 }
 function rateMarkDone(){try{localStorage.setItem(RATE_DONE,String(Date.now()))}catch(e){}}
 /* Fold away: fade, then collapse the space it took. */
 function foldAway(row){
-  if(!row||!row.isConnected)return;
+  if(!row||!row.isConnected||row.classList.contains('is-out'))return;
   row.style.maxHeight=row.offsetHeight+'px';void row.offsetHeight;
   row.classList.add('is-out');
   setTimeout(function(){if(row.isConnected)row.remove()},window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?0:380);
@@ -5442,34 +5597,78 @@ function rateStepAside(){
   var row=$('.ai-chat-rate',msgsEl);if(!row)return;
   var st=row.getAttribute('data-state');
   if(st==='ask')foldAway(row);
-  else if(st==='voted'){var inp=$('.ai-chat-rate__input',row);var c=inp?inp.value.trim():'';if(c)ratePost(row.getAttribute('data-vote'),c);rateFinish(row)}
+  else if(st==='why')rateFinish(row);
+  else if(st==='voted'){var inp=$('.ai-chat-rate__input',row);var c=inp?inp.value.trim():'';if(c)ratePost(row,row.getAttribute('data-vote'),c,row.getAttribute('data-why')||'');rateFinish(row)}
+}
+/* The optional comment, after a thumbs-up or a reason. */
+function rateToComment(row,vote){
+  var keep=rateNearBottom();
+  row.innerHTML=rateCommentHtml(vote);row.setAttribute('data-state','voted');
+  if(keep)keepInView(row);
+  /* A keyboard on screen is a lot to ask for an optional comment: the
+     field takes focus only with a mouse or trackpad. */
+  if(window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches){var inp=$('.ai-chat-rate__input',row);if(inp)try{inp.focus({preventScroll:true})}catch(_){}}
+  else{var xb=$('.ai-chat-rate__x',row);if(xb)try{xb.focus({preventScroll:true})}catch(_){}}
+}
+/* Right after an add to cart the shopper is looking at "Added to your
+   cart": the question comes into view only if that stays in view too. */
+function rateReveal(row){requestAnimationFrame(function(){
+  if(!row.isConnected)return;
+  var mr=msgsEl.getBoundingClientRect(),rr=row.getBoundingClientRect(),pad=12;
+  var need=rr.bottom-mr.bottom+pad;if(need<=0)return;
+  var all=msgsEl.querySelectorAll('.ai-chat-atc-panel'),a=all[all.length-1];
+  if(!a)return;
+  var ar=a.getBoundingClientRect();
+  if(ar.bottom<=mr.top||ar.top>=mr.bottom||ar.top-need<mr.top+pad)return;
+  msgsEl.scrollTop+=need;
+})}
+function rateHadProducts(){
+  for(var i=0;i<messages.length;i++)if(messages[i].role==='assistant'&&messages[i].products&&messages[i].products.length)return true;
+  return false;
 }
 function maybeAskRating(){
   if(!RATE_ON||isStreaming||$('.ai-chat-rate',msgsEl))return;
   var n=0;for(var i=0;i<messages.length;i++)if(messages[i].role==='assistant')n++;
-  if(n<RATE_AFTER||rateQuiet())return;
+  var moment=ratePending();
+  if(!n||(!moment&&n<RATE_AFTER))return;
+  if(rateQuiet()){if(moment)rateForget();return}
   later(function(){
-    if(!RATE_ON||isStreaming||$('.ai-chat-rate',msgsEl)||rateQuiet())return;
-    if(inputEl.value.trim()||(fbSheet&&!fbSheet.hidden))return;
+    if(!RATE_ON||!isOpen||isStreaming||$('.ai-chat-rate',msgsEl)||rateQuiet())return;
+    if(inputEl.value.trim()||(fbSheet&&!fbSheet.hidden)||(fitx&&!fitx.hidden))return;
+    /* They've just rated the answer above: not now. */
+    var fbr=fbNewest();
+    if(fbr&&fbr.getAttribute('data-voted'))return;
+    var m=ratePending();
+    if(!m&&n<RATE_AFTER)return;
     try{localStorage.setItem(rateShownKey(),'1')}catch(e){}
+    rateForget();
+    /* The question for the whole chat takes the place of the answer's thumbs. */
+    if(fbr)foldAway(fbr);
     var near=rateNearBottom();
-    var row=el('div','ai-chat-rate',rateAskHtml());
-    row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');
+    var row=el('div','ai-chat-rate',rateAskHtml(m));
+    row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');row.setAttribute('data-moment',m||'replies');
     msgsEl.appendChild(row);
     void row.offsetWidth;row.classList.add('is-in');
-    if(near)keepInView(row);
+    if(near)keepInView(row);else if(m==='cart')rateReveal(row);
     row.addEventListener('click',function(e){
       var v=e.target.closest('[data-rate]');
       if(v&&row.getAttribute('data-state')==='ask'){
         var vote=v.getAttribute('data-rate')==='down'?'down':'up';
-        ratePost(vote,'');rateMarkDone();
+        ratePost(row,vote,'','');rateMarkDone();
+        row.setAttribute('data-vote',vote);
+        if(vote==='up'){rateToComment(row,'up');return}
         var keep=rateNearBottom();
-        row.innerHTML=rateCommentHtml(vote);row.setAttribute('data-state','voted');row.setAttribute('data-vote',vote);
+        row.innerHTML=rateWhyHtml(m==='cart'||m==='buy_now'||rateHadProducts());row.setAttribute('data-state','why');
         if(keep)keepInView(row);
-        /* A keyboard on screen is a lot to ask for an optional comment:
-           the field takes focus only with a mouse or trackpad. */
-        if(window.matchMedia&&matchMedia('(hover: hover) and (pointer: fine)').matches){var inp=$('.ai-chat-rate__input',row);if(inp)try{inp.focus({preventScroll:true})}catch(_){}}
-        else{var xb=$('.ai-chat-rate__x',row);if(xb)try{xb.focus({preventScroll:true})}catch(_){}}
+        var c1=$('.ai-chat-rate__chip',row);if(c1)try{c1.focus({preventScroll:true})}catch(_){}
+        return;
+      }
+      var w=e.target.closest('[data-rate-why]');
+      if(w&&row.getAttribute('data-state')==='why'){
+        var reason=w.getAttribute('data-rate-why');
+        row.setAttribute('data-why',reason);
+        ratePost(row,'down','',reason);
+        rateToComment(row,'down');
         return;
       }
       if(e.target.closest('[data-rate-x]')){
@@ -5484,15 +5683,16 @@ function maybeAskRating(){
     row.addEventListener('submit',function(e){
       e.preventDefault();
       var inp=$('.ai-chat-rate__input',row),c=inp?inp.value.trim():'';
-      if(c)ratePost(row.getAttribute('data-vote')||'up',c);
+      if(c)ratePost(row,row.getAttribute('data-vote')||'up',c,row.getAttribute('data-why')||'');
       rateFinish(row);
     });
-    row.addEventListener('keydown',function(e){if(e.key==='Escape'&&row.getAttribute('data-state')==='voted'){e.preventDefault();e.stopPropagation();rateFinish(row)}});
+    row.addEventListener('keydown',function(e){var st=row.getAttribute('data-state');if(e.key==='Escape'&&(st==='voted'||st==='why')){e.preventDefault();e.stopPropagation();rateFinish(row)}});
   },1600);
 }
 
 function clearChat(){
 chatGen++;clearWatchdog();
+rateForget();
 messages=[];_memSess='';try{localStorage.removeItem(HK);localStorage.removeItem(SK);localStorage.removeItem(HK_AT)}catch(e){}
 msgsEl.innerHTML='';buildWelcome();
 if(isOpen)playWelcomeIntro();
@@ -5773,7 +5973,12 @@ else{
   var _last=messages[messages.length-1];
   for(var i=0;i<messages.length;i++){
     var _md=appendMsg(messages[i].role,messages[i].content,messages[i].products);
-    if(_md&&messages[i].role==='assistant')restoreExtras(messages[i],_md,messages[i]===_last);
+    if(_md&&messages[i].role==='assistant'){
+      _md.__msg=messages[i];
+      restoreExtras(messages[i],_md,messages[i]===_last);
+      /* The newest answer keeps its thumbs until they're used. */
+      if(messages[i]===_last&&_last.ai&&!_last.fb){var _q=messages[i-1];fbAttach(_md,{text:_last.content,prods:_last.products||[],q:_q&&_q.role==='user'?_q.content:''})}
+    }
   }
 }
 if(messages.length)resumeReturns();

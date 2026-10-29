@@ -245,6 +245,10 @@ model ShopConfig {
   storeLocatorMapId   String   @default("")
   storeLocatorLabel   String   @default("Find a store near you")
   storeLocatorUrl     String   @default("")
+  // What the stores on the map are: "retail" (they sell the store's
+  // products) or "scanner" (they have its foot scanner; not all sell its
+  // shoes — so the map is for scans and fittings, not for buying a style).
+  storeLocatorStores  String   @default("retail")
   // A quiet "How's the chat going?" check-in after a few replies.
   chatRatingOn        Boolean  @default(true)
   chatRatingAfter     Int      @default(3)
@@ -481,6 +485,16 @@ model ChatFeedback {
   kind         String   @default("answer")
   vote         String
   comment      String?
+  // Why, after a thumbs-down (one tap): wrong_product, not_answered,
+  // wrong_info, too_slow or other.
+  reason       String?
+  // When it was asked: "order" for an answer about an order; for "chat",
+  // "cart" (after an add to cart), "buy_now" (back from checkout) or
+  // "replies" (after the store's number of replies).
+  moment       String?
+  // The widget's id for one vote: the reason picked after it updates the
+  // same row.
+  clientKey    String?
   botResponse  String
   products     String[]
   conversation String?

@@ -1916,16 +1916,18 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector("[d
     await page.waitForTimeout(600);
     const x = await page.evaluate(() => ({ gone: !document.querySelector(".ai-chat-rate"), quiet: !!localStorage.getItem("hajirai_rate_done") }));
     check("chat rating: × closes it, sends nothing, and it stays quiet for two weeks", x.gone && x.quiet && feedbackBodies.length === fb0, JSON.stringify(x));
-    // Comment skipped: × after a thumb → the thanks, only the vote sent.
+    // Reasons skipped: × after a thumbs-down → the thanks, only the vote sent.
     await page.evaluate(() => { localStorage.removeItem("hajirai_rate_done"); Object.keys(localStorage).filter((k) => k.startsWith("hajirai_rate_")).forEach((k) => localStorage.removeItem(k)); });
     await say(page, "hello 1");
     await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
     await page.click('.ai-chat-rate [data-rate="down"]');
     await page.waitForTimeout(300);
     const dq = await page.$eval(".ai-chat-rate__q", (q) => q.textContent);
+    const chips = await page.$$eval(".ai-chat-rate [data-rate-why]", (b) => b.map((x) => x.textContent));
     await page.click(".ai-chat-rate [data-rate-x]");
     await page.waitForTimeout(300);
-    check("chat rating: a thumbs-down asks what could be better; skipping the comment keeps just the vote", dq === "Sorry about that. What could we do better?" && (await page.$eval(".ai-chat-rate", (r) => r.getAttribute("data-state"))) === "done" && feedbackBodies.length === fb0 + 1 && feedbackBodies.at(-1).vote === "down" && !feedbackBodies.at(-1).comment, JSON.stringify(feedbackBodies.slice(fb0)));
+    check("chat rating: a thumbs-down asks what went wrong, in one tap", dq === "Sorry about that. What went wrong?" && chips.join("|") === "Wrong product|Didn’t answer my question|Info was wrong|Too slow|Something else", `${dq} ${chips.join("|")}`);
+    check("chat rating: skipping the reasons keeps just the vote", (await page.$eval(".ai-chat-rate", (r) => r.getAttribute("data-state"))) === "done" && feedbackBodies.length === fb0 + 1 && feedbackBodies.at(-1).vote === "down" && feedbackBodies.at(-1).moment === "replies" && !feedbackBodies.at(-1).reason && !feedbackBodies.at(-1).comment, JSON.stringify(feedbackBodies.slice(fb0)));
     check("chat rating: no JS errors (closing)", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
@@ -1948,6 +1950,228 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector("[d
     await page.waitForTimeout(600);
     check("chat rating: a new message while it's unanswered — it steps aside", (await page.$$(".ai-chat-rate")).length === 0);
     check("chat rating: no JS errors (typing)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+}
+// Thumbs under every answer — not just ones with products — on the newest
+// answer only; quiet icons that fold away once the shopper writes again. A
+// thumbs-down offers one-tap reasons, sent with the same vote. An answer
+// about an order asks in words. A vote is kept with the answer.
+{
+  const fbCtx = async (opts, cookies) => { const ctx = await browser.newContext(opts); if (cookies) await ctx.addCookies(cookies); const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message)); return { ctx, page, errors }; };
+  const say = async (page, q) => {
+    const before = await page.$$eval(".ai-chat-msg--assistant", (m) => m.length);
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", q);
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((n) => document.querySelectorAll(".ai-chat-msg--assistant").length > n, before, { timeout: 6000 });
+    await page.waitForTimeout(500);
+  };
+  for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+    const { ctx, page, errors } = await fbCtx(opts);
+    const fb0 = feedbackBodies.length;
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "show me 2");
+    const one = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll(".ai-chat-feedback")], row = rows[0], b = row && row.closest(".ai-chat-msg-bubble");
+      const btns = row ? [...row.querySelectorAll(".ai-chat-fb-btn")] : [];
+      const cs = btns[0] && getComputedStyle(btns[0]);
+      const icon = btns[0] && btns[0].querySelector("svg").getBoundingClientRect(), text = b && b.querySelector("p").getBoundingClientRect();
+      return { rows: rows.length, inBubble: !!b, last: b && b.lastElementChild === row, labels: btns.map((x) => x.getAttribute("aria-label")).join("|"), words: row && row.textContent.trim(),
+        size: btns[0] && Math.round(btns[0].getBoundingClientRect().height), border: cs && cs.borderTopWidth, bg: cs && cs.backgroundColor, aligned: icon && Math.abs(icon.left - text.left) <= 3, group: row && row.getAttribute("role") + "|" + row.getAttribute("aria-label") };
+    });
+    check(`thumbs (${label}): quiet icons at the foot of the answer — no words, no border, no fill`, one.rows === 1 && one.inBubble && one.last && one.labels === "Helpful|Not helpful" && one.words === "" && one.border === "0px" && one.bg === "rgba(0, 0, 0, 0)" && one.group === "group|Was this answer helpful?", JSON.stringify(one));
+    check(`thumbs (${label}): easy to tap (${label === "phone" ? "36" : "32"}px), the icon lined up with the text`, one.size === (label === "phone" ? 36 : 32) && one.aligned, JSON.stringify(one));
+    await page.screenshot({ path: out(`thumbs-${label}-quiet`) });
+    // A text-only answer gets them too; the older answer's fold away.
+    await say(page, "storesnear");
+    await page.waitForTimeout(450);
+    const two = await page.evaluate(() => { const rows = [...document.querySelectorAll(".ai-chat-feedback")]; const msgs = [...document.querySelectorAll(".ai-chat-msg--assistant")]; return { rows: rows.length, onNewest: rows.length === 1 && msgs.at(-1).contains(rows[0]), cards: !!msgs.at(-1).querySelector(".ai-chat-product-card") }; });
+    check(`thumbs (${label}): every answer gets them, not just ones with products — on the newest only`, two.rows === 1 && two.onNewest && !two.cards, JSON.stringify(two));
+    check(`thumbs (${label}): nothing is sent until they tap`, feedbackBodies.length === fb0);
+    // Thumbs-down: reasons, one tap; the answer keeps its width.
+    const w0 = await page.$eval(".ai-chat-msg:last-child .ai-chat-msg-bubble", (b) => Math.round(b.getBoundingClientRect().width));
+    await page.click('.ai-chat-msg:last-child .ai-chat-fb-btn[data-vote="down"]');
+    await page.waitForTimeout(350);
+    const why = await page.evaluate(() => { const r = document.querySelector(".ai-chat-msg:last-child .ai-chat-feedback"); return { q: r.querySelector(".ai-chat-fb-say").textContent, chips: [...r.querySelectorAll("[data-why]")].map((b) => b.textContent).join("|"), w: Math.round(r.closest(".ai-chat-msg-bubble").getBoundingClientRect().width), tap: Math.min(...[...r.querySelectorAll("[data-why]")].map((b) => b.getBoundingClientRect().height)), inside: [...r.querySelectorAll("[data-why]")].every((b) => b.getBoundingClientRect().right <= r.closest(".ai-chat-msg-bubble").getBoundingClientRect().right + 0.5) }; });
+    await page.screenshot({ path: out(`thumbs-${label}-why`) });
+    const v1 = feedbackBodies[fb0];
+    check(`thumbs (${label}): a thumbs-down is sent at once`, v1 && v1.vote === "down" && /^v_[A-Za-z0-9]{8,}$/.test(v1.key) && /^sess_/.test(v1.session) && v1.botResponse === "Search your area on our store map." && Array.isArray(v1.conversation) && !v1.reason && !v1.kind, JSON.stringify(v1));
+    check(`thumbs (${label}): then "what went wrong?" in one tap ("Wrong product" only when products were shown)`, why.q === "Sorry about that. What went wrong?" && why.chips === "Didn’t answer my question|Info was wrong|Too slow|Something else" && why.tap >= 32 && why.inside, JSON.stringify(why));
+    check(`thumbs (${label}): the reasons don't widen the answer`, why.w === w0, `${w0} → ${why.w}`);
+    await page.click('.ai-chat-msg:last-child [data-why="wrong_info"]');
+    await page.waitForTimeout(300);
+    const v2 = feedbackBodies[fb0 + 1];
+    check(`thumbs (${label}): the reason goes with the same vote`, v2 && v2.vote === "down" && v2.reason === "wrong_info" && v2.key === v1.key && feedbackBodies.length === fb0 + 2, JSON.stringify(v2));
+    check(`thumbs (${label}): a short thanks`, (await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => r.textContent.trim())) === "Thanks — this helps us get better");
+    // Kept with the answer: a reload doesn't ask again.
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("hajirai_chat_history") || "[]").filter((m) => m.role === "assistant").map((m) => (m.ai ? "ai" : "-") + ":" + (m.fb || "")).join(","));
+    await page.reload();
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(600);
+    check(`thumbs (${label}): the vote is kept with the answer — a reload doesn't ask again`, kept === "ai:,ai:down" && (await page.$$(".ai-chat-feedback")).length === 0, kept);
+    // A thumbs-up on a product answer: the product names go with it.
+    await say(page, "show me 2");
+    await page.click('.ai-chat-msg:last-child .ai-chat-fb-btn[data-vote="up"]');
+    await page.waitForTimeout(300);
+    const v3 = feedbackBodies.at(-1);
+    check(`thumbs (${label}): a thumbs-up says thanks and sends the products shown`, v3.vote === "up" && v3.products.length === 2 && /Savannah/.test(v3.products[0]) && !v3.conversation && (await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => r.textContent.trim())) === "Thanks for the feedback", JSON.stringify(v3));
+    check(`thumbs (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Reloaded before voting: the newest answer still has its thumbs (older ones don't).
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "show me 2");
+    await say(page, "storesnear");
+    await page.reload();
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(600);
+    const r = await page.evaluate(() => { const rows = [...document.querySelectorAll(".ai-chat-feedback")]; return { n: rows.length, newest: rows.length === 1 && document.querySelectorAll(".ai-chat-msg--assistant")[1].contains(rows[0]) }; });
+    check("thumbs: after a reload, the newest answer still has its thumbs (and only it)", r.n === 1 && r.newest, JSON.stringify(r));
+    check("thumbs: no JS errors (reload)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Quick replies stay last: the thumbs go above them.
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "full");
+    const order = await page.evaluate(() => { const r = document.querySelector(".ai-chat-msg:last-child .ai-chat-feedback"); return r && r.nextElementSibling && r.nextElementSibling.className; });
+    check("thumbs: under the answer, above its quick replies", /ai-chat-suggestions/.test(order || ""), String(order));
+    check("thumbs: no JS errors (quick replies)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // An answer about an order asks in words; one waiting for the shopper
+  // (sign in, look it up) doesn't — until the order is looked up.
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, [{ name: "signedin", value: "1", url: "http://localhost:4789" }]);
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "where is my order");
+    const ask = await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => ({ cls: r.className, text: r.textContent.trim(), aria: r.getAttribute("aria-label") }));
+    check("thumbs: an order answer asks \"Did that answer your question?\"", /is-ask/.test(ask.cls) && ask.text === "Did that answer your question?" && ask.aria === "Did that answer your question?", JSON.stringify(ask));
+    await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => r.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: out("thumbs-phone-order") });
+    await page.click('.ai-chat-msg:last-child .ai-chat-fb-btn[data-vote="up"]');
+    await page.waitForTimeout(300);
+    check("thumbs: the vote says it was an order answer", feedbackBodies.at(-1).moment === "order" && feedbackBodies.at(-1).vote === "up", JSON.stringify(feedbackBodies.at(-1)));
+    check("thumbs: no JS errors (orders)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "where is my order");
+    const before = await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => r.textContent.trim());
+    await page.click(".ai-chat-msg:last-child [data-ordl-open]");
+    await page.fill(".ai-chat-msg:last-child [name=order]", "1172010");
+    await page.fill(".ai-chat-msg:last-child [name=email]", "pat@example.com");
+    await page.click(".ai-chat-msg:last-child .ai-ordl__go");
+    await page.waitForSelector(".ai-chat-msg:last-child .ai-ordl-done", { timeout: 4000 });
+    const after = await page.$eval(".ai-chat-msg:last-child .ai-chat-feedback", (r) => r.textContent.trim());
+    check("thumbs: a sign-in / look-up answer doesn't ask in words — once the order is looked up, it does", before === "" && after === "Did that answer your question?", `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    check("thumbs: no JS errors (look-up)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The moments that matter: right after an add to cart ...
+  for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+    const { ctx, page, errors } = await fbCtx(opts);
+    const fb0 = feedbackBodies.length;
+    await page.goto("http://localhost:4789/showcase?rate=3");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "show me 2");
+    await page.waitForTimeout(2000);
+    check(`moment (${label}): one answer in, nothing asked yet`, (await page.$$(".ai-chat-rate")).length === 0);
+    await page.click('.ai-chat-product-card[data-handle="savannah-red"] [data-atc]');
+    await page.waitForSelector(".ai-chat-atc-done", { timeout: 5000 });
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: out(`moment-${label}-cart`) });
+    const c = await page.evaluate(() => {
+      const r = document.querySelector(".ai-chat-rate"), m = document.querySelector(".ai-chat-messages").getBoundingClientRect(), rr = r.getBoundingClientRect(), done = document.querySelector(".ai-chat-atc-done").getBoundingClientRect();
+      return { moment: r.getAttribute("data-moment"), q: r.querySelector(".ai-chat-rate__q").textContent, votes: [...r.querySelectorAll("[data-rate]")].map((b) => b.getAttribute("aria-label")).join("|"), thumbs: document.querySelectorAll(".ai-chat-feedback:not(.is-out)").length,
+        seen: rr.top >= m.top && rr.bottom <= m.bottom + 1, added: done.top >= m.top && done.bottom <= m.bottom, h: Math.round(rr.height) };
+    });
+    check(`moment (${label}): right after an add to cart, "Did … help you find it?"`, c.moment === "cart" && c.q === "Did the chat help you find it?" && c.votes === "Yes, it helped|No, it didn’t" && c.h <= 48, JSON.stringify(c));
+    check(`moment (${label}): it takes the place of the answer's thumbs`, c.thumbs === 0, JSON.stringify(c));
+    check(`moment (${label}): in view, with "Added to your cart" still in view`, c.seen && c.added, JSON.stringify(c));
+    await page.click('.ai-chat-rate [data-rate="down"]');
+    await page.waitForTimeout(300);
+    const chips = await page.$$eval(".ai-chat-rate [data-rate-why]", (b) => b.map((x) => x.textContent).join("|"));
+    await page.click('.ai-chat-rate [data-rate-why="wrong_product"]');
+    await page.waitForTimeout(300);
+    const st = await page.evaluate(() => ({ state: document.querySelector(".ai-chat-rate").getAttribute("data-state"), q: document.querySelector(".ai-chat-rate__q").textContent, input: !!document.querySelector(".ai-chat-rate__input") }));
+    const sent = feedbackBodies.slice(fb0);
+    check(`moment (${label}): a thumbs-down, then one tap for why (with "Wrong product")`, chips.startsWith("Wrong product|") && sent.length === 2 && sent[0].kind === "chat" && sent[0].vote === "down" && sent[0].moment === "cart" && !sent[0].reason && sent[1].reason === "wrong_product" && sent[1].moment === "cart", JSON.stringify(sent));
+    check(`moment (${label}): then an optional comment`, st.state === "voted" && st.q === "Thanks. Anything to add?" && st.input, JSON.stringify(st));
+    await page.fill(".ai-chat-rate__input", "Wrong color");
+    await page.press(".ai-chat-rate__input", "Enter");
+    await page.waitForTimeout(300);
+    const cm = feedbackBodies.at(-1);
+    check(`moment (${label}): the comment keeps the reason`, cm.kind === "chat" && cm.comment === "Wrong color" && cm.reason === "wrong_product" && cm.vote === "down", JSON.stringify(cm));
+    // Another add in this chat: not asked again.
+    await page.waitForTimeout(3600);
+    await page.click('.ai-chat-atc-panel [data-atc-close]').catch(() => {});
+    await say(page, "show me 1");
+    await page.click('.ai-chat-msg:last-child .ai-chat-product-card [data-atc]');
+    await page.waitForTimeout(2600);
+    check(`moment (${label}): asked once per conversation`, (await page.$$(".ai-chat-rate")).length === 0);
+    check(`moment (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // ... and for Buy now (which leaves for checkout) when they're back in the chat.
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase?rate=3&buy=2");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "show me 2");
+    await page.click('.ai-chat-product-card[data-handle="savannah-red"] .ai-buynow');
+    await page.waitForURL(/\/cart\/|\/checkout/, { timeout: 5000 }).catch(() => {});
+    const left = page.url();
+    await page.goto("http://localhost:4789/showcase?rate=3&buy=2");
+    await page.waitForTimeout(2200);
+    const closed = (await page.$$(".ai-chat-rate")).length;
+    await page.click(".ai-chat-launcher");
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    const b = await page.$eval(".ai-chat-rate", (r) => r.getAttribute("data-moment") + "|" + r.querySelector(".ai-chat-rate__q").textContent);
+    check("moment: Buy now — asked when they're back in the chat (never on the closed chat)", /\/cart\/|\/checkout/.test(left) && closed === 0 && b === "buy_now|Did the chat help you find it?", `${left} ${closed} ${b}`);
+    await page.click('.ai-chat-rate [data-rate="up"]');
+    await page.waitForTimeout(300);
+    check("moment: the rating says it was after Buy now", feedbackBodies.at(-1).moment === "buy_now" && feedbackBodies.at(-1).vote === "up", JSON.stringify(feedbackBodies.at(-1)));
+    check("moment: no JS errors (Buy now)", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Just rated the answer above: the chat question waits for a later reply.
+  {
+    const { ctx, page, errors } = await fbCtx({ viewport: { width: 1280, height: 800 } });
+    await page.goto("http://localhost:4789/showcase?rate=2");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(500);
+    await say(page, "hello 1");
+    await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "hello 1");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelectorAll(".ai-chat-msg--assistant").length >= 2, null, { timeout: 6000 });
+    await page.waitForSelector(".ai-chat-msg:last-child .ai-chat-fb-btn", { timeout: 2000 });
+    await page.click('.ai-chat-msg:last-child .ai-chat-fb-btn[data-vote="up"]');
+    await page.waitForTimeout(2300);
+    const waited = (await page.$$(".ai-chat-rate")).length === 0;
+    await say(page, "hello 1");
+    await page.waitForSelector(".ai-chat-rate.is-in", { timeout: 4000 });
+    check("chat rating: never right after they rated the answer above — it comes with the next reply", waited, "");
+    check("chat rating: no JS errors (after a thumb)", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
 }

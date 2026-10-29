@@ -1642,6 +1642,28 @@ await test("asked about stores: the locator, and warmly, the full range online �
   assert.match(ran.note, /the full range is online at aetrex\.com — and they can order right here in the chat/);
   assert.match(ran.note, /show a few products for what they're shopping for/);
 });
+await test("stores on the map have the foot scanner: never sent there to buy — call a local shoe store, and everything is online", async () => {
+  const config = { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner", storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" };
+  const p = buildLeanSystemPrompt({ shop: "x", config });
+  assert.match(p, /don't show the store locator for this — its locations have the foot scanner, and not every one sells these shoes/);
+  assert.match(p, /call or visit their local shoe stores to ask whether they have that style in stock/);
+  assert.match(p, /all in one place online at aetrex\.com, where they can order right here in the chat/);
+  assert.match(p, /never name or guess which stores carry the brand/);
+  assert.match(p, /Foot scans and fittings .*: show the store locator — its locations have the foot scanner, and some also carry orthotics, so calling ahead is best/);
+  assert.match(p, /the store locator for "where can I get my feet scanned\?"/);
+  assert.doesNotMatch(p, /each store picks its own selection/);
+  const { buildLeanStoreExtras } = await import("../app/lib/lean/store-tools.server.js");
+  const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config, messages: [{ role: "user", content: "where can I get my feet scanned?" }], latestUserMessage: "where can I get my feet scanned?" });
+  const loc = ex.tools.find((t) => t.definition.name === "show_store_locator");
+  assert.ok(loc, "the map is still offered — for scans and fittings");
+  assert.match(loc.definition.description, /Its locations have the store's foot scanner/);
+  assert.match(loc.definition.description, /Not for buying or finding a style in a store: then say they can call or visit their local shoe stores/);
+  assert.doesNotMatch(loc.definition.description, /buying or trying on in person, getting fitted/);
+  const ran = await loc.run({});
+  assert.match(ran.note, /find a location with the foot scanner there — some also carry orthotics, so calling ahead is best/);
+  assert.match(ran.note, /the full range is all in one place online at aetrex\.com/);
+  assert.equal(ran._events[0].type, "map_cta");
+});
 await test("the store's website, from a link set in Settings", async () => {
   const { storeWebsite } = await import("../app/lib/lean/prompt.js");
   assert.equal(storeWebsite({ storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" }), "aetrex.com");

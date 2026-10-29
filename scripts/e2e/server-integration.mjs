@@ -267,6 +267,26 @@ await test("widget-config, feedback and See It Styled answer signed requests cor
   assert.deepEqual(cfg.fitLevels, ["high", "mid"], "fit confidence: High and Mid on cards unless the store says");
   const fb = await fetch(signed("/feedback"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ vote: "up", session: "s", botResponse: "ok" }) });
   assert.equal(fb.status, 200);
+  // A thumbs-down, then its reason with the same key: one row, the reason
+  // kept; made-up reasons, moments and keys are dropped.
+  const post = (b) => fetch(signed("/feedback"), { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.88" }, body: JSON.stringify(b) });
+  assert.equal((await post({ vote: "down", session: "why-s", key: "v_route12345", moment: "order", botResponse: "Here are your orders." })).status, 200);
+  assert.equal((await post({ vote: "down", session: "why-s", key: "v_route12345", moment: "order", reason: "not_answered", botResponse: "Here are your orders." })).status, 200);
+  assert.equal((await post({ vote: "down", session: "why-s", key: "<script>", moment: "anything", reason: "made_up", botResponse: "x" })).status, 200);
+  const rows = await prisma.chatFeedback.findMany({ where: { shop: SHOP, sessionId: "why-s" }, orderBy: { createdAt: "asc" } });
+  assert.equal(rows.length, 2, JSON.stringify(rows));
+  assert.equal(rows[0].reason, "not_answered");
+  assert.equal(rows[0].moment, "order");
+  assert.equal(rows[0].clientKey, "v_route12345");
+  assert.equal(rows[1].reason, null);
+  assert.equal(rows[1].moment, null);
+  assert.equal(rows[1].clientKey, null);
+  // The chat check-in: when it was asked, and why.
+  assert.equal((await post({ kind: "chat", vote: "down", session: "why-c", moment: "cart", reason: "wrong_product", conversation: [{ role: "user", content: "boots" }] })).status, 200);
+  const chat = await prisma.chatFeedback.findFirst({ where: { shop: SHOP, sessionId: "why-c" } });
+  assert.equal(chat.kind, "chat");
+  assert.equal(chat.moment, "cart");
+  assert.equal(chat.reason, "wrong_product");
   const viz = await fetch(signed("/visualize"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ productHandle: "x" }) });
   assert.equal(viz.status, 403, "feature off for this store → refused, no image call");
 });

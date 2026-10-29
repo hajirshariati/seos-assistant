@@ -17,18 +17,38 @@ export function redactContactDetails(text) {
     .replace(/\+?\(?\d[\d\s().-]{7,}\d/g, "[number]");
 }
 
-export async function recordFeedback({ shop, sessionId, vote, botResponse, products, conversation, ip }) {
+// Thumbs under one answer. The widget sends the vote at once and the
+// reason (after a thumbs-down) a moment later, with the same key: the
+// second updates the first — or, if the first never arrived, stands in.
+export async function recordFeedback({ shop, sessionId, vote, reason = null, moment = null, clientKey = null, botResponse, products, conversation, ip }) {
   const transcript = Array.isArray(conversation)
     ? conversation
       .filter((m) => m && (m.role === "user" || m.role === "assistant"))
       .slice(-10)
       .map((m) => ({ role: m.role, content: redactContactDetails(String(m.content || "").slice(0, 300)) }))
     : null;
+  const existing = clientKey && sessionId
+    ? await prisma.chatFeedback.findFirst({ where: { shop, sessionId, kind: "answer", clientKey }, select: { id: true } })
+    : null;
+  if (existing) {
+    return prisma.chatFeedback.update({
+      where: { id: existing.id },
+      data: {
+        vote,
+        reason: vote === "down" ? reason : null,
+        ...(moment ? { moment } : {}),
+        ...(transcript ? { conversation: JSON.stringify(transcript) } : {}),
+      },
+    });
+  }
   return prisma.chatFeedback.create({
     data: {
       shop,
       sessionId,
       vote,
+      reason: vote === "down" ? reason : null,
+      moment,
+      clientKey,
       botResponse: redactContactDetails((botResponse || "").slice(0, 500)),
       products: (products || []).slice(0, 5).map((p) => String(typeof p === "string" ? p : p?.title || "").slice(0, 200)),
       conversation: transcript ? JSON.stringify(transcript) : null,
@@ -39,7 +59,7 @@ export async function recordFeedback({ shop, sessionId, vote, botResponse, produ
 
 // The check-in rating of a whole conversation: one per conversation — a
 // changed mind or the comment that follows the vote updates it.
-export async function recordChatRating({ shop, sessionId, vote, comment = "", conversation, ip }) {
+export async function recordChatRating({ shop, sessionId, vote, comment = "", reason = null, moment = null, conversation, ip }) {
   const transcript = Array.isArray(conversation)
     ? conversation
       .filter((m) => m && (m.role === "user" || m.role === "assistant"))
@@ -49,6 +69,10 @@ export async function recordChatRating({ shop, sessionId, vote, comment = "", co
   const lastReply = transcript ? [...transcript].reverse().find((m) => m.role === "assistant")?.content || "" : "";
   const data = {
     vote,
+    // A thumbs-up has no reason; a thumbs-down keeps one picked earlier
+    // when only the comment follows.
+    ...(vote === "up" ? { reason: null } : reason ? { reason } : {}),
+    ...(moment ? { moment } : {}),
     ...(comment ? { comment: redactContactDetails(comment) } : {}),
     ...(transcript ? { conversation: JSON.stringify(transcript), botResponse: lastReply.slice(0, 500) } : {}),
   };
@@ -77,7 +101,10 @@ export async function getFeedbackSummary(shop, range = 30) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      kind: true,
       vote: true,
+      reason: true,
+      moment: true,
       botResponse: true,
       products: true,
       conversation: true,
@@ -89,6 +116,9 @@ export async function getFeedbackSummary(shop, range = 30) {
   const up = all.filter((f) => f.vote === "up").length;
   const down = all.filter((f) => f.vote === "down").length;
   const total = up + down;
+  // Why, for the thumbs-downs that say: { wrong_product: 3, … }.
+  const reasons = {};
+  for (const f of all) if (f.vote === "down" && f.reason) reasons[f.reason] = (reasons[f.reason] || 0) + 1;
 
   // Pre-parse conversation JSON into a clean transcript array so the
   // analytics page can render the full back-and-forth without re-
@@ -121,7 +151,10 @@ export async function getFeedbackSummary(shop, range = 30) {
       return {
         id: f.id,
         createdAt: f.createdAt,
+        kind: f.kind === "chat" ? "chat" : "answer",
         vote: f.vote,
+        reason: f.reason || null,
+        moment: f.moment || null,
         botResponse: f.botResponse,
         products: f.products || [],
         transcript,
@@ -134,6 +167,7 @@ export async function getFeedbackSummary(shop, range = 30) {
     up,
     down,
     satisfactionRate: total > 0 ? Math.round((up / total) * 100) : 0,
+    reasons,
     negativeFeedback: decorated.slice(0, 20),
   };
 }
@@ -147,6 +181,8 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
       id: true,
       kind: true,
       comment: true,
+      reason: true,
+      moment: true,
       conversation: true,
       vote: true,
       products: true,
@@ -183,6 +219,9 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
         // with their comment if they left one.
         kind: r.kind === "chat" ? "chat" : "answer",
         comment: r.comment || null,
+        // Why, after a thumbs-down; and when it was asked.
+        reason: r.vote === "down" ? r.reason || null : null,
+        moment: r.moment || null,
         products: r.products || [],
         date: r.createdAt,
         transcript,

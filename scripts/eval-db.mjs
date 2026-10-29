@@ -143,6 +143,46 @@ await test("chat check-in: one rating per conversation; the comment updates it, 
   assert.equal(answer.kind, "answer", "Helpful / Not helpful stays its own kind");
 });
 
+await test("thumbs on one answer: the reason picked after a thumbs-down updates the same vote (by its key)", async () => {
+  const conv = [{ role: "user", content: "where is my order" }, { role: "assistant", content: "Here are your recent orders." }];
+  const vote = await recordFeedback({ shop: A, sessionId: "why-1", vote: "down", moment: "order", clientKey: "v_abc12345", botResponse: "Here are your recent orders.", products: [], conversation: conv, ip: "203.0.113.9" });
+  assert.equal(vote.reason, null);
+  assert.equal(vote.moment, "order");
+  const why = await recordFeedback({ shop: A, sessionId: "why-1", vote: "down", reason: "wrong_info", moment: "order", clientKey: "v_abc12345", botResponse: "Here are your recent orders.", products: [], conversation: conv, ip: "203.0.113.9" });
+  assert.equal(why.id, vote.id, "the same row");
+  assert.equal(why.reason, "wrong_info");
+  assert.equal(await prisma.chatFeedback.count({ where: { shop: A, sessionId: "why-1" } }), 1);
+  // Only the reason arrived (the vote was lost): it stands in.
+  const alone = await recordFeedback({ shop: A, sessionId: "why-1", vote: "down", reason: "too_slow", clientKey: "v_other999", botResponse: "x", products: [], conversation: null, ip: "" });
+  assert.notEqual(alone.id, vote.id);
+  assert.equal(alone.reason, "too_slow");
+  // Another answer's vote, no key: a row of its own.
+  const plain = await recordFeedback({ shop: A, sessionId: "why-1", vote: "up", botResponse: "y", products: [], conversation: null, ip: "" });
+  assert.equal(plain.reason, null);
+  assert.equal(await prisma.chatFeedback.count({ where: { shop: A, sessionId: "why-1" } }), 3);
+  const { getFeedbackSummary, getRecentQuestions } = await import("../app/models/ChatFeedback.server.js");
+  const sum = await getFeedbackSummary(A, 30);
+  assert.equal(sum.reasons.wrong_info >= 1 && sum.reasons.too_slow >= 1, true, JSON.stringify(sum.reasons));
+  const rows = await getRecentQuestions(A, 30, 50);
+  const r = rows.find((q) => q.id === vote.id);
+  assert.equal(r.reason, "wrong_info");
+  assert.equal(r.moment, "order");
+});
+
+await test("chat check-in: when it was asked, the reason after a thumbs-down, kept when the comment follows", async () => {
+  const conv = [{ role: "user", content: "boots" }, { role: "assistant", content: "Here are three." }];
+  const down = await recordChatRating({ shop: A, sessionId: "rate-cart", vote: "down", moment: "cart", conversation: conv, ip: "" });
+  assert.equal(down.moment, "cart");
+  const why = await recordChatRating({ shop: A, sessionId: "rate-cart", vote: "down", reason: "wrong_product", moment: "cart", conversation: conv, ip: "" });
+  assert.equal(why.id, down.id);
+  assert.equal(why.reason, "wrong_product");
+  const note = await recordChatRating({ shop: A, sessionId: "rate-cart", vote: "down", comment: "wrong color", moment: "cart", conversation: conv, ip: "" });
+  assert.equal(note.reason, "wrong_product", "the comment keeps the reason");
+  assert.equal(note.comment, "wrong color");
+  const changed = await recordChatRating({ shop: A, sessionId: "rate-cart", vote: "up", moment: "cart", conversation: conv, ip: "" });
+  assert.equal(changed.reason, null, "a thumbs-up has no reason");
+});
+
 console.log("\ncatalog sync");
 const node = (id, title) => ({
   id: `gid://shopify/Product/${id}`, handle: title.toLowerCase().replace(/\W+/g, "-"), title, vendor: "Aetrex",

@@ -1,4 +1,4 @@
-import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl } from "../lib/feedback-survey.js";
+import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl, locatorStores } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
 import { getShopName } from "../lib/shop-name.server.js";
@@ -121,6 +121,7 @@ export const loader = async ({ request }) => {
     storeLocatorMapId: config.storeLocatorMapId || "",
     storeLocatorLabel: config.storeLocatorLabel || "Find a store near you",
     storeLocatorUrl: config.storeLocatorUrl || "",
+    storeLocatorStores: locatorStores(config.storeLocatorStores),
     appPromoOn: config.appPromoOn !== false,
     appIosUrl: config.appIosUrl || "",
     appAndroidUrl: config.appAndroidUrl || "",
@@ -334,6 +335,8 @@ export const action = async ({ request }) => {
     if (raw && !locatorPageUrl(raw)) return fail("The store locator page should be a link on your store, like /pages/store-locator or https://…", "tools");
     data.storeLocatorUrl = raw;
   }
+  const locStores = formData.get("storeLocatorStores");
+  if (locStores !== null) data.storeLocatorStores = locatorStores(String(locStores));
   const surveyOn = formData.get("feedbackSurveyOn");
   const survey = formData.get("feedbackSurvey");
   if (survey !== null) {
@@ -519,7 +522,7 @@ const FIELDS = {
   supportUrl: ["care"], supportLabel: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
-  storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"],
+  storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
   appPromoOn: ["tools", "bool"], appIosUrl: ["tools"], appAndroidUrl: ["tools"], appPromoText: ["tools"], appPromoButton: ["tools"],
@@ -859,10 +862,10 @@ function AssistantSection({ d, values, set }) {
       </Group>
       <Group title="In the chat">
         <Row title="Follow-up questions" help="2–3 tappable follow-ups after each answer — only ones AVA can answer." toggle checked={values.showFollowUps} onChange={set("showFollowUps")} />
-        <Row title="Helpful / Not helpful" help="Thumbs under product answers. Feedback shows in Analytics." toggle checked={values.showFeedback} onChange={set("showFeedback")} />
-        <Row title="Ask how the chat went" help="A quiet “How's the chat going?” after a few replies, once per chat. Ratings and comments show in Analytics." toggle checked={values.chatRatingOn} onChange={set("chatRatingOn")}>
+        <Row title="Helpful / Not helpful" help="Quiet thumbs under the newest answer; a thumbs-down asks what went wrong, in one tap. Feedback shows in Analytics." toggle checked={values.showFeedback} onChange={set("showFeedback")} />
+        <Row title="Ask how the chat went" help="One quiet question per chat: right after an add to cart or Buy now, or else after a few replies. Ratings, reasons and comments show in Analytics." toggle checked={values.chatRatingOn} onChange={set("chatRatingOn")}>
           <div style={{ maxWidth: 220 }}>
-            <Select label="Ask after" options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} replies`, value: String(n) }))} value={values.chatRatingAfter} onChange={set("chatRatingAfter")} />
+            <Select label="Otherwise, ask after" options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} replies`, value: String(n) }))} value={values.chatRatingAfter} onChange={set("chatRatingAfter")} />
           </div>
         </Row>
       </Group>
@@ -1089,12 +1092,32 @@ function ToolsSection({ d, values, set }) {
             <TextField label="Button text" value={values.whichOrthoticLabel} onChange={set("whichOrthoticLabel")} maxLength={40} autoComplete="off" disabled={!values.whichOrthotic.trim()} />
           </div>
         </Row>
-        <Row title="Store locator" help="Your Storepoint map, opened in the chat when a shopper asks where to buy or try on in person." stack>
-          <div className="set-grid set-grid--3">
-            <TextField label="Storepoint map" value={values.storeLocatorMapId} onChange={set("storeLocatorMapId")} placeholder="Map ID or embed code" autoComplete="off" helpText={mapId ? `Map ${mapId}` : "Blank turns it off."} />
-            <TextField label="Button text" value={values.storeLocatorLabel} onChange={set("storeLocatorLabel")} maxLength={40} autoComplete="off" disabled={!mapId} />
-            <TextField label="Locator page" value={values.storeLocatorUrl} onChange={set("storeLocatorUrl")} placeholder="/pages/store-locator" autoComplete="off" disabled={!mapId} helpText="If the map can't load." />
-          </div>
+        <Row
+          title="Store locator"
+          help={values.storeLocatorStores === "scanner"
+            ? "Your Storepoint map, opened in the chat for foot scans and fittings. To buy a style in person, the chat suggests calling or visiting a local shoe store — and shopping here, where everything is in one place."
+            : "Your Storepoint map, opened in the chat when a shopper asks where to buy or try on in person."}
+          stack
+        >
+          <BlockStack gap="300">
+            <div className="set-grid set-grid--3">
+              <TextField label="Storepoint map" value={values.storeLocatorMapId} onChange={set("storeLocatorMapId")} placeholder="Map ID or embed code" autoComplete="off" helpText={mapId ? `Map ${mapId}` : "Blank turns it off."} />
+              <TextField label="Button text" value={values.storeLocatorLabel} onChange={set("storeLocatorLabel")} maxLength={40} autoComplete="off" disabled={!mapId} />
+              <TextField label="Locator page" value={values.storeLocatorUrl} onChange={set("storeLocatorUrl")} placeholder="/pages/store-locator" autoComplete="off" disabled={!mapId} helpText="If the map can't load." />
+            </div>
+            <div style={{ maxWidth: 420 }}>
+              <Select
+                label="The stores on the map"
+                options={[
+                  { label: "Sell our products", value: "retail" },
+                  { label: "Have our foot scanner (not all sell our shoes)", value: "scanner" },
+                ]}
+                value={values.storeLocatorStores}
+                onChange={set("storeLocatorStores")}
+                disabled={!mapId}
+              />
+            </div>
+          </BlockStack>
         </Row>
         <Row
           title="Feedback button"

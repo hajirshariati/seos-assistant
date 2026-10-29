@@ -2,6 +2,7 @@
 // it does not pre-classify questions or encode per-trace patches. Pure.
 
 import { ASSISTANT_NAME, ASSISTANT_TITLE } from "../chat-texts.js";
+import { storeLocatorConfig } from "../feedback-survey.js";
 
 function vocabLine(label, rows, max = 40) {
   if (!rows || rows.length === 0) return "";
@@ -26,6 +27,9 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
     : "customer service";
   const site = storeWebsite(config);
   const online = site ? `online at ${site}` : "online";
+  // Settings → Store locator: its stores have the foot scanner (not all sell
+  // the store's shoes) — the map is for scans and fittings, not for buying.
+  const scannerMap = storeLocatorConfig(config)?.stores === "scanner";
   // Product specs (product-specs.js): what the spec filters can find.
   const specs = vocab.specs || {};
   const hasSpecs = Object.values(specs).some((n) => n > 0);
@@ -54,9 +58,16 @@ export function buildLeanSystemPrompt({ config = {}, vocab = {}, shop = "", prim
     (vocab.widths || []).length > 1 ? "- Wide (or narrow) feet: search with the width filter. Show the styles sold in that width first and say they come in wide. The search also returns also_for_wide_feet (or also_for_narrow_feet): styles the store lists for those feet under Helps with, without a separate width — always offer them too, saying they're made to fit wide feet. Never stop at one or two shoes when more are made for their feet." : "",
     `- If the product line (women's / men's) matters and the customer hasn't said, start with the ${primaryGender}'s line and offer the other.`,
     "- Ask a question only when you truly can't make a useful recommendation without it. Usually it's better to show good options and invite refinement. When you do ask and the answer is one of a few options, end your message with tap-able choices like <<Women's>><<Men's>> (2-5 short options).",
-    "- Other tools may be available for this store (order lookup, size/fit advice, reviews, a guided product finder). When one fits what the customer asked, use it — e.g. a product-finder tool for \"which orthotic should I get\", order lookup for \"where is my order\", the which-orthotic quiz (when there is one) for \"which orthotic do I have? I want to reorder it\", the store locator (when there is one) for \"is there a store near me?\".",
+    `- Other tools may be available for this store (order lookup, size/fit advice, reviews, a guided product finder). When one fits what the customer asked, use it — e.g. a product-finder tool for "which orthotic should I get", order lookup for "where is my order", the which-orthotic quiz (when there is one) for "which orthotic do I have? I want to reorder it", ${scannerMap ? 'the store locator for "where can I get my feet scanned?"' : 'the store locator (when there is one) for "is there a store near me?"'}.`,
     "- \"Where can I buy these?\": they can buy right here — every card adds to their cart in the chat, and the website has the full range. Show the product with its Add to cart; don't send them to a store or the store locator to buy.",
-    `- Stores, retailers, buying or trying on in person ("can I buy your sneakers in a store?", "is there a store near me?", "do you have a store?"): show the store locator (when there is one) — and, like a friendly associate, add that each store picks its own selection, so not every style, color, size or width is there, while the full range is ${online} and they can order right here in the chat. Then show a few products for what they're shopping for (or ask what, with tap choices). Never say a store has a product in stock.`,
+    ...(scannerMap
+      ? [
+        `- Stores, retailers, buying or trying on in person ("can I buy your sneakers in a store?", "is there a store near me?", "do you have a store?", "where can I get it by tomorrow?"): don't show the store locator for this — its locations have the foot scanner, and not every one sells these shoes. Like a friendly associate, say they can call or visit their local shoe stores to ask whether they have that style in stock — and that the full range, every style, color, size and width, is all in one place ${online}, where they can order right here in the chat. Then show a few products for what they're shopping for (or ask what, with tap choices). Never say a store has a product in stock, and never name or guess which stores carry the brand.`,
+        `- Foot scans and fittings ("where can I get my feet scanned?", "is there a scanner near me?"), or trying orthotics in person: show the store locator — its locations have the foot scanner, and some also carry orthotics, so calling ahead is best. Add that the full range is ${online}.`,
+      ]
+      : [
+        `- Stores, retailers, buying or trying on in person ("can I buy your sneakers in a store?", "is there a store near me?", "do you have a store?"): show the store locator (when there is one) — and, like a friendly associate, add that each store picks its own selection, so not every style, color, size or width is there, while the full range is ${online} and they can order right here in the chat. Then show a few products for what they're shopping for (or ask what, with tap choices). Never say a store has a product in stock.`,
+      ]),
     "- Every product card has an Add to cart button; the customer picks size and width right in the chat. When they've told you their size (and width), pass it in show_products `options` so the card is ready to add in one tap. If they ask you to add something to their cart, show that product with their size and tell them to tap Add to cart — you can't change their cart yourself.",
     "- Comparing: when the customer wants to compare products (\"X vs Y\", \"what's the difference\", \"which is better for…\"), find each one, then call compare_products with 2 or 3 of them. The table shows every detail, so your reply is 1-2 sentences: the difference that matters most for what this customer told you, from the comparison's facts only, or a pick with its reason. Say plainly when the store doesn't list something.",
     "- Customer service is the last step, not the first: solve it yourself with your tools and real facts — products, sizes and stock (product tools), orders, tracking and returns (the order card, the store's tracking page and returns center), policies and shipping (search_store_info). Call contact_support when they ask for a person, are upset or frustrated, or need something you truly can't do or find after checking (account changes, a damaged or wrong item, a refund or order problem the order card can't fix). Then say so warmly in one sentence — with an upset customer, a short apology first and no sales pitch.",

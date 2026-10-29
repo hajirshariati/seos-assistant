@@ -25,6 +25,7 @@ import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
+import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
 
 function parseRange(searchParams) {
   const preset = searchParams.get("range") || "30d";
@@ -212,6 +213,8 @@ const ANALYTICS_CSS = `
   .an-pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #616161; background: rgba(26,46,38,0.06); white-space: nowrap; }
   .an-pill.is-up { color: #2D6B4F; background: rgba(45,107,79,0.10); }
   .an-pill.is-down { color: #a33d3d; background: rgba(185,90,90,0.13); }
+  .an-why { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 16px 12px; }
+  .an-why__label { font-size: 12px; line-height: 16px; font-weight: 600; color: #616161; margin-right: 2px; }
   .an-convo__q { font-size: 13.5px; line-height: 19px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .an-convo__line { margin-top: 2px; font-size: 12.5px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
   .an-convo__line b { font-weight: 600; color: #616161; }
@@ -411,7 +414,9 @@ function ConversationRow({ row, mounted }) {
         {mounted && <span>{new Date(row.date).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
         {row.vote === "up" && <span className="an-pill is-up">{chat ? "Chat went well" : "Helpful"}</span>}
         {row.vote === "down" && <span className="an-pill is-down">{chat ? "Chat not great" : "Not helpful"}</span>}
-        {chat && <span className="an-pill">Rated the whole chat</span>}
+        {row.reason && FEEDBACK_REASONS[row.reason] && <span className="an-pill is-down">{FEEDBACK_REASONS[row.reason]}</span>}
+        {chat && <span className="an-pill">{row.moment && FEEDBACK_MOMENTS[row.moment] ? `Whole chat · ${FEEDBACK_MOMENTS[row.moment].toLowerCase()}` : "Rated the whole chat"}</span>}
+        {!chat && row.moment === "order" && <span className="an-pill">{FEEDBACK_MOMENTS.order}</span>}
         {products.length > 0 && <span className="an-pill">{`${products.length} product${products.length > 1 ? "s" : ""}`}</span>}
       </div>
       {(row.lastUserQuestion || row.question) && <div className="an-convo__q an-clamp">{row.lastUserQuestion || row.question}</div>}
@@ -436,7 +441,7 @@ function ConversationRow({ row, mounted }) {
 
 // Recent rated / finished chats: filter chips, the latest few, the rest on
 // demand. Export downloads the active filter.
-function ConversationsCard({ rows, onExport, exporting, mounted }) {
+function ConversationsCard({ rows, reasons, onExport, exporting, mounted }) {
   const [filter, setFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
   const filtered = useMemo(() => {
@@ -455,6 +460,11 @@ function ConversationsCard({ rows, onExport, exporting, mounted }) {
     }
     return { up, down, unrated: rows.length - up - down, comments: rows.filter((r) => r.comment).length };
   }, [rows]);
+  // The one-tap reasons after a thumbs-down, most picked first (the range).
+  const why = useMemo(
+    () => Object.entries(reasons || {}).filter(([key, n]) => FEEDBACK_REASONS[key] && n > 0).sort((a, b) => b[1] - a[1]),
+    [reasons],
+  );
   const FIRST = 5;
   const shown = showAll ? filtered : filtered.slice(0, FIRST);
 
@@ -484,6 +494,12 @@ function ConversationsCard({ rows, onExport, exporting, mounted }) {
           </button>
         ))}
       </div>
+      {why.length > 0 && (
+        <div className="an-why">
+          <span className="an-why__label">Why not helpful</span>
+          {why.map(([key, n]) => <span key={key} className="an-pill is-down">{`${FEEDBACK_REASONS[key]} · ${n}`}</span>)}
+        </div>
+      )}
       {shown.length === 0 ? (
         <div className="an-empty" style={{ borderTop: "1px solid rgba(30,27,51,0.07)" }}>No conversations match this filter.</div>
       ) : (
@@ -719,7 +735,7 @@ export default function Analytics() {
           <ProductsCard searched={top5(productsByTool?.searched)} viewed={top5(productsByTool?.viewed)} />
 
           {recentQuestions.length > 0 && (
-            <ConversationsCard rows={recentQuestions} onExport={handleExport} exporting={exporting} mounted={mounted} />
+            <ConversationsCard rows={recentQuestions} reasons={feedback.reasons} onExport={handleExport} exporting={exporting} mounted={mounted} />
           )}
 
           <div>

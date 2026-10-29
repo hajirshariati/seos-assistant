@@ -1,5 +1,6 @@
 // Analytics CSV rows that aren't a plain list: the range's numbers in one
 // file (everything the page leaves off), and the week's topics. Pure.
+import { FEEDBACK_REASONS } from "./chat-rating.js";
 
 export const MODEL_LABELS = {
   "claude-sonnet-4-20250514": "Standard",
@@ -30,6 +31,8 @@ export function summaryRows({ range, usage = {}, feedback = {}, conversions = {}
     ["Satisfaction (%)", feedback.total > 0 ? feedback.satisfactionRate : "", feedback.total > 0 ? "" : "No votes yet"],
     ["Helpful votes", feedback.up || 0, ""],
     ["Not helpful votes", feedback.down || 0, ""],
+    // Why, from the one-tap reasons after a thumbs-down.
+    ...Object.entries(FEEDBACK_REASONS).map(([key, label]) => [`Not helpful: ${label}`, feedback.reasons?.[key] || 0, "Reason picked"]),
     ["AI cost (USD)", usd(usage.totalCost), "Everything below included"],
     ["Average cost per conversation (USD)", usd(usage.avgCostPerMessage), ""],
     ["Semantic search cost (USD)", usd(usage.embeddingCost), ""],
