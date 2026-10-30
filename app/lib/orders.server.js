@@ -20,6 +20,12 @@ export const ORDER_FIELDS = `
   discountCodes
   totalRefundedSet { shopMoney { amount currencyCode } }
   refunds(first: 5) { createdAt totalRefundedSet { shopMoney { amount currencyCode } } }
+  returns(first: 3) {
+    nodes {
+      name status createdAt requestApprovedAt closedAt totalQuantity
+      reverseFulfillmentOrders(first: 3) { nodes { reverseDeliveries(first: 3) { nodes { deliverable { ... on ReverseDeliveryShippingDeliverable { tracking { carrierName number url } } } } } } }
+    }
+  }
   customer { id }
   lineItems(first: 20) {
     nodes {
@@ -44,6 +50,7 @@ const CUSTOMER_ORDERS_QUERY = `
   query ChatOrders($id: ID!, $first: Int!) {
     customer(id: $id) {
       email
+      numberOfOrders
       orders(first: $first, sortKey: CREATED_AT, reverse: true) { nodes { ${ORDER_FIELDS} } }
     }
   }
@@ -136,6 +143,36 @@ export function refundFacts(o) {
   return { status: status || "Refunded", total: total || undefined, refunds: refunds.length ? refunds : undefined };
 }
 
+// Each return on an order, as Shopify records it (the store's returns app
+// syncs them): when it was requested and approved, whether it's still open
+// (on its way back, not yet refunded) or closed (refunded), and the return
+// shipment's tracking when there is one. For the assistant, not the card:
+// with the refund facts and the store's refund-timing policy it can say
+// where a return stands instead of handing the question off.
+const RETURN_STATE = {
+  REQUESTED: "Requested — waiting for the store's approval",
+  OPEN: "Open — approved, not refunded yet (on its way back or being processed)",
+  CLOSED: "Closed — done (see refund)",
+  DECLINED: "Declined by the store",
+  CANCELED: "Canceled",
+};
+export function returnFacts(o) {
+  const list = (o?.returns?.nodes || []).filter(Boolean).map((r) => {
+    const tracking = (r.reverseFulfillmentOrders?.nodes || [])
+      .flatMap((rf) => (rf.reverseDeliveries?.nodes || []).map((d) => d?.deliverable?.tracking).filter((t) => t && (t.number || t.url)))[0] || null;
+    return {
+      name: String(r.name || ""),
+      status: RETURN_STATE[r.status] || String(r.status || ""),
+      items: Number.isFinite(r.totalQuantity) ? r.totalQuantity : undefined,
+      requested: day(r.createdAt) || undefined,
+      approved: day(r.requestApprovedAt) || undefined,
+      closed: day(r.closedAt) || undefined,
+      shipment: tracking ? { carrier: tracking.carrierName || undefined, number: tracking.number || undefined, url: tracking.url || undefined } : undefined,
+    };
+  });
+  return list.length ? list : null;
+}
+
 // The card for one order: no addresses, no payment details, no email.
 // A return the chat already started for this order, as the card shows it.
 export function chatReturnView(r) {
@@ -209,6 +246,7 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
     items,
     // For the assistant only (the order tool takes these off the card).
     refund: refundFacts(o),
+    returnFacts: returnFacts(o),
     discountCodes: (o.discountCodes || []).map(String).slice(0, 5),
   };
 }
@@ -222,14 +260,19 @@ export async function getOrderCards({ shop, accessToken, customerId, first = 5, 
     variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 25) },
   });
   const customer = data?.customer;
-  if (!customer) return { orders: [] };
+  if (!customer) return { orders: [], numberOfOrders: 0 };
   console.log(`[pii-access] shop=${shop} customer=${customerId} fields=orders purpose=customer_service source=admin_api`);
   let nodes = customer.orders?.nodes || [];
   const want = String(orderNumber || "").replace(/[^0-9a-z]/gi, "").toLowerCase();
   if (want) nodes = nodes.filter((o) => String(o.name || "").replace(/[^0-9a-z]/gi, "").toLowerCase().endsWith(want));
   const started = await lookupReturns(shop, nodes.map((o) => numericId(o.id)));
   const forOrder = (o) => started.filter((r) => r.orderId === numericId(o.id));
-  return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o), policy })) };
+  // numberOfOrders counts every order on the account; the list may hold
+  // fewer when the app's access stops at 60 days (no read_all_orders).
+  return {
+    orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o), policy })),
+    numberOfOrders: parseInt(customer.numberOfOrders, 10) || 0,
+  };
 }
 
 // The signed-in customer's email (for their rewards account), never shown.

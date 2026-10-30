@@ -955,6 +955,78 @@ await test("the orthotic-chat check only fires on a short answer that switches t
     assert.equal(makeLiveStock({ shop: "s", accessToken: null }), null);
   });
 }
+// Live store, 2026-10-30: "Any idea when the Miles in US 10.5 size will be
+// back in stock?" got the customer service button. With Klaviyo set up the
+// store has back-in-stock alerts (restock.js): the size is checked and, sold
+// out, the Notify-me card goes under the reply instead.
+{
+  const miles = row("Miles Arch Support Sneaker - Black", { cat: "Sneakers", gender: "Men", price: "139.95" });
+  miles.variants = [["10.5 US", 0, "51133383508281"], ["12 US", 43, "51133383573817"]].map(([size, qty, id]) => ({ shopifyId: id, price: "139.95", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }]) }));
+  const cat4 = buildLeanCatalog([...ROWS, miles], { shop: "s.myshopify.com" });
+  const mh = cat4.products.find((p) => p.title.startsWith("Miles")).handle;
+  const config = { klaviyoCompanyId: "AbC123" };
+  const ask = "Any idea when the Miles in US 10.5 size will be back in stock?";
+  const card = { type: "restock_cta", handle: mh, title: "Miles Arch Support Sneaker - Black", image: "https://img/x.jpg", variant: "51133383508281", choice: "10.5 US" };
+  await test("a restock question handed to customer service is sent back; the rewrite checks the size and the Notify-me card goes under the reply", async () => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },
+      { stop_reason: "tool_use", content: [tu("t2", "contact_support", { reason: "restock date" })] },
+      { stop_reason: "end_turn", content: [txt("I don't have restock dates — our customer service team can help with that.")] },
+      { stop_reason: "tool_use", content: [tu("t3", "back_in_stock_alert", { handle: mh, options: { size: "10.5" } })] },
+      { stop_reason: "end_turn", content: [txt("The Miles in Black is sold out in 10.5 US right now — 12 US is in stock. Pop your email in below and we'll email you the moment it's back.")] },
+    ]);
+    const logs = [];
+    const r = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, callModel: s.callModel, log: (l) => logs.push(l) });
+    assert.ok(s.requests[0].tools.some((t) => t.name === "back_in_stock_alert"), "the tool is offered");
+    assert.equal(r.retried, true);
+    assert.ok(logs.some((l) => /rewrite: .*restock_not_checked/.test(l)), logs.join("\n"));
+    assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /sending them to customer service instead of checking/);
+    const result = JSON.stringify(s.requests[4].messages.at(-1));
+    assert.match(result, /alert\\?":\\?"offered/);
+    assert.match(result, /in_stock_sizes\\?":\[\\?"12 US/);
+    assert.deepEqual(r.events.filter((e) => e.type === "restock_cta"), [card]);
+    assert.equal(r.supportRequested, null, "the support button waited for the rewrite, which didn't ask for it");
+    assert.match(r.text, /sold out in 10.5 US/);
+  });
+  await test("a store without Klaviyo: no tool, no rewrite — the reply stands as before", async () => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },
+      { stop_reason: "end_turn", content: [txt("I don't have restock dates, sorry — the 12 US is in stock if that helps.")] },
+    ]);
+    const r = await runLeanTurn({ catalog: cat4, config: {}, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, callModel: s.callModel, log: quiet });
+    assert.ok(!s.requests[0].tools.some((t) => t.name === "back_in_stock_alert"));
+    assert.equal(r.retried, false);
+    assert.equal(r.events.length, 0);
+  });
+  await test("a size picked for a card that's sold out: the alert is offered in the rewrite, with the card", async () => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },
+      { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [mh], options: { [mh]: { size: "10.5" } } })] },
+      { stop_reason: "end_turn", content: [txt("The Miles is sold out in 10.5 US right now — 12 US is in stock.")] },
+      { stop_reason: "tool_use", content: [tu("t3", "back_in_stock_alert", { handle: mh, options: { size: "10.5" } })] },
+      { stop_reason: "end_turn", content: [txt("The Miles is sold out in 10.5 US right now — 12 US is in stock. Want an email the moment 10.5 is back? Pop your email in below.")] },
+    ]);
+    const r = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: "miles in 10.5" }], latestUserMessage: "miles in 10.5", callModel: s.callModel, log: quiet });
+    assert.equal(r.retried, true);
+    assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /the store has back-in-stock alerts: call back_in_stock_alert/);
+    assert.deepEqual(r.events.filter((e) => e.type === "restock_cta"), [card]);
+    assert.equal(r.cards.length, 1);
+    assert.equal(r.cards[0].preselect, undefined);
+  });
+  await test("live stock is asked before the alert: back in stock since the sync → no card, show it", async () => {
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },
+      { stop_reason: "tool_use", content: [tu("t2", "back_in_stock_alert", { handle: mh, options: { size: "10.5" } })] },
+      { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [mh], options: { [mh]: { size: "10.5" } } })] },
+      { stop_reason: "end_turn", content: [txt("Good news — the Miles is in stock in 10.5 US, ready to add.")] },
+    ]);
+    const r = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, liveStock: async () => [{ Size: "10.5 US" }, { Size: "12 US" }], callModel: s.callModel, log: quiet });
+    assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /in_stock\\?":true/);
+    assert.equal(r.events.length, 0);
+    assert.equal(r.retried, false);
+    assert.deepEqual(r.cards[0].preselect, { Size: "10.5 US" });
+  });
+}
 await test("show_products rejects a product no tool returned", async () => {
   const s = scripted([
     { stop_reason: "tool_use", content: [tu("t1", "show_products", { handles: [H["Margot Lace-Up Boot - Dark Red"]] })] },
@@ -2080,6 +2152,9 @@ await test("a hand-off before looking: the tools that can know, by what was aske
   assert.deepEqual(supportTooSoon({ latestUserMessage: "where is my refund?", supportOffered: true, called: [], available: all }), ["get_my_orders", "search_store_info"]);
   assert.deepEqual(supportTooSoon({ latestUserMessage: "my package never arrived", supportOffered: true, called: [], available: all }), ["get_my_orders"]);
   assert.deepEqual(supportTooSoon({ latestUserMessage: "how many points do I have", supportOffered: true, called: [], available: ["get_my_orders", "search_store_info"] }), ["search_store_info"], "no rewards tool here: the policy at least");
+  // Live store, 2026-10-30: "my return credit" went straight to customer service.
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "my return credit", supportOffered: true, called: [], available: all }), ["get_my_orders", "get_my_rewards", "search_store_info"]);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "where is my credit", supportOffered: true, called: ["get_my_rewards", "search_store_info"], available: all }), ["get_my_orders"], "a credit can be the refund on a return");
 });
 await test("no hand-off, everything looked at, a person asked for, an upset shopper, another topic: nothing to add", () => {
   const all = ["get_my_orders", "get_my_rewards", "search_store_info"];

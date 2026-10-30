@@ -1213,10 +1213,10 @@ function IntegrationsSection({ d, values, set }) {
         <Integration title="AfterShip Returns" help="Returns and exchanges started right in the chat, with your rules, labels and emails." connected={d.hasAftershipKey}>
           <TextField label="AfterShip Returns API key" type="password" value={values.aftershipApiKey} onChange={set("aftershipApiKey")} placeholder={d.hasAftershipKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText="AfterShip → Settings → API keys (your plan needs API access)." />
         </Integration>
-        <Integration title="Klaviyo" help="A newsletter signup form in the chat when a shopper wants deals or updates." connected={Boolean(values.klaviyoCompanyId && values.klaviyoListId)}>
+        <Integration title="Klaviyo" help="Back-in-stock alerts in the chat: when a size is sold out, a Notify-me card takes the shopper's email and your Klaviyo back-in-stock flow emails them when it's back. With a list, also a newsletter signup form when a shopper wants deals or updates." connected={Boolean(values.klaviyoCompanyId)}>
           <div className="set-grid">
-            <TextField label="Company ID (public key)" value={values.klaviyoCompanyId} onChange={set("klaviyoCompanyId")} placeholder="AbC123" autoComplete="off" helpText="Klaviyo → Settings → API Keys." />
-            <TextField label="List ID" value={values.klaviyoListId} onChange={set("klaviyoListId")} placeholder="XyZ789" autoComplete="off" helpText="Audience → Lists → your list." />
+            <TextField label="Company ID (public key)" value={values.klaviyoCompanyId} onChange={set("klaviyoCompanyId")} placeholder="AbC123" autoComplete="off" helpText="Klaviyo → Settings → API Keys. Turns on back-in-stock alerts — your Klaviyo back-in-stock flow must be live for the emails to go out." />
+            <TextField label="List ID" value={values.klaviyoListId} onChange={set("klaviyoListId")} placeholder="XyZ789" autoComplete="off" helpText="Audience → Lists → your list. Adds the newsletter signup form." />
           </div>
         </Integration>
         <Integration

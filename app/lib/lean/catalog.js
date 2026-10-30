@@ -205,9 +205,18 @@ export function normalizeProduct(row, { shop = "" } = {}) {
     // The option values of each variant in stock ({ Size: "7 US", Width: "M" }),
     // so a size picked for the customer can be checked before it's offered.
     stock: inStockVariants.map((v) => optionBag(v.optionsJson)).filter((o) => Object.keys(o).length),
+    // Each variant by its Shopify id with its option values, for the
+    // back-in-stock alert (restock.js) — the id names the variant to Klaviyo.
+    variants: variants.map((v) => ({ id: variantNumber(v?.shopifyId), options: optionBag(v?.optionsJson) })),
     sizes,
     widths,
   };
+}
+
+// "gid://shopify/ProductVariant/123" or "123" → "123"; anything else → "".
+function variantNumber(id) {
+  const n = String(id ?? "").replace(/^gid:\/\/shopify\/ProductVariant\//, "");
+  return /^\d{1,20}$/.test(n) ? n : "";
 }
 
 // Count values across products → [{ value, count }] sorted by count.

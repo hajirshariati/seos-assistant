@@ -31,7 +31,7 @@ export const ORDERS_TOOL = {
     "The orders appear as cards under your reply — keep your reply to one short sentence and don't repeat what the cards show (numbers, dates, tracking). " +
     "If the customer isn't signed in, a card appears instead where they can sign in, look up the order with its order number (or confirmation code) and the email they used, or open the store's tracking page or returns center: point them to it in one sentence. Never ask them to type their email or order details into the chat. " +
     "Tracking an order and starting a return are handled by these cards and the store's own pages — don't send them to customer service for that unless they've tried and are still stuck, or ask for a person. " +
-    "For a question about what happened after a return — was it refunded, how much, when, were points or a discount given back — use intent \"refunds\": it looks further back and lists each order with a return or refund, with the refund's status, amount and date and the discount codes used on it (facts for you; the cards don't show them). " +
+    "For a question about a return they've made or what happened after it — where a return stands, their return credit or refund, how much, when, were points or a discount given back — use intent \"refunds\": it looks further back and lists each order with a return or refund, with each return's days (requested, approved, closed), its status and shipment tracking, the refund's status, amount and date, and the discount codes used (facts for you; the cards don't show them). Answer from those with the store's refund timing (search_store_info) before any hand-off. " +
     IN_CHAT_RETURNS,
 
   input_schema: {
@@ -71,14 +71,24 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         };
       }
       if (!accessToken) return { error: "Orders aren't available right now." };
-      let { orders } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: refundsAsked ? 25 : 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl, policy });
+      let { orders, numberOfOrders = 0 } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: refundsAsked ? 25 : 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl, policy });
       // Returns and refunds: only the orders that had one (unless they named one).
       const recent = orders.length;
-      if (refundsAsked && !input.orderNumber) orders = orders.filter((o) => o.refund || o.returnStatus || o.returns?.length);
+      if (refundsAsked && !input.orderNumber) orders = orders.filter((o) => o.refund || o.returnStatus || o.returns?.length || o.returnFacts);
       // Returns in the chat turned off: the card's button opens the returns page.
       if (!returnsInChat) for (const o of orders) o.returnMode = "page";
       if (!orders.length) {
         if (refundsAsked && recent) return { signed_in: true, orders: [], note: `None of their last ${recent} orders has a return or refund on record. Say so plainly; if they returned something recently, it may not be processed yet — the store's info says how long refunds take (search_store_info).` };
+        // The account counts orders the chat can't list: the store's app
+        // access stops at orders from the last 60 days.
+        if (!recent && numberOfOrders > 0) {
+          return {
+            signed_in: true,
+            orders: [],
+            orders_on_account: numberOfOrders,
+            note: `Their account has ${numberOfOrders} order${numberOfOrders === 1 ? "" : "s"} on record, but none from the last 60 days — older orders aren't visible to this chat. Say that plainly (their older orders aren't visible here — never that they have no orders), point them to their account's order history on the store's site for those, and offer customer service for anything about them${refundsAsked ? "; for how long refunds take after a return, use the store's info (search_store_info)" : ""}.`,
+          };
+        }
         return { signed_in: true, orders: [], note: input.orderNumber ? "No order with that number on this account. Ask them to check the number, or point to customer service." : "No orders on this account yet." };
       }
       // What the model sees: the gist only. The cards carry the details.
@@ -88,17 +98,25 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         return_started_in_chat: o.returns?.length ? o.returns.map((r) => ({ rma: r.rma || undefined, on: r.date, how: r.method?.label || undefined, exchange: r.exchange || undefined })) : undefined,
         why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", not_shipped: "not shipped yet — returns open once it ships", window_closed: `past the ${policy.windowDays}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
         has_returns_page: returnsInChat ? undefined : Boolean(o.returnsUrl),
+        // Each return the store's records hold: requested/approved/closed
+        // days, where it stands, the return shipment's tracking.
+        returns_on_record: o.returnFacts || undefined,
         refund: o.refund || undefined,
         discount_codes: o.discountCodes?.length ? o.discountCodes : undefined,
         items: o.items.map((i) => i.title).slice(0, 4),
       }));
       // The cards carry no payment facts.
-      const cards = orders.map((o) => { const card = { ...o }; delete card.refund; delete card.discountCodes; return card; });
+      const cards = orders.map((o) => { const card = { ...o }; delete card.refund; delete card.returnFacts; delete card.discountCodes; return card; });
+      const hasReturn = orders.some((o) => o.returnFacts);
       return {
         signed_in: true,
         orders: summary,
         note: refundsAsked
-          ? "The orders with a return or refund are shown as cards under your reply. Answer from these facts: which order, its refund status, amount and date (refund), and any discount codes used on it. Say plainly what they don't show — never guess an amount, a date or what happened to points."
+          ? "The orders with a return or refund are shown as cards under your reply. Answer from these facts: each return on record (returns_on_record — the day it was requested and approved, whether it's still open or closed, the return shipment's tracking link), the refund (refund — status, amount, date) and any discount codes used. " +
+            "For a return that's still open, say where it stands from those days, give the tracking link so they can see where the package is, and say how long the store says a refund takes once the return arrives (search_store_info) — counted from these dates, never a guess. For a closed one, name the refund's date and amount. " +
+            "Say plainly what the records don't show (the chat can't see a carrier's drop-off scan — only the tracking link) — never guess an amount, a date or what happened to points, and don't hand this to customer service while these facts answer it."
+          : hasReturn
+          ? "The order cards are shown under your reply. One or more orders have a return on record (returns_on_record: requested/approved/closed days, status, the return shipment's tracking); if they ask about a return or refund, answer from those facts and the refund field, with the store's refund timing from search_store_info."
           : intent === "return" && !returnsInChat
           ? `The order cards are shown with a "Start a return" button on returnable orders (${rule}) that opens the returns page with the order filled in. Tell them to tap it; if none can be returned, say why in one sentence (why_no_return).`
           : intent === "return"

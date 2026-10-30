@@ -17,6 +17,7 @@ import { buildLeanSystemPrompt } from "./prompt.js";
 import { storeLocatorConfig } from "../feedback-survey.js";
 import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
+import { RESTOCK_TOOL, restockCheck, restockIssues } from "./restock.js";
 import { productKind, codesInText } from "./catalog.js";
 import { containsColorWord } from "../color-match.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown, footConditionQuestion } from "../medical-disclaimer.js";
@@ -445,6 +446,8 @@ export function pointsToSupport(text) {
 // shopper didn't ask for a person and isn't upset) gets one rewrite.
 const ACCOUNT_ASKS = [
   { re: /\b(points?|rewards?|loyalty|store credit)\b/i, tools: ["get_my_rewards", "search_store_info"] },
+  // "my credit" / "my return credit": the refund on the return, or store credit.
+  { re: /\bcredit\b/i, tools: ["get_my_orders", "get_my_rewards", "search_store_info"] },
   { re: /\b(refund\w*|returns?|returned|returning|exchang\w*|charged?|charges|money back|cancel\w*)\b/i, tools: ["get_my_orders", "search_store_info"] },
   { re: /\b(my orders?|order #?\d|package|parcel|deliver\w*|tracking|track my|shipped|arriv\w*)\b/i, tools: ["get_my_orders"] },
 ];
@@ -519,7 +522,10 @@ export async function runLeanTurn({
   const familyIndex = buildFamilyIndex(products);
 
   const featuredOn = Boolean(featured?.handle && catalog?.collections?.has(featured.handle));
-  const baseTools = buildLeanTools(catalog?.vocab || {}, { similar: similarAttributes.length > 0, collection: featuredOn ? featured : null });
+  // Back-in-stock alerts (restock.js) need the store's Klaviyo company id:
+  // the card under the reply subscribes the variant there.
+  const restockAlerts = Boolean(config?.klaviyoCompanyId);
+  const baseTools = buildLeanTools(catalog?.vocab || {}, { similar: similarAttributes.length > 0, collection: featuredOn ? featured : null, restockAlerts });
   baseTools[baseTools.length - 1] = { ...baseTools[baseTools.length - 1], cache_control: { type: "ephemeral" } };
   const extraByName = new Map(extraTools.filter((t) => t?.definition?.name && typeof t.run === "function").map((t) => [t.definition.name, t]));
   const tools = [...baseTools, ...[...extraByName.values()].map((t) => t.definition)];
@@ -732,6 +738,18 @@ export async function runLeanTurn({
       log(`[lean] support button: ${supportRequested}`);
       return { ok: true, note: "A button to reach customer service is shown under your reply. Tell the customer briefly." };
     }
+    if (name === RESTOCK_TOOL && restockAlerts) {
+      const handle = String(input.handle || "");
+      const p = byHandle.get(handle) || null;
+      // The store as it is right now, when it can be asked (a size can sell
+      // out, or come back, between catalog syncs).
+      const live = p && liveStock ? await liveStock(handle).catch(() => null) : null;
+      const { _events, ...r } = restockCheck(p, input.options, live);
+      if (Array.isArray(_events)) events.push(..._events);
+      if (p) { markSeen([p.handle]); topic("product", p.title); topic("tool", name); }
+      log(`[lean] restock ${handle} ${JSON.stringify(input.options || {})} → ${r.error ? `error: ${r.error}` : r.carried === false ? "not carried" : r.needs_options ? "needs options" : r.in_stock ? "in stock" : `sold out, alert ${r.alert}`}`);
+      return r;
+    }
     const ext = extraByName.get(name);
     // "L820" is a product code here, not an order number: send Claude to the product.
     const codeAsOrder = name === "get_my_orders" && input?.orderNumber ? codesInText(catalog, input.orderNumber, { close: false }) : [];
@@ -921,6 +939,17 @@ export async function runLeanTurn({
         detail: `You're sending them to customer service before looking into it. Investigate first with your tools: ${lookFirst.map((t) => LOOK_INTO[t]).join("; ")}. Then answer from what you found — the order number, the dates, the refund, the points entries — and connect it to their question; say plainly what the records don't show, never guess. Offer customer service (contact_support) only if the facts can't settle it, and then say what you checked.`,
       });
     }
+    // A restock question, or a size picked for a card that's sold out, with
+    // the store's back-in-stock alerts left unused: check the size and offer
+    // the alert (the support button waits for the rewrite).
+    issues.push(...restockIssues({
+      latestUserMessage,
+      text,
+      supportOffered: Boolean(supportRequested) || pointsToSupport(text),
+      called: [...calledTools],
+      available: tools.map((t) => t.name),
+      soldOut,
+    }));
     // Free shipping said of a product the store's offer doesn't name.
     for (const m of misappliedShipping({ text, knowledgeText, lineNames: lineNamesOf(catalog) })) {
       issues.push({
@@ -944,7 +973,7 @@ export async function runLeanTurn({
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";
       // Its hand-off to customer service waits for what the rewrite finds.
-      if (issues.some((i) => i.code === "support_too_soon")) supportRequested = null;
+      if (issues.some((i) => i.code === "support_too_soon" || i.code === "restock_not_checked")) supportRequested = null;
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
         role: "user",

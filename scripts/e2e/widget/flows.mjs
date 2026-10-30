@@ -558,6 +558,61 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check("points: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Back in stock: a sold-out size gets a Notify-me card under the reply. The
+// email goes from the browser straight to Klaviyo's back-in-stock
+// subscription for that Shopify variant; the card remembers it's done.
+for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["phone", { width: 375, height: 740 }]]) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, ...(label === "phone" ? { isMobile: true, hasTouch: true } : {}) });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const klaviyo = [];
+  let klaviyoStatus = 202;
+  await page.route("https://a.klaviyo.com/**", (r) => { klaviyo.push({ url: r.request().url(), headers: r.request().headers(), body: r.request().postDataJSON() }); return r.fulfill({ status: klaviyoStatus, contentType: "application/json", body: klaviyoStatus === 202 ? "" : JSON.stringify({ errors: [{ detail: "nope" }] }) }); });
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "when will the miles be back in stock in 13.5");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg:last-child .ai-bis", { timeout: 6000 });
+  const card = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return { title: c.querySelector(".ai-ord__num").textContent, sub: c.querySelector(".ai-ord__date").textContent, variant: c.getAttribute("data-bis-variant"), input: !!c.querySelector('input[type="email"]'), note: c.querySelector(".ai-bis__note").textContent.trim(), privacy: c.querySelector(".ai-bis__note a")?.getAttribute("href") }; });
+  check(`restock (${label}): the Notify-me card names the product and size, with an email field and an honest note`, card.title === "Get an email when it’s back" && card.sub === "Miles Arch Support Sneaker - Black · 13.5 - 14 US" && card.variant === "51133383639353" && card.input && /One email when it’s back in stock — nothing else\./.test(card.note) && !!card.privacy, JSON.stringify(card));
+  if (label === "desktop") {
+    const fits = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); const b = c.getBoundingClientRect(), p = c.closest(".ai-chat-msg-bubble").getBoundingClientRect(); return b.right <= p.right + 1 && b.left >= p.left - 1; });
+    check("restock (desktop): the card fits the bubble", fits);
+  }
+  // A bad email: told inline, nothing sent.
+  await page.fill(".ai-chat-msg:last-child .ai-bis input", "not-an-email");
+  await page.click(".ai-chat-msg:last-child .ai-bis__go");
+  await page.waitForTimeout(200);
+  const bad = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return { err: c.querySelector(".ai-bis__err").textContent, hidden: c.querySelector(".ai-bis__err").hidden, invalid: c.querySelector("input").getAttribute("aria-invalid"), focused: document.activeElement === c.querySelector("input") }; });
+  check(`restock (${label}): a bad email is said inline, focus back on the field, nothing sent`, bad.err === "Please enter a valid email address." && !bad.hidden && bad.invalid === "true" && bad.focused && klaviyo.length === 0, JSON.stringify(bad));
+  // Klaviyo says no: the card says so and lets them try again.
+  klaviyoStatus = 500;
+  await page.fill(".ai-chat-msg:last-child .ai-bis input", "jo@example.com");
+  await page.click(".ai-chat-msg:last-child .ai-bis__go");
+  await page.waitForFunction(() => /Couldn’t save that just now/.test([...document.querySelectorAll(".ai-bis__err")].pop()?.textContent || ""), null, { timeout: 4000 });
+  const failed = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return { btn: c.querySelector(".ai-bis__go").textContent, disabled: c.querySelector(".ai-bis__go").disabled, form: !!c.querySelector("form") }; });
+  check(`restock (${label}): a failed save is said, the button is back`, failed.btn === "Notify me" && !failed.disabled && failed.form && klaviyo.length === 1, JSON.stringify(failed));
+  // It works: one subscription for that exact variant, by email only.
+  klaviyoStatus = 202;
+  await page.click(".ai-chat-msg:last-child .ai-bis__go");
+  await page.waitForSelector(".ai-chat-msg:last-child .ai-bis__done", { timeout: 4000 });
+  const sent = klaviyo[1];
+  const body = sent?.body?.data;
+  check(`restock (${label}): one back-in-stock subscription for that variant, from the browser, with the company id`, klaviyo.length === 2 && /^https:\/\/a\.klaviyo\.com\/client\/back-in-stock-subscriptions\/\?company_id=TESTCO$/.test(sent.url) && sent.headers.revision === "2024-10-15" && body?.type === "back-in-stock-subscription" && JSON.stringify(body.attributes.channels) === '["EMAIL"]' && body.attributes.profile.data.attributes.email === "jo@example.com" && body.relationships.variant.data.id === "$shopify:::$default:::51133383639353" && body.relationships.variant.data.type === "catalog-variant", JSON.stringify(sent));
+  const done = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return { text: c.querySelector(".ai-bis__done").textContent, form: !!c.querySelector("form"), cls: c.className }; });
+  check(`restock (${label}): the card says it's done, the form is gone`, /You’re on the list — one email the moment it’s back\./.test(done.text) && !done.form && /is-done/.test(done.cls), JSON.stringify(done));
+  check(`restock (${label}): the email is not kept in this browser`, !/jo@example\.com/.test(await page.evaluate(() => JSON.stringify(localStorage))));
+  // After a reload the card is still there, still done — no second ask.
+  await page.reload();
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(800);
+  const again = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return c ? { done: !!c.querySelector(".ai-bis__done"), form: !!c.querySelector("form"), sub: c.querySelector(".ai-ord__date").textContent } : null; });
+  check(`restock (${label}): after a reload the card is back, already done`, !!again && again.done && !again.form && /13\.5 - 14 US/.test(again.sub), JSON.stringify(again));
+  check(`restock (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The store's app: its own small message after the second reply of a visit
 // (like the rating question), never again that visit; its button opens a
 // QR code (computers) or the phone's own store badge — from the store's

@@ -340,6 +340,8 @@ export function start(port) {
           return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
         }
         if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
+          // Settings → Integrations → Klaviyo: the company id alone turns on back-in-stock alerts (no list → no newsletter form).
+          klaviyoCompanyId: "TESTCO",
           // Smart Recommenders → Fit confidence: on for ?fitc=1 pages.
           // …with the levels the cards show: High and Mid, as stored by default (?fitl=all: all three; ?fitl=none: none).
           ...(/[?&]fitc=1/.test(String(req.headers.referer || "")) ? { fitConfidence: true, fitLevels: /[?&]fitl=all/.test(String(req.headers.referer || "")) ? ["high", "mid", "fair"] : /[?&]fitl=none/.test(String(req.headers.referer || "")) ? [] : ["high", "mid"] } : {}),
@@ -376,6 +378,17 @@ export function start(port) {
             w({ type: "text", text: TRUE_FIT_INTRO_TEXT });
             w({ type: "products", products: [] });
             w(trueFitIntro(INTRO_CATALOG, { primaryLine: "women" }));
+            w({ type: "done" });
+            return resp.end();
+          }
+          // A restock question (the back_in_stock_alert tool, as the server
+          // sends it): sold out in that size → the Notify-me card.
+          if (/back in stock|restock/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            w({ type: "text", text: "The Miles in Black is sold out in 13.5 - 14 US right now — 12 US and 12.5 - 13 US are in stock. Pop your email in below and we'll email you the moment it's back." });
+            w({ type: "products", products: [] });
+            w({ type: "restock_cta", handle: "miles-black-am260m", title: "Miles Arch Support Sneaker - Black", image: "", variant: "51133383639353", choice: "13.5 - 14 US" });
             w({ type: "done" });
             return resp.end();
           }

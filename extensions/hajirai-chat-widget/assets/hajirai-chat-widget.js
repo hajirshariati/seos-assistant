@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-30 account-answers');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-30 restock-alerts');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -3190,6 +3190,10 @@ function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 /* A button under the reply that opens one of the store's Typeforms. */
 var pendingForm=null,pendingMap=null;
+/* The back-in-stock card under a reply (the server's restock_cta): the
+   shopper's email goes from here straight to the store's Klaviyo, for that
+   one variant — never through the assistant. */
+var pendingRestock=null;
 /* "View all 16 women's sale boots": when the search behind the cards matched
    more than they show, every match opens in the sheet — the chat's own
    search, so exactly what the assistant found, each with Add to cart. A page
@@ -4907,9 +4911,64 @@ panel.addEventListener('click',function(e){
 
 panel.addEventListener('submit',function(e){
   var form=e.target&&e.target.closest&&e.target.closest('.ai-ordl__form');
-  if(!form)return;
-  e.preventDefault();ordlSubmit(form);
+  if(form){e.preventDefault();ordlSubmit(form);return}
+  var bis=e.target&&e.target.closest&&e.target.closest('.ai-bis__form');
+  if(bis){e.preventDefault();bisSubmit(bis)}
 });
+
+/* ── Back-in-stock alert card ──
+   Under a reply about a sold-out size: one email field, one tap. The email
+   goes from this browser to the store's Klaviyo back-in-stock subscription
+   for that exact Shopify variant (the same subscription the store's own
+   Notify-me buttons make), and the store's flow emails them when it's
+   back. The assistant never sees the email; the card remembers only that
+   it's done. */
+var BIS_URL='https://a.klaviyo.com/client/back-in-stock-subscriptions/';
+var BIS_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
+var BIS_DONE='You’re on the list — one email the moment it’s back.';
+var bisSeq=0;
+/* The server sends the card only for a store with Klaviyo; it's drawn even
+   before this page's settings arrive (a restored chat), and a tap before
+   then is told to try again. */
+function restockCardHtml(r){
+  if(!r)return '';
+  var n=++bisSeq,f='ai-bis-'+n;
+  var head='<div class="ai-ord__signin-icon">'+BIS_ICON+'</div>'+
+    '<div class="ai-ord__signin-text"><div class="ai-ord__num">Get an email when it’s back</div><div class="ai-ord__date">'+esc(r.title)+(r.choice?' · '+esc(r.choice):'')+'</div></div>';
+  if(r.done)return '<div class="ai-ord ai-ord--signin ai-bis is-done" data-bis>'+head+'<div class="ai-ord__signedin ai-bis__done">'+ORD_ICON.check+esc(BIS_DONE)+'</div></div>';
+  return '<div class="ai-ord ai-ord--signin ai-bis" data-bis data-bis-variant="'+esc(r.variant)+'">'+head+
+    '<form class="ai-bis__form" id="'+f+'" novalidate>'+
+      '<label class="ai-sr" for="'+f+'-e">Email address</label>'+
+      '<div class="ai-bis__row"><input id="'+f+'-e" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="you@example.com" aria-describedby="'+f+'-err">'+
+      '<button type="submit" class="ai-ord__btn is-primary ai-bis__go">Notify me</button></div>'+
+      '<span class="ai-bis__err" id="'+f+'-err" role="alert" hidden></span>'+
+      '<p class="ai-bis__note">'+ORD_ICON.lock+'<span>One email when it’s back in stock — nothing else. <a href="'+esc(safeUrl(PRIVURL)||'/policies/privacy-policy')+'" target="_blank" rel="noopener">Privacy</a></span></p>'+
+    '</form></div>';
+}
+function bisSubmit(form){
+  var card=form.closest('[data-bis]'),variant=card?String(card.getAttribute('data-bis-variant')||''):'';
+  var input=$('input[name="email"]',form),btn=$('.ai-bis__go',form),err=$('.ai-bis__err',form);
+  if(!input||!btn||!err)return;
+  var email=(input.value||'').trim();
+  var fail=function(msg){err.textContent=msg;err.hidden=false;input.setAttribute('aria-invalid','true');btn.disabled=false;btn.textContent='Notify me';input.focus()};
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))return fail('Please enter a valid email address.');
+  if(!/^\d{1,20}$/.test(variant)||!KLAVIYO_COMPANY_ID)return fail('This alert isn’t available right now.');
+  err.hidden=true;input.removeAttribute('aria-invalid');btn.disabled=true;btn.textContent='Saving…';
+  fetch(BIS_URL+'?company_id='+encodeURIComponent(KLAVIYO_COMPANY_ID),{
+    method:'POST',
+    headers:{'Content-Type':'application/json','revision':'2024-10-15'},
+    body:JSON.stringify({data:{type:'back-in-stock-subscription',attributes:{channels:['EMAIL'],profile:{data:{type:'profile',attributes:{email:email}}}},relationships:{variant:{data:{type:'catalog-variant',id:'$shopify:::$default:::'+variant}}}}})
+  }).then(function(r){
+    if(!(r.ok||r.status===202)){
+      r.text().then(function(t){console.error('[klaviyo] back in stock status='+r.status,t)}).catch(function(){});
+      return fail('Couldn’t save that just now. Please try again.');
+    }
+    card.classList.add('is-done');
+    form.outerHTML='<div class="ai-ord__signedin ai-bis__done" role="status">'+ORD_ICON.check+esc(BIS_DONE)+'</div>';
+    var md=card.closest('.ai-chat-msg');
+    if(md&&md.__msg&&md.__msg.restock){md.__msg.restock.done=true;saveH(messages)}
+  }).catch(function(){fail('Connection error. Please try again.')});
+}
 
 function sendMessage(){
 var text=inputEl.value.trim();
@@ -5173,7 +5232,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingRestock=null;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -5213,6 +5272,7 @@ if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
+if(p.type==='restock_cta'){pendingRestock=cleanRestock(p)}
 if(p.type==='map_cta'){pendingMap=cleanMap(p)}
 if(p.type==='view_all'){pendingViewAll=cleanViewAll(p)}
 if(p.type==='size_intro'){pendingSizeIntro=cleanSizeIntro(p)}
@@ -5342,6 +5402,7 @@ if(cleanText){
      card, buttons, size results, choices — so a reopened chat reads the
      same as it did. */
   if(pendingLogin)_saved.login=pendingLogin;
+  if(pendingRestock)_saved.restock=pendingRestock;
   if(supportCta)_saved.support=supportCta;
   if(sizeFinder)_saved.sizeFinder=sizeFinder;
   if(fitReport)_saved.fitReport=fitReport;
@@ -5411,6 +5472,11 @@ if(pendingLogin&&mDiv){
   var lb2=$('.ai-chat-msg-bubble',mDiv);
   if(lb2)lb2.insertAdjacentHTML('beforeend',loginCardHtml(pendingLogin));
   pendingLogin=null;
+}
+if(pendingRestock&&mDiv){
+  var rb=$('.ai-chat-msg-bubble',mDiv);
+  if(rb)rb.insertAdjacentHTML('beforeend',restockCardHtml(pendingRestock));
+  pendingRestock=null;
 }
 if(sizeFinder&&mDiv){
   var tfb=$('.ai-chat-msg-bubble',mDiv);
@@ -5983,6 +6049,12 @@ function cleanLogin(p){
   if(!p||typeof p!=='object')return null;
   return {intent:p.intent==='return'||p.intent==='rewards'?p.intent:'track',lookup:p.lookup===true,order:/^[A-Za-z0-9-]{3,24}$/.test(String(p.order||''))?String(p.order):'',pages:p.pages||null};
 }
+function cleanRestock(p){
+  if(!p||typeof p!=='object')return null;
+  var v=String(p.variant||''),t=STR(p.title,120);
+  if(!/^\d{1,20}$/.test(v)||!HANDLE_RE.test(String(p.handle||''))||!t)return null;
+  return {handle:String(p.handle),title:t,choice:STR(p.choice,60),image:safeUrl(p.image),variant:v,done:p.done===true};
+}
 function cleanSupport(p){
   if(!p||typeof p!=='object')return null;
   var u=STR(p.fallbackUrl,500);
@@ -6025,6 +6097,7 @@ function restoreExtras(m,md,live){
   }
   /* Signed in since: the orders come in the chat now, not this card. */
   var lg=CUST_LOGGED_IN?null:cleanLogin(m.login);if(lg)add(loginCardHtml(lg));
+  var rs=cleanRestock(m.restock);if(rs)add(restockCardHtml(rs));
   var tf=cleanFinder(m.sizeFinder);if(tf)add(trueFitBtnHtml(tf));
   var fr=cleanFitReport(m.fitReport);
   if(fr){

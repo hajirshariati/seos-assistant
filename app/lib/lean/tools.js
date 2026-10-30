@@ -10,9 +10,12 @@ function arrayEnum(rows, description) {
   return { type: "array", items: { type: "string", enum: vals }, description };
 }
 
+import { RESTOCK_TOOL_DEF } from "./restock.js";
+
 // collection: the seasonal button's { handle, title, label } (seasonal-cta.js),
-// or null. It reads the same for every shopper, so the tools stay cached.
-export function buildLeanTools(vocab = {}, { similar = false, collection = null } = {}) {
+// or null. restockAlerts: the store has Klaviyo back-in-stock alerts
+// (restock.js). It reads the same for every shopper, so the tools stay cached.
+export function buildLeanTools(vocab = {}, { similar = false, collection = null, restockAlerts = false } = {}) {
   const props = {
     query: {
       type: "string",
@@ -150,5 +153,7 @@ export function buildLeanTools(vocab = {}, { similar = false, collection = null 
       },
     });
   }
+  // Before contact_support, so the hand-off reads as the step after it.
+  if (restockAlerts) tools.splice(tools.findIndex((t) => t.name === "contact_support"), 0, RESTOCK_TOOL_DEF);
   return tools;
 }

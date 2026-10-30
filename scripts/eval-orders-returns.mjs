@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
-const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts } = await import("../app/lib/orders.server.js");
+const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts, returnFacts } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 const { cleanLookup, guestSearch, matchGuestOrder, guestOrderCard, lookupGuestOrder, createLookupLimiter, GUEST_LIMITS } = await import("../app/lib/guest-order.server.js");
@@ -430,6 +430,73 @@ await test("chat tool, refunds while signed out: the sign-in card, as for tracki
   const r = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null }).run({ intent: "refunds" });
   assert.equal(r.signed_in, false);
   assert.equal(r._events[0].intent, "track");
+});
+// ── Returns on record: where a return stands, from Shopify's own records ──
+// (the store's returns app syncs them). Live store, 2026-10-30: "my return
+// credit" went to customer service with the return's dates unread.
+const inReturn = (over = {}) => order({
+  id: "gid://shopify/Order/5011", name: "#1174966", displayFinancialStatus: "PAID", returnStatus: "IN_PROGRESS",
+  returns: { nodes: [{
+    name: "#1174966-R1", status: "OPEN", createdAt: "2026-10-29T00:52:31Z", requestApprovedAt: "2026-10-29T00:52:31Z", closedAt: null, totalQuantity: 2,
+    reverseFulfillmentOrders: { nodes: [{ status: "OPEN", reverseDeliveries: { nodes: [{ deliverable: { tracking: { carrierName: null, number: "92023909899905543475181082", url: "https://www.aftership.com/track/ups-mi/92023909899905543475181082" } } }] } }] },
+  }] },
+  ...over,
+});
+await test("return facts: requested/approved/closed days, status in words, the return shipment's tracking; none → nothing", () => {
+  assert.deepEqual(returnFacts(inReturn()), [{
+    name: "#1174966-R1", status: "Open — approved, not refunded yet (on its way back or being processed)", items: 2,
+    requested: "2026-10-29", approved: "2026-10-29", closed: undefined,
+    shipment: { carrier: undefined, number: "92023909899905543475181082", url: "https://www.aftership.com/track/ups-mi/92023909899905543475181082" },
+  }]);
+  const closed = returnFacts(refunded({ returns: { nodes: [{ name: "#1160741-R1", status: "CLOSED", createdAt: "2026-10-16T10:00:00Z", requestApprovedAt: "2026-10-16T10:00:00Z", closedAt: "2026-10-20T15:00:01Z", totalQuantity: 1, reverseFulfillmentOrders: { nodes: [{ status: "OPEN", reverseDeliveries: { nodes: [] } }] } }] } }));
+  assert.equal(closed[0].status, "Closed — done (see refund)");
+  assert.equal(closed[0].closed, "2026-10-20");
+  assert.equal(closed[0].shipment, undefined, "no return shipment on record");
+  assert.equal(returnFacts(order()), null, "no returns");
+  assert.equal(returnFacts(order({ returns: { nodes: [] } })), null);
+  assert.deepEqual(toOrderCard(inReturn()).returnFacts, returnFacts(inReturn()));
+});
+await test("chat tool, refunds: an open return is listed with its days and tracking — facts for the model, off the cards — and the note says how to answer", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", numberOfOrders: 2, orders: { nodes: [inReturn(), order({ id: "gid://shopify/Order/5009", name: "#1180000", displayFinancialStatus: "PAID" })] } } } }), { status: 200 });
+  try {
+    const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77" });
+    const r = await t.run({ intent: "refunds" });
+    assert.deepEqual(r.orders.map((o) => o.number), ["1174966"], "the order with the return, even before any refund");
+    assert.equal(r.orders[0].return_status, "Return in progress");
+    assert.equal(r.orders[0].returns_on_record[0].requested, "2026-10-29");
+    assert.match(r.orders[0].returns_on_record[0].shipment.url, /aftership\.com\/track/);
+    assert.equal(r.orders[0].refund, undefined);
+    assert.match(r.note, /where it stands from those days/);
+    assert.match(r.note, /how long the store says a refund takes once the return arrives \(search_store_info\)/);
+    assert.match(r.note, /can't see a carrier's drop-off scan/);
+    assert.match(r.note, /don't hand this to customer service while these facts answer it/);
+    assert.ok(!("returnFacts" in r._events[0].orders[0]), "not on the card");
+    // Tracking: the return is mentioned so a follow-up is answered from it.
+    const track = await t.run({});
+    assert.equal(track.orders[0].returns_on_record[0].name, "#1174966-R1");
+    assert.match(track.note, /have a return on record/);
+    assert.match(t.definition.description, /where a return stands/);
+  } finally { globalThis.fetch = realFetch; }
+});
+await test("chat tool: an account with orders the chat can't list (older than 60 days) is never told it has none", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", numberOfOrders: 3, orders: { nodes: [] } } } }), { status: 200 });
+  try {
+    const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77" });
+    const r = await t.run({});
+    assert.deepEqual(r.orders, []);
+    assert.equal(r.orders_on_account, 3);
+    assert.match(r.note, /3 orders on record, but none from the last 60 days/);
+    assert.match(r.note, /never that they have no orders/);
+    assert.match(r.note, /account's order history/);
+    const refunds = await t.run({ intent: "refunds" });
+    assert.match(refunds.note, /search_store_info/);
+    const { numberOfOrders } = await getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async () => [] });
+    assert.equal(numberOfOrders, 3);
+    globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", numberOfOrders: 0, orders: { nodes: [] } } } }), { status: 200 });
+    assert.match((await t.run({})).note, /No orders on this account yet/, "a new account");
+  } finally { globalThis.fetch = realFetch; }
 });
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
