@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-22 signin-resume');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-30 launcher-mark');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -63,11 +63,12 @@ function hideAssistant(){
 }
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
-fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')).then(function(r){return r.json()}).then(function(d){
+fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')+'&av='+encodeURIComponent(C.avatarUrl||'')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false){SHOW_FEEDBACK=false;var _fr=msgsEl.querySelectorAll('.ai-chat-feedback');for(var _fi=0;_fi<_fr.length;_fi++)_fr[_fi].remove()}
   if(d.chatRating&&typeof d.chatRating==='object'){RATE_ON=d.chatRating.on!==false;var _ra=parseInt(d.chatRating.after,10);if(_ra>=2&&_ra<=8)RATE_AFTER=_ra}
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
+  if(d.launcherMark&&typeof d.launcherMark==='object')setLauncherMark(d.launcherMark);
   if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers'}
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
@@ -80,7 +81,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   if(d.chatTexts&&typeof d.chatTexts==='object'){
-    var txtNow=function(){return [NAME,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
+    var txtNow=function(){return [NAME,NAME_SUB,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
     try{localStorage.setItem(TXT_KEY,JSON.stringify(d.chatTexts))}catch(e){}
     setTexts(d.chatTexts);
     if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
@@ -155,12 +156,12 @@ var SHOWBAN=C.showBanner!==false;
 /* Settings → Look & feel → Chat text: the store's own words win over the
    theme editor's; a blank one keeps the theme editor's (or the default).
    Remembered, so the next page shows them from the start. */
-var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular',FIT_LBL='Check fit & size';
+var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular',FIT_LBL='Check fit & size',NAME_SUB='';
 var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,launcher:LPLACE,input:IPLACE};
 function setTexts(t){
   t=t&&typeof t==='object'?t:{};
   var v=function(k,max){var x=t[k];return typeof x==='string'&&x.trim()?x.replace(/\s+/g,' ').trim().slice(0,max):''};
-  NAME=v('name',60)||TXT_BASE.name;GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;
+  NAME=v('name',60)||TXT_BASE.name;NAME_SUB=v('nameSub',60);GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;
   LPLACE=v('launcher',60)||TXT_BASE.launcher;IPLACE=v('input',60)||TXT_BASE.input;
   START_LBL=v('startHeading',30)||'Start here';POP_LBL=v('popularHeading',30)||'Popular';
   FIT_LBL=v('fitButton',24)||'Check fit & size';
@@ -427,6 +428,25 @@ var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="pr
 var ORB_DEFAULT=['#ff1f33','#1a4dff','#33dbff','#14d999','#ff4780'],ORB_KEY='hajirai_orb_colors',ORB_COLORS=ORB_DEFAULT.slice();
 /* The globe's own color behind the light (Settings → Assistant look). */
 var ORB_BG_DEFAULT='#05050a',ORB_BG_KEY='hajirai_orb_bg',ORB_BG=ORB_BG_DEFAULT;
+/* What sits in the chat bar (Settings → AVA mark): AVA's light, or the
+   assistant's photo from the theme editor. With the photo, the × folds the
+   bar into a small text button in the store's words ("Ask AI" unless set)
+   instead of the round light. No photo set, or one that won't load: the
+   light stays. Remembered, so the next page starts in the store's look. */
+var MARK_KEY='hajirai_launcher_mark',MARK_PHOTO=false,MARK_TEXT='Ask AI',MARK_BROKEN=false;
+function markRead(m){
+  MARK_PHOTO=!!(m&&m.mark==='avatar');
+  var t=m&&typeof m.text==='string'?m.text.replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,24).trim():'';
+  MARK_TEXT=t||'Ask AI';
+}
+try{markRead(JSON.parse(localStorage.getItem(MARK_KEY)||'null'))}catch(e){}
+function photoMark(){return MARK_PHOTO&&!MARK_BROKEN&&!!safeUrl(AVATAR)}
+function setLauncherMark(m){
+  var was=[MARK_PHOTO,MARK_TEXT].join('|');
+  markRead(m);
+  try{if(MARK_PHOTO)localStorage.setItem(MARK_KEY,JSON.stringify({mark:'avatar',text:MARK_TEXT}));else localStorage.removeItem(MARK_KEY)}catch(e){}
+  if(was!==[MARK_PHOTO,MARK_TEXT].join('|')&&typeof launcher!=='undefined'&&launcher){cancelMorph();applyMark();placeLauncher()}
+}
 function orbParse(v){
   if(!v||typeof v!=='object'||v.length!==5)return null;
   var out=[];
@@ -616,7 +636,8 @@ function glowLoop(){
   /* In-chat orbs (the image generator's) leave the list once they're gone. */
   for(var gi=glows.length-1;gi>=0;gi--)if(glows[gi].inPanel&&!glows[gi].el.isConnected)glows.splice(gi,1);
   var inChat=false;for(var gj=0;gj<glows.length;gj++)if(glows[gj].inPanel){inChat=true;break}
-  var idle=document.hidden||(launcher.classList.contains('hidden')&&!inChat);
+  /* The bar showing the photo has no light of its own to draw. */
+  var idle=document.hidden||(!inChat&&(launcher.classList.contains('hidden')||launcher.classList.contains('is-photo')));
   if(!idle)paintGlows(performance.now()/1000);
   if(idle)setTimeout(glowLoop,300);else requestAnimationFrame(glowLoop);
 }
@@ -628,7 +649,7 @@ launcher.style.maxWidth='calc(100vw - 32px)';
    a small dark circle with a softly breathing AI sparkle — remembered
    across pages. */
 launcher.innerHTML='<div class="ai-chat-launcher__icon is-orb" aria-hidden="true"></div><button type="button" class="ai-chat-launcher__text" aria-label="'+esc(LPLACE)+' — open the shopping assistant">'+esc(LPLACE)+'</button><button type="button" class="ai-chat-launcher__close" aria-label="Minimize to a bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'+
-  '<span class="ai-chat-launcher__orb" aria-hidden="true"></span>';
+  '<span class="ai-chat-launcher__orb" aria-hidden="true"></span><span class="ai-chat-launcher__pill" aria-hidden="true"></span>';
 $('.ai-chat-launcher__icon',launcher).appendChild(makeGlow(40));
 $('.ai-chat-launcher__orb',launcher).appendChild(makeGlow(48));
 if(GLOW_STILL)paintGlows(GLOW_SEED);else requestAnimationFrame(glowLoop);
@@ -654,7 +675,7 @@ if(CUST_LOGGED_IN&&CUST_NAME){
 }
 
 panel.innerHTML=
-'<div class="ai-chat-header"><div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
+'<div class="ai-chat-header"><div class="ai-chat-header__info"><div class="ai-chat-header__name">'+esc(NAME)+'</div><div class="ai-chat-header__sub"'+(NAME_SUB?'':' hidden')+'>'+esc(NAME_SUB)+'</div></div><div class="ai-chat-header__actions">'+loginPillHtml+'<button type="button" class="ai-chat-header__btn ai-chat-theme-btn" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ai-chat-theme-btn__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg><svg class="ai-chat-theme-btn__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button><button class="ai-chat-header__btn ai-chat-menu-btn" aria-label="Menu" title="Options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button><button class="ai-chat-header__btn ai-chat-close-btn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>'+
 '<div class="ai-chat-messages" role="log" aria-live="polite"></div>'+
 '<div class="ai-chat-typing"><div class="ai-chat-msg-avatar">'+assistantBubbleAvatar+'</div><div class="ai-chat-typing-dots"><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span><span class="ai-chat-typing-dot"></span></div><span class="ai-chat-typing-text" aria-live="polite"></span></div>'+
 '<div class="ai-chat-input-area"><div class="ai-chat-input-wrap"><div class="ai-chat-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="ai-chat-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><textarea class="ai-chat-input" rows="1" placeholder="'+esc(IPLACE)+'" aria-label="Type your message" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea><button type="button" class="ai-chat-voice-cancel" aria-label="Cancel voice input" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/></svg></button><span class="ai-chat-voice-status" aria-live="polite"></span>'+
@@ -736,8 +757,31 @@ try{localStorage.removeItem(LBUBBLE_KEY)}catch(e){}/* was remembered forever */
 /* The bar holds two buttons (open, minimize), so the bar itself isn't one;
    the round bubble is a single control, so it is the button. */
 function launcherA11y(){
-  if(launcher.classList.contains('is-bubble')){launcher.setAttribute('role','button');launcher.setAttribute('tabindex','0');launcher.setAttribute('aria-label','Open the AI shopping assistant')}
-  else{launcher.removeAttribute('role');launcher.removeAttribute('tabindex');launcher.removeAttribute('aria-label')}
+  if(launcher.classList.contains('is-bubble')){
+    /* The text button says its own words; the round light gets a tooltip. */
+    var photo=launcher.classList.contains('is-photo');
+    launcher.setAttribute('role','button');launcher.setAttribute('tabindex','0');
+    launcher.setAttribute('aria-label',photo?MARK_TEXT+' — open the AI shopping assistant':'Open the AI shopping assistant');
+    if(photo)launcher.removeAttribute('title');else launcher.title='Ask AI';
+  }
+  else{launcher.removeAttribute('role');launcher.removeAttribute('tabindex');launcher.removeAttribute('aria-label');launcher.removeAttribute('title')}
+}
+/* The bar's mark and its minimized look, as Settings → AVA mark has them:
+   the photo in the bar's round end and the text button, or the light. */
+function applyMark(){
+  var photo=photoMark(),ic=$('.ai-chat-launcher__icon',launcher),img=$('.ai-chat-launcher__photo',ic);
+  if(photo&&!img){
+    img=document.createElement('img');img.className='ai-chat-launcher__photo';img.alt='';img.decoding='async';
+    img.onerror=function(){if(!img.isConnected)return;MARK_BROKEN=true;cancelMorph();applyMark();placeLauncher()};
+    img.src=safeUrl(AVATAR);
+    ic.appendChild(img);
+  }
+  if(img&&!photo)img.remove();
+  ic.classList.toggle('is-orb',!photo);ic.classList.toggle('is-photo',photo);
+  launcher.classList.toggle('is-photo',photo);
+  $('.ai-chat-launcher__pill',launcher).textContent=MARK_TEXT;
+  var x=$('.ai-chat-launcher__close',launcher);if(x)x.setAttribute('aria-label',photo?'Minimize':'Minimize to a bubble');
+  launcherA11y();
 }
 function setLauncherBubble(on,animate){
   try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
@@ -745,7 +789,6 @@ function setLauncherBubble(on,animate){
     launcher.classList.toggle('is-bubble',!!on);
     launcher.classList.remove('is-tucked');tucked=false;tuckWant=false;
     launcherA11y();
-    if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
     placeLauncher();
   };
   if(animate)morphLauncher(apply);else{cancelMorph();apply()}
@@ -767,11 +810,16 @@ function launcherLook(){
   var ic=bubble?$('.ai-chat-launcher__orb',launcher):$('.ai-chat-launcher__icon',launcher),ir=ic?ic.getBoundingClientRect():null;
   var tx=bubble?null:$('.ai-chat-launcher__text',launcher),tr=tx?tx.getBoundingClientRect():null,tcs=tx?getComputedStyle(tx):null;
   var xs=bubble?null:$('.ai-chat-launcher__close svg',launcher),xr=xs?xs.getBoundingClientRect():null;
-  return {r:r,bg:cs.backgroundColor,shadow:cs.boxShadow,radius:Math.min(parseFloat(cs.borderTopLeftRadius)||0,r.height/2),z:cs.zIndex,
+  var photo=launcher.classList.contains('is-photo'),ph=photo&&!bubble?$('.ai-chat-launcher__photo',launcher):null,phr=ph?ph.getBoundingClientRect():null;
+  var pl=photo&&bubble?$('.ai-chat-launcher__pill',launcher):null,plr=pl?pl.getBoundingClientRect():null,plcs=pl?getComputedStyle(pl):null;
+  /* The text button's capsule is its ::after (its glow lies beneath it). */
+  return {r:r,bg:photo&&bubble?getComputedStyle(launcher,'::after').backgroundColor:cs.backgroundColor,shadow:cs.boxShadow,radius:Math.min(parseFloat(cs.borderTopLeftRadius)||0,r.height/2),z:cs.zIndex,
     bw:cs.borderTopStyle==='none'?'0px':cs.borderTopWidth,bc:cs.borderTopColor,
     close:xr&&xr.width?{x:xr.left-r.left,y:xr.top-r.top,w:xr.width,h:xr.height,svg:xs.outerHTML,color:getComputedStyle(xs).color}:null,
     icon:ir&&ir.width?{x:ir.left-r.left,y:ir.top-r.top,s:ir.width,bg:getComputedStyle(ic).backgroundColor,filter:glowFilter(ic)}:null,
-    text:tr&&tr.width?{x:tr.left-r.left,y:tr.top-r.top,h:tr.height,label:tx.textContent,color:tcs.color,font:tcs.font,pad:tcs.paddingLeft}:null};
+    text:tr&&tr.width?{x:tr.left-r.left,y:tr.top-r.top,h:tr.height,label:tx.textContent,color:tcs.color,font:tcs.font,pad:tcs.paddingLeft}:null,
+    photo:phr&&phr.width?{x:phr.left-r.left,y:phr.top-r.top,s:phr.width,src:ph.currentSrc||ph.src}:null,
+    pill:plr&&plr.width?{x:plr.left-r.left,y:plr.top-r.top,w:plr.width,h:plr.height,label:pl.textContent,color:plcs.color,font:plcs.font,ls:plcs.letterSpacing}:null};
 }
 function glowFilter(ic){var c=$('.ai-chat-glow',ic),f=c?getComputedStyle(c).filter:'';return f&&f!=='none'?f:'drop-shadow(0 0 0 rgba(0,0,0,0))'}
 /* Shadows blend layer by layer in list order, and the bar and the bubble
@@ -829,7 +877,10 @@ function morphLauncher(apply,done){
   /* Its hairline edge, drawn inside so nothing in it shifts. */
   var edge=document.createElement('span');edge.style.cssText='position:absolute;left:0;top:0;right:0;bottom:0;border-style:solid;border-radius:inherit;box-sizing:border-box;pointer-events:none';
   g.appendChild(edge);
-  anims.push(edge.animate([{borderWidth:A.bw,borderColor:A.bc},{borderWidth:B.bw,borderColor:B.bc}],o));
+  /* An edge only one end has thins away in its own color (a borderless
+     end's color is just the text color: it would show as a dark ring). */
+  var bcA=A.bw==='0px'?B.bc:A.bc,bcB=B.bw==='0px'?A.bc:B.bc;
+  anims.push(edge.animate([{borderWidth:A.bw,borderColor:bcA},{borderWidth:B.bw,borderColor:bcB}],o));
   /* The orb: the live glow, gliding from its spot in one look to the other. */
   if(A.icon&&B.icon){
     var ob=document.createElement('span');ob.style.cssText='position:absolute;left:0;top:0;border-radius:50%;overflow:hidden;display:block';
@@ -841,6 +892,23 @@ function morphLauncher(apply,done){
     anims.push(gl.animate([{filter:A.icon.filter},{filter:B.icon.filter}],o));
     var ip=function(L){return 'translate3d('+L.icon.x+'px,'+L.icon.y+'px,0)'};
     anims.push(ob.animate([{transform:ip(A),width:A.icon.s+'px',height:A.icon.s+'px',backgroundColor:A.icon.bg},{transform:ip(B),width:B.icon.s+'px',height:B.icon.s+'px',backgroundColor:B.icon.bg}],o));
+  }
+  /* The photo shrinks away as the bar folds into the text button, and grows
+     back as it opens out. */
+  var PH=A.photo||B.photo;
+  if(PH){
+    var pi=document.createElement('img');pi.alt='';pi.src=PH.src;
+    pi.style.cssText='position:absolute;left:'+PH.x+'px;top:'+PH.y+'px;width:'+PH.s+'px;height:'+PH.s+'px;margin:0;border-radius:50%;object-fit:cover;display:block';
+    g.appendChild(pi);
+    anims.push(pi.animate(A.photo?[{opacity:1,transform:'scale(1)'},{opacity:0,transform:'scale(0.5)',offset:0.32},{opacity:0,transform:'scale(0.5)'}]:[{opacity:0,transform:'scale(0.5)'},{opacity:0,transform:'scale(0.5)',offset:0.55},{opacity:1,transform:'scale(1)'}],{duration:MORPH_MS,easing:'ease-out',fill:'both'}));
+  }
+  /* The text button's words: in late as it folds up, out early as it opens. */
+  var Q=A.pill||B.pill;
+  if(Q){
+    var pt=document.createElement('span');pt.textContent=Q.label;
+    pt.style.cssText='position:absolute;left:'+Q.x+'px;top:'+Q.y+'px;width:'+Q.w+'px;height:'+Q.h+'px;display:flex;align-items:center;justify-content:center;white-space:nowrap;font:'+Q.font+';letter-spacing:'+Q.ls+';color:'+Q.color;
+    g.appendChild(pt);
+    anims.push(pt.animate(A.pill?[{opacity:1},{opacity:0,offset:0.25},{opacity:0}]:[{opacity:0},{opacity:0,offset:0.3},{opacity:1,offset:0.7},{opacity:1}],{duration:MORPH_MS,easing:'ease-out',fill:'both'}));
   }
   /* The words: fade out early when folding up, in late when opening out. */
   var T=A.text||B.text;
@@ -889,7 +957,6 @@ function setTucked(on){
   morphLauncher(function(){
     launcher.classList.toggle('is-bubble',on);launcher.classList.toggle('is-tucked',on);
     launcherA11y();
-    if(on)launcher.title='Ask AI';else launcher.removeAttribute('title');
     placeLauncher();
   },function(){tuckBusy=false;if(tuckWant!==tucked)setTucked(tuckWant)});
 }
@@ -1017,8 +1084,8 @@ function liftFloaters(on){
   }
   liftedEls=liftedEls.filter(function(rec){if(keep.indexOf(rec.el)!==-1)return true;dropLift(rec);return false});
 }
-try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1'){launcher.classList.add('is-bubble');launcher.title='Ask AI'}}catch(e){}
-launcherA11y();
+try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1')launcher.classList.add('is-bubble')}catch(e){}
+applyMark();
 window.addEventListener('resize',placeLauncher);
 setTimeout(placeLauncher,600);
 /* Other apps' buttons (Zendesk and the like) load late — often only after
@@ -1341,6 +1408,7 @@ function welcomeGreetingText(){
 /* Settings' chat text arrived after the chat was drawn: put it in place. */
 function refreshTexts(inWas){
   var hn=$('.ai-chat-header__name',panel);if(hn)hn.textContent=NAME;
+  var hs=$('.ai-chat-header__sub',panel);if(hs){hs.textContent=NAME_SUB;hs.hidden=!NAME_SUB}
   var lt=$('.ai-chat-launcher__text',launcher);if(lt){lt.textContent=LPLACE;lt.setAttribute('aria-label',LPLACE+' — open the shopping assistant')}
   if(inputEl&&inputEl.getAttribute('placeholder')===inWas)inputEl.setAttribute('placeholder',IPLACE);
   var wt=$('.ai-chat-welcome__title',panel);if(wt)wt.textContent=welcomeGreetingText()||('Hi, I\'m '+NAME);

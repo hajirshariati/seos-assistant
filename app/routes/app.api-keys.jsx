@@ -1,7 +1,7 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl, locatorStores } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
-import { getShopName } from "../lib/shop-name.server.js";
+import { getShopName, getShopHosts } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator, useRouteLoaderData } from "react-router";
@@ -48,6 +48,7 @@ import { TestRecordingCard } from "../components/TestRecordingCard";
 import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch } from "../components/SettingsUI";
 import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
+import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launcher-mark.js";
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
@@ -78,6 +79,8 @@ export const loader = async ({ request }) => {
     getShopName(admin, session.shop),
   ]);
   const seasonalHandle = collectionHandle(config.seasonalCtaCollection);
+  // The photo the storefront chat reported, from the store's own domains only.
+  const shopHosts = await getShopHosts(admin, session.shop);
   let hideOnUrls = [];
   try { hideOnUrls = JSON.parse(config.hideOnUrls || "[]"); } catch { hideOnUrls = []; }
   return {
@@ -93,6 +96,12 @@ export const loader = async ({ request }) => {
     welcomeIntroOn: config.welcomeGlowStyle !== "none",
     orbColors: parseOrbColors(config.orbColors),
     orbBackground: parseOrbBackground(config.orbBackground),
+    launcherMark: launcherMark(config.launcherMark),
+    launcherText: cleanLauncherText(config.launcherText),
+    avatarUrl: avatarPreviewUrl(config.widgetAvatarUrl, shopHosts),
+    // "photo" (the theme editor has one), "none", or "unknown" (the chat
+    // hasn't reported since this was added).
+    avatarState: config.widgetAvatarUrl == null ? "unknown" : config.widgetAvatarUrl ? "photo" : "none",
     voiceInput: config.voiceInput !== false,
     recording: (() => { const st = recordingState(config); return { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope }; })(),
     shopDomain: session.shop,
@@ -187,8 +196,18 @@ export const action = async ({ request }) => {
     const stored = serializeOrbColors([0, 1, 2, 3, 4].map((i) => formData.get(`c${i}`)));
     const bg = serializeOrbBackground(formData.get("bg"));
     if (stored === null || bg === null) return { orbError: "Each color needs to be a hex value like #1a4dff." };
-    await updateShopConfig(session.shop, { orbColors: stored, orbBackground: bg });
-    return { orbSaved: true, colors: parseOrbColors(stored), bg: parseOrbBackground(bg) };
+    // The AVA mark card also says what sits in the chat bar (older pages
+    // that don't send it leave it as it is).
+    const mark = formData.get("mark");
+    const markData = mark === null ? {} : { launcherMark: launcherMark(mark), launcherText: cleanLauncherText(formData.get("text")) };
+    const saved = await updateShopConfig(session.shop, { orbColors: stored, orbBackground: bg, ...markData });
+    return {
+      orbSaved: true,
+      colors: parseOrbColors(stored),
+      bg: parseOrbBackground(bg),
+      mark: launcherMark(saved?.launcherMark),
+      text: cleanLauncherText(saved?.launcherText),
+    };
   }
 
   // Your app → the app's picture (resized in the browser before it's sent).
@@ -894,7 +913,7 @@ function LookSection({ d, values, set }) {
           <BlockStack gap="300">
             <div className="set-grid">
               <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={TEXT_DEFAULT.name} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat. In its replies, AVA always introduces itself as Ava, the Aetrex Virtual Assistant." />
-              <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={TEXT_DEFAULT.launcher} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
+              <TextField label="Under the chat name" value={values.textNameSub} onChange={set("textNameSub")} placeholder="Optional, e.g. Aetrex Virtual Assistant" maxLength={TEXT_MAX.nameSub} autoComplete="off" helpText="A smaller gray line under the name. Left blank, the header shows just the name." />
             </div>
             <div className="set-grid">
               <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={TEXT_DEFAULT.greeting} maxLength={TEXT_MAX.greeting} autoComplete="off" />
@@ -906,12 +925,13 @@ function LookSection({ d, values, set }) {
               <TextField label="Message box" value={values.textInput} onChange={set("textInput")} placeholder={TEXT_DEFAULT.input} maxLength={TEXT_MAX.input} autoComplete="off" />
             </div>
             <div className="set-grid">
+              <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={TEXT_DEFAULT.launcher} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
               <TextField label="Fit & size button" value={values.textFitButton} onChange={set("textFitButton")} placeholder={TEXT_DEFAULT.fitButton} maxLength={TEXT_MAX.fitButton} autoComplete="off" helpText="On product cards, under Add to cart, with Fit confidence on (Recommenders). It opens the Fit score and the size finder." />
             </div>
           </BlockStack>
         </Row>
       </Group>
-      <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} />
+      <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} initialMark={d.launcherMark} initialText={d.launcherText} avatarUrl={d.avatarUrl} avatarState={d.avatarState} launcherPrompt={values.textLauncher || TEXT_DEFAULT.launcher} />
     </BlockStack>
   );
 }

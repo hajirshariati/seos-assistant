@@ -23,7 +23,7 @@ const base = {
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const LIQ = fs.readFileSync(new URL("../../../extensions/hajirai-chat-widget/blocks/hajirai_chat.liquid", import.meta.url), "utf8").match(/<style>[\s\S]*?<\/style>/)[0];
 const page = (cfg) => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">${LIQ}<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG=${JSON.stringify(cfg)}</script></head><body><div style="height:1200px">Store</div><script src="/w.js"></script></body></html>`;
-let cfgNow = base; let wcNow = {}; const bodies = [];
+let cfgNow = base; let wcNow = {}; const bodies = []; const wcLog = [];
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, "http://x"); let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => {
     if (u.pathname === "/" || /\/products\//.test(u.pathname)) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); return res.end(page(cfgNow)); }
@@ -31,7 +31,7 @@ const srv = http.createServer((req, res) => {
     if (u.pathname === "/w.css") { res.writeHead(200, { "Content-Type": "text/css" }); return res.end(fs.readFileSync(W + "hajirai-chat-widget.css")); }
     if (u.pathname.endsWith(".png")) { res.writeHead(200, { "Content-Type": "image/png" }); return res.end(png); }
     if (u.pathname === "/axe.js") { try { res.writeHead(200, { "Content-Type": "application/javascript" }); return res.end(fs.readFileSync(new URL("../../../node_modules/axe-core/axe.min.js", import.meta.url))); } catch { res.writeHead(404); return res.end(); } }
-    if (u.pathname.startsWith("/apps/hajirai/widget-config")) { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(wcNow)); }
+    if (u.pathname.startsWith("/apps/hajirai/widget-config")) { wcLog.push(u.search); res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(wcNow)); }
     if (u.pathname === "/apps/hajirai/chat") { bodies.push(JSON.parse(b || "{}")); res.writeHead(200, { "Content-Type": "text/event-stream" }); res.write('data: {"type":"text","text":"ok"}\n\n'); res.write('data: {"type":"products","products":[{"title":"Test Shoe","handle":"test-shoe","url":"/products/test-shoe","price":"10.00","price_formatted":"$10.00","kind":"footwear"}]}\n\n'); res.write('data: {"type":"done"}\n\n'); return res.end(); }
     res.writeHead(404); res.end();
   });
@@ -297,6 +297,101 @@ await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" 
   check("delay switched off: shows right away again", !(await state()).waiting);
   if (errs.length) check("delay: no JS errors", false, errs.join("|"));
   await ctx.close(); wcNow = {};
+}
+
+// Settings → Chat text: a smaller line under the name in the header.
+{
+  const header = (p) => p.evaluate(() => { const s = document.querySelector(".ai-chat-header__sub"); const n = document.querySelector(".ai-chat-header__name"); return { name: n.textContent, sub: s.textContent, shown: !s.hidden && s.getBoundingClientRect().height > 0, small: parseFloat(getComputedStyle(s).fontSize) < parseFloat(getComputedStyle(n).fontSize), gray: getComputedStyle(s).color !== getComputedStyle(n).color }; });
+  wcNow = { chatTexts: { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" } }; cfgNow = base;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto("http://localhost:4795/"); await p.waitForTimeout(600);
+  let h = await header(p);
+  check("header: the name with a smaller, softer line under it", h.name === "Ask Ava!" && h.sub === "Aetrex Virtual Assistant" && h.shown && h.small && h.gray, JSON.stringify(h));
+  wcNow = { chatTexts: { name: "Ask Ava!" } };
+  await p.reload(); await p.waitForTimeout(600);
+  h = await header(p);
+  check("header: no line set → just the name", h.name === "Ask Ava!" && !h.shown, JSON.stringify(h));
+  if (errs.length) check("header: no JS errors", false, errs.join("|"));
+  await ctx.close(); wcNow = {};
+}
+// Settings → AVA mark: the avatar photo in the bar, and the text button it
+// folds into (the round light stays the default, and the fallback).
+{
+  const PHOTO = { launcherMark: { mark: "avatar", text: "Ask Ava!" } };
+  const look = async (p) => { await p.mouse.move(5, 5); await p.waitForTimeout(350); return p.evaluate(() => {
+    const l = document.querySelector(".ai-chat-launcher"), ic = l.querySelector(".ai-chat-launcher__icon"), img = ic.querySelector(".ai-chat-launcher__photo");
+    const pill = l.querySelector(".ai-chat-launcher__pill"), r = l.getBoundingClientRect(), pr = pill.getBoundingClientRect();
+    return {
+      photo: l.classList.contains("is-photo"), bubble: l.classList.contains("is-bubble"), img: img ? img.getAttribute("src") : null, imgShown: !!img && img.getBoundingClientRect().width === 40,
+      orbIcon: ic.classList.contains("is-orb"), pillShown: pr.width > 0, pillText: pill.textContent, w: r.width, h: r.height, label: l.getAttribute("aria-label"), title: l.getAttribute("title"),
+      glow: getComputedStyle(l, "::before").backgroundImage, capsule: getComputedStyle(l, "::after").backgroundColor, ls: localStorage.getItem("hajirai_launcher_mark"),
+      close: l.querySelector(".ai-chat-launcher__close").getAttribute("aria-label"), text: getComputedStyle(pill).color, theme: l.getAttribute("data-theme"),
+    };
+  }); };
+  wcNow = PHOTO; cfgNow = base; wcLog.length = 0;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto("http://localhost:4795/"); await p.waitForTimeout(500);
+  check("mark: widget-config is told the theme's avatar photo", wcLog.some((q) => new URLSearchParams(q).get("av") === "/avatar.png"), wcLog.join(" "));
+  let s = await look(p);
+  check("mark: the photo sits in the bar instead of the light", s.photo && s.img === "/avatar.png" && s.imgShown && !s.orbIcon, JSON.stringify(s));
+  check("mark: remembered for the next page", s.ls === JSON.stringify({ mark: "avatar", text: "Ask Ava!" }), s.ls);
+  check("mark: the × just says Minimize", s.close === "Minimize", s.close);
+  await p.click(".ai-chat-launcher__close"); await p.waitForTimeout(900);
+  s = await look(p);
+  check("mark: minimized, it's the text button with the store's words", s.bubble && s.pillShown && s.pillText === "Ask Ava!" && s.w > 60 && Math.round(s.h) === 44, JSON.stringify(s));
+  check("mark: the button is named by its words (no tooltip)", s.label === "Ask Ava! — open the AI shopping assistant" && s.title === null, JSON.stringify({ l: s.label, t: s.title }));
+  check("mark: the button wears the colorful glow over a solid ink capsule", /conic-gradient/.test(s.glow) && s.capsule === (s.theme === "dark" ? "rgb(245, 245, 247)" : "rgb(13, 13, 18)") && s.text !== s.capsule, JSON.stringify({ g: s.glow.slice(0, 40), c: s.capsule, t: s.text, th: s.theme }));
+  await p.mouse.move(5, 5); await p.waitForTimeout(350);
+  const lb = await p.evaluate(() => { const r = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { right: Math.round(innerWidth - r.right), bottom: Math.round(innerHeight - r.bottom) }; });
+  check("mark: the button sits in the bubble's corner", lb.right === 20 && lb.bottom === 20, JSON.stringify(lb));
+  const axe = await p.evaluate(async () => { if (!window.axe) { await new Promise((r) => { const sc = document.createElement("script"); sc.src = "/axe.js"; sc.onload = r; sc.onerror = r; document.head.appendChild(sc); }); } if (!window.axe) return null; const res = await window.axe.run(document.querySelector(".ai-chat-launcher"), { resultTypes: ["violations"] }); return res.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id); });
+  if (axe !== null) check("mark: the text button has no serious accessibility issues", axe.length === 0, axe.join(","));
+  await p.focus(".ai-chat-launcher"); await p.keyboard.press("Enter"); await p.waitForTimeout(700);
+  s = await look(p);
+  check("mark: the text button opens the chat and the bar comes back", !s.bubble && s.photo && await p.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open")), JSON.stringify(s));
+  // Next page: the photo from the start, before the store's answer arrives.
+  wcNow = {};
+  await p.reload(); await p.waitForTimeout(80);
+  s = await look(p);
+  check("mark: the next page starts with the photo", s.photo && s.img === "/avatar.png", JSON.stringify(s));
+  // The store's words are cleaned and kept short.
+  wcNow = { launcherMark: { mark: "avatar", text: "  <b>Talk</b>   to   our   shoe   expert  now " } };
+  await p.reload(); await p.waitForTimeout(500);
+  await p.click(".ai-chat-launcher__close"); await p.waitForTimeout(900);
+  s = await look(p);
+  check("mark: the button's words are cleaned and at most 24 characters", s.pillText === "bTalk/b to our shoe expe" && !/[<>]/.test(s.pillText), JSON.stringify(s.pillText));
+  // No words set: the built-in default.
+  wcNow = { launcherMark: { mark: "avatar", text: "" } };
+  await p.reload(); await p.waitForTimeout(500);
+  s = await look(p);
+  check("mark: no words set → \"Ask AI\"", s.pillText === "Ask AI" && s.bubble, JSON.stringify(s));
+  // The store switches back to the light: everything as before.
+  wcNow = { launcherMark: { mark: "orb", text: "" } };
+  await p.reload(); await p.waitForTimeout(500);
+  s = await look(p);
+  check("mark: back to the light → the round bubble, nothing remembered", !s.photo && s.orbIcon && !s.img && !s.pillShown && Math.round(s.w) === 48 && s.title === "Ask AI" && s.ls === null, JSON.stringify(s));
+  if (errs.length) check("mark: no JS errors", false, errs.join("|"));
+  await ctx.close();
+}
+{
+  // No photo in the theme editor, or one that won't load: the light stays.
+  for (const [name, cfg] of [["no avatar set", { ...base, avatarUrl: "" }], ["the photo won't load", { ...base, avatarUrl: "/missing-avatar.jpg" }]]) {
+    wcNow = { launcherMark: { mark: "avatar", text: "Ask Ava!" } }; cfgNow = cfg;
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto("http://localhost:4795/"); await p.waitForTimeout(700);
+    const s = await p.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); return { photo: l.classList.contains("is-photo"), img: !!l.querySelector(".ai-chat-launcher__photo"), orb: l.querySelector(".ai-chat-launcher__icon").classList.contains("is-orb") }; });
+    check(`mark: ${name} → the bar keeps the light`, !s.photo && !s.img && s.orb, JSON.stringify(s));
+    await p.click(".ai-chat-launcher__close"); await p.waitForTimeout(900);
+    await p.mouse.move(5, 5); await p.waitForTimeout(350);
+    const w = await p.evaluate(() => Math.round(document.querySelector(".ai-chat-launcher").getBoundingClientRect().width));
+    check(`mark: ${name} → minimized, the round light`, w === 48, w);
+    if (errs.length) check(`mark (${name}): no JS errors`, false, errs.join("|"));
+    await ctx.close();
+  }
+  wcNow = {}; cfgNow = base;
 }
 console.log(out.join("\n"));
 const failed = out.filter((l) => l.startsWith("FAIL")).length;

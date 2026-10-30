@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { ORB_FRAG } from "../app/lib/orb-shader.js";
 import { ORB_DEFAULT_COLORS, ORB_DEFAULT_BG, normalizeHex, parseOrbColors, serializeOrbColors, isDefaultOrbColors, parseOrbBackground, serializeOrbBackground } from "../app/lib/orb-colors.js";
+import { launcherMark, cleanLauncherText, defaultLauncherText, launcherMarkConfig, cleanAvatarUrl, avatarPreviewUrl, LAUNCHER_TEXT_MAX } from "../app/lib/launcher-mark.js";
 
 let passed = 0;
 let failed = 0;
@@ -69,6 +70,48 @@ test("the globe color: same default in widget and Settings, always a valid color
   assert.equal(serializeOrbBackground(ORB_DEFAULT_BG), "", "default stores as empty");
   assert.equal(serializeOrbBackground("#fff"), "#ffffff");
   assert.equal(serializeOrbBackground("blue"), null, "invalid refused");
+});
+
+console.log("\nlauncher mark (the light or the photo)");
+test("only \"avatar\" picks the photo; anything else is the light", () => {
+  assert.equal(launcherMark("avatar"), "avatar");
+  for (const v of ["orb", "", null, undefined, "AVATAR", "photo"]) assert.equal(launcherMark(v), "orb");
+});
+test("the button's words are cleaned and kept short", () => {
+  assert.equal(cleanLauncherText("  Ask   Ava! "), "Ask Ava!");
+  assert.equal(cleanLauncherText("<b>Hi</b>"), "bHi/b");
+  assert.equal(cleanLauncherText("x".repeat(40)).length, LAUNCHER_TEXT_MAX);
+  assert.equal(cleanLauncherText(null), "");
+});
+test("default words: \"Ask Ava!\" on the AVA app only", () => {
+  assert.equal(defaultLauncherText("AVA"), "Ask Ava!");
+  assert.equal(defaultLauncherText("SEoS"), "Ask AI");
+});
+test("widget-config gets the mark and the words", () => {
+  assert.deepEqual(launcherMarkConfig({ launcherMark: "avatar", launcherText: " Ask Ava! " }), { mark: "avatar", text: "Ask Ava!" });
+  assert.deepEqual(launcherMarkConfig({}), { mark: "orb", text: "" });
+});
+test("the widget keeps the same rules (default words, length, what turns the photo on)", () => {
+  assert.match(widget, /MARK_TEXT='Ask AI'/);
+  assert.match(widget, /\.slice\(0,24\)/);
+  assert.match(widget, /m\.mark==='avatar'/);
+  assert.equal(LAUNCHER_TEXT_MAX, 24);
+});
+test("the reported avatar: a photo address, \"\" for none, anything else dropped", () => {
+  assert.equal(cleanAvatarUrl("//aetrex.com/cdn/shop/files/ava.png?v=1&width=200"), "//aetrex.com/cdn/shop/files/ava.png?v=1&width=200");
+  assert.equal(cleanAvatarUrl("https://cdn.shopify.com/s/files/1/0001/files/a.jpg"), "https://cdn.shopify.com/s/files/1/0001/files/a.jpg");
+  assert.equal(cleanAvatarUrl(""), "");
+  assert.equal(cleanAvatarUrl(null), null);
+  for (const bad of ["javascript:alert(1)", "data:image/png;base64,AAA", "/relative.png", "http://x.com/a.png", "//x.com/a\"onerror=1", "//" + "a".repeat(600) + ".com/x"]) assert.equal(cleanAvatarUrl(bad), null, bad);
+});
+test("Settings shows the photo only from the store's own domains or Shopify's CDN", () => {
+  const hosts = ["www.aetrex.com", "aetrex.myshopify.com"];
+  assert.equal(avatarPreviewUrl("//www.aetrex.com/cdn/shop/files/ava.png?v=1&width=200", hosts), "https://www.aetrex.com/cdn/shop/files/ava.png?v=1&width=200");
+  assert.equal(avatarPreviewUrl("https://cdn.shopify.com/s/files/1/0001/files/a.jpg", hosts), "https://cdn.shopify.com/s/files/1/0001/files/a.jpg");
+  assert.equal(avatarPreviewUrl("//evil.example/cdn/shop/files/x.png", hosts), "", "another site");
+  assert.equal(avatarPreviewUrl("//www.aetrex.com/pages/x.png", hosts), "", "not a files path");
+  assert.equal(avatarPreviewUrl("", hosts), "");
+  assert.equal(avatarPreviewUrl(null, hosts), "");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -1,5 +1,5 @@
-// The chat's own words, set in Settings → Look & feel → Chat text: its name,
-// the welcome greetings, the "Start here" / "Popular" headings, the chat
+// The chat's own words, set in Settings → Look & feel → Chat text: its name
+// (and an optional smaller line under it in the header), the welcome greetings, the "Start here" / "Popular" headings, the chat
 // button, the message box and the product cards' fit & size button (shown
 // with Fit confidence on). Stored as one JSON object; a blank one keeps
 // the theme editor's text (or the built-in default). Pure.
@@ -12,6 +12,7 @@ export const ASSISTANT_TITLE = "Aetrex Virtual Assistant";
 // [key, form field, max length, default shown as the placeholder]
 export const CHAT_TEXT_FIELDS = [
   ["name", "textName", 60, "AI Shopping Assistant"],
+  ["nameSub", "textNameSub", 60, ""],
   ["greeting", "textGreeting", 120, "Hi! I'm your personal shopping assistant."],
   ["greetingLoggedIn", "textGreetingLoggedIn", 120, "Welcome back, {name}!"],
   ["startHeading", "textStartHeading", 30, "Start here"],

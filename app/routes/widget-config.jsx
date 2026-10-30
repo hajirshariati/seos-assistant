@@ -11,10 +11,12 @@ import { getShopConfigCached } from "../models/ShopConfig.server";
 import { getGreetingCtaTranslations } from "../lib/greeting-translation.server";
 import prisma from "../db.server";
 import { parseOrbColors, parseOrbBackground } from "../lib/orb-colors";
+import { launcherMarkConfig, cleanAvatarUrl } from "../lib/launcher-mark.js";
 import { recordingState } from "../lib/chat-recording.js";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const lastSeenWrite = new Map(); // shop → ms of the last lastWidgetSeenAt write
+const avatarFirstWrite = new Set(); // shops whose first avatar report this server has saved
 
 // Storefront chat widget reads runtime config from this endpoint via the
 // Shopify app proxy. authenticate.public.appProxy verifies the proxy HMAC,
@@ -42,13 +44,27 @@ export const loader = async ({ request }) => {
       config.lastWidgetSeenAt ? new Date(config.lastWidgetSeenAt).getTime() : 0,
       lastSeenWrite.get(session.shop) || 0,
     );
+    // The same write notes the avatar photo the theme editor gives the chat
+    // (?av=, "" when none), for the Settings preview of the chat bar. The
+    // first report is saved at once; a change after that waits for the
+    // throttle, so no visitor can turn page views into writes.
+    let avatarSeen = null;
+    try { avatarSeen = cleanAvatarUrl(new URL(request.url).searchParams.get("av")); } catch { avatarSeen = null; }
+    const avatarNew = avatarSeen !== null && avatarSeen !== (config.widgetAvatarUrl ?? null);
     if (Date.now() - last > FIVE_MIN_MS) {
       lastSeenWrite.set(session.shop, Date.now());
+      const data = { lastWidgetSeenAt: new Date() };
+      if (avatarNew) data.widgetAvatarUrl = avatarSeen;
       prisma.shopConfig
         .update({
           where: { shop: session.shop },
-          data: { lastWidgetSeenAt: new Date() },
+          data,
         })
+        .catch(() => {});
+    } else if (avatarNew && config.widgetAvatarUrl == null && !avatarFirstWrite.has(session.shop)) {
+      avatarFirstWrite.add(session.shop);
+      prisma.shopConfig
+        .update({ where: { shop: session.shop }, data: { widgetAvatarUrl: avatarSeen } })
         .catch(() => {});
     }
 
@@ -118,6 +134,9 @@ export const loader = async ({ request }) => {
         // hex values; the Siri defaults when unset) and the talk button.
         orbColors: parseOrbColors(config.orbColors),
         orbBackground: parseOrbBackground(config.orbBackground),
+        // …and what sits in the chat bar: the light or the photo, with the
+        // minimized button's words.
+        launcherMark: launcherMarkConfig(config),
         voiceInput: config.voiceInput !== false,
         // Test recordings: the widget shows a "recording" note to the people
         // being recorded (testers, or everyone if the store chose that).

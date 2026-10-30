@@ -2479,6 +2479,19 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   letter-spacing: -0.01em;
   color: var(--seos-text);
 }
+/* Settings → Chat text: an optional smaller line under the name. */
+.ai-chat-panel .ai-chat-header__sub {
+  margin-top: 1px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--seos-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chat-panel .ai-chat-header__sub[hidden] { display: none; }
 .ai-chat-panel .ai-chat-header__login-pill,
 .ai-chat-panel .ai-chat-header__vip-pill {
   background: var(--seos-surface) !important;
@@ -7016,4 +7029,121 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-buynow { box-shadow: inset 0 0 0 1.5px var(--seos-ink); color: var(--seos-ink); background: transparent; }
 @media (hover: hover) {
   .ai-chat-panel[data-theme="dark"] .ai-buynow:hover { background: var(--seos-ink); color: #0d0d12; }
+}
+
+/* ======================================================================
+   AVA MARK: THE PHOTO (Settings → AVA mark)
+   The assistant's photo sits in the bar's round end, where the light would
+   be. The × folds the bar into a small text button in the store's words —
+   an ink capsule, the chat's primary-button look (near-white on dark) —
+   instead of the round light.
+   ====================================================================== */
+.ai-chat-launcher__pill { display: none; }
+.ai-chat-launcher__icon.is-photo {
+  position: relative;
+  width: 40px !important;
+  height: 40px !important;
+  margin: -2px 10px -2px 4px !important;
+  flex-shrink: 0;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  background: var(--seos-surface, #f5f5f7) !important;
+  box-shadow: none !important;
+}
+.ai-chat-launcher__icon.is-photo .ai-chat-glow { display: none !important; }
+.ai-chat-launcher__photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: cover;
+  border-radius: 50%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+/* A hairline ring, so a photo with a white edge still reads as a circle. */
+.ai-chat-launcher__icon.is-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(13, 13, 18, 0.08);
+  pointer-events: none;
+}
+.ai-chat-launcher[data-theme="dark"] .ai-chat-launcher__icon.is-photo::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+
+/* The text button: an ink capsule (near-white on dark) in the same soft,
+   turning glow of color as the assistant's face on the welcome screen. The
+   capsule is drawn by ::after and the glow by ::before beneath it, so the
+   launcher itself stays clear and nothing clips the light. */
+@property --ai-pill-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.ai-chat-launcher.is-bubble.is-photo {
+  width: auto !important;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+}
+.ai-chat-launcher.is-bubble.is-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--seos-ink, #0d0d12);
+  transition: background-color 0.2s ease;
+  pointer-events: none;
+}
+.ai-chat-launcher.is-bubble.is-photo::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(from var(--ai-pill-turn), #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3);
+  filter: blur(10px);
+  opacity: 0.6;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+  /* It lights up as the bar finishes folding, then turns slowly. */
+  animation: aiPillGlowIn 0.5s ease-out 0.45s backwards, aiPillGlowTurn 10s linear infinite;
+  pointer-events: none;
+}
+@keyframes aiPillGlowIn { from { opacity: 0; } }
+@keyframes aiPillGlowTurn { to { --ai-pill-turn: 360deg; } }
+.ai-chat-launcher.is-bubble.is-photo > .ai-chat-launcher__orb { display: none !important; }
+.ai-chat-launcher.is-bubble.is-photo > .ai-chat-launcher__pill {
+  display: flex !important;
+  align-items: center;
+  height: 100%;
+  font-family: var(--seos-font);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+@media (hover: hover) {
+  .ai-chat-launcher.is-bubble.is-photo:hover { transform: translateY(-1px) !important; box-shadow: none !important; }
+  .ai-chat-launcher.is-bubble.is-photo:hover::after { background: var(--seos-ink-hover, #26262d); }
+  .ai-chat-launcher.is-bubble.is-photo:hover::before { opacity: 0.75; filter: blur(12px); }
+}
+.ai-chat-launcher.is-bubble.is-photo:active { transform: scale(0.97) !important; }
+.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo { background: transparent !important; box-shadow: none !important; }
+.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo::before { opacity: 0.65; }
+.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo > .ai-chat-launcher__pill { color: #0d0d12; }
+@media (hover: hover) {
+  .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo:hover { box-shadow: none !important; }
+  .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo:hover::before { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-launcher.is-bubble.is-photo { transition: none; }
+  .ai-chat-launcher.is-bubble.is-photo::before { animation: none; }
+  .ai-chat-launcher.is-bubble.is-photo:hover,
+  .ai-chat-launcher.is-bubble.is-photo:active { transform: none !important; }
 }

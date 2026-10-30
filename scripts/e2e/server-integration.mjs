@@ -410,6 +410,28 @@ await test("order status without signing in: signed requests only, JSON only, ma
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { guestOrderLookup: true } });
   await configCacheExpiry();
 });
+await test("AVA mark: widget-config sends the light or the photo with its button words, and notes the theme's avatar", async () => {
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).launcherMark, { mark: "orb", text: "" }, "the light by default");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { launcherMark: "avatar", launcherText: "Ask Ava!", widgetAvatarUrl: null } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).launcherMark, { mark: "avatar", text: "Ask Ava!" });
+  // A bad photo address isn't kept; the theme's real one is, right away the first time.
+  await fetch(signed("/widget-config", { av: "javascript:alert(1)" }));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await prisma.shopConfig.findUnique({ where: { shop: SHOP } })).widgetAvatarUrl, null, "not a photo address");
+  const AV = "//shop.example/cdn/shop/files/ava.png?v=17&width=200";
+  await fetch(signed("/widget-config", { av: AV }));
+  let got = null;
+  for (let i = 0; i < 20 && got !== AV; i++) { await new Promise((r) => setTimeout(r, 100)); got = (await prisma.shopConfig.findUnique({ where: { shop: SHOP } })).widgetAvatarUrl; }
+  assert.equal(got, AV, "the first report is saved");
+  // A change right after waits for the throttle (no writes per page view).
+  await configCacheExpiry();
+  await fetch(signed("/widget-config", { av: "//shop.example/cdn/shop/files/other.png" }));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await prisma.shopConfig.findUnique({ where: { shop: SHOP } })).widgetAvatarUrl, AV, "not rewritten on every view");
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { launcherMark: "orb", launcherText: "", widgetAvatarUrl: null } });
+  await configCacheExpiry();
+});
 await test("Buy now: widget-config says off until the store turns it on; then on, with its code", async () => {
   const off = (await (await fetch(signed("/widget-config"))).json()).buyNow;
   assert.deepEqual(off, { on: false, code: "" }, "off by default, no code sent");

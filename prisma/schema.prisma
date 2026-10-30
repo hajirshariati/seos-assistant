@@ -140,6 +140,14 @@ model ShopConfig {
   orbColors              String   @default("")
   // The globe's own color behind the light, hex; "" = near-black glass.
   orbBackground          String   @default("")
+  // What sits in the chat bar (Settings → AVA mark): "orb" (AVA's light) or
+  // "avatar" (the theme editor's photo). With the photo, the minimized bar is
+  // a small text button saying launcherText instead of the round light.
+  launcherMark           String   @default("orb")
+  launcherText           String   @default("")
+  // The avatar photo the storefront chat last reported (its theme editor
+  // setting), for the Settings preview: "" = none set, null = not heard yet.
+  widgetAvatarUrl        String?
   // The talk (voice input) button beside Send in the chat.
   voiceInput             Boolean  @default(true)
   // Conversation recording for testing (Settings → Test recordings): on

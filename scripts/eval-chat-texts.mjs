@@ -5,6 +5,7 @@
 //
 // Run: node scripts/eval-chat-texts.mjs
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 const { CHAT_TEXT_FIELDS, ASSISTANT_NAME, ASSISTANT_TITLE, parseChatTexts, chatTextsFromForm, chatTextsForForm, cleanChatText } = await import("../app/lib/chat-texts.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
@@ -23,6 +24,12 @@ await test("only the texts set reach the widget, tidied; anything else is droppe
   assert.deepEqual(parseChatTexts(null), {});
   assert.deepEqual(parseChatTexts("[1,2]"), {});
   assert.deepEqual(parseChatTexts("{}"), {});
+});
+await test("the line under the name: optional, tidied, and read by the widget", () => {
+  assert.deepEqual(parseChatTexts('{"name":"Ask Ava!","nameSub":"  Aetrex   Virtual Assistant "}'), { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+  assert.deepEqual(parseChatTexts('{"nameSub":"   "}'), {}, "blank → not sent (the header shows just the name)");
+  const w = readFileSync(new URL("../extensions/hajirai-chat-widget/assets/hajirai-chat-widget.js", import.meta.url), "utf8");
+  assert.match(w, /NAME_SUB=v\('nameSub',60\)/);
 });
 await test("each text is capped at its length; markup characters can't get in", () => {
   for (const [key, , max] of CHAT_TEXT_FIELDS) {
