@@ -46,11 +46,14 @@ api_version = "2026-04"
 
 [access_scopes]
 # write_orders: the orders/create handler runs tagsAdd on attributed orders.
-# read_all_orders: without it the Admin API shows only the last 60 days of a
-# customer's orders, so the chat told returning customers it saw no orders.
-# Shopify grants it on request (Dev Dashboard → the app → Access requests →
-# Read all orders); the store approves the new scope on its next open.
-scopes = "read_customers,read_metaobjects,read_orders,read_all_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_themes"
+# read_all_orders (not yet here): without it the Admin API shows only the
+# last 60 days of a customer's orders, so the chat says older orders aren't
+# visible. Shopify refuses a version that declares it before the request is
+# approved ("scopes: read_all_orders"): request it in the Dev Dashboard (the
+# app → Access requests → Read all orders), then add ",read_all_orders" after
+# read_orders below and deploy; the store approves the new scope on its next
+# open of the app.
+scopes = "read_customers,read_metaobjects,read_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_themes"
 
 [auth]
 redirect_urls = [
