@@ -177,6 +177,27 @@ export function shoppingFor(message, vocab = {}) {
   return "";
 }
 
+// Stores whose locator shows foot-scanning locations (Settings → Store
+// locator → "Have our foot scanner"): the first time a shopper asks to try
+// on or buy a style in person, the answer is help buying here — never the
+// map or the scanner locations. Later (they insist), or for a scan or
+// orthotics, the map is right. Pure.
+const STORE_ASK = /\b(stores?|shops?|retailers?|dealers?|boutiques?|in[- ]person|near me|nearby|close to me|try (?:\w+ ){0,4}on|where can i (?:try|see|feel))\b/i;
+const SCAN_ASK = /\b(scan(?:ner|ned|ning|s)?|fitting|fitted|orthotics?|insoles?|arch supports?|locator|map)\b/i;
+const INSIST = /\b(still|anyway|anyways|insist|rather|really (?:want|need|would like)|prefer (?:to )?(?:try|see|go))\b/i;
+const LOCATOR_SAID = /\b(foot[- ]?scanners?|scanner locations?|scanning locations?|store locator|store map|find a store|stores? near you|locations? near you|nearby (?:stores?|locations?)|retail locations?)\b/i;
+const textOf = (m) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((b) => (b?.type === "text" ? b.text : "")).join(" ") : "");
+export function storeTooSoon({ scannerStores = false, messages = [], latestUserMessage = "", text = "", mapShown = false } = {}) {
+  if (!scannerStores) return false;
+  const latest = String(latestUserMessage || "");
+  if (!STORE_ASK.test(latest) || SCAN_ASK.test(latest) || INSIST.test(latest)) return false;
+  // Asked about stores before in this conversation: now they insist.
+  const users = messages.filter((m) => m?.role === "user").map(textOf);
+  if (users.length && users[users.length - 1].trim() === latest.trim()) users.pop();
+  if (users.some((u) => STORE_ASK.test(u) || SCAN_ASK.test(u))) return false;
+  return mapShown || LOCATOR_SAID.test(String(text || ""));
+}
+
 // The catalog's product line names, worked out once per catalog.
 const lineNameCache = new WeakMap();
 function lineNamesOf(catalog) {
@@ -772,6 +793,16 @@ export async function runLeanTurn({
           // Its stores have the foot scanner; only some sell the shoes.
           ? `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and keep the door open online in one short sentence — the full range, every style, color, size and width, is online, ready to order right here.`
           : `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and say warmly that each store picks its own selection while the full range — every style, color, size and width — is online, ready to order right here.`,
+      });
+    }
+    // A first ask to try on or buy a style in person, at a store whose
+    // locator shows foot-scanning locations: help buying here — no map, no
+    // scanner locations (a map already shown is taken back).
+    if (storeTooSoon({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text, mapShown: events.some((e) => e?.type === "map_cta") })) {
+      for (let i = events.length - 1; i >= 0; i--) if (events[i]?.type === "map_cta") events.splice(i, 1);
+      issues.push({
+        code: "store_too_soon",
+        detail: "They asked about trying on or buying a style in person, for the first time. Don't mention stores, the store locator, the map, foot scanners or scanner locations in this reply — its locations are for foot scans and orthotics, and most don't carry the shoes (the map is only for when they insist, or want a scan). Help them buy with confidence right here, like the store's best associate: if it's the size or fit they want to be sure of, you can help now — True Fit for their size in the shoe (open_true_fit, when you have it); easy returns as the store's info says them (search_store_info); the style itself, ready to order; then an inviting next step with tap choices.",
       });
     }
     // Free shipping said of a product the store's offer doesn't name.
