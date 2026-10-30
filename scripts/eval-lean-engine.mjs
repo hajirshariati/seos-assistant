@@ -1645,18 +1645,21 @@ await test("asked about stores: the locator, and warmly, the full range online �
 await test("stores on the map have the foot scanner: the size worry first (True Fit), easy returns, the style — no stores in that reply; the map only if they insist (or for a scan)", async () => {
   const config = { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner", storeLocatorUrl: "https://www.aetrex.com/pages/store-locator" };
   const p = buildLeanSystemPrompt({ shop: "x", config });
-  assert.match(p, /answer like the store's best sales associate — friendly, professional, human\. Most people want to try a shoe on to be sure of the size and fit; solve that right here\. In 3-4 short, warm sentences, in this order/);
-  assert.match(p, /1\. Acknowledge what they asked, in your own words: you understand they'd like to try it on in person/);
-  assert.match(p, /2\. The fit: if it's the size or fit they're unsure about, you can help right now — True Fit finds their size in that shoe in about a minute \(call open_true_fit with it, when you have it/);
-  assert.match(p, /3\. Take the risk away: ordering here is easy to undo — the returns as the store's info says them \(search_store_info first: the satisfaction guarantee, a free first return for a new customer\), only what it actually says, never more/);
-  assert.match(p, /4\. A warm next step toward buying, with tap choices/);
-  assert.match(p, /all in one place online at aetrex\.com/);
-  assert.match(p, /For example: "Totally understand wanting to try the Charlotte on first — fit is everything with shoes\. If it's your size you're unsure about, I can help right now: .* \[the store's returns, in a few words, from its info\]/);
-  assert.match(p, /Never reply with just "tap the button" — that ignores what they asked/);
-  assert.match(p, /Don't mention stores, the store locator, the store map, foot scanners or scanner locations in this reply — not even as an offer/);
-  assert.match(p, /If they still want to try it on in person after that \(they ask again, or insist\): show the store locator, honestly — .* most don't carry the shoes, so call ahead; local shoe stores may carry the style too/);
+  assert.match(p, /Trying on or buying a style in person, the first time they ask .*: answer like the store's best sales associate — warm, friendly, professional, never a script/);
+  assert.match(p, /Three short paragraphs with a blank line between them, one or two sentences each/);
+  assert.match(p, /1\. Show you get it, in your own words: wanting to try shoes on before buying makes total sense\. One friendly emoji is fine \(😊\), never more/);
+  assert.match(p, /2\. The size: if that's the main worry, True Fit can find their best size in about a minute, from real shoppers' fit feedback \(for a shoe they named, call open_true_fit with it, when you have it/);
+  assert.match(p, /3\. What makes trying it easy: the store's returns as its info says them \(search_store_info first\) — that they can actually wear them and still return them if they're not quite right/);
+  assert.match(p, /Then one short, warm question toward buying, with tap choices/);
+  assert.match(p, /"I totally get it — sometimes you just want to feel a shoe on before you buy\. 😊 \[blank line\] If it's mostly about the size, True Fit can find your best fit in the Charlotte in about a minute/);
+  assert.match(p, /In this reply don't mention stores, the store locator, the store map, foot scanners or scanner locations — not even as an offer, even if they gave a ZIP code or city/);
+  assert.match(p, /When they ask again or insist on trying it on in person: now help them find a place — warmly and honestly, in the same three-paragraph shape \(never open with "if you'd still prefer" or refer back to your earlier reply\)/);
+  assert.match(p, /They can always check their local shoe stores for the brand's shoes — and you can show them the brand's scanner locations near them \(show_store_locator\), naming the ZIP code or city they gave/);
+  assert.match(p, /most may not carry the shoes — so it's worth calling ahead before making the trip/);
+  assert.match(p, /In the meantime, one short, warm offer: help finding their size in the style they named, or its other colors/);
   assert.match(p, /never name or guess which stores carry the brand/);
-  assert.match(p, /Foot scans and fittings .*: show the store locator — its locations have the foot scanner, and some also carry orthotics, so calling ahead is best/);
+  assert.match(p, /Foot scans and fittings .*: show the store locator right away, naming the ZIP code or city they gave/);
+  assert.match(p, /the full range is online at aetrex\.com/);
   assert.doesNotMatch(p, /each store picks its own selection/);
   const { buildLeanStoreExtras } = await import("../app/lib/lean/store-tools.server.js");
   const ex = await buildLeanStoreExtras({ shop: "s.myshopify.com", config, messages: [{ role: "user", content: "where can I get my feet scanned?" }], latestUserMessage: "where can I get my feet scanned?" });
@@ -1666,7 +1669,8 @@ await test("stores on the map have the foot scanner: the size worry first (True 
   assert.match(loc.definition.description, /Not the first answer to trying on or buying a style in person — most locations don't carry the shoes/);
   assert.match(loc.definition.description, /don't mention the map or the scanner locations in that reply/);
   const ran = await loc.run({});
-  assert.match(ran.note, /find a location with the foot scanner there — some also carry orthotics, so calling ahead is best/);
+  assert.match(ran.note, /the map shows the brand's scanner locations near them \(name the ZIP code or city they gave\) — and they can always check their local shoe stores for the shoes/);
+  assert.match(ran.note, /most may not carry the shoes, so it's worth calling ahead/);
   assert.equal(ran._events[0].type, "map_cta");
 });
 await test("first ask to try on in person (scanner stores): a reply that brings up the map or scanners goes back", async () => {
@@ -1763,6 +1767,9 @@ await test("scanner stores, first ask: \"tap the button\" alone goes back — he
   assert.deepEqual(storeAskMisses({ ...base, text: "Totally understand wanting to try the Charlotte on first. If it's your size you're unsure about, I can help right now. Want me to find it?" }), ["returns"]);
   assert.deepEqual(storeAskMisses({ ...base, text: "Totally understand wanting to try the Charlotte on first — fit is everything with shoes. If it's your size you're unsure about, I can help right now, and with the 30-day Health Guarantee, returns are easy." }), []);
   assert.deepEqual(storeAskMisses({ ...base, scannerStores: false, text: robotic }), [], "stores that sell the products: unchanged");
+  const dense = "Totally understand wanting to try Aetrex shoes on before committing — fit really is everything! If it's your size you're unsure about, I can help right now: True Fit can match you to your size in any specific shoe in about a minute, using real data from shoppers who've worn it. And ordering here is low-risk — Aetrex's 30-day Health Guarantee lets you actually wear the shoes, and if you're not completely satisfied, you can return them (even worn!), with the $5.95 return fee waived on your very first order.\n\nIs there a particular style you're interested in?";
+  assert.deepEqual(storeAskMisses({ ...base, text: dense }), ["paragraphs"], "one dense block goes back");
+  assert.deepEqual(storeAskMisses({ ...base, text: "I totally get it — sometimes you just want to feel a shoe on before you buy. 😊\n\nIf it's mostly about the size, True Fit can find your best fit in about a minute, from real shoppers' feedback.\n\nAnd here's what makes trying it easier: with the 30-day Health Guarantee you can actually wear them and still return them if they're not quite right. <<Find my size>><<See other colors>>" }), [], "three short paragraphs");
   assert.deepEqual(storeAskMisses({ ...base, latestUserMessage: "where can I get my feet scanned near me?", messages: [{ role: "user", content: "where can I get my feet scanned near me?" }], text: robotic }), [], "a scan question");
   const msg = "where can i try the savannah sandal";
   const s = scripted([
@@ -1776,7 +1783,7 @@ await test("scanner stores, first ask: \"tap the button\" alone goes back — he
   assert.equal(r.retried, true);
   assert.ok(logs.some((l) => /rewrite: .*store_ask_reply/.test(l)), logs.join("\n"));
   const back = JSON.stringify(s.requests.at(-1).messages.at(-1));
-  assert.match(back, /doesn't show you heard that and doesn't take the risk away/);
+  assert.match(back, /doesn't show you heard that and doesn't take the risk away\./);
   assert.match(back, /Never just \\"tap the button\\"/);
   assert.match(r.text, /^Totally understand/);
   assert.deepEqual(r.issues, []);
@@ -1793,6 +1800,32 @@ await test("scanner stores, they insist: the map stays", async () => {
   const r = await runLeanTurn({ catalog, model: "m", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }, messages: history, latestUserMessage: msg, callModel: s.callModel, extraTools: [locatorTool], log: quiet });
   assert.equal(r.retried, false, JSON.stringify(r.issues));
   assert.ok(r.events.some((e) => e.type === "map_cta"), "the map stays");
+});
+await test("scanner stores, the map shown: an honest heads-up to call ahead, the ZIP said back, no scripted opener", async () => {
+  const { locatorReplyMisses } = await import("../app/lib/lean/engine.js");
+  const history = [{ role: "user", content: "where can i try aetrex shoes ? zip code 07666" }, { role: "assistant", content: "I totally get it…" }, { role: "user", content: "where can i try the aetrex charlotte sneaker" }];
+  const base = { scannerStores: true, messages: history, latestUserMessage: "where can i try the aetrex charlotte sneaker", mapShown: true };
+  const robotic = "If you'd still prefer to try it on in person after that, tap below and I can show you scanner locations near 07666 — just keep in mind most locations don't carry the shoes themselves, so calling ahead is a good idea.";
+  assert.deepEqual(locatorReplyMisses({ ...base, text: robotic }), ["opener"]);
+  assert.deepEqual(locatorReplyMisses({ ...base, text: "Here's the map." }), ["call_ahead", "zip"]);
+  assert.deepEqual(locatorReplyMisses({ ...base, text: "You can always check your local shoe stores for our shoes — and here are our scanner locations near 07666. 😊\n\nJust a heads-up: most may not carry the shoes, so it's worth calling ahead." }), []);
+  assert.deepEqual(locatorReplyMisses({ ...base, mapShown: false, text: "Here's the map." }), [], "no map, nothing to check");
+  assert.deepEqual(locatorReplyMisses({ ...base, scannerStores: false, text: "Here's the map." }), [], "stores that sell the products: unchanged");
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "show_store_locator", {})] },
+    { stop_reason: "tool_use", content: [tu("t2", "search_products", { query: "savannah", gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
+    { stop_reason: "end_turn", content: [txt(robotic)] },
+    { stop_reason: "end_turn", content: [txt("You can always check your local shoe stores for our shoes — and I can show you our scanner locations near 07666 below. 😊\n\nJust a heads-up: many offer our foot scanning and some carry our orthotics, but most may not carry the shoes, so it's worth calling ahead.\n\nIn the meantime, want help finding your size in the Savannah? <<Find my size>><<See other colors>>")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }, messages: history, latestUserMessage: base.latestUserMessage, callModel: s.callModel, extraTools: [locatorTool], log: (l) => logs.push(l) });
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*locator_reply/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests.at(-1).messages.at(-1)), /don't open with \\"if you'd still prefer…\\" or refer back to your earlier reply/);
+  assert.match(r.text, /^You can always check your local shoe stores/);
+  assert.ok(r.events.some((e) => e.type === "map_cta"), "the map stays");
+  assert.deepEqual(r.issues, []);
 });
 await test("\"Is there a store near me?\" — the locator, no rewrite (it asks what they're shopping for)", async () => {
   const msg = "is there a store near me?";

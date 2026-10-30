@@ -230,7 +230,7 @@ export async function buildLeanStoreExtras({
       input_schema: { type: "object", properties: {} },
     }, async () => ({
       ok: true,
-      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly: a short sentence that they can find a location with the foot scanner there — some also carry orthotics, so calling ahead is best; then, in one short sentence, keep the door open online: the full range is all in one place ${online}, and they can order right here in the chat. Don't add the store locator link, never say a location has a product in stock, and never name or guess which stores carry the brand.`,
+      note: `A "${locator.label}" button appears under your reply and opens the store map in the chat. In your reply, warmly and honestly, in short paragraphs: the map shows the brand's scanner locations near them (name the ZIP code or city they gave) — and they can always check their local shoe stores for the shoes; a quick heads-up that those locations offer the foot scanning and some carry the orthotics, but most may not carry the shoes, so it's worth calling ahead; then, in the meantime, one short, warm offer — their size in the style they named, or its other colors (the full range is all in one place ${online}). Don't add the store locator link, never say a location has a product in stock, and never name or guess which stores carry the brand.`,
       _events: [{ type: "map_cta", mapId: locator.mapId, label: locator.label, url: locator.url }],
     }));
   } else if (locator) {

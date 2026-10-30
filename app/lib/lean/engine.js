@@ -205,10 +205,29 @@ export function storeTooSoon({ text = "", mapShown = false, ...ask } = {}) {
 // risk away (the returns). Which of the two the reply leaves out.
 const HEARD = /\b(understand|totally|of course|makes (?:total |perfect )?sense|i get (?:it|that)|get it|fair enough|great question|good question|love that|want(?:ing)? to (?:try|see|feel)|try (?:\w+ ){0,3}on|in person|before (?:you )?(?:buy|order|commit|decide))\b/i;
 const RETURNS = /\b(returns?|returned|returning|exchanges?|guarantee|money[- ]back|risk[- ]free)\b/i;
+// When the map is shown at such a store (they insisted, or a scan): an
+// honest heads-up to call ahead, the ZIP code they gave said back, and no
+// robotic opener ("If you'd still prefer… after that"). What it leaves out.
+const CALL_AHEAD = /\b(call(?:ing)? ahead|call (?:them |the store |the location )?(?:first|before)|give (?:them|it|the store) a (?:quick )?call|calling first)\b/i;
+const ZIP = /\b\d{5}(?:-\d{4})?\b/g;
+const SCRIPTED_OPENER = /^\W*(?:if you(?:'d| would)? still|if you still|if after that|after that\b)/i;
+export function locatorReplyMisses({ scannerStores = false, messages = [], latestUserMessage = "", text = "", mapShown = false } = {}) {
+  if (!scannerStores || !mapShown) return [];
+  const t = String(text || "");
+  const asked = [...messages.filter((m) => m?.role === "user").map(textOf), String(latestUserMessage || "")].join(" ");
+  const zips = [...new Set(asked.match(ZIP) || [])];
+  return [
+    ...(CALL_AHEAD.test(t) ? [] : ["call_ahead"]),
+    ...(zips.length && !zips.some((z) => t.includes(z)) ? ["zip"] : []),
+    ...(SCRIPTED_OPENER.test(t) ? ["opener"] : []),
+  ];
+}
 export function storeAskMisses({ text = "", ...ask } = {}) {
   if (!firstStoreAsk(ask)) return [];
   const t = String(text || "");
-  return [...(HEARD.test(t) ? [] : ["heard"]), ...(RETURNS.test(t) ? [] : ["returns"])];
+  // Short paragraphs, not one dense block.
+  const dense = t.split(/\n\s*\n/).some((para) => para.replace(/<<[^<>]*>>/g, "").trim().length > 280);
+  return [...(HEARD.test(t) ? [] : ["heard"]), ...(RETURNS.test(t) ? [] : ["returns"]), ...(dense ? ["paragraphs"] : [])];
 }
 
 // The catalog's product line names, worked out once per catalog.
@@ -824,7 +843,16 @@ export async function runLeanTurn({
     if (misses.length) {
       issues.push({
         code: "store_ask_reply",
-        detail: `They'd like to try it on in person, and your reply ${misses.includes("heard") ? "doesn't show you heard that" : ""}${misses.length === 2 ? " and " : ""}${misses.includes("returns") ? "doesn't take the risk away" : ""}. Answer like a friendly, professional associate, in 3-4 short, warm sentences: first acknowledge it in your own words ("Totally understand wanting to try the Charlotte on first — fit is everything with shoes."); then, if it's the size or fit they're unsure about, you can help right now — True Fit finds their size in that shoe in about a minute; then that ordering here is easy to undo — the returns as the store's info says them (search_store_info, only what it actually says); then a warm next step with tap choices. Never just "tap the button".`,
+        detail: `They'd like to try it on in person, and your reply ${[misses.includes("heard") && "doesn't show you heard that", misses.includes("returns") && "doesn't take the risk away", misses.includes("paragraphs") && "is one dense block"].filter(Boolean).join(" and ")}. Answer like a friendly, professional associate, in three short paragraphs with a blank line between them, one or two sentences each: show you get it, in your own words ("I totally get it — sometimes you just want to feel a shoe on before you buy. 😊"); then, if it's mostly about the size, True Fit can find their best fit in about a minute, from real shoppers' feedback; then what makes trying it easy — the returns as the store's info says them (search_store_info, only what it actually says); then one short, warm question toward buying, with tap choices. Never just "tap the button".`,
+      });
+    }
+    // The map at such a store: honest, and it heard where they are.
+    const mapMisses = locatorReplyMisses({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text, mapShown: events.some((e) => e?.type === "map_cta") });
+    if (mapMisses.length) {
+      const zip = (String(latestUserMessage || "").match(ZIP) || [])[0] || "";
+      issues.push({
+        code: "locator_reply",
+        detail: `You're showing the map of scanner locations. Write it warmly and honestly, in short paragraphs, like a friendly associate:${mapMisses.includes("opener") ? " don't open with \"if you'd still prefer…\" or refer back to your earlier reply — start fresh;" : ""} they can always check their local shoe stores for the shoes, and the map shows the scanner locations near them${mapMisses.includes("zip") ? ` — say the ZIP code they gave${zip ? ` (${zip})` : ""}` : ""};${mapMisses.includes("call_ahead") ? " a quick heads-up that those locations offer the foot scanning and some carry the orthotics, but most may not carry the shoes, so it's worth calling ahead;" : ""} then, in the meantime, one short, warm offer (their size in the style, or its other colors).`,
       });
     }
     // Free shipping said of a product the store's offer doesn't name.
