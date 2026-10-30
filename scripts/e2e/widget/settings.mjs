@@ -342,7 +342,10 @@ await recRun("/?hajirai_tester=Ann", { recording: { on: false, scope: "testers" 
   s = await look(p);
   check("mark: minimized, it's the text button with the store's words", s.bubble && s.pillShown && s.pillText === "Ask Ava!" && s.w > 60 && Math.round(s.h) === 44, JSON.stringify(s));
   check("mark: the button is named by its words (no tooltip)", s.label === "Ask Ava! — open the AI shopping assistant" && s.title === null, JSON.stringify({ l: s.label, t: s.title }));
-  check("mark: the button wears the colorful glow over a solid ink capsule", /conic-gradient/.test(s.glow) && s.capsule === (s.theme === "dark" ? "rgb(245, 245, 247)" : "rgb(13, 13, 18)") && s.text !== s.capsule, JSON.stringify({ g: s.glow.slice(0, 40), c: s.capsule, t: s.text, th: s.theme }));
+  check("mark: the button wears the colorful glow over a capsule in the bar's own colors", /conic-gradient/.test(s.glow) && s.capsule === (s.theme === "dark" ? "rgb(20, 20, 24)" : "rgb(255, 255, 255)") && s.text === (s.theme === "dark" ? "rgb(245, 245, 247)" : "rgb(29, 29, 31)"), JSON.stringify({ g: s.glow.slice(0, 40), c: s.capsule, t: s.text, th: s.theme }));
+  // …and the other look: light words on charcoal in dark mode, dark words on white in light mode.
+  const other = await p.evaluate(async () => { const l = document.querySelector(".ai-chat-launcher"); const was = l.getAttribute("data-theme"); l.setAttribute("data-theme", was === "dark" ? "light" : "dark"); await new Promise((r) => setTimeout(r, 400)); const r = { theme: l.getAttribute("data-theme"), capsule: getComputedStyle(l, "::after").backgroundColor, text: getComputedStyle(l.querySelector(".ai-chat-launcher__pill")).color }; l.setAttribute("data-theme", was); return r; });
+  check("mark: the button matches the other theme too", other.capsule === (other.theme === "dark" ? "rgb(20, 20, 24)" : "rgb(255, 255, 255)") && other.text === (other.theme === "dark" ? "rgb(245, 245, 247)" : "rgb(29, 29, 31)"), JSON.stringify(other));
   await p.mouse.move(5, 5); await p.waitForTimeout(350);
   const lb = await p.evaluate(() => { const r = document.querySelector(".ai-chat-launcher").getBoundingClientRect(); return { right: Math.round(innerWidth - r.right), bottom: Math.round(innerHeight - r.bottom) }; });
   check("mark: the button sits in the bubble's corner", lb.right === 20 && lb.bottom === 20, JSON.stringify(lb));

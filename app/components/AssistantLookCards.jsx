@@ -94,9 +94,9 @@ const MARK_CSS = `
   .mark-ph { display: grid; place-items: end center; border-radius: 50%; overflow: hidden; flex: none; background: linear-gradient(160deg, #e7e2dc, #d7d0c8); }
   @property --mark-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
   @keyframes markTurn { to { --mark-turn: 360deg; } }
-  .mark-pill { position: relative; isolation: isolate; display: inline-flex; align-items: center; height: 44px; padding: 0 20px; border-radius: 999px; color: #fff;
+  .mark-pill { position: relative; isolation: isolate; display: inline-flex; align-items: center; height: 44px; padding: 0 20px; border-radius: 999px; color: #1d1d1f;
     font: 600 15px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; letter-spacing: -0.01em; white-space: nowrap; -webkit-font-smoothing: antialiased; }
-  .mark-pill::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: #0d0d12; }
+  .mark-pill::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: #fff; box-shadow: 0 0 0 1px rgba(13,13,18,0.06); }
   .mark-pill::before { content: ""; position: absolute; inset: -3px; z-index: -2; border-radius: inherit; filter: blur(10px); opacity: 0.6;
     background: conic-gradient(from var(--mark-turn), #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3); animation: markTurn 10s linear infinite; }
   .mark-pill--sm { height: 24px; padding: 0 10px; font-size: 10.5px; }

@@ -7072,8 +7072,9 @@ button.ai-chat-launcher__text {
 }
 .ai-chat-launcher[data-theme="dark"] .ai-chat-launcher__icon.is-photo::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
 
-/* The text button: an ink capsule (near-white on dark) in the same soft,
-   turning glow of color as the assistant's face on the welcome screen. The
+/* The text button: a capsule in the chat bar's own colors (white with dark
+   words in light mode, charcoal with light words in dark mode) in the same
+   soft, turning glow of color as the assistant's face on the welcome screen. The
    capsule is drawn by ::after and the glow by ::before beneath it, so the
    launcher itself stays clear and nothing clips the light. */
 @property --ai-pill-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
@@ -7093,7 +7094,8 @@ button.ai-chat-launcher__text {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: var(--seos-ink, #0d0d12);
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(13, 13, 18, 0.06);
   transition: background-color 0.2s ease;
   pointer-events: none;
 }
@@ -7123,22 +7125,24 @@ button.ai-chat-launcher__text {
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
-  color: #fff;
+  color: var(--seos-text, #1d1d1f);
   white-space: nowrap;
   user-select: none;
   -webkit-font-smoothing: antialiased;
 }
 @media (hover: hover) {
   .ai-chat-launcher.is-bubble.is-photo:hover { transform: translateY(-1px) !important; box-shadow: none !important; }
-  .ai-chat-launcher.is-bubble.is-photo:hover::after { background: var(--seos-ink-hover, #26262d); }
+  .ai-chat-launcher.is-bubble.is-photo:hover::after { background: #fafafb; }
   .ai-chat-launcher.is-bubble.is-photo:hover::before { opacity: 0.75; filter: blur(12px); }
 }
 .ai-chat-launcher.is-bubble.is-photo:active { transform: scale(0.97) !important; }
 .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo { background: transparent !important; box-shadow: none !important; }
+.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo::after { background: var(--seos-bg, #141418); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo::before { opacity: 0.65; }
-.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo > .ai-chat-launcher__pill { color: #0d0d12; }
+.ai-chat-launcher[data-theme="dark"].is-bubble.is-photo > .ai-chat-launcher__pill { color: var(--seos-text, #f5f5f7); }
 @media (hover: hover) {
   .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo:hover { box-shadow: none !important; }
+  .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo:hover::after { background: var(--seos-bg-raised, #1c1c21); }
   .ai-chat-launcher[data-theme="dark"].is-bubble.is-photo:hover::before { opacity: 0.85; }
 }
 @media (prefers-reduced-motion: reduce) {
