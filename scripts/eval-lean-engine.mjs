@@ -1650,7 +1650,8 @@ await test("stores on the map have the foot scanner: the size worry first (True 
   assert.match(p, /1\. Show you get it, in your own words: wanting to try shoes on before buying makes total sense\. One friendly emoji is fine \(😊\), never more/);
   assert.match(p, /2\. The size: if that's the main worry, True Fit can find their best size in about a minute, from real shoppers' fit feedback \(for a shoe they named, call open_true_fit with it, when you have it/);
   assert.match(p, /3\. What makes trying it easy: the store's returns as its info says them \(search_store_info first\) — that they can actually wear them and still return them if they're not quite right/);
-  assert.match(p, /Then one short, warm question toward buying, with tap choices/);
+  assert.match(p, /Then one short, warm question toward buying \(their size, other colors\)\. Show the style they named, or a few for what they're shopping for — with those cards, put the next steps in show_products follow_ups \(they're the quick replies\), not as tap choices in your reply; tap choices only when you show no products/);
+  assert.match(p, /3\. In the meantime, one short, warm offer: help finding their size in the style they named, or its other colors \(as quick replies when you show it\)/);
   assert.match(p, /"I totally get it — sometimes you just want to feel a shoe on before you buy\. 😊 \[blank line\] If it's mostly about the size, True Fit can find your best fit in the Charlotte in about a minute/);
   assert.match(p, /In this reply don't mention stores, the store locator, the store map, foot scanners or scanner locations — not even as an offer, even if they gave a ZIP code or city/);
   assert.match(p, /When they ask again or insist on trying it on in person: now help them find a place — warmly and honestly, in the same three-paragraph shape \(never open with "if you'd still prefer" or refer back to your earlier reply\)/);
@@ -1689,6 +1690,23 @@ await test("first ask to try on in person (scanner stores): a reply that brings 
   // A scan or orthotics: the map is right.
   assert.equal(storeTooSoon({ ...base, latestUserMessage: "where can I get my feet scanned near me?", messages: [{ role: "user", content: "where can I get my feet scanned near me?" }], text: said, mapShown: true }), false, "scan");
   assert.equal(storeTooSoon({ ...base, latestUserMessage: "can I try your orthotics in a store?", messages: [{ role: "user", content: "can I try your orthotics in a store?" }], text: said, mapShown: true }), false, "orthotics");
+});
+await test("tap choices the quick replies already offer go — one set of buttons, never two", async () => {
+  const { dedupeChoices } = await import("../app/lib/lean/engine.js");
+  const qr = ["Find my size in the Charlotte", "See the Charlotte in other colors", "Do any come in wide?"];
+  assert.deepEqual(dedupeChoices("Want help with your size, or other colors? <<Find my size>><<See other colors>>", qr), { text: "Want help with your size, or other colors?", followUps: qr }, "every choice is a quick reply: the choices go");
+  assert.deepEqual(dedupeChoices("Women's or men's? <<Women's>><<Men's>>", ["Do these come in wide?"]), { text: "Women's or men's? <<Women's>><<Men's>>", followUps: ["Do these come in wide?"] }, "different: both stay");
+  assert.deepEqual(dedupeChoices("Which? <<Find my size>><<Women's>>", ["Find my size in the Charlotte", "Do any come in wide?"]), { text: "Which? <<Find my size>><<Women's>>", followUps: ["Do any come in wide?"] }, "some overlap: the choices stay, the repeated quick reply goes");
+  assert.deepEqual(dedupeChoices("Here you go.", qr), { text: "Here you go.", followUps: qr }, "no choices: nothing changes");
+  const msg = "show me the savannah";
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "savannah", gender: "women" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]], follow_ups: ["Find my size in the Savannah", "See the Savannah in other colors"] })] },
+    { stop_reason: "end_turn", content: [txt("Here's the Savannah. Want help with your size or other colors? <<Find my size>><<See other colors>>")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet });
+  assert.equal(r.text, "Here's the Savannah. Want help with your size or other colors?");
+  assert.deepEqual(r.followUps, ["Find my size in the Savannah", "See the Savannah in other colors"]);
 });
 await test("the store's website, from a link set in Settings", async () => {
   const { storeWebsite } = await import("../app/lib/lean/prompt.js");

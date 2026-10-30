@@ -39,6 +39,30 @@ export function cleanFollowUps(list) {
   return out;
 }
 
+// Tap choices that the quick replies already offer ("Find my size" beside
+// "Find my size in the Charlotte"): one set of buttons, never two. When
+// every choice is already a quick reply, the choices go; otherwise they
+// stay and the quick replies that repeat one go. Pure.
+const CHOICE_STOP = new Set(["the", "a", "an", "in", "of", "my", "me", "to", "for", "it", "its", "this", "that", "these", "those", "your", "you", "i", "and", "or", "please", "can", "could", "would", "want", "like", "some"]);
+function choiceWords(s) {
+  return String(s || "").toLowerCase().replace(/[’']/g, "").split(/[^a-z0-9]+/)
+    .filter((w) => w && !CHOICE_STOP.has(w))
+    .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+}
+const covers = (big, small) => {
+  const b = new Set(choiceWords(big));
+  const w = choiceWords(small);
+  return w.length > 0 && w.every((x) => b.has(x));
+};
+export function dedupeChoices(text, followUps = []) {
+  const choices = [...String(text || "").matchAll(/<<([^<>]+)>>/g)].map((m) => m[1].trim());
+  if (!choices.length || !followUps.length) return { text, followUps };
+  if (choices.every((c) => followUps.some((f) => covers(f, c)))) {
+    return { text: String(text).replace(/\s*<<[^<>]+>>/g, "").trim(), followUps };
+  }
+  return { text, followUps: followUps.filter((f) => !choices.some((c) => covers(f, c) || covers(c, f))) };
+}
+
 // Product handles anywhere in a tool result (orders, recommender, fit report).
 function collectHandles(value, out = new Set(), depth = 0) {
   if (!value || depth > 6) return out;
@@ -843,7 +867,7 @@ export async function runLeanTurn({
     if (misses.length) {
       issues.push({
         code: "store_ask_reply",
-        detail: `They'd like to try it on in person, and your reply ${[misses.includes("heard") && "doesn't show you heard that", misses.includes("returns") && "doesn't take the risk away", misses.includes("paragraphs") && "is one dense block"].filter(Boolean).join(" and ")}. Answer like a friendly, professional associate, in three short paragraphs with a blank line between them, one or two sentences each: show you get it, in your own words ("I totally get it — sometimes you just want to feel a shoe on before you buy. 😊"); then, if it's mostly about the size, True Fit can find their best fit in about a minute, from real shoppers' feedback; then what makes trying it easy — the returns as the store's info says them (search_store_info, only what it actually says); then one short, warm question toward buying, with tap choices. Never just "tap the button".`,
+        detail: `They'd like to try it on in person, and your reply ${[misses.includes("heard") && "doesn't show you heard that", misses.includes("returns") && "doesn't take the risk away", misses.includes("paragraphs") && "is one dense block"].filter(Boolean).join(" and ")}. Answer like a friendly, professional associate, in three short paragraphs with a blank line between them, one or two sentences each: show you get it, in your own words ("I totally get it — sometimes you just want to feel a shoe on before you buy. 😊"); then, if it's mostly about the size, True Fit can find their best fit in about a minute, from real shoppers' feedback; then what makes trying it easy — the returns as the store's info says them (search_store_info, only what it actually says); then one short, warm question toward buying (with the cards, the next steps go in show_products follow_ups, not as tap choices). Never just "tap the button".`,
       });
     }
     // The map at such a store: honest, and it heard where they are.
@@ -918,6 +942,8 @@ export async function runLeanTurn({
 
   // Products in the comparison table aren't repeated as cards.
   const cards = shown.filter((h) => !compared.includes(h)).map((h) => byHandle.get(h)).filter(Boolean).map((p) => toCard(p, preselects.get(p.handle) || null));
+  // Quick replies come with the cards; tap choices that repeat them go.
+  if (cards.length) ({ text, followUps } = dedupeChoices(text, followUps));
   // The search that found the shown cards — the "View all" link repeats it.
   const shopAllSearch = cards.length
     ? [...searches].reverse().find((s) => shown.some((h) => s.handles.has(h)))?.input || null
