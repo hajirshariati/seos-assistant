@@ -13,12 +13,16 @@
 //   - HTTP 5xx (server errors) and 529 (overloaded)
 //   - HTTP 429 (rate limit), waiting at least as long as the API's
 //     retry-after asks — unless that's longer than a shopper should wait
-//   - Network errors (ECONNRESET, ETIMEDOUT, ECONNREFUSED, network)
+//   - Network errors (ECONNRESET, ETIMEDOUT, ECONNREFUSED, network) — and
+//     the SDK's own "Connection error." / "Request timed out." (no status;
+//     the real network error is its cause, or its cause's cause)
 //
 // What we do NOT retry:
 //   - HTTP 4xx other than 429 (auth, validation, billing) — retry won't
 //     help and just delays the customer's error
 //   - Errors after partial output (would duplicate to the customer)
+
+import { APIConnectionError } from "@anthropic-ai/sdk";
 
 const RETRYABLE_HTTP_CODES = new Set([429, 500, 502, 503, 504, 522, 524, 529]);
 const RETRYABLE_NETWORK_CODES = new Set([
@@ -26,16 +30,38 @@ const RETRYABLE_NETWORK_CODES = new Set([
   "ETIMEDOUT",
   "ECONNREFUSED",
   "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
   "EAI_AGAIN",
+  // Node's fetch (undici): the other side closed a kept-alive socket, or
+  // connecting took too long.
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
 ]);
+
+// A network failure before any answer: the SDK's APIConnectionError
+// ("Connection error.", or "Request timed out."), or a network code
+// anywhere down the error's causes.
+function isConnectionFailure(err) {
+  if (err instanceof APIConnectionError) return true;
+  for (let e = err, i = 0; e && i < 5; e = e.cause, i++) {
+    if (e.code && RETRYABLE_NETWORK_CODES.has(e.code)) return true;
+  }
+  return false;
+}
+
+// The first error code down the causes (for the log): "UND_ERR_SOCKET", …
+function failureCode(err) {
+  for (let e = err, i = 0; e && i < 5; e = e.cause, i++) if (e.code) return e.code;
+  return err instanceof APIConnectionError ? err.constructor.name : "";
+}
 
 function isRetryableError(err) {
   if (!err) return false;
   // Anthropic SDK exposes `.status` on APIError instances.
   const status = err.status ?? err.response?.status;
   if (typeof status === "number" && RETRYABLE_HTTP_CODES.has(status)) return true;
-  const code = err.code ?? err.cause?.code;
-  if (code && RETRYABLE_NETWORK_CODES.has(code)) return true;
+  if (isConnectionFailure(err)) return true;
   // Fallback: message includes a retry-eligible signal.
   const msg = String(err.message || "").toLowerCase();
   if (/network|timeout|econnreset|temporarily|overloaded|retry/.test(msg)) return true;
@@ -77,7 +103,7 @@ export async function withAnthropicRetry(fn, opts = {}) {
       if (delay > maxWaitMs) throw err;
       // Leave the retry a few seconds to run before the turn's end.
       if (deadlineAt && Date.now() + delay + 3000 > deadlineAt) throw err;
-      console.log(`[${label}] retry ${attempt + 1}/${maxRetries} after ${delay}ms — ${err?.status || err?.code || "unknown"}: ${String(err?.message || err).slice(0, 120)}`);
+      console.log(`[${label}] retry ${attempt + 1}/${maxRetries} after ${delay}ms — ${err?.status || failureCode(err) || "unknown"}: ${String(err?.message || err).slice(0, 120)}`);
       await sleep(delay);
     }
   }
@@ -98,7 +124,7 @@ export function classifyAnthropicError(err) {
   if (status && status >= 500 && status < 600) {
     return { kind: "upstream", retryable: true };
   }
-  if (RETRYABLE_NETWORK_CODES.has(err?.code)) {
+  if (isConnectionFailure(err)) {
     return { kind: "network", retryable: true };
   }
   // This server already has as many AI requests running as it allows.

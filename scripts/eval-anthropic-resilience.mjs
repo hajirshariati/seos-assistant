@@ -2,9 +2,11 @@
 // fallback message. Pure functions — no network, no API.
 
 import assert from "node:assert/strict";
+import { APIConnectionError, APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import {
   classifyAnthropicError,
   customerFacingFailureMessage,
+  withAnthropicRetry,
 } from "../app/lib/anthropic-resilience.server.js";
 
 let passed = 0;
@@ -48,6 +50,41 @@ test("classifies an unknown 400 as unknown (non-retryable)", () => {
   assert.equal(c.retryable, false);
 });
 
+// Production 2026-10-30: "[lean] turn failed: Error: Connection error." — the
+// SDK's APIConnectionError (no status; the socket error two causes down)
+// wasn't retried, and the shopper saw the generic "having trouble" note.
+const sdkConnectionError = () => {
+  const socket = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" });
+  const fetchFailed = new TypeError("fetch failed", { cause: socket });
+  return new APIConnectionError({ cause: fetchFailed });
+};
+test("the SDK's \"Connection error.\" is a network failure (retryable)", () => {
+  const err = sdkConnectionError();
+  assert.equal(err.message, "Connection error.");
+  assert.deepEqual(classifyAnthropicError(err), { kind: "network", retryable: true });
+  assert.deepEqual(classifyAnthropicError(new APIConnectionTimeoutError()), { kind: "network", retryable: true });
+  assert.deepEqual(classifyAnthropicError(new TypeError("fetch failed", { cause: Object.assign(new Error("x"), { code: "ECONNRESET" }) })), { kind: "network", retryable: true }, "a code down the causes");
+});
+const retried = async (makeErr) => {
+  let calls = 0;
+  const out = await withAnthropicRetry(async () => { calls++; if (calls === 1) throw makeErr(); return "ok"; }, { baseDelayMs: 1, label: "test" }).catch((e) => e);
+  return { calls, out };
+};
+const asyncTests = [];
+asyncTests.push(["a dropped connection is tried again, and the turn goes on", async () => {
+  const r = await retried(sdkConnectionError);
+  assert.equal(r.calls, 2);
+  assert.equal(r.out, "ok");
+  const t = await retried(() => new APIConnectionTimeoutError());
+  assert.equal(t.calls, 2);
+  assert.equal(t.out, "ok");
+}]);
+asyncTests.push(["a bad request is not tried again", async () => {
+  const r = await retried(() => Object.assign(new Error("400 invalid"), { status: 400 }));
+  assert.equal(r.calls, 1);
+  assert.equal(r.out.status, 400);
+}]);
+
 test("billing/down message points the customer to human support", () => {
   const m = customerFacingFailureMessage("billing");
   assert.match(m, /customer service|support/i);
@@ -61,6 +98,11 @@ test("every kind yields a non-empty, leak-free customer message", () => {
     assert.doesNotMatch(m, /\b(?:status|stack|api|token|anthropic|400|429|500)\b/i, `leaks internals for ${kind}: ${m}`);
   }
 });
+
+for (const [name, fn] of asyncTests) {
+  try { await fn(); console.log(`  ✓ ${name}`); passed++; }
+  catch (err) { console.log(`  ✗ ${name} — ${err.message}`); failures.push({ name, err }); failed++; }
+}
 
 console.log("");
 if (failed === 0) {
