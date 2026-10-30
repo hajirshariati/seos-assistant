@@ -45,7 +45,7 @@
     hideOnMobile: {{ block.settings.hide_on_mobile | json }},
     trueFit: {{ block.settings.truefit_size_finder | json }},
     trueFitLogo: {{ 'truefit-logo.png' | asset_url | json }},
-    rotateGreetingCta: {{ block.settings.rotate_greeting_cta | json }},
+    homeLayout: {{ block.settings.home_layout | json }},
     customerLoggedIn: {% if customer %}true{% else %}false{% endif %},
     customerFirstName: {% if customer %}{{ customer.first_name | json }}{% else %}""{% endif %},
     customerLoginUrl: {{ routes.account_login_url | json }},
@@ -214,11 +214,15 @@
       "default": false
     },
     {
-      "type": "checkbox",
-      "id": "rotate_greeting_cta",
-      "label": "Rotate Greeting CTA through 6 languages",
-      "info": "Cross-fades the welcome line through Spanish, Arabic, Japanese, Hebrew, Hindi, and Farsi translations of your text — signals to international shoppers that the assistant understands them. Translations regenerate automatically (server-side, cached) whenever you edit the Greeting CTA above.",
-      "default": true
+      "type": "select",
+      "id": "home_layout",
+      "label": "Home layout",
+      "info": "Classic is the current welcome screen. Focus opens on the foot-pain question with six places it can hurt, then Footwear and Orthotics as two cards whose tools open in a sheet. Try it on a draft theme first. (Rotating the welcome line through languages is set in the app's Settings.)",
+      "options": [
+        { "value": "classic", "label": "Classic" },
+        { "value": "focus", "label": "Focus — foot pain specialist first" }
+      ],
+      "default": "classic"
     },
     {
       "type": "paragraph",
