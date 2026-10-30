@@ -70,7 +70,7 @@ export function trueFitTool({ shop, sizeFinder, lookup = findProduct, loadCatalo
       return {
         ok: true,
         handle: product.handle,
-        note: "A \"Find my size with True Fit\" button is shown under your reply. Tell the customer briefly to tap it.",
+        note: "A \"Find my size with True Fit\" button is shown under your reply. As part of your reply, point them to it in a sentence — it finds their size in this shoe in about a minute — after answering what they asked; it's never the whole reply.",
         _events: [{ type: "size_finder", provider: "truefit", handle: product.handle, title: product.title }],
       };
     },

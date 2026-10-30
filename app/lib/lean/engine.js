@@ -187,15 +187,28 @@ const SCAN_ASK = /\b(scan(?:ner|ned|ning|s)?|fitting|fitted|orthotics?|insoles?|
 const INSIST = /\b(still|anyway|anyways|insist|rather|really (?:want|need|would like)|prefer (?:to )?(?:try|see|go))\b/i;
 const LOCATOR_SAID = /\b(foot[- ]?scanners?|scanner locations?|scanning locations?|store locator|store map|find a store|stores? near you|locations? near you|nearby (?:stores?|locations?)|retail locations?)\b/i;
 const textOf = (m) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((b) => (b?.type === "text" ? b.text : "")).join(" ") : "");
-export function storeTooSoon({ scannerStores = false, messages = [], latestUserMessage = "", text = "", mapShown = false } = {}) {
+// The first ask, at such a store, to try on or buy a style in person.
+export function firstStoreAsk({ scannerStores = false, messages = [], latestUserMessage = "" } = {}) {
   if (!scannerStores) return false;
   const latest = String(latestUserMessage || "");
   if (!STORE_ASK.test(latest) || SCAN_ASK.test(latest) || INSIST.test(latest)) return false;
   // Asked about stores before in this conversation: now they insist.
   const users = messages.filter((m) => m?.role === "user").map(textOf);
   if (users.length && users[users.length - 1].trim() === latest.trim()) users.pop();
-  if (users.some((u) => STORE_ASK.test(u) || SCAN_ASK.test(u))) return false;
-  return mapShown || LOCATOR_SAID.test(String(text || ""));
+  return !users.some((u) => STORE_ASK.test(u) || SCAN_ASK.test(u));
+}
+export function storeTooSoon({ text = "", mapShown = false, ...ask } = {}) {
+  return firstStoreAsk(ask) && (mapShown || LOCATOR_SAID.test(String(text || "")));
+}
+// The answer a sales associate gives that first time: it shows they heard
+// the question ("totally understand wanting to try it on…") and takes the
+// risk away (the returns). Which of the two the reply leaves out.
+const HEARD = /\b(understand|totally|of course|makes (?:total |perfect )?sense|i get (?:it|that)|get it|fair enough|great question|good question|love that|want(?:ing)? to (?:try|see|feel)|try (?:\w+ ){0,3}on|in person|before (?:you )?(?:buy|order|commit|decide))\b/i;
+const RETURNS = /\b(returns?|returned|returning|exchanges?|guarantee|money[- ]back|risk[- ]free)\b/i;
+export function storeAskMisses({ text = "", ...ask } = {}) {
+  if (!firstStoreAsk(ask)) return [];
+  const t = String(text || "");
+  return [...(HEARD.test(t) ? [] : ["heard"]), ...(RETURNS.test(t) ? [] : ["returns"])];
 }
 
 // The catalog's product line names, worked out once per catalog.
@@ -803,6 +816,15 @@ export async function runLeanTurn({
       issues.push({
         code: "store_too_soon",
         detail: "They asked about trying on or buying a style in person, for the first time. Don't mention stores, the store locator, the map, foot scanners or scanner locations in this reply — its locations are for foot scans and orthotics, and most don't carry the shoes (the map is only for when they insist, or want a scan). Help them buy with confidence right here, like the store's best associate: if it's the size or fit they want to be sure of, you can help now — True Fit for their size in the shoe (open_true_fit, when you have it); easy returns as the store's info says them (search_store_info); the style itself, ready to order; then an inviting next step with tap choices.",
+      });
+    }
+    // That first ask deserves a person's answer: heard, and the risk taken
+    // away — never just "tap the button".
+    const misses = storeAskMisses({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text });
+    if (misses.length) {
+      issues.push({
+        code: "store_ask_reply",
+        detail: `They'd like to try it on in person, and your reply ${misses.includes("heard") ? "doesn't show you heard that" : ""}${misses.length === 2 ? " and " : ""}${misses.includes("returns") ? "doesn't take the risk away" : ""}. Answer like a friendly, professional associate, in 3-4 short, warm sentences: first acknowledge it in your own words ("Totally understand wanting to try the Charlotte on first — fit is everything with shoes."); then, if it's the size or fit they're unsure about, you can help right now — True Fit finds their size in that shoe in about a minute; then that ordering here is easy to undo — the returns as the store's info says them (search_store_info, only what it actually says); then a warm next step with tap choices. Never just "tap the button".`,
       });
     }
     // Free shipping said of a product the store's offer doesn't name.
