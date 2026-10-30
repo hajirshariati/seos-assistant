@@ -1,6 +1,7 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl, locatorStores } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
+import { focusImageError, focusImageKey } from "../lib/focus-home.js";
 import { getShopName, getShopHosts } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
@@ -138,6 +139,9 @@ export const loader = async ({ request }) => {
     appPromoButton: config.appPromoButton || "",
     appPromoDefaultText: defaultAppText(shopName),
     appPromoImage: config.appPromoImage || "",
+    // Focus home (Theme editor → Home layout → Focus): the line cards' pictures.
+    focusFootwearImage: config.focusFootwearImage || "",
+    focusOrthoticsImage: config.focusOrthoticsImage || "",
     buyNowEnabled: config.buyNowEnabled === true,
     buyNowCode: config.buyNowCode || "",
     appEventsEnabled: config.appEventsEnabled !== false,
@@ -217,6 +221,17 @@ export const action = async ({ request }) => {
     if (err) return { appImageError: err };
     await updateShopConfig(session.shop, { appPromoImage: image });
     return { appImageSaved: true, appImage: image };
+  }
+
+  // Focus home → the Footwear / Orthotics card pictures (resized in the browser).
+  if (intent === "save_focus_image") {
+    const key = focusImageKey(String(formData.get("kind") || ""));
+    if (!key) return { focusImageError: "Unknown card." };
+    const image = String(formData.get("image") || "");
+    const err = focusImageError(image);
+    if (err) return { focusImageError: err };
+    await updateShopConfig(session.shop, { [key]: image });
+    return { focusImageSaved: true, focusImage: image };
   }
 
   if (intent === "save_recording") {
@@ -931,6 +946,14 @@ function LookSection({ d, values, set }) {
           </BlockStack>
         </Row>
       </Group>
+      <Group title="Focus home">
+        <Row stack help="The chat's second home layout — the foot-pain question first, then Footwear and Orthotics as two cards. Switch layouts in the theme editor (AVA → Home layout); try it on a draft theme first. The pictures below go on those two cards.">
+          <BlockStack gap="300">
+            <FocusPicture kind="footwear" initial={d.focusFootwearImage} />
+            <FocusPicture kind="orthotics" initial={d.focusOrthoticsImage} />
+          </BlockStack>
+        </Row>
+      </Group>
       <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} initialMark={d.launcherMark} initialText={d.launcherText} avatarUrl={d.avatarUrl} avatarState={d.avatarState} launcherPrompt={values.textLauncher || TEXT_DEFAULT.launcher} />
     </BlockStack>
   );
@@ -1011,12 +1034,12 @@ function CareSection({ values, set }) {
 // Your app → the app's picture: a PNG (ideally with no background) shown in
 // the chat's app message. Resized here to a small file before it's saved.
 const APP_IMAGE_HEIGHT = 360;
-function resizeAppImage(file) {
+function resizeAppImage(file, maxHeight = APP_IMAGE_HEIGHT) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, APP_IMAGE_HEIGHT / img.naturalHeight);
+      const scale = Math.min(1, maxHeight / img.naturalHeight);
       const c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(img.naturalWidth * scale));
       c.height = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -1070,6 +1093,59 @@ function AppPicture({ initial, disabled }) {
           <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked} disabled={disabled}>{image ? "Replace picture" : "Upload picture"}</Button>
           {image ? <Button variant="plain" tone="critical" onClick={remove} disabled={disabled || busy}>Remove</Button> : null}
           {fetcher.data?.appImageSaved && !busy ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
+        </InlineStack>
+        {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
+      </div>
+    </div>
+  );
+}
+
+// Focus home (Theme editor → Home layout → Focus): a picture for the
+// Footwear card and one for the Orthotics card. Without one, the card shows
+// a line drawing.
+function FocusPicture({ kind, initial }) {
+  const fetcher = useFetcher();
+  const inputRef = useRef(null);
+  const [picked, setPicked] = useState(null);
+  const [localError, setLocalError] = useState("");
+  const saved = fetcher.data?.focusImageSaved ? fetcher.data.focusImage : null;
+  const image = picked ?? saved ?? initial ?? "";
+  const error = localError || fetcher.data?.focusImageError || "";
+  const busy = fetcher.state !== "idle";
+  const title = kind === "footwear" ? "Footwear card" : "Orthotics card";
+  const send = (value) => {
+    const fd = new FormData();
+    fd.set("intent", "save_focus_image");
+    fd.set("kind", kind);
+    fd.set("image", value);
+    fetcher.submit(fd, { method: "post" });
+  };
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setLocalError("");
+    if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { setLocalError("Choose a PNG, WebP or JPEG image."); return; }
+    try {
+      const data = await resizeAppImage(file, 320);
+      setPicked(data);
+      send(data);
+    } catch {
+      setLocalError("That image couldn't be read — try another one.");
+    }
+  };
+  const remove = () => { setPicked(""); send(""); };
+  return (
+    <div className="set-app-pic">
+      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`}>{image ? <img src={image} alt="" /> : <span aria-hidden="true">{kind === "footwear" ? "👟" : "🦶"}</span>}</div>
+      <div className="set-app-pic__body">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">{title}</Text>
+        <Text as="p" variant="bodySm" tone="subdued">A square picture looks best — it fills the card's rounded box. Without one, the card shows a line drawing.</Text>
+        <InlineStack gap="200" blockAlign="center">
+          <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
+          <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked}>{image ? "Replace picture" : "Upload picture"}</Button>
+          {image ? <Button variant="plain" tone="critical" onClick={remove} disabled={busy}>Remove</Button> : null}
+          {fetcher.data?.focusImageSaved && !busy ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
         </InlineStack>
         {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
       </div>

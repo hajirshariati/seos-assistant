@@ -1,6 +1,7 @@
 import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
 import { appPromoConfig } from "../lib/app-promo.js";
+import { focusImagesConfig } from "../lib/focus-home.js";
 import { buyNowConfig } from "../lib/buy-now.js";
 import { parseFitLevels } from "../lib/fit-confidence.js";
 import { parseChatTexts } from "../lib/chat-texts.js";
@@ -107,6 +108,9 @@ export const loader = async ({ request }) => {
         seasonalCta: seasonalCtaConfig(config),
         // Settings → Your app: its own message, once per visit.
         appPromo: appPromoConfig(config),
+        // Settings → Focus home: pictures for the Footwear and Orthotics cards
+        // (Theme editor → Home layout → Focus).
+        focusImages: focusImagesConfig(config),
         // Settings → Look & feel → Chat text (only the ones set; the rest
         // stay the theme editor's).
         chatTexts: parseChatTexts(config.chatTexts),

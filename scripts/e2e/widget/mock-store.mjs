@@ -158,8 +158,8 @@ function themeBlockStyle() {
 // True Fit driver: open() shows the finder, the shopper "answers", it
 // closes, and the size appears a moment later — as True Fit does.
 // ?tf=none: True Fit has no data for this style (open() shows the size chart).
-const shoePage = (handle, tf) => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
-<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={assistantName:"AI Shopping Assistant",greeting:"Hi!"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
+const shoePage = (handle, tf, extra = "") => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/w.css">
+<script>window.Shopify={routes:{root:"/"}};window.__AI_CHAT_CONFIG={${extra}assistantName:"AI Shopping Assistant",greeting:"Hi!"};try{localStorage.setItem("hajirai_product_card_style","showcase")}catch(e){}</script></head>
 <body style="font-family:-apple-system,Helvetica,Arial;margin:0;background:#fafafa"><div style="padding:20px">Product ${handle} <span class="cart-count">0</span>
 ${tf === "absent" ? "" : '<button type="button" data-tf-size-tile data-product-id="42">Find my size</button>'}<div id="size-chart" hidden>Size chart</div></div>
 <script>
@@ -286,9 +286,10 @@ export function start(port) {
         }
         if (u.pathname === "/account/logout" || u.pathname === "/account/login") return send(200, "text/html", "<!doctype html><title>account</title>" + u.pathname);
         const shoe = u.pathname.match(/^\/products\/([^/.]+)$/);
-        if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf")));
+        if (shoe) return send(200, "text/html", shoePage(shoe[1], shoe[1] === "orthotic-one" ? "absent" : u.searchParams.get("tf"), u.searchParams.get("home") ? `homeLayout:${JSON.stringify(u.searchParams.get("home"))},` : ""));
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
+        if (u.pathname === "/pic-footwear.svg" || u.pathname === "/pic-orthotics.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${u.pathname.includes("foot") ? "#c7d7ff" : "#ffd9c2"}"/><circle cx="80" cy="80" r="44" fill="#fff"/></svg>`);
         if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {
           let a = null;
           try { a = JSON.parse(body || "{}"); } catch { a = { unreadable: body }; }
@@ -354,6 +355,8 @@ export function start(port) {
           // The "How's the chat going?" check-in: off unless the page asks (?rate=N).
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
+          // ?pics=1: the Focus home's card pictures (Settings → Focus home).
+          focusImages: /[?&]pics=1/.test(String(req.headers.referer || "")) ? { footwear: "/pic-footwear.svg", orthotics: "/pic-orthotics.svg" } : {},
           appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=img/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "", image: /[?&]app=imgbad/.test(String(req.headers.referer || "")) ? "/apps/hajirai/app-image?v=missing" : "/apps/hajirai/app-image?v=test1" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));

@@ -219,6 +219,11 @@ model ShopConfig {
   // A picture of the app (a data URL, resized in Settings before it's saved),
   // served to the chat at /apps/hajirai/app-image. "" → the phone icon.
   appPromoImage        String   @default("")
+  // The Focus home's line cards (Theme editor → Home layout → Focus): a
+  // picture each, stored like the app's picture, served at
+  // /apps/hajirai/focus-image?kind=footwear|orthotics. "" → a line drawing.
+  focusFootwearImage   String   @default("")
+  focusOrthoticsImage  String   @default("")
   // The chat's own words (Settings → Look & feel → Chat text): its name,
   // welcome greetings, the Start here / Popular headings, the chat button and
   // message box text. JSON; a blank one falls back to the theme editor's.

@@ -548,6 +548,28 @@ await test("the public pages name the app this server runs — AVA on the Aetrex
   assert.match(guide, /Apps → AVA in your Shopify admin\./);
   assert.doesNotMatch(guide, /SEoS Assistant/);
 });
+await test("Focus home pictures: widget-config links each card that has one; the route serves exactly the uploaded bytes, signed only", async () => {
+  const cfg0 = await (await fetch(signed("/widget-config"))).json();
+  assert.deepEqual(cfg0.focusImages, {}, "no pictures → nothing to link");
+  assert.equal((await fetch(signed("/focus-image", { kind: "footwear", v: "x" }))).status, 404, "no picture → nothing served");
+  const pngBytes = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13];
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: `data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}` } });
+  await configCacheExpiry();
+  const links = (await (await fetch(signed("/widget-config"))).json()).focusImages;
+  assert.match(links.footwear, /^\/apps\/hajirai\/focus-image\?kind=footwear&v=[a-z0-9]+$/, "the picture's link, with its fingerprint");
+  assert.equal(links.orthotics, undefined, "the other card has none");
+  const pic = await fetch(signed("/focus-image", { kind: "footwear", v: links.footwear.split("v=")[1] }));
+  assert.equal(pic.status, 200);
+  assert.equal(pic.headers.get("content-type"), "image/png");
+  assert.deepEqual([...new Uint8Array(await pic.arrayBuffer())], pngBytes, "exactly the uploaded picture");
+  assert.equal((await fetch(signed("/focus-image", { kind: "orthotics", v: "x" }))).status, 404, "the other card → nothing served");
+  assert.equal((await fetch(signed("/focus-image", { kind: "shoes", v: "x" }))).status, 404, "an unknown card → nothing served");
+  const unsignedPic = await fetch(`http://localhost:${APP_PORT}/focus-image?shop=${SHOP}&kind=footwear&v=x`);
+  assert.ok(unsignedPic.status >= 400 && unsignedPic.status < 500, `unsigned → ${unsignedPic.status}`);
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: "" } });
+  await configCacheExpiry();
+  assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).focusImages, {}, "removed → no link");
+});
 await test("the store's app: widget-config says it's on; the QR code is made only from the store's own link", async () => {
   const cfg = await (await fetch(signed("/widget-config"))).json();
   assert.deepEqual(cfg.appPromo, { on: true, ios: "", android: "", text: "", button: "" }, "on by default, links from the footer, the default text");

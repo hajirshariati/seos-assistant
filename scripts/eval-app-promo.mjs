@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import QRCode from "qrcode";
 
 const { cleanAppLink, appPromoConfig, appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } = await import("../app/lib/app-promo.js");
+const { focusImagesConfig, focusImageError, focusImageKey, FOCUS_IMAGE_PATH } = await import("../app/lib/focus-home.js");
 
 let passed = 0;
 let failed = 0;
@@ -78,6 +79,29 @@ await test("the QR code is an SVG of exactly the store link", async () => {
   assert.match(a, /^<svg[^>]+viewBox=/);
   assert.notEqual(a, await make(ANDROID));
   assert.equal(a, await make(IOS));
+});
+
+
+// The Focus home's card pictures (Settings → Focus home): a link per card
+// that has one, carrying the picture's fingerprint; anything else refused.
+const PNG = "data:image/png;base64," + Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]).toString("base64");
+await test("focus pictures: a link per card that has a picture, with its fingerprint; none without", () => {
+  assert.deepEqual(focusImagesConfig({}), {});
+  const one = focusImagesConfig({ focusFootwearImage: PNG });
+  assert.ok(one.footwear && one.footwear.startsWith(`${FOCUS_IMAGE_PATH}?kind=footwear&v=`), one.footwear);
+  assert.equal(one.orthotics, undefined);
+  const both = focusImagesConfig({ focusFootwearImage: PNG, focusOrthoticsImage: PNG });
+  assert.ok(both.orthotics.startsWith(`${FOCUS_IMAGE_PATH}?kind=orthotics&v=`));
+  assert.equal(focusImagesConfig({ focusFootwearImage: "https://evil.example/x.png" }).footwear, undefined, "only a stored picture, never a link");
+  assert.equal(focusImageKey("footwear"), "focusFootwearImage");
+  assert.equal(focusImageKey("orthotics"), "focusOrthoticsImage");
+  assert.equal(focusImageKey("shoes"), "", "unknown cards have no key");
+});
+await test("focus pictures: Settings refuses anything but a small PNG, WebP or JPEG", () => {
+  assert.equal(focusImageError(""), "");
+  assert.equal(focusImageError(PNG), "");
+  assert.match(focusImageError("data:text/html;base64,PGI+"), /PNG, WebP or JPEG/);
+  assert.match(focusImageError("data:image/png;base64," + "A".repeat(600 * 1024)), /too large/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

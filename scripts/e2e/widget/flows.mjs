@@ -3085,8 +3085,9 @@ for (const coop of ["1", "2"]) {
 // welcome exactly as before; Focus is the opt-in foot-pain-first home with the
 // face on the header's line, whose ring becomes the line once a chat starts.
 {
-  const open = async (url, opts = {}) => {
+  const open = async (url, opts = {}, texts = null) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, ...opts });
+    if (texts) await ctx.addInitScript((t) => { try { localStorage.setItem("hajirai_texts", JSON.stringify(t)); } catch (e) { /* storage blocked: the test still runs */ } }, texts);
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -3095,6 +3096,7 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(700);
     return { ctx, page, errors };
   };
+  const lineY = () => { const r = document.querySelector(".ai-chat-header__line").getBoundingClientRect(); return (r.top + r.bottom) / 2; };
   const state = (page) => page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { focus: p.classList.contains("is-focus"), home: p.classList.contains("is-home"), chatting: p.classList.contains("is-chatting"), streaming: p.classList.contains("is-streaming"), hero: !!document.querySelector(".ai-chat-hero:not(.is-gone)"), heroGone: !!document.querySelector(".ai-chat-hero.is-gone"), line: !!document.querySelector(".ai-chat-header__line"), focusHome: !!document.querySelector(".ai-chat-welcome--focus"), sheet: !!document.querySelector(".ai-chat-focus-sheet"), classic: !!document.querySelector(".ai-chat-welcome__cta-btn, .ai-chat-welcome__helpers, .ai-chat-welcome__greeting-cta"), msgs: document.querySelectorAll(".ai-chat-msg").length, input: document.querySelector(".ai-chat-input").value, focused: document.activeElement === document.querySelector(".ai-chat-input") }; });
   // Classic (the default): nothing of the Focus layout exists, the welcome is as always.
   {
@@ -3108,10 +3110,10 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
-    const parts = await page.evaluate(() => ({ heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), title: document.querySelector(".ai-chat-focus__title")?.textContent, line: document.querySelector(".ai-chat-focus__line")?.textContent, tiles: document.querySelectorAll(".ai-chat-focus__tile").length, tileMsgs: document.querySelectorAll(".ai-chat-focus__tile[data-message]").length, zones: document.querySelectorAll(".ai-chat-focus__zone").length, cards: [...document.querySelectorAll("[data-focus-sheet]")].map((c) => c.getAttribute("data-focus-sheet")), links: document.querySelectorAll("[data-prefill]").length }));
-    check("home layout focus: the face on the line (the photo, or the initial when the store has none), the question, six tiles, Footwear + Orthotics cards, three quiet links — none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.title === "Where does it hurt?" && /Tap where your foot hurts/.test(parts.line) && parts.tiles === 6 && parts.tileMsgs === 5 && parts.zones === 4 && parts.cards.join(",") === "footwear,orthotics" && parts.links === 3, JSON.stringify({ st, parts }));
-    const geo = await page.evaluate(() => { const h = document.querySelector(".ai-chat-hero").getBoundingClientRect(), d = document.querySelector(".ai-chat-header").getBoundingClientRect(), t = document.querySelector(".ai-chat-focus__title").getBoundingClientRect(), n = document.querySelector(".ai-chat-header__name").getBoundingClientRect(); return { heroMid: (h.top + h.bottom) / 2, hdrBottom: d.bottom, heroBottom: h.bottom, titleTop: t.top, heroRight: h.right, nameLeft: n.left }; });
-    check("home layout focus: the face is centred on the header's line, clear of the name and of the question", Math.abs(geo.heroMid - geo.hdrBottom) <= 2 && geo.titleTop > geo.heroBottom + 6 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
+    const parts = await page.evaluate(() => ({ heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-hero__glow"), title: document.querySelector(".ai-chat-focus__title")?.textContent, line: document.querySelector(".ai-chat-focus__line")?.textContent, tiles: document.querySelectorAll(".ai-chat-focus__tile").length, tileMsgs: document.querySelectorAll(".ai-chat-focus__tile[data-message]").length, feet: document.querySelectorAll(".ai-chat-focus__tile .ai-chat-focus__ico .ai-chat-focus__foot").length, zones: document.querySelectorAll(".ai-chat-focus__zone").length, plain: !document.querySelector('.ai-chat-focus__tile[data-focus="type"] svg'), cards: [...document.querySelectorAll("[data-focus-sheet]")].map((c) => c.getAttribute("data-focus-sheet")), pics: document.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: document.querySelectorAll("[data-prefill]").length }));
+    check("home layout focus: the face on the line (the photo, or the initial when the store has none), the question, five footprint tiles with the painful place marked + Something else without an icon, Footwear + Orthotics cards (line drawings until pictures are set), three quiet links — none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.title === "Where does it hurt?" && /Tap where your foot hurts/.test(parts.line) && parts.tiles === 6 && parts.tileMsgs === 5 && parts.feet === 5 && parts.zones === 5 && parts.plain && parts.cards.join(",") === "footwear,orthotics" && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
+    const geo = await page.evaluate((lineY) => { const h = document.querySelector(".ai-chat-hero").getBoundingClientRect(), d = document.querySelector(".ai-chat-header").getBoundingClientRect(), t = document.querySelector(".ai-chat-focus__title").getBoundingClientRect(), n = document.querySelector(".ai-chat-header__name").getBoundingClientRect(); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, titleTop: t.top, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom }; }, lineY.toString());
+    check("home layout focus: the face is centred on the header's line (the header's bottom when the name has no second line), clear of the name and of the question", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.titleTop > geo.heroBottom + 6 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
     // "Something else" and the links only touch the text box.
     let n = chatBodies.length;
     await page.click('.ai-chat-focus__tile[data-focus="type"]');
@@ -3126,12 +3128,12 @@ for (const coop of ["1", "2"]) {
     // The Footwear sheet.
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, big: [...s.querySelectorAll(".ai-chat-focus__big")].map((b) => b.getAttribute("data-message")), tabs: s.querySelectorAll("[data-browse]").length, chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close") }; });
-    check("home layout focus: the Footwear sheet — Shop women's / men's, Browse by work · activity · features", fw.title === "Footwear" && fw.big.join("|") === "Show me women’s footwear|Show me men’s footwear" && fw.tabs === 3 && fw.chips.length === 6 && fw.chips[0] === "Nurses & healthcare" && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
+    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, big: [...s.querySelectorAll(".ai-chat-focus__big")].map((b) => b.getAttribute("data-message")), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), tf: !!s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon svg'), tfTitle: s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__title')?.textContent, modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close") }; });
+    check("home layout focus: the Footwear sheet — Shop women's / men's, Browse by shoes · condition · collections from the store's menu (no True Fit row where the store has no True Fit)", fw.title === "Footwear" && fw.big.join("|") === "Show me women’s footwear|Show me men’s footwear" && fw.tabs.join(",") === "Shoes,Condition,Collections" && fw.chips.length === 8 && fw.chips[0] === "Sneakers" && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
     await page.click('.ai-chat-focus-sheet [data-browse="1"]');
     await page.waitForTimeout(120);
-    const act = await page.evaluate(() => ({ on: document.querySelector('.ai-chat-focus-sheet [data-browse].is-on')?.textContent, chips: [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent) }));
-    check("home layout focus: Browse by → Activity swaps the chips", act.on === "Activity" && act.chips.length === 6 && act.chips[0] === "Walking", JSON.stringify(act));
+    const act = await page.evaluate(() => ({ on: document.querySelector('.ai-chat-focus-sheet [data-browse].is-on')?.textContent, focused: document.activeElement === document.querySelector('.ai-chat-focus-sheet [data-browse].is-on'), chips: [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent) }));
+    check("home layout focus: Browse by → Condition swaps the chips and keeps the keyboard on the tab", act.on === "Condition" && act.focused && act.chips.length === 8 && act.chips[0] === "Plantar fasciitis", JSON.stringify(act));
     await page.keyboard.press("Escape");
     await page.waitForTimeout(450);
     s2 = await state(page);
@@ -3139,13 +3141,17 @@ for (const coop of ["1", "2"]) {
     // The Orthotics sheet: FITFinder and the store's visual quiz (a Typeform quick pick).
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const or = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, fit: s.querySelector('[data-helper="fitfinder"] .ai-chat-focus__row-title')?.textContent, quiz: s.querySelector("[data-form]")?.getAttribute("data-form"), quizLabel: s.querySelector("[data-form]")?.getAttribute("data-form-label"), browse: !!s.querySelector("[data-browse]") }; });
-    check("home layout focus: the Orthotics sheet — Find my FIT and the store's visual quiz, no Browse by", or.title === "Orthotics" && or.fit === "Find my FIT" && or.quiz === "ojyWbTvZ" && or.quizLabel === "Identify my orthotic" && !or.browse, JSON.stringify(or));
+    const or = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, fit: s.querySelector('.ai-chat-helper[data-helper="fitfinder"] .ai-chat-helper__title')?.textContent, fitMono: s.querySelector('.ai-chat-helper[data-helper="fitfinder"] .ai-chat-helper__mono')?.textContent, quiz: s.querySelector(".ai-chat-helper[data-form]")?.getAttribute("data-form"), quizLabel: s.querySelector("[data-form]")?.getAttribute("data-form-label"), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.getAttribute("data-message")) }; });
+    check("home layout focus: the Orthotics sheet — the chat's own Find my orthotic FIT row, the store's visual quiz, Browse by condition · activity · collections from the store's menu", or.title === "Orthotics" && or.fit === "Find my orthotic FIT" && or.fitMono === "FIT" && or.quiz === "ojyWbTvZ" && or.quizLabel === "Identify my orthotic" && or.tabs.join(",") === "Condition,Activity,Collections" && or.chips.length === 8 && or.chips[0] === "Orthotics for plantar fasciitis", JSON.stringify(or));
+    await page.click('.ai-chat-focus-sheet [data-browse="2"]');
+    await page.waitForTimeout(120);
+    const col = await page.evaluate(() => [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent));
+    check("home layout focus: Orthotics → Collections lists the store's orthotic collections", col.length === 10 && col[0] === "Premium Memory Foam" && col.includes("Speed") && col.includes("Work"), JSON.stringify(col));
     // Shop women's sends; the face's ring becomes the header's line.
     n = chatBodies.length;
     await page.click('.ai-chat-focus-sheet .ai-chat-focus__big[data-message="Show me women’s orthotics"]');
     await waitUntil(() => chatBodies.length > n);
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(1900);/* the morph (≈1.1s) and the fades after it */
     s2 = await state(page);
     const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__line")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
     check("home layout focus: Shop women's sends its message and the ring becomes the header's line (the gray line gone, the face gone)", chatBodies.at(-1)?.message === "Show me women’s orthotics" && chatBodies.at(-1)?.typed === false && !s2.sheet && !s2.home && s2.chatting && s2.heroGone && !s2.hero && !s2.focusHome && look.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(look.border), JSON.stringify({ s2, look }));
@@ -3175,6 +3181,22 @@ for (const coop of ["1", "2"]) {
     check("home layout focus: no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
+  // With a second line to the name (Ask Ava! / Aetrex Virtual Assistant): the
+  // line runs between them, the face on it; in chat the colour line takes
+  // the same place, the second line still under it.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+    const g = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), su = r(".ai-chat-header__sub"), h = r(".ai-chat-hero"), d = r(".ai-chat-header"), t = r(".ai-chat-focus__title"), a = r(".ai-chat-header__actions"); const subCs = getComputedStyle(document.querySelector(".ai-chat-header__sub")); return { name: document.querySelector(".ai-chat-header__name").textContent, sub: document.querySelector(".ai-chat-header__sub").textContent, line: eval(lineY)(), nameBottom: n.bottom, subTop: su.top, subLeft: su.left + parseFloat(subCs.paddingLeft), nameLeft: n.left, heroMid: (h.top + h.bottom) / 2, heroRight: h.right, heroBottom: h.bottom, hdrBottom: d.bottom, titleTop: t.top, actionsMid: (a.top + a.bottom) / 2, subBorder: subCs.borderTopWidth, subBorderColor: subCs.borderTopColor, hdrBorder: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomWidth }; }, lineY.toString());
+    check("home layout focus (two-line name): Ask Ava! above the line, Aetrex Virtual Assistant below it, the face centred on the line, both lines clear of the face, no second line under the header", g.name === "Ask Ava!" && g.sub === "Aetrex Virtual Assistant" && g.nameBottom <= g.line && g.subTop >= g.line - 1 && Math.abs(g.heroMid - g.line) <= 2 && g.nameLeft > g.heroRight + 6 && g.subLeft > g.heroRight + 6 && g.subBorder === "1px" && g.hdrBorder === "0px" && g.titleTop > g.heroBottom + 6 && g.actionsMid < g.line, JSON.stringify(g));
+    const n = chatBodies.length;
+    await page.click('.ai-chat-focus__tile[data-message]');
+    await waitUntil(() => chatBodies.length > n);
+    await page.waitForTimeout(1900);
+    const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), su = r(".ai-chat-header__sub"); const subCs = getComputedStyle(document.querySelector(".ai-chat-header__sub")); return { line: eval(lineY)(), nameBottom: n.bottom, subTop: su.top, nameLeft: n.left - document.querySelector(".ai-chat-header").getBoundingClientRect().left, subLeft: su.left + parseFloat(subCs.paddingLeft) - document.querySelector(".ai-chat-header").getBoundingClientRect().left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__line")).opacity), subBorderColor: subCs.borderTopColor, chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }; }, lineY.toString());
+    check("home layout focus (two-line name): in chat the colour line runs between the two lines, the gray one gone, both lines back at the left", c.chatting && c.nameBottom <= c.line && c.subTop >= c.line - 1 && c.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(c.subBorderColor) && Math.abs(c.nameLeft - c.subLeft) <= 1 && c.nameLeft < 40, JSON.stringify(c));
+    check("home layout focus (two-line name): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
   // Phone: two columns of tiles, cards stacked, the sheet within the screen.
   {
     const { ctx, page, errors } = await open("/full?home=focus", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -3186,6 +3208,93 @@ for (const coop of ["1", "2"]) {
     const sh = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet__panel").getBoundingClientRect(); return { w: r.width, vw: innerWidth, bottom: r.bottom, vh: innerHeight }; });
     check("home layout focus (phone): the sheet fits the screen", sh.w <= sh.vw && sh.bottom <= sh.vh + 1, JSON.stringify(sh));
     check("home layout focus (phone): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The morph, step by step: the ring squishes to a short line while the
+  // face stays; the face steps away; the short line grows to the full width.
+  // Back home: the line draws in to the face's place, the face returns, the
+  // line opens up around it.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+    const at = (sel) => page.evaluate((sel) => { const el = document.querySelector(sel); const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { w: r.width, h: r.height, op: parseFloat(cs.opacity), display: cs.display, clip: cs.clipPath }; }, sel);
+    const SEL = ".ai-chat-hero__ring, .ai-chat-hero__photo, .ai-chat-hero__glow, .ai-chat-hero__bar, .ai-chat-header__line";
+    const pause = () => page.evaluate((SEL) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => a.pause())), SEL);
+    const seek = (t) => page.evaluate(({ SEL, t }) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => { a.currentTime = t; })), { SEL, t });
+    const play = () => page.evaluate((SEL) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => a.play())), SEL);
+    const n = chatBodies.length;
+    await page.click('.ai-chat-focus__tile[data-message]');
+    await page.waitForTimeout(30);
+    await pause(); await seek(300);
+    const s1 = { ring: await at(".ai-chat-hero__ring"), photo: await at(".ai-chat-hero__photo"), bar: await at(".ai-chat-hero__bar") };
+    check("morph 1: the ring is squished to a short line across the face (2px tall, the face's width) while the face is still fully there", s1.ring.h <= 4 && s1.ring.w >= 60 && s1.bar.op > 0.9 && s1.bar.h === 2 && s1.photo.op === 1 && s1.photo.h >= 56, JSON.stringify(s1));
+    await play();
+    await waitUntil(() => chatBodies.length > n);
+    // Step 2 runs right after step 1 (the face fades); catch step 3: the line clipped to the face's span, then full.
+    const seen = { narrow: false, full: false, faceGone: false };
+    const t0 = Date.now();
+    while (Date.now() - t0 < 2500) {
+      const st = await page.evaluate(() => { const l = document.querySelector(".ai-chat-header__line"), p = document.querySelector(".ai-chat-hero__photo"), panel = document.querySelector(".ai-chat-panel"); const cs = getComputedStyle(l); return { clip: cs.clipPath, chatting: panel.classList.contains("is-chatting"), photoOp: parseFloat(getComputedStyle(p).opacity), gone: document.querySelector(".ai-chat-hero").classList.contains("is-gone") }; });
+      if (st.chatting && /inset\(0px \d+/.test(st.clip) && !/inset\(0px 0px 0px 0px\)/.test(st.clip)) seen.narrow = true;
+      if (st.chatting && st.photoOp === 0) seen.faceGone = true;
+      if (st.gone) { seen.full = true; break; }
+      await page.waitForTimeout(16);
+    }
+    check("morph 3: the face steps away, then the short line grows into the full header line", seen.faceGone && seen.narrow && seen.full, JSON.stringify(seen));
+    const done = await state(page);
+    check("morph: ends in chat — the line on, the face gone, no welcome", done.chatting && done.heroGone && !done.home && !done.focusHome, JSON.stringify(done));
+    // Back home.
+    await page.waitForTimeout(1200);
+    await page.click(".ai-chat-menu-btn");
+    await page.waitForTimeout(150);
+    await page.click('.ai-chat-menu-item[data-action="clear"]');
+    await page.waitForTimeout(30);
+    await pause(); await seek(300);
+    const b1 = await page.evaluate(() => { const l = getComputedStyle(document.querySelector(".ai-chat-header__line")); const p = getComputedStyle(document.querySelector(".ai-chat-hero__photo")); return { clip: l.clipPath, chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting"), photoOp: parseFloat(p.opacity) }; });
+    check("morph back 1: the line draws in from the sides (clipped) while the face is still away", b1.chatting && /inset\(0px \d+/.test(b1.clip) && !/inset\(0px 0px 0px 0px\)/.test(b1.clip) && b1.photoOp === 0, JSON.stringify(b1));
+    await play();
+    const back = { faceUnderBar: false };
+    const t1 = Date.now();
+    while (Date.now() - t1 < 1500) {
+      const st = await page.evaluate(() => ({ bar: parseFloat(getComputedStyle(document.querySelector(".ai-chat-hero__bar")).opacity), photo: parseFloat(getComputedStyle(document.querySelector(".ai-chat-hero__photo")).opacity), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }));
+      if (!st.chatting && st.bar > 0.9 && st.photo > 0.9) { back.faceUnderBar = true; break; }
+      await page.waitForTimeout(16);
+    }
+    check("morph back 2: the face is back under the short line before the line opens up around it", back.faceUnderBar, JSON.stringify(back));
+    await page.waitForTimeout(900);
+    const b2 = await state(page);
+    const ring = await at(".ai-chat-hero__ring");
+    const bar = await at(".ai-chat-hero__bar");
+    check("morph back: ends at home — the face in its ring, the line off", b2.home && !b2.chatting && b2.hero && ring.h >= 56 && ring.op === 1 && bar.op === 0, JSON.stringify({ b2, ring, bar }));
+    check("morph: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // On a shoe page with True Fit, the Footwear sheet carries the chat's own True Fit row — same logo, same words.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://localhost:4789/products/jillian-black?home=focus");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(700);
+    await page.click('[data-focus-sheet="footwear"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const tf = await page.evaluate(() => { const row = document.querySelector('.ai-chat-focus-sheet .ai-chat-helper[data-helper="truefit"]'); return row ? { logo: !!row.querySelector(".ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper__icon svg"), title: row.querySelector(".ai-chat-helper__title")?.textContent, sub: row.querySelector(".ai-chat-helper__sub")?.textContent, cls: row.className } : null; });
+    check("home layout focus (shoe page): the Footwear sheet's True Fit row is the chat's own — the True Fit mark (the logo where the theme has one), 'Find my size · for this shoe'", !!tf && tf.logo && tf.title === "Find my size" && tf.sub === "True Fit \u00b7 for this shoe" && /\bai-chat-helper\b/.test(tf.cls), JSON.stringify(tf));
+    check("home layout focus (shoe page): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // Pictures on the two line cards (Settings → Focus home).
+  {
+    const { ctx, page, errors } = await open("/full?home=focus&pics=1");
+    await page.waitForTimeout(600);
+    const pics = await page.evaluate(() => ({ cards: [...document.querySelectorAll(".ai-chat-focus__card-ico")].map((b) => ({ pic: b.classList.contains("has-pic"), src: b.querySelector("img")?.getAttribute("src") || "" })) }));
+    check("home layout focus: the cards show the store's pictures when set", pics.cards.length === 2 && pics.cards.every((c) => c.pic) && pics.cards[0].src === "/pic-footwear.svg" && pics.cards[1].src === "/pic-orthotics.svg", JSON.stringify(pics));
+    await page.click('[data-focus-sheet="orthotics"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const head = await page.evaluate(() => document.querySelector(".ai-chat-focus-sheet__head .ai-chat-focus__card-ico img")?.getAttribute("src") || "");
+    check("home layout focus: the sheet's head shows the same picture", head === "/pic-orthotics.svg", head);
+    check("home layout focus (pictures): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // Reduced motion: the switch from face to line happens without the journey.

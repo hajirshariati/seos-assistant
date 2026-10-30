@@ -44,7 +44,7 @@ export function appImageError(value) {
   return IMAGE_DATA_URL.test(v) ? "That picture is too large — try a smaller one." : "The app picture should be a PNG, WebP or JPEG image.";
 }
 // A short fingerprint of the picture, so a new one gets a new link (cached for good).
-function shortHash(s) {
+export function shortHash(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h.toString(36);

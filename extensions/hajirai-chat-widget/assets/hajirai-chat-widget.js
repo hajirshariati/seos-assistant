@@ -111,6 +111,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
      append translations to the frames array — the running rotator
      picks them up on its next tick. */
   FOCUS_ROTATE=d.rotateGreetingCta!==false;
+  /* Settings → Focus home: pictures for the Footwear and Orthotics cards. */
+  if(d.focusImages&&typeof d.focusImages==='object'){FOCUS_PICS={footwear:safeUrl(d.focusImages.footwear),orthotics:safeUrl(d.focusImages.orthotics)};try{localStorage.setItem(FOCUS_PICS_KEY,JSON.stringify(FOCUS_PICS))}catch(e){}if(FOCUS)focusRefreshPics()}
   if(GREET_CTA_ROTATE && d.rotateGreetingCta!==false && Array.isArray(d.greetingCtaTranslations) && d.greetingCtaTranslations.length>0){
     GREET_CTA_FRAMES=[{text:GREETCTA,dir:'ltr',code:'en'}].concat(d.greetingCtaTranslations);
   }
@@ -1223,9 +1225,24 @@ var sendBtn=$('.ai-chat-send',panel);
 if(FOCUS){
   panel.classList.add('is-focus');
   var _fhdr=$('.ai-chat-header',panel);
-  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend','<span class="ai-chat-header__line" aria-hidden="true"></span><div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__ring"></span><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div>');
+  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend','<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__glow"></span><span class="ai-chat-hero__ring"></span><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span><span class="ai-chat-hero__bar"></span></div><span class="ai-chat-header__line" aria-hidden="true"></span>');
+  /* The second line of the name goes under the header's line (the approved
+     design): the line runs between "Ask Ava!" and "Aetrex Virtual Assistant",
+     and the face sits on it. */
+  var _fsub=$('.ai-chat-header__sub',_fhdr);if(_fsub)_fhdr.appendChild(_fsub);
+  focusMeasure();
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(focusMeasure).observe(_fhdr);
   /* The line glows more while a reply is being written. */
   if(typeof MutationObserver!=='undefined')new MutationObserver(function(){panel.classList.toggle('is-streaming',typingEl.classList.contains('visible'))}).observe(typingEl,{attributes:true,attributeFilter:['class']});
+}
+/* Where the header's line is: on top of the second line of the name when
+   there is one, else the header's bottom. The face and the colour line
+   follow it (CSS reads --ai-focus-line). */
+function focusMeasure(){
+  var hdr=$('.ai-chat-header',panel);if(!hdr)return;
+  var sub=$('.ai-chat-header__sub',hdr),has=!!(sub&&!sub.hidden);
+  hdr.classList.toggle('has-sub',has);
+  hdr.style.setProperty('--ai-focus-line',(has?sub.offsetTop:hdr.clientHeight)+'px');
 }
 var closeBtn=$('.ai-chat-close-btn',panel);
 var menuBtn=$('.ai-chat-menu-btn',panel);
@@ -1425,6 +1442,7 @@ function welcomeGreetingText(){
 function refreshTexts(inWas){
   var hn=$('.ai-chat-header__name',panel);if(hn)hn.textContent=NAME;
   var hs=$('.ai-chat-header__sub',panel);if(hs){hs.textContent=NAME_SUB;hs.hidden=!NAME_SUB}
+  if(FOCUS)focusMeasure();
   var lt=$('.ai-chat-launcher__text',launcher);if(lt){lt.textContent=LPLACE;lt.setAttribute('aria-label',LPLACE+' — open the shopping assistant')}
   if(inputEl&&inputEl.getAttribute('placeholder')===inWas)inputEl.setAttribute('placeholder',IPLACE);
   var wt=$('.ai-chat-welcome__title',panel);if(wt)wt.textContent=welcomeGreetingText()||('Hi, I\'m '+NAME);
@@ -1439,13 +1457,12 @@ function refreshWelcomeCtas(){
   if(box)box.innerHTML=welcomeCtasHtml(welcomeCtas());
 }
 /* ── Focus home (Theme editor → Home layout → Focus) ──
-   The foot-pain specialist first: the question, six places it can hurt
+   The foot-pain specialist first: the question, five places it can hurt
    (each sends a message; "Something else" puts the cursor in the text box),
    then the two product lines as single cards whose tools open in a sheet —
-   Women / Men, Find my size (True Fit), Find my FIT (FITFinder), the
-   store's visual quizzes (quick picks that are Typeforms), and browsing by
-   work, activity and features. The links right above the text box only
-   fill it in, so a stray tap sends nothing. The classic home is untouched. */
+   Women / Men, the store's own helpers (True Fit, FITFinder, its visual
+   quizzes), and Browse by, from the store's menu. The links right above the
+   text box only fill it in, so a stray tap sends nothing. Classic is untouched. */
 var FOCUS_TITLE='Where does it hurt?';
 var FOCUS_LINES=[
   {text:'Tap where your foot hurts, or ask me anything.',dir:'ltr',code:'en'},
@@ -1465,28 +1482,51 @@ var FOCUS_TILES=[
   ['whole','Whole foot','My feet are tired and swollen by the end of the day. What would help?'],
   ['else','Something else','']
 ];
-var FOCUS_BROWSE=[
-  ['Work',[['Nurses & healthcare',"I'm a nurse on my feet all day — which shoes would help?"],['Standing all day','I stand all day at work — which shoes would help?'],['Chefs & kitchens','I work in a kitchen — slip-resistant, comfortable shoes?'],['Delivery & postal','I walk all day delivering — which shoes would help?'],['Hair & beauty','I stand all day doing hair — which shoes would help?'],['Teachers',"I'm a teacher on my feet all day — which shoes?"]]],
-  ['Activity',[['Walking','Shoes for walking'],['Running','Shoes for running'],['Hiking','Shoes for hiking'],['Fitness & gym','Shoes for the gym'],['Travel','Comfortable shoes for travel'],['Golf','Shoes for golf']]],
-  ['Features',[['Wide widths','Shoes in wide widths'],['Arch support','Shoes with arch support'],['Removable footbed','Shoes with a removable footbed'],['Slip-resistant','Slip-resistant shoes'],['Lightweight','Lightweight shoes'],['Fall styles','Show me the fall styles']]]
-];
-var FOCUS_SOLE='M16 42C10.5 42 7.5 38.5 7.5 33c0-4.5 2.5-8 3-12.5.5-4.5-2-8.5-1.5-12C9.5 4 12.5 2 16.5 2S24 4.5 24.5 9c.5 4-1.5 8-2 12-.5 4.5 2 8 2 12.5 0 5-3 8.5-8.5 8.5z';
+/* Browse by: the store's own menu (aetrex.com), one group per tab. */
+var FOCUS_BROWSE={
+  footwear:[
+    ['Shoes',[['Sneakers','Show me sneakers'],['Sandals','Show me sandals'],['Loafers & oxfords','Show me loafers and oxfords'],['Boots','Show me boots'],['Slip-ons','Show me slip-ons'],['Clogs','Show me clogs'],['Slippers','Show me slippers'],['Wedges & heels','Show me wedges and heels']]],
+    ['Condition',[['Plantar fasciitis','Shoes for plantar fasciitis'],['Metatarsalgia','Shoes for metatarsalgia'],['Flat feet','Shoes for flat feet'],['High arch','Shoes for high arches'],['Bunions','Shoes for bunions'],['Arthritis','Shoes for arthritis'],['Swollen feet','Shoes for swollen feet'],['Wide width','Shoes in wide widths']]],
+    ['Collections',[['New arrivals','Show me the new arrivals'],['Best sellers','Show me the best-selling shoes'],['Jillian','Show me the Jillian collection'],['Heelium','Show me the Heelium collection'],['SkyTech','Show me the SkyTech collection'],['Water-friendly','Show me water-friendly shoes']]]
+  ],
+  orthotics:[
+    ['Condition',[['Plantar fasciitis','Orthotics for plantar fasciitis'],['Ball of foot','Orthotics for ball-of-foot discomfort'],['Flat feet','Orthotics for flat feet'],['High arches','Orthotics for high arches'],['Heel spurs','Orthotics for heel spurs'],['Overpronation','Orthotics for overpronation'],['Bunions','Orthotics for bunions'],['Diabetes','Orthotics for diabetes']]],
+    ['Activity',[['Casual everyday','Orthotics for casual everyday wear'],['All-day standing','Orthotics for standing all day'],['Walking','Orthotics for walking'],['Running','Orthotics for running'],['Dress shoes','Orthotics for dress shoes'],['Golf','Orthotics for golf'],['Gym & training','Orthotics for the gym'],['Tennis & pickleball','Orthotics for tennis and pickleball'],['Cleats','Orthotics for cleats']]],
+    ['Collections',[['Premium Memory Foam','Show me the Premium Memory Foam orthotics'],['Essentials','Show me the Essentials orthotics'],['Compete','Show me the Compete orthotics'],['Speed','Show me the Speed orthotics'],['Active','Show me the Active orthotics'],['Train','Show me the Train orthotics'],['Casual Comfort','Show me the Casual Comfort orthotics'],['Fashion','Show me the Fashion orthotics'],['Work','Show me the Work orthotics'],['Kids','Show me the kids orthotics']]]
+  ]
+};
 var FOCUS_QUIZ_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/><path d="M8.5 11h5M11 8.5v5"/></svg>';
-/* A foot sole with the painful place marked. */
+/* A footprint — sole and five toes — with the painful place as a soft glow. */
+var FOCUS_FOOT='M7.5 21.5C7.5 17 12 14.5 20 14.5c8 0 14.5 2.5 14.5 8 0 5.5-4 8.5-5.5 14.5-1.2 4.5 0 9-2 13-1.7 3.5-8.5 4.5-11.8 1-3.2-3.5-1.7-9-2.2-14C12.5 31.5 7.5 27.5 7.5 21.5z';
+var FOCUS_TOES='<ellipse cx="10.5" cy="10" rx="4.2" ry="4.8"/><circle cx="17.6" cy="7.6" r="2.9"/><circle cx="23.2" cy="7.5" r="2.6"/><circle cx="28.2" cy="8.8" r="2.3"/><circle cx="32.4" cy="11.5" r="2.1"/>';
+var FOCUS_ZONES={heel:'<circle cx="20.5" cy="46" r="11"/>',arch:'<circle cx="13.5" cy="33" r="10"/>',ball:'<circle cx="20.5" cy="21" r="11"/>',toes:'<circle cx="11" cy="14.5" r="8"/><ellipse cx="22" cy="9.5" rx="14" ry="7"/>'};
 function focusZone(kind){
-  if(kind==='else')return '<svg class="ai-chat-focus__ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.5 18.5 3 19.5l1-4.5z"/></svg>';
-  var z={heel:'<circle cx="16" cy="35" r="7.5"/>',arch:'<ellipse cx="13.5" cy="22" rx="6" ry="7.5"/>',ball:'<ellipse cx="16.5" cy="12.5" rx="8.5" ry="5.5"/>',toes:'<ellipse cx="16.5" cy="4.5" rx="9" ry="4.5"/>'}[kind]||'';
-  var id='ai-fz-'+kind;
-  return '<svg class="ai-chat-focus__ico" viewBox="0 0 32 44" width="20" height="28" aria-hidden="true">'+(z?'<defs><clipPath id="'+id+'"><path d="'+FOCUS_SOLE+'"/></clipPath></defs>':'')+'<path class="ai-chat-focus__sole'+(kind==='whole'?' is-full':'')+'" d="'+FOCUS_SOLE+'" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'+(z?'<g class="ai-chat-focus__zone" clip-path="url(#'+id+')">'+z+'</g>':'')+'</svg>';
+  if(kind==='else')return '';
+  var id='ai-fz-'+kind,z=FOCUS_ZONES[kind]||'';
+  var defs='<defs><clipPath id="'+id+'-c"><path d="'+FOCUS_FOOT+'"/>'+FOCUS_TOES+'</clipPath><radialGradient id="'+id+'-g"><stop offset="0" stop-opacity=".95"/><stop offset=".5" stop-opacity=".55"/><stop offset="1" stop-opacity="0"/></radialGradient></defs>';
+  var shape='<g class="ai-chat-focus__foot"><path d="'+FOCUS_FOOT+'"/>'+FOCUS_TOES+'</g>';
+  var glow=kind==='whole'?'<g class="ai-chat-focus__zone is-full" clip-path="url(#'+id+'-c)"><rect x="0" y="0" width="40" height="56"/></g>':'<g class="ai-chat-focus__zone" clip-path="url(#'+id+'-c)" fill="url(#'+id+'-g)">'+z+'</g>';
+  return '<svg class="ai-chat-focus__ico" viewBox="0 0 40 56" width="30" height="42" aria-hidden="true">'+defs+shape+glow+'</svg>';
 }
 function focusTileHtml(t){
-  var act=t[2]?'data-message="'+esc(t[2])+'"':'data-focus="type"';
-  return '<button type="button" class="ai-chat-focus__tile" '+act+'>'+focusZone(t[0])+'<span>'+esc(t[1])+'</span></button>';
+  var ico=focusZone(t[0]),act=t[2]?'data-message="'+esc(t[2])+'"':'data-focus="type"';
+  return '<button type="button" class="ai-chat-focus__tile'+(ico?'':' is-plain')+'" '+act+'>'+ico+'<span>'+esc(t[1])+'</span></button>';
 }
-function focusLineIcon(kind,size){return (kind==='footwear'?WI.shoe:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"')}
+/* The line cards' pictures (Settings → Focus home); line drawings without. */
+var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={footwear:'',orthotics:''};
+try{var _fpics=JSON.parse(localStorage.getItem(FOCUS_PICS_KEY)||'null');if(_fpics&&typeof _fpics==='object')FOCUS_PICS={footwear:safeUrl(_fpics.footwear),orthotics:safeUrl(_fpics.orthotics)}}catch(e){}
+function focusLineIcon(kind,size){
+  var pic=FOCUS_PICS[kind];
+  return pic?'<img src="'+pic+'" alt="" decoding="async">':(kind==='footwear'?WI.shoe:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"');
+}
+function focusRefreshPics(){
+  var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
+  for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!FOCUS_PICS[k])}
+}
+function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(FOCUS_PICS[kind]?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
 function focusCardHtml(kind){
   var fw=kind==='footwear';
-  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico">'+focusLineIcon(kind,30)+'</span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-title">'+(fw?'Footwear':'Orthotics')+'</span><span class="ai-chat-focus__card-sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</span></span>'+WI.arrow+'</button>';
+  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,30)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-title">'+(fw?'Footwear':'Orthotics')+'</span><span class="ai-chat-focus__card-sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</span></span>'+WI.arrow+'</button>';
 }
 function buildFocusHome(){
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus">';
@@ -1498,6 +1538,7 @@ function buildFocusHome(){
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
   panel.classList.add('is-home');
+  focusMeasure();
   focusLineRotate();
   focusLineToRing();
 }
@@ -1523,32 +1564,44 @@ function focusLineRotate(){
   };
   setTimeout(tick,4200);
 }
-/* The sheet for one product line. */
-var focusSheetEl=null,focusSheetOpener=null,focusBrowse=0;
-function focusRowHtml(act,icon,title,sub){return '<button type="button" class="ai-chat-focus__row" '+act+'><span class="ai-chat-focus__row-ico">'+icon+'</span><span class="ai-chat-focus__row-text"><span class="ai-chat-focus__row-title">'+esc(title)+'</span><span class="ai-chat-focus__row-sub">'+esc(sub)+'</span></span>'+WI.arrow+'</button>'}
+/* The sheet for one product line. Its helper rows are the chat's own
+   (the same True Fit and FITFinder rows as the classic home). */
+var focusSheetEl=null,focusSheetOpener=null,focusBrowseIdx={footwear:0,orthotics:0};
+function focusHelperRow(attrs,icon,title,sub){return '<button type="button" class="ai-chat-helper" '+attrs+'><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'}
 function focusSheetRows(kind){
   var rows='';
-  if(kind==='footwear'&&tfPayload())rows+=focusRowHtml('data-helper="truefit"',WI.ruler,'Find my size','True Fit · pick a shoe, get your size in it');
+  if(kind==='footwear'&&tfPayload()){
+    /* The same words as the classic home's True Fit row. */
+    var onShoe=tfHere()&&pageHandle(),size=onShoe?tfSizeHere():'';
+    if(size)rows+=focusHelperRow('data-helper="truefit"',tfLogo(24),'Size '+size,'Your True Fit size');
+    else if(onShoe)rows+=focusHelperRow('data-helper="truefit"',tfLogo(24),'Find my size','True Fit · for this shoe');
+    else rows+=focusHelperRow('data-helper="truefit"',tfLogo(24),'Find my shoe size','True Fit · pick a shoe, get its size');
+  }
   if(kind==='orthotics'){
-    if(ff){var mine=savedFit();rows+=focusRowHtml('data-helper="fitfinder"','<span class="ai-chat-helper__mono">FIT</span>',mine?'Shop my '+fitTitle(mine):'Find my FIT',mine?'Your FITFinder result':'FITFinder · a few questions match you to the right arch support')}
+    if(ff){
+      var mine=savedFit();
+      if(mine)rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono is-letter">'+esc(fitLetter(mine))+'</span>',mine.name||fitTitle(mine),'Your '+fitTitle(mine));
+      else rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono">FIT</span>','Find my orthotic FIT',ff.questions&&ff.questions.length?'FITFinder · '+ff.questions.length+' quick question'+(ff.questions.length===1?'':'s'):'with FITFinder');
+    }
     var qps=[[QP1L,QP1M],[QP2L,QP2M],[QP3L,QP3M],[QP4L,QP4M]];
-    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f)rows+=focusRowHtml('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}
+    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f)rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}
   }
   return rows;
 }
-function focusBrowseHtml(){
+function focusBrowseHtml(kind){
+  var groups=FOCUS_BROWSE[kind]||[],on=focusBrowseIdx[kind]||0;
   var h='<div class="ai-chat-focus__label">Browse by</div><div class="ai-chat-focus__seg" role="tablist">';
-  for(var i=0;i<FOCUS_BROWSE.length;i++)h+='<button type="button" role="tab" aria-selected="'+(i===focusBrowse?'true':'false')+'" data-browse="'+i+'"'+(i===focusBrowse?' class="is-on"':'')+'>'+esc(FOCUS_BROWSE[i][0])+'</button>';
+  for(var i=0;i<groups.length;i++)h+='<button type="button" role="tab" aria-selected="'+(i===on?'true':'false')+'" data-browse="'+i+'"'+(i===on?' class="is-on"':'')+'>'+esc(groups[i][0])+'</button>';
   h+='</div><div class="ai-chat-focus__chips">';
-  var chips=FOCUS_BROWSE[focusBrowse][1];for(var j=0;j<chips.length;j++)h+='<button type="button" data-message="'+esc(chips[j][1])+'">'+esc(chips[j][0])+'</button>';
+  var chips=groups[on]?groups[on][1]:[];for(var j=0;j<chips.length;j++)h+='<button type="button" data-message="'+esc(chips[j][1])+'">'+esc(chips[j][0])+'</button>';
   return h+'</div>';
 }
 function openFocusSheet(kind,opener){
   closeFocusSheet(true);
   focusSheetOpener=opener||null;
   var fw=kind==='footwear',line=fw?'footwear':'orthotics';
-  var sh=el('div','ai-chat-focus-sheet');
-  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head"><span class="ai-chat-focus__card-ico">'+focusLineIcon(kind,26)+'</span><div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div><div class="ai-chat-focus-sheet__sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"><div class="ai-chat-focus__pair"><button type="button" class="ai-chat-focus__big" data-message="Show me women’s '+line+'">Shop women’s</button><button type="button" class="ai-chat-focus__big" data-message="Show me men’s '+line+'">Shop men’s</button></div>'+focusSheetRows(kind)+(fw?'<div class="ai-chat-focus__browse">'+focusBrowseHtml()+'</div>':'')+'</div></div>';
+  var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
+  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div><div class="ai-chat-focus-sheet__sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"><div class="ai-chat-focus__pair"><button type="button" class="ai-chat-focus__big" data-message="Show me women’s '+line+'">Shop women’s</button><button type="button" class="ai-chat-focus__big" data-message="Show me men’s '+line+'">Shop men’s</button></div>'+focusSheetRows(kind)+'<div class="ai-chat-focus__browse">'+focusBrowseHtml(kind)+'</div></div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
   requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
   var c=$('.ai-chat-focus-sheet__close',sh);if(c)c.focus({preventScroll:true});
@@ -1575,7 +1628,7 @@ if(FOCUS){
     var sh=focusSheetEl;if(!sh||!sh.contains(e.target))return;
     if(e.target.closest('[data-focus-close]')){e.preventDefault();closeFocusSheet();return}
     var tab=e.target.closest('[data-browse]');
-    if(tab){focusBrowse=parseInt(tab.getAttribute('data-browse'),10)||0;var box=$('.ai-chat-focus__browse',sh);if(box){box.innerHTML=focusBrowseHtml();var on=$('[data-browse].is-on',box);if(on)on.focus({preventScroll:true})}return}
+    if(tab){var kind=sh.getAttribute('data-kind')||'footwear';focusBrowseIdx[kind]=parseInt(tab.getAttribute('data-browse'),10)||0;var box=$('.ai-chat-focus__browse',sh);if(box){box.innerHTML=focusBrowseHtml(kind);var on=$('[data-browse].is-on',box);if(on)on.focus({preventScroll:true})}return}
     var hp=e.target.closest('[data-helper]');
     if(hp){e.preventDefault();closeFocusSheet(true);if(!isStreaming)startHelper(hp.getAttribute('data-helper'));return}
     var fb=e.target.closest('[data-form]');
@@ -1585,47 +1638,91 @@ if(FOCUS){
   });
   panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&focusSheetEl){e.preventDefault();e.stopPropagation();closeFocusSheet()}},true);
 }
-/* The ring around the face becomes the header's line when a chat starts,
-   and comes back around the face at home. Transforms only, so it stays
-   smooth; shoppers who prefer reduced motion get the switch without the
-   journey. */
-var FOCUS_EASE='cubic-bezier(0.32, 0.72, 0, 1)';
+/* The ring around the face becomes the header's line in two steps — it
+   squishes to a short line behind the face (the face stays), the face steps
+   away, then the short line grows to the full width. Back home is the
+   reverse: the line draws in from both sides to where the face sits, the
+   face returns, then the line opens back up around it. Transforms and a
+   clip only, so it stays smooth; reduced motion gets the switch without
+   the journey. */
+var FOCUS_EASE='cubic-bezier(0.32, 0.72, 0, 1)',FOCUS_EASE_IN='cubic-bezier(0.4, 0, 1, 1)',FOCUS_EASE_OUT='cubic-bezier(0, 0, 0.2, 1)';
+var focusMorphGen=0;
 function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
 function focusCancelAnims(n){try{if(n&&n.getAnimations)n.getAnimations().forEach(function(a){a.cancel()})}catch(e){}}
-function focusBarShape(hero,hdr){
-  var w=hero.offsetWidth||64,h=hero.offsetHeight||64,hw=hdr.clientWidth||w;
-  var dx=hw/2-(hero.offsetLeft+w/2),dy=(hdr.offsetHeight-1)-(hero.offsetTop+h/2);
-  return 'translate('+dx+'px,'+dy+'px) scale('+((hw+2)/w)+','+(2/h)+')';
+function focusParts(){
+  var hero=$('.ai-chat-hero',panel),hdr=$('.ai-chat-header',panel);
+  if(!hero||!hdr)return null;
+  var p={hero:hero,hdr:hdr,ring:$('.ai-chat-hero__ring',hero),photo:$('.ai-chat-hero__photo',hero),glow:$('.ai-chat-hero__glow',hero),bar:$('.ai-chat-hero__bar',hero),line:$('.ai-chat-header__line',hdr)};
+  return p.ring&&p.photo&&p.glow&&p.bar&&p.line?p:null;
 }
+function focusAll(p){[p.ring,p.photo,p.glow,p.bar,p.line].forEach(focusCancelAnims)}
+/* The line clipped to the face's span: inset(0 right 0 left). */
+function focusSpanClip(p){
+  var l=p.hero.offsetLeft,r=p.line.offsetWidth-(p.hero.offsetLeft+p.hero.offsetWidth);
+  return 'inset(0 '+Math.max(0,Math.round(r))+'px 0 '+Math.max(0,Math.round(l))+'px)';
+}
+function focusSquish(p){return 2/(p.hero.offsetHeight||68)}
+function focusThen(a,gen,fn){a.finished.then(function(){if(gen===focusMorphGen)fn()}).catch(function(){})}
 function focusSetChatting(on){
   panel.classList.toggle('is-chatting',!!on);
   var hero=$('.ai-chat-hero',panel);if(hero)hero.classList.toggle('is-gone',!!on);
 }
 function focusRingToLine(){
-  var hero=$('.ai-chat-hero',panel),hdr=$('.ai-chat-header',panel);
-  if(!hero||!hdr||panel.classList.contains('is-chatting'))return;
-  var ring=$('.ai-chat-hero__ring',hero),photo=$('.ai-chat-hero__photo',hero);
-  if(!focusMotionOk()||!ring||!ring.animate){focusSetChatting(true);return}
-  focusCancelAnims(ring);focusCancelAnims(photo);
-  hero.classList.add('is-morph');
-  var bar=focusBarShape(hero,hdr);
-  photo.animate([{transform:'scale(1)',opacity:1},{transform:'scale(0.3)',opacity:0}],{duration:340,easing:FOCUS_EASE,fill:'forwards'});
-  var a=ring.animate([{transform:'translate(0,0) scale(1,1)',opacity:1},{transform:bar,opacity:1,offset:0.82},{transform:bar,opacity:0}],{duration:780,easing:FOCUS_EASE,fill:'forwards'});
-  setTimeout(function(){if(hero.classList.contains('is-morph'))panel.classList.add('is-chatting')},560);
-  a.onfinish=function(){hero.classList.remove('is-morph');focusSetChatting(true);focusCancelAnims(ring);focusCancelAnims(photo)};
+  var p=focusParts();
+  if(!p||panel.classList.contains('is-chatting'))return;
+  var gen=++focusMorphGen;
+  if(!focusMotionOk()||!p.ring.animate){focusSetChatting(true);return}
+  focusMeasure();focusAll(p);
+  var sq='scaleY('+focusSquish(p)+')';
+  p.hero.classList.add('is-morph');
+  /* 1. The ring squishes to a short line across the face; the face stays. */
+  p.glow.animate([{opacity:0.45},{opacity:0}],{duration:240,easing:FOCUS_EASE_IN,fill:'forwards'});
+  p.bar.animate([{opacity:0},{opacity:0,offset:0.5},{opacity:1}],{duration:320,easing:FOCUS_EASE,fill:'forwards'});
+  var a1=p.ring.animate([{transform:'scaleY(1)'},{transform:sq}],{duration:320,easing:FOCUS_EASE,fill:'forwards'});
+  focusThen(a1,gen,function(){
+    /* 2. The face steps away; the short line stays. */
+    var a2=p.photo.animate([{transform:'scale(1)',opacity:1},{transform:'scale(0.72)',opacity:0}],{duration:220,easing:FOCUS_EASE_IN,fill:'forwards'});
+    focusThen(a2,gen,function(){
+      /* 3. The short line is the header's line now; it grows to full width. */
+      var clip=focusSpanClip(p);
+      p.line.animate([{clipPath:clip}],{duration:1,fill:'forwards'});
+      panel.classList.add('is-chatting');
+      p.ring.animate([{opacity:0}],{duration:1,fill:'forwards'});
+      p.bar.animate([{opacity:0}],{duration:1,fill:'forwards'});
+      var a3=p.line.animate([{clipPath:clip},{clipPath:'inset(0 0 0 0)'}],{duration:520,easing:FOCUS_EASE,fill:'forwards'});
+      focusThen(a3,gen,function(){p.hero.classList.remove('is-morph');focusSetChatting(true);focusAll(p)});
+    });
+  });
 }
 function focusLineToRing(){
-  var hero=$('.ai-chat-hero',panel),hdr=$('.ai-chat-header',panel);
-  if(!hero||!hdr||!panel.classList.contains('is-chatting'))return;
-  var ring=$('.ai-chat-hero__ring',hero),photo=$('.ai-chat-hero__photo',hero);
-  focusSetChatting(false);
-  if(!focusMotionOk()||!ring||!ring.animate)return;
-  focusCancelAnims(ring);focusCancelAnims(photo);
-  hero.classList.add('is-morph');
-  var bar=focusBarShape(hero,hdr);
-  var a=ring.animate([{transform:bar,opacity:0},{transform:bar,opacity:1,offset:0.15},{transform:'translate(0,0) scale(1,1)',opacity:1}],{duration:740,easing:FOCUS_EASE});
-  photo.animate([{transform:'scale(0.3)',opacity:0},{transform:'scale(0.3)',opacity:0,offset:0.45},{transform:'scale(1)',opacity:1}],{duration:740,easing:FOCUS_EASE});
-  a.onfinish=function(){hero.classList.remove('is-morph')};
+  var p=focusParts();
+  if(!p||!panel.classList.contains('is-chatting'))return;
+  var gen=++focusMorphGen;
+  if(!focusMotionOk()||!p.ring.animate){focusSetChatting(false);return}
+  focusMeasure();focusAll(p);
+  var sq='scaleY('+focusSquish(p)+')';
+  p.hero.classList.remove('is-gone');p.hero.classList.add('is-morph');
+  /* Out of sight until their turn. */
+  p.ring.animate([{transform:sq,opacity:1}],{duration:1,fill:'forwards'});
+  p.photo.animate([{transform:'scale(0.72)',opacity:0}],{duration:1,fill:'forwards'});
+  p.glow.animate([{opacity:0}],{duration:1,fill:'forwards'});
+  p.bar.animate([{opacity:0}],{duration:1,fill:'forwards'});
+  /* 1. The line draws in from both sides to where the face will be. */
+  var clip=focusSpanClip(p);
+  var a1=p.line.animate([{clipPath:'inset(0 0 0 0)'},{clipPath:clip}],{duration:520,easing:FOCUS_EASE,fill:'forwards'});
+  focusThen(a1,gen,function(){
+    /* 2. The short line stays put while the face comes back under it. */
+    p.bar.animate([{opacity:1}],{duration:1,fill:'forwards'});
+    panel.classList.remove('is-chatting');
+    var a2=p.photo.animate([{transform:'scale(0.72)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:240,delay:100,easing:FOCUS_EASE_OUT,fill:'forwards'});
+    focusThen(a2,gen,function(){
+      /* 3. The line opens back up around the face. */
+      p.glow.animate([{opacity:0},{opacity:0.45}],{duration:360,easing:FOCUS_EASE_OUT,fill:'forwards'});
+      p.bar.animate([{opacity:1},{opacity:1,offset:0.4},{opacity:0}],{duration:340,easing:FOCUS_EASE,fill:'forwards'});
+      var a3=p.ring.animate([{transform:sq,opacity:1},{transform:'scaleY(1)',opacity:1}],{duration:340,easing:FOCUS_EASE,fill:'forwards'});
+      focusThen(a3,gen,function(){p.hero.classList.remove('is-morph');focusAll(p)});
+    });
+  });
 }
 
 function buildWelcome(){
