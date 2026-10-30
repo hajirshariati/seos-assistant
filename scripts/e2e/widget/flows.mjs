@@ -576,7 +576,7 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   await page.keyboard.press("Enter");
   await page.waitForSelector(".ai-chat-msg:last-child .ai-bis", { timeout: 6000 });
   const card = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); return { title: c.querySelector(".ai-ord__num").textContent, sub: c.querySelector(".ai-ord__date").textContent, variant: c.getAttribute("data-bis-variant"), input: !!c.querySelector('input[type="email"]'), note: c.querySelector(".ai-bis__note").textContent.trim(), privacy: c.querySelector(".ai-bis__note a")?.getAttribute("href") }; });
-  check(`restock (${label}): the Notify-me card names the product and size, with an email field and an honest note`, card.title === "Get an email when it’s back" && card.sub === "Miles Arch Support Sneaker - Black · 13.5 - 14 US" && card.variant === "51133383639353" && card.input && /One email when it’s back in stock — nothing else\./.test(card.note) && !!card.privacy, JSON.stringify(card));
+  check(`restock (${label}): the Notify-me card names the product and size, with an email field and only a privacy link under it`, card.title === "Get an email when it’s back" && card.sub === "Miles Arch Support Sneaker - Black · 13.5 - 14 US" && card.variant === "51133383639353" && card.input && card.note === "Privacy Policy" && !!card.privacy, JSON.stringify(card));
   if (label === "desktop") {
     const fits = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-bis")].pop(); const b = c.getBoundingClientRect(), p = c.closest(".ai-chat-msg-bubble").getBoundingClientRect(); return b.right <= p.right + 1 && b.left >= p.left - 1; });
     check("restock (desktop): the card fits the bubble", fits);

@@ -1013,6 +1013,26 @@ await test("the orthotic-chat check only fires on a short answer that switches t
     assert.equal(r.cards.length, 1);
     assert.equal(r.cards[0].preselect, undefined);
   });
+  await test("a size this color has no variant of: the other colors that carry it are named and can be shown", async () => {
+    const iron = row("Miles Arch Support Sneaker - Iron", { cat: "Sneakers", gender: "Men", price: "169.95" });
+    iron.variants = [["12 US", 22, "54309717344569"]].map(([size, qty, id]) => ({ shopifyId: id, price: "169.95", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }]) }));
+    const cat5 = buildLeanCatalog([...ROWS, miles, iron], { shop: "s.myshopify.com" });
+    const ih = cat5.products.find((p) => p.title.endsWith("Iron")).handle;
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "back_in_stock_alert", { handle: ih, options: { size: "10.5" } })] },
+      { stop_reason: "tool_use", content: [tu("t2", "back_in_stock_alert", { handle: mh, options: { size: "10.5" } })] },
+      { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [mh] })] },
+      { stop_reason: "end_turn", content: [txt("The Iron doesn't come in 10.5 US, but the Miles in Black does — it's sold out right now. Pop your email in below and we'll email you the moment it's back.")] },
+    ]);
+    const r = await runLeanTurn({ catalog: cat5, config, model: "m", messages: [{ role: "user", content: "when will this be back in 10.5?" }], latestUserMessage: "when will this be back in 10.5?", viewingHandle: ih, callModel: s.callModel, log: quiet });
+    const first = JSON.stringify(s.requests[1].messages.at(-1));
+    assert.match(first, /carried\\?":false/);
+    assert.match(first, /other_colors/);
+    assert.match(first, /Miles Arch Support Sneaker - Black/);
+    assert.equal(r.cards.length, 1, "the Black can be shown without a search");
+    assert.deepEqual(r.events.filter((e) => e.type === "restock_cta"), [card]);
+    assert.equal(r.retried, false);
+  });
   await test("live stock is asked before the alert: back in stock since the sync → no card, show it", async () => {
     const s = scripted([
       { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },

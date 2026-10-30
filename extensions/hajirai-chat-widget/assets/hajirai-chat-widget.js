@@ -4942,7 +4942,7 @@ function restockCardHtml(r){
       '<div class="ai-bis__row"><input id="'+f+'-e" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="254" placeholder="you@example.com" aria-describedby="'+f+'-err">'+
       '<button type="submit" class="ai-ord__btn is-primary ai-bis__go">Notify me</button></div>'+
       '<span class="ai-bis__err" id="'+f+'-err" role="alert" hidden></span>'+
-      '<p class="ai-bis__note">'+ORD_ICON.lock+'<span>One email when it’s back in stock — nothing else. <a href="'+esc(safeUrl(PRIVURL)||'/policies/privacy-policy')+'" target="_blank" rel="noopener">Privacy</a></span></p>'+
+      '<p class="ai-bis__note">'+ORD_ICON.lock+'<a href="'+esc(safeUrl(PRIVURL)||'/policies/privacy-policy')+'" target="_blank" rel="noopener">Privacy Policy</a></p>'+
     '</form></div>';
 }
 function bisSubmit(form){

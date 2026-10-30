@@ -46,10 +46,24 @@ function matching(product, pre) {
   });
 }
 
+// The style's other colorways that come in the options asked for, and
+// whether each has them in stock (the synced catalog's stock).
+function colorwaysWith(siblings, wanted) {
+  const out = [];
+  for (const s of siblings || []) {
+    const pre = s && resolvePreselect(s, wanted);
+    if (!pre) continue;
+    out.push({ handle: s.handle, title: s.title, in_stock: preselectAvailable(s.stock, pre) });
+  }
+  return out;
+}
+
 // The tool's answer for one product and the options the customer named.
 // live: this product's in-stock option bags from the store right now (the
 // lean engine's liveStock), or null → the synced catalog's stock.
-export function restockCheck(product, options, live = null) {
+// siblings: the same style's other colorways (a size one color doesn't
+// come in may be carried, or sold out, in another).
+export function restockCheck(product, options, live = null, siblings = []) {
   if (!product) return { error: "No product with that handle. Search first." };
   const title = product.title;
   const optionNames = Object.keys(product.options || {});
@@ -60,11 +74,20 @@ export function restockCheck(product, options, live = null) {
   if (optionNames.length && !pre) {
     const named = wanted ? Object.values(wanted).map((v) => String(v).trim()).filter(Boolean) : [];
     if (named.length) {
+      const size = named.join(" / ");
+      const others = colorwaysWith(siblings, wanted);
+      const inStock = others.filter((o) => o.in_stock);
+      const soldOut = others.filter((o) => !o.in_stock);
+      const names = (list) => list.map((o) => o.title).join(", ");
       return {
         carried: false,
         title,
         comes_in: Object.fromEntries(optionNames.map((n) => [n, listed(product.options[n])])),
-        note: `${title} doesn't come in ${named.join(" / ")} — that isn't a size the store carries for it, so it won't be restocked in it (no alert). Say so plainly and offer the closest size it does come in (\`comes_in\`), or another style in their size.`,
+        ...(others.length ? { other_colors: others } : {}),
+        note: `${title} doesn't come in ${size} — that isn't a size the store carries for this color, so it won't be restocked in it (no alert for it). ` +
+          (others.length
+            ? `The same style does come in ${size} in other colors (\`other_colors\`)${inStock.length ? ` — in stock now: ${names(inStock)}` : ""}${soldOut.length ? `${inStock.length ? ";" : " —"} sold out right now: ${names(soldOut)}` : ""}. Say so, ${inStock.length ? "show the in-stock ones with show_products with their size" : ""}${inStock.length && soldOut.length ? ", and " : ""}${soldOut.length ? `offer an email for a sold-out one by calling ${RESTOCK_TOOL} with that color's handle` : ""}. Never say the style doesn't come in ${size} — this color doesn't.`
+            : `Say so plainly and offer the closest size it does come in (\`comes_in\`), or another style in their size.`),
       };
     }
     return {

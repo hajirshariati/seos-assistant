@@ -89,9 +89,39 @@ await test("a size the store doesn't carry for it: not a stock gap, no card, the
   const r = restockCheck(P["miles-black-am260m"], { size: "15" });
   assert.equal(r.carried, false);
   assert.equal(r._events, undefined);
+  assert.equal(r.other_colors, undefined);
   assert.deepEqual(r.comes_in, { Size: ["8 US", "10.5 US", "13.5 - 14 US"] });
   assert.match(r.note, /doesn't come in 15/);
   assert.match(r.note, /won't be restocked in it/);
+  assert.match(r.note, /closest size it does come in/);
+});
+// Live store, 2026-10-30: the Miles in Iron has no 13.5 - 14 variant at all,
+// while the Black and Navy carry it (sold out). "The Miles doesn't come in
+// 13.5" was the answer — wrong for the style, and no alert offered.
+await test("a size this color doesn't come in, carried by the style's other colors: named, in stock or sold out, with the alert to offer", () => {
+  const iron = { ...miles, handle: "miles-iron-am268m", title: "Miles Arch Support Sneaker - Iron", variants: miles.variants.slice(0, 2).map((v) => ({ ...v, shopifyId: `9${v.shopifyId}` })) };
+  const navy = { ...miles, handle: "miles-navy-am265m", title: "Miles Arch Support Sneaker - Navy", variants: miles.variants.map((v, i) => ({ ...v, shopifyId: `8${v.shopifyId}`, inventoryQty: i === 2 ? 4 : v.inventoryQty })) };
+  const cat = buildLeanCatalog([miles, iron, navy], { shop: "s.myshopify.com" });
+  const byH = Object.fromEntries(cat.products.map((p) => [p.handle, p]));
+  const siblings = cat.products.filter((p) => p.handle !== "miles-iron-am268m" && p.style === byH["miles-iron-am268m"].style);
+  assert.equal(siblings.length, 2, "same style, other colors");
+  const r = restockCheck(byH["miles-iron-am268m"], { size: "13.5" }, null, siblings);
+  assert.equal(r.carried, false);
+  assert.equal(r._events, undefined, "no alert for a size this color has no variant of");
+  assert.deepEqual(r.other_colors, [
+    { handle: "miles-black-am260m", title: "Miles Arch Support Sneaker - Black", in_stock: false },
+    { handle: "miles-navy-am265m", title: "Miles Arch Support Sneaker - Navy", in_stock: true },
+  ]);
+  assert.match(r.note, /doesn't come in 13\.5 — that isn't a size the store carries for this color/);
+  assert.match(r.note, /in stock now: Miles Arch Support Sneaker - Navy/);
+  assert.match(r.note, /sold out right now: Miles Arch Support Sneaker - Black/);
+  assert.match(r.note, /show the in-stock ones with show_products/);
+  assert.match(r.note, /offer an email for a sold-out one by calling back_in_stock_alert with that color's handle/);
+  assert.match(r.note, /Never say the style doesn't come in 13\.5/);
+  // Then the alert for the Black, as a follow-up.
+  const black = restockCheck(byH["miles-black-am260m"], { size: "13.5" }, null, siblings);
+  assert.equal(black.alert, "offered");
+  assert.equal(black._events[0].variant, "51133383639353");
 });
 await test("no size given, or only the size of a sized-and-widthed style: ask, don't guess", () => {
   const none = restockCheck(P["miles-black-am260m"], undefined);

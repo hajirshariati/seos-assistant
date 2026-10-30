@@ -744,9 +744,12 @@ export async function runLeanTurn({
       // The store as it is right now, when it can be asked (a size can sell
       // out, or come back, between catalog syncs).
       const live = p && liveStock ? await liveStock(handle).catch(() => null) : null;
-      const { _events, ...r } = restockCheck(p, input.options, live);
+      // The style's other colorways: a size this color doesn't come in may
+      // be carried (or sold out, with an alert) in another.
+      const siblings = p ? products.filter((q) => q.handle !== p.handle && q.style.toLowerCase() === p.style.toLowerCase()) : [];
+      const { _events, ...r } = restockCheck(p, input.options, live, siblings);
       if (Array.isArray(_events)) events.push(..._events);
-      if (p) { markSeen([p.handle]); topic("product", p.title); topic("tool", name); }
+      if (p) { markSeen([p.handle, ...(r.other_colors || []).map((o) => o.handle)]); topic("product", p.title); topic("tool", name); }
       log(`[lean] restock ${handle} ${JSON.stringify(input.options || {})} → ${r.error ? `error: ${r.error}` : r.carried === false ? "not carried" : r.needs_options ? "needs options" : r.in_stock ? "in stock" : `sold out, alert ${r.alert}`}`);
       return r;
     }
