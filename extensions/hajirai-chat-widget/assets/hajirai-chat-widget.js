@@ -4,7 +4,7 @@
 /* Build marker — bump on widget changes so a live deploy can be verified
    in DevTools console. If you don't see this line after `shopify app deploy`
    + hard refresh, the new bundle isn't live (stale checkout or CDN cache). */
-try{console.log('[hajirai-widget] build 2026-10-30 launcher-mark');}catch(e){}
+try{console.log('[hajirai-widget] build 2026-10-30 account-answers');}catch(e){}
 
 /* Visual config comes from theme editor (liquid-injected as window.__AI_CHAT_CONFIG).
    Chat server URL is handled internally via app proxy at /apps/hajirai/chat. */
@@ -4518,6 +4518,10 @@ function ordersHtml(list){
 }
 function loginCardHtml(p){
   if(typeof p==='string')p={intent:p};
+  /* Points: sign in to see them (no order lookup for those). */
+  if(p&&p.intent==='rewards')return '<div class="ai-ord ai-ord--signin"><div class="ai-ord__signin-icon">'+ORD_ICON.user+'</div>'+
+    '<div class="ai-ord__signin-text"><div class="ai-ord__num">Sign in to see your points</div><div class="ai-ord__date">Your rewards and orders, right here.</div></div>'+
+    '<button type="button" class="ai-ord__btn is-primary" data-ord-login="rewards">Sign in</button></div>';
   var intent=p&&p.intent==='return'?'return':'track',pages=cleanPages(p&&p.pages);
   if(p&&p.pages)ordPages=pages;
   if(p&&(p.lookup||pages.track||pages.returns))return lookupCardHtml(intent,p.order||'',false,{lookup:!!p.lookup,pages:pages});
@@ -4616,7 +4620,7 @@ function ordlShow(card,o){
    tells the chat and closes. Blocked pop-up: same tab, and the chat picks up
    where it left off when the shopper comes back. */
 function startSignIn(intent){
-  var q=lastAskedOrders||'Where’s my order?';
+  var q=lastAskedOrders||(intent==='rewards'?'How many points do I have?':'Where’s my order?');
   try{sessionStorage.setItem(RESUME_KEY,JSON.stringify({q:q,intent:intent,at:Date.now()}))}catch(e){}
   var back=location.pathname+location.search;
   var landing='/apps/hajirai/signed-in?back='+encodeURIComponent(back);
@@ -4924,7 +4928,7 @@ leaveHome();
 var stale=msgsEl.querySelectorAll('.ai-chat-choices, .ai-chat-suggestions, .ai-chat-welcome__qps, .ai-chat-welcome__ctas, .ai-chat-dead-end');
 for(var si=0;si<stale.length;si++){stale[si].classList.add('is-stale')}
 lastUserMessage=text;
-if(/order|track|ship|deliver|package|return|exchange|refund/i.test(text))lastAskedOrders=text;
+if(/order|track|ship|deliver|package|return|exchange|refund|point|reward|loyal|credit/i.test(text))lastAskedOrders=text;
 messages.push({role:'user',content:text});
 appendMsg('user',text);
 saveH(messages);
@@ -5203,7 +5207,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   fitResult=String(p.key);
 }
 if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods}
-if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:'',pages:p.pages||null}}
+if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'||p.intent==='rewards'?p.intent:'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:'',pages:p.pages||null}}
 if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pendingCompare=p.comparison}
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
@@ -5977,7 +5981,7 @@ function cleanStrs(a,max,len){return Array.isArray(a)?a.map(function(x){return S
 var HANDLE_RE=/^[a-z0-9][a-z0-9-]{0,200}$/i;
 function cleanLogin(p){
   if(!p||typeof p!=='object')return null;
-  return {intent:p.intent==='return'?'return':'track',lookup:p.lookup===true,order:/^[A-Za-z0-9-]{3,24}$/.test(String(p.order||''))?String(p.order):'',pages:p.pages||null};
+  return {intent:p.intent==='return'||p.intent==='rewards'?p.intent:'track',lookup:p.lookup===true,order:/^[A-Za-z0-9-]{3,24}$/.test(String(p.order||''))?String(p.order):'',pages:p.pages||null};
 }
 function cleanSupport(p){
   if(!p||typeof p!=='object')return null;

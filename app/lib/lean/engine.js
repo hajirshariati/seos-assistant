@@ -440,6 +440,32 @@ export function pointsToSupport(text) {
   return SUPPORT_POINTER.test(String(text || ""));
 }
 
+// A question about the shopper's own account, and the tools that can look
+// into it. Handing it to customer service before using them (when the
+// shopper didn't ask for a person and isn't upset) gets one rewrite.
+const ACCOUNT_ASKS = [
+  { re: /\b(points?|rewards?|loyalty|store credit)\b/i, tools: ["get_my_rewards", "search_store_info"] },
+  { re: /\b(refund\w*|returns?|returned|returning|exchang\w*|charged?|charges|money back|cancel\w*)\b/i, tools: ["get_my_orders", "search_store_info"] },
+  { re: /\b(my orders?|order #?\d|package|parcel|deliver\w*|tracking|track my|shipped|arriv\w*)\b/i, tools: ["get_my_orders"] },
+];
+const WANTS_PERSON = /\b(human|real person|a person|an agent|representative|someone|somebody|talk to|speak (?:to|with)|call (?:you|someone)|phone number|manager)\b/i;
+const UPSET = /\b(angry|furious|ridiculous|terrible|unacceptable|worst|scam|fraud|disgust\w*|frustrat\w*|fed up|upset)\b|!!/i;
+export function supportTooSoon({ latestUserMessage = "", supportOffered = false, called = [], available = [] } = {}) {
+  const msg = String(latestUserMessage || "");
+  if (!supportOffered || WANTS_PERSON.test(msg) || UPSET.test(msg)) return [];
+  const have = new Set(available), done = new Set(called), missing = [];
+  for (const a of ACCOUNT_ASKS) {
+    if (!a.re.test(msg)) continue;
+    for (const t of a.tools) if (have.has(t) && !done.has(t) && !missing.includes(t)) missing.push(t);
+  }
+  return missing;
+}
+const LOOK_INTO = {
+  get_my_orders: "their orders (get_my_orders — intent \"refunds\" for a return or refund: status, amount, date, discounts used)",
+  get_my_rewards: "their points balance and history (get_my_rewards)",
+  search_store_info: "the store's own policy on it (search_store_info)",
+};
+
 // What the model is told about the product page the shopper is on: the
 // catalog's own facts, nothing more.
 export function viewingNote(p) {
@@ -559,6 +585,7 @@ export async function runLeanTurn({
   let followUps = [];
   let supportRequested = null;
   let ordersLooked = false;
+  const calledTools = new Set(); // every tool used this turn, for the hand-off check
   let compared = []; // handles in this reply's comparison table
   let soldOut = []; // sizes the customer asked for that aren't in stock
   const events = [];
@@ -587,6 +614,7 @@ export async function runLeanTurn({
   };
 
   const runTool = async (name, input = {}) => {
+    calledTools.add(name);
     if (name === "search_products") {
       const result = leanSearch(catalog, input);
       // Its own products and the ones it offers for wide (or narrow) feet.
@@ -879,6 +907,20 @@ export async function runLeanTurn({
         detail: `You're showing the map of scanner locations. Write it warmly and honestly, in short paragraphs, like a friendly associate:${mapMisses.includes("opener") ? " don't open with \"if you'd still prefer…\" or refer back to your earlier reply — start fresh;" : ""} they can always check their local shoe stores for the shoes, and the map shows the scanner locations near them${mapMisses.includes("zip") ? ` — say the ZIP code they gave${zip ? ` (${zip})` : ""}` : ""};${mapMisses.includes("call_ahead") ? " a quick heads-up that those locations offer the foot scanning and some carry the orthotics, but most may not carry the shoes, so it's worth calling ahead;" : ""} then, in the meantime, one short, warm offer (their size in the style, or its other colors).`,
       });
     }
+    // Sent to customer service with a question about their own account, before
+    // looking: look into it first (the support button waits for the rewrite).
+    const lookFirst = supportTooSoon({
+      latestUserMessage,
+      supportOffered: Boolean(supportRequested) || pointsToSupport(text),
+      called: [...calledTools],
+      available: tools.map((t) => t.name),
+    });
+    if (lookFirst.length) {
+      issues.push({
+        code: "support_too_soon",
+        detail: `You're sending them to customer service before looking into it. Investigate first with your tools: ${lookFirst.map((t) => LOOK_INTO[t]).join("; ")}. Then answer from what you found — the order number, the dates, the refund, the points entries — and connect it to their question; say plainly what the records don't show, never guess. Offer customer service (contact_support) only if the facts can't settle it, and then say what you checked.`,
+      });
+    }
     // Free shipping said of a product the store's offer doesn't name.
     for (const m of misappliedShipping({ text, knowledgeText, lineNames: lineNamesOf(catalog) })) {
       issues.push({
@@ -901,6 +943,8 @@ export async function runLeanTurn({
       retried = true;
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";
+      // Its hand-off to customer service waits for what the rewrite finds.
+      if (issues.some((i) => i.code === "support_too_soon")) supportRequested = null;
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
         role: "user",

@@ -15,7 +15,11 @@ export const ORDER_FIELDS = `
   createdAt
   cancelledAt
   displayFulfillmentStatus
+  displayFinancialStatus
   returnStatus
+  discountCodes
+  totalRefundedSet { shopMoney { amount currencyCode } }
+  refunds(first: 5) { createdAt totalRefundedSet { shopMoney { amount currencyCode } } }
   customer { id }
   lineItems(first: 20) {
     nodes {
@@ -115,6 +119,23 @@ export function returnBlock(o, stage, items, now = Date.now(), policy = returnPo
   return "";
 }
 
+// What was refunded on an order (for the assistant, not the card): the
+// payment status in words, the total, and each refund's day and amount.
+const REFUND_LABEL = { REFUNDED: "Refunded", PARTIALLY_REFUNDED: "Partly refunded", VOIDED: "Voided" };
+function money(set) {
+  const a = Number.parseFloat(set?.shopMoney?.amount);
+  if (!Number.isFinite(a) || a <= 0) return "";
+  const cur = set.shopMoney.currencyCode || "USD";
+  return cur === "USD" ? `$${a.toFixed(2)}` : `${a.toFixed(2)} ${cur}`;
+}
+export function refundFacts(o) {
+  const refunds = (o?.refunds || []).map((r) => ({ on: day(r.createdAt), amount: money(r.totalRefundedSet) })).filter((r) => r.on && r.amount);
+  const total = money(o?.totalRefundedSet);
+  const status = REFUND_LABEL[o?.displayFinancialStatus] || "";
+  if (!refunds.length && !total && !status) return null;
+  return { status: status || "Refunded", total: total || undefined, refunds: refunds.length ? refunds : undefined };
+}
+
 // The card for one order: no addresses, no payment details, no email.
 // A return the chat already started for this order, as the card shows it.
 export function chatReturnView(r) {
@@ -186,15 +207,19 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
     canReturn: !blocked,
     returnBlocked: blocked,
     items,
+    // For the assistant only (the order tool takes these off the card).
+    refund: refundFacts(o),
+    discountCodes: (o.discountCodes || []).map(String).slice(0, 5),
   };
 }
 
 // The signed-in customer's recent orders as cards (and their email, kept
-// server-side for prefilled tracking/return links).
+// server-side for prefilled tracking/return links). `first` up to 25 (an
+// order number, or returns and refunds, look further back).
 export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", returnsBase = "", policy = returnPolicy(), lookupReturns = findChatReturns }) {
   const data = await adminGraphql({
     shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
-    variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 10) },
+    variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 25) },
   });
   const customer = data?.customer;
   if (!customer) return { orders: [] };
@@ -205,6 +230,15 @@ export async function getOrderCards({ shop, accessToken, customerId, first = 5, 
   const started = await lookupReturns(shop, nodes.map((o) => numericId(o.id)));
   const forOrder = (o) => started.filter((r) => r.orderId === numericId(o.id));
   return { orders: nodes.map((o) => toOrderCard(o, { trackingBase, returnsBase, email: customer.email || "", chatReturns: forOrder(o), policy })) };
+}
+
+// The signed-in customer's email (for their rewards account), never shown.
+export async function getCustomerEmail({ shop, accessToken, customerId }) {
+  if (!customerId || !accessToken) return "";
+  const data = await adminGraphql({ shop, accessToken, query: `query ChatCustomerEmail($id: ID!) { customer(id: $id) { email } }`, variables: { id: `gid://shopify/Customer/${customerId}` } });
+  const email = String(data?.customer?.email || "").trim();
+  if (email) console.log(`[pii-access] shop=${shop} customer=${customerId} fields=email purpose=rewards_lookup source=admin_api`);
+  return email;
 }
 
 // One order, only if it belongs to this customer (for starting a return).

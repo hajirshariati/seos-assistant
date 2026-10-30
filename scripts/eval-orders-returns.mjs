@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
-const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy } = await import("../app/lib/orders.server.js");
+const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 const { cleanLookup, guestSearch, matchGuestOrder, guestOrderCard, lookupGuestOrder, createLookupLimiter, GUEST_LIMITS } = await import("../app/lib/guest-order.server.js");
@@ -372,6 +372,64 @@ await test("returns in chat off: cards send shoppers to the prefilled returns pa
     assert.match(on.definition.description, /walks them through/);
     assert.equal((await on.run({})).orders[0].has_returns_page, undefined);
   } finally { globalThis.fetch = realFetch; }
+});
+// ── Refunds: what the assistant can tell about money back after a return ──
+const refunded = (over = {}) => order({
+  id: "gid://shopify/Order/5003", name: "#1160741", displayFinancialStatus: "PARTIALLY_REFUNDED", returnStatus: "RETURNED",
+  discountCodes: ["RWD10MUTQT"],
+  totalRefundedSet: { shopMoney: { amount: "93.05", currencyCode: "USD" } },
+  refunds: [{ createdAt: "2026-10-20T15:00:00Z", totalRefundedSet: { shopMoney: { amount: "93.05", currencyCode: "USD" } } }],
+  ...over,
+});
+await test("refund facts: status in words, the total, each refund's day and amount; none → nothing", () => {
+  assert.deepEqual(refundFacts(refunded()), { status: "Partly refunded", total: "$93.05", refunds: [{ on: "2026-10-20", amount: "$93.05" }] });
+  assert.equal(refundFacts(order({ displayFinancialStatus: "PAID" })), null);
+  assert.equal(refundFacts(order()), null, "older data without the fields");
+  assert.equal(refundFacts(refunded({ displayFinancialStatus: "REFUNDED" })).status, "Refunded");
+  assert.equal(refundFacts(refunded({ totalRefundedSet: { shopMoney: { amount: "12.5", currencyCode: "CAD" } }, refunds: [] })).total, "12.50 CAD");
+  const card = toOrderCard(refunded());
+  assert.deepEqual(card.discountCodes, ["RWD10MUTQT"]);
+  assert.equal(card.returnStatus, "Returned");
+});
+await test("chat tool, refunds: looks further back, lists only orders with a return or refund, facts for the model — never on the cards", async () => {
+  const realFetch = globalThis.fetch;
+  let asked = null;
+  globalThis.fetch = async (u, init) => { const b = JSON.parse(init.body); if (b.variables?.first) asked = b.variables.first; return new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [order({ id: "gid://shopify/Order/5009", name: "#1180000", displayFinancialStatus: "PAID" }), refunded()] } } } }), { status: 200 }); };
+  try {
+    const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77" });
+    assert.match(t.definition.description, /intent \\"refunds\\"|intent "refunds"/);
+    assert.ok(t.definition.input_schema.properties.intent.enum.includes("refunds"));
+    const r = await t.run({ intent: "refunds" });
+    assert.equal(asked, 25, "looks back 25 orders");
+    assert.deepEqual(r.orders.map((o) => o.number), ["1160741"], "only the order with a return or refund");
+    assert.deepEqual(r.orders[0].refund, { status: "Partly refunded", total: "$93.05", refunds: [{ on: "2026-10-20", amount: "$93.05" }] });
+    assert.deepEqual(r.orders[0].discount_codes, ["RWD10MUTQT"]);
+    assert.equal(r.orders[0].return_status, "Returned");
+    assert.match(r.note, /Answer from these facts/);
+    assert.match(r.note, /never guess an amount, a date or what happened to points/);
+    const card = r._events[0].orders[0];
+    assert.equal(r._events[0].intent, "track", "the cards show as order cards");
+    assert.ok(!("refund" in card) && !("discountCodes" in card), "no payment facts on the cards");
+    // Tracking as before: five orders, no refund lookup.
+    await t.run({});
+    assert.equal(asked, 5);
+  } finally { globalThis.fetch = realFetch; }
+});
+await test("chat tool, refunds: none on record → said plainly, with where refund timing comes from", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { customer: { email: "jo@x.com", orders: { nodes: [order({ displayFinancialStatus: "PAID" })] } } } }), { status: 200 });
+  try {
+    const r = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77" }).run({ intent: "refunds" });
+    assert.deepEqual(r.orders, []);
+    assert.match(r.note, /None of their last 1 orders has a return or refund on record/);
+    assert.match(r.note, /search_store_info/);
+    assert.equal(r._events, undefined, "no cards");
+  } finally { globalThis.fetch = realFetch; }
+});
+await test("chat tool, refunds while signed out: the sign-in card, as for tracking", async () => {
+  const r = await ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null }).run({ intent: "refunds" });
+  assert.equal(r.signed_in, false);
+  assert.equal(r._events[0].intent, "track");
 });
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

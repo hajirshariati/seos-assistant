@@ -498,6 +498,21 @@ export function start(port) {
             resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
             return resp.end();
           }
+          // Points (the rewards tool, as the server sends it): signed out → the
+          // sign-in card for points; signed in → the answer from their history.
+          if (/\bpoints\b/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            if (/signedin=1/.test(req.headers.cookie || "")) {
+              w({ type: "text", text: "You have 4,200 points — your history shows 930 points taken back on Oct 20 after the refund on order #1160741." });
+            } else {
+              w({ type: "text", text: "Sign in and I'll look at your points and orders together." });
+              w({ type: "products", products: [] });
+              w({ type: "login_prompt", intent: "rewards" });
+            }
+            w({ type: "done" });
+            return resp.end();
+          }
           if (/order|return/i.test(parsed.message || "")) {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);

@@ -1196,7 +1196,7 @@ function IntegrationsSection({ d, values, set }) {
         <Integration title="Yotpo Reviews" help="Star ratings, fit summaries and “what do reviewers say” answers." connected={d.hasYotpoKey}>
           <TextField label="Yotpo API key" type="password" value={values.yotpoApiKey} onChange={set("yotpoApiKey")} placeholder={d.hasYotpoKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText={d.hasYotpoKey ? "Leave blank to keep the saved key." : undefined} />
         </Integration>
-        <Integration title="Yotpo Loyalty & Referrals" help="Points, VIP tier and a personal referral link for signed-in shoppers (with VIP mode on)." connected={d.hasYotpoLoyaltyKey}>
+        <Integration title="Yotpo Loyalty & Referrals" help="Signed-in shoppers can ask about their points: AVA looks up their balance and points history to answer — like whether points came back after a return. With VIP mode on, it also knows their tier and referral link from the start." connected={d.hasYotpoLoyaltyKey}>
           <div className="set-grid">
             <TextField label="Loyalty API key" type="password" value={values.yotpoLoyaltyApiKey} onChange={set("yotpoLoyaltyApiKey")} placeholder={d.hasYotpoLoyaltyKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText="Yotpo Loyalty → Program Settings → API Key." />
             <TextField label="GUID (optional)" value={values.yotpoLoyaltyGuid} onChange={set("yotpoLoyaltyGuid")} autoComplete="off" helpText="Only if your account needs it." />

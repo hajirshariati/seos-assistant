@@ -4,7 +4,7 @@
 // This file only decides which tools this store and this customer get; it
 // adds no routing of its own — Claude decides when to call them.
 
-import { returnPolicy } from "../orders.server.js";
+import { returnPolicy, getCustomerEmail } from "../orders.server.js";
 import {
   FIT_PREDICTOR_TOOL,
   REVIEWS_TOOL,
@@ -59,6 +59,56 @@ export function formatLoyalty(loyalty, config = {}) {
   if (loyalty.referralUrl) lines.push(`Their personal referral link: ${loyalty.referralUrl}`);
   if (config.referralPageUrl) lines.push(`Referral program page: ${config.referralPageUrl}`);
   return lines.join("\n");
+}
+
+export const REWARDS_TOOL = {
+  name: "get_my_rewards",
+  description:
+    "The customer's own rewards account (loyalty points): their points balance, tier, and points history — each entry's date, what it was for (a purchase, a reward redeemed, points taken back after a refund…), its points (negative when spent or taken back), its status (pending points haven't posted yet) and its order. " +
+    "Use for any question about their points or rewards: how many they have, missing or pending points, whether points came back after a return or a cancelled order, why a balance changed, expiring points. " +
+    "Look into it together with their orders (get_my_orders, intent \"refunds\") and the store's rewards policy (search_store_info), then answer from what the records show.",
+  input_schema: { type: "object", properties: {} },
+};
+
+// Points in the store's chosen unit, for one history entry or the balance.
+function pointsWords(n, config = {}) {
+  if (config.loyaltyDisplay !== "dollars") return `${n} points`;
+  const ratio = Math.max(1, parseInt(config.loyaltyPointsPerDollar, 10) || 100);
+  return `${n} points ($${(n / ratio).toFixed(2)})`;
+}
+
+export function rewardsTool({ shop, accessToken, loggedInCustomerId, config = {}, fetchLoyalty = fetchYotpoLoyalty, emailOf = getCustomerEmail }) {
+  return {
+    definition: REWARDS_TOOL,
+    run: async () => {
+      if (!loggedInCustomerId) {
+        return {
+          signed_in: false,
+          note: "They aren't signed in, so their points can't be seen here. A card under your reply lets them sign in; once they do, the chat picks their question back up with their points and orders. Say so in one sentence. Don't ask for their email, and don't send them to customer service for this.",
+          _events: [{ type: "login_prompt", intent: "rewards" }],
+        };
+      }
+      const email = await emailOf({ shop, accessToken, customerId: loggedInCustomerId }).catch(() => "");
+      if (!email) return { signed_in: true, error: "Their rewards account can't be looked up right now." };
+      const r = await fetchLoyalty({ apiKey: config.yotpoLoyaltyApiKey, guid: config.yotpoLoyaltyGuid, email, history: true });
+      if (r?.unavailable) return { signed_in: true, error: "The rewards system didn't answer just now — you can't see their points this time. Say so plainly; don't guess a balance or what happened to points." };
+      if (!r) return { signed_in: true, member: false, note: "No rewards account was found for the email on their store account. Say so plainly; if they joined with another email, that account's points aren't visible here." };
+      const history = (r.history || []).map((h) => ({ ...h, points: pointsWords(h.points, config) }));
+      return {
+        signed_in: true,
+        member: true,
+        balance: r.pointsBalance != null ? pointsWords(r.pointsBalance, config) : undefined,
+        tier: r.tier || undefined,
+        store_credit: r.creditBalance > 0 ? `$${r.creditBalance}` : undefined,
+        history: history.length ? history : undefined,
+        note: history.length
+          ? "Their points history is above, newest first. Answer from these entries: name the ones that matter (date, what for, points, status) and connect them to their orders and the store's policy. If an entry they expect isn't there, say plainly that it isn't in their history — don't guess why."
+          : r.historyListed
+          ? "Their points history has no entries. Answer from the balance, and say plainly there are no points entries yet."
+          : "Only their balance is available here, not the history. Answer from the balance and say plainly you can't see the individual entries.",
+      };
+    },
+  };
 }
 
 // Pure: the per-request system block. Exported for tests.
@@ -161,6 +211,14 @@ export async function buildLeanStoreExtras({
   // (no VIP mode needed — it's their own data).
   const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat, guestLookup: ctx.guestOrderLookup, policy: ctx.returnPolicy });
   wrap(orders.definition, orders.run);
+
+  // Their rewards account (Yotpo Loyalty): balance, tier and points history,
+  // for the signed-in shopper — so a points question is looked into, not
+  // passed to customer service.
+  if (config.yotpoLoyaltyApiKey) {
+    const rewards = rewardsTool({ shop, accessToken, loggedInCustomerId, config });
+    wrap(rewards.definition, rewards.run);
+  }
 
   if (config.fitPredictorEnabled === true) {
     wrap(FIT_PREDICTOR_TOOL, async (input) => {

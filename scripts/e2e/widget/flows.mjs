@@ -534,6 +534,30 @@ for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 900 
   check(`order lookup (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Points while signed out: a sign-in card for points; once signed in, the
+// chat asks the same question again and answers from their history.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(500);
+  await page.fill(".ai-chat-input-area textarea", "were my points restored after my return");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg:last-child .ai-ord--signin", { timeout: 6000 });
+  const card = await page.evaluate(() => { const c = [...document.querySelectorAll(".ai-ord--signin")].pop(); return { title: c.querySelector(".ai-ord__num").textContent, sub: c.querySelector(".ai-ord__date").textContent, login: c.querySelector("[data-ord-login]").getAttribute("data-ord-login"), lookup: !!c.closest(".ai-chat-msg").querySelector(".ai-ordl") }; });
+  check("points signed out: a sign-in card for points (no order lookup form)", card.title === "Sign in to see your points" && card.sub === "Your rewards and orders, right here." && card.login === "rewards" && !card.lookup, JSON.stringify(card));
+  const [popup] = await Promise.all([page.waitForEvent("popup"), page.click(".ai-chat-msg:last-child [data-ord-login]")]);
+  await popup.waitForEvent("close", { timeout: 8000 }).catch(() => {});
+  await page.waitForFunction(() => /4,200 points/.test([...document.querySelectorAll(".ai-chat-msg--assistant")].pop()?.textContent || ""), null, { timeout: 8000 });
+  const asked = await page.evaluate(() => [...document.querySelectorAll(".ai-chat-msg--user")].map((m) => m.textContent.trim()));
+  check("points: after sign-in the chat asks the same question again and answers it", asked.filter((t) => /were my points restored/.test(t)).length === 2, JSON.stringify(asked));
+  check("points: the sign-in card says it's done", !!(await page.$(".ai-ord__signedin")));
+  check("points: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The store's app: its own small message after the second reply of a visit
 // (like the rating question), never again that visit; its button opens a
 // QR code (computers) or the phone's own store badge — from the store's

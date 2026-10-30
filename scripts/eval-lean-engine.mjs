@@ -2072,5 +2072,60 @@ await test("the last step's fact check stands when no rewrite step is left", asy
   assert.ok(r.issues.length > 0, "issues reported, not silently passed");
 });
 
+console.log("\naccount questions: look into it before customer service");
+const { supportTooSoon } = await import("../app/lib/lean/engine.js");
+await test("a hand-off before looking: the tools that can know, by what was asked", () => {
+  const all = ["get_my_orders", "get_my_rewards", "search_store_info", "search_products"];
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "were my points restored after my return", supportOffered: true, called: ["get_my_orders"], available: all }), ["get_my_rewards", "search_store_info"]);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "where is my refund?", supportOffered: true, called: [], available: all }), ["get_my_orders", "search_store_info"]);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "my package never arrived", supportOffered: true, called: [], available: all }), ["get_my_orders"]);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "how many points do I have", supportOffered: true, called: [], available: ["get_my_orders", "search_store_info"] }), ["search_store_info"], "no rewards tool here: the policy at least");
+});
+await test("no hand-off, everything looked at, a person asked for, an upset shopper, another topic: nothing to add", () => {
+  const all = ["get_my_orders", "get_my_rewards", "search_store_info"];
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "were my points restored after my return", supportOffered: false, called: [], available: all }), []);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "were my points restored after my return", supportOffered: true, called: all, available: all }), []);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "I want to talk to a real person about my points", supportOffered: true, called: [], available: all }), []);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "this is ridiculous, my refund still isn't here", supportOffered: true, called: [], available: all }), []);
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "do you make wide sneakers?", supportOffered: true, called: [], available: all }), []);
+});
+await test("\"were my points restored after my return\": sent to the team at once → looked into with orders, points and policy, then answered", async () => {
+  const toolCalls = [];
+  const ordersStub = { definition: { name: "get_my_orders", description: "orders", input_schema: { type: "object", properties: { intent: { type: "string" } } } },
+    run: async (input) => { toolCalls.push(["get_my_orders", input.intent]); return { signed_in: true, orders: [{ number: "1160741", return_status: "Returned", refund: { status: "Refunded", total: "$93.05", refunds: [{ on: "2026-10-20", amount: "$93.05" }] }, discount_codes: ["RWD10MUTQT"] }], note: "facts" }; } };
+  const rewardsStub = { definition: { name: "get_my_rewards", description: "points", input_schema: { type: "object", properties: {} } },
+    run: async () => { toolCalls.push(["get_my_rewards"]); return { signed_in: true, member: true, balance: "4200 points", history: [{ date: "2026-09-01", action: "Redeemed $10 off", points: "-2000 points", status: "Approved" }] }; } };
+  const s = scripted([
+    // As in the recording: a look at the latest order, then straight to the team.
+    { stop_reason: "tool_use", content: [tu("t0", "get_my_orders", {}), tu("t1", "contact_support", { reason: "points after return" })] },
+    { stop_reason: "end_turn", content: [txt("You can reach the team using the button below — they'll be able to check your points history and confirm everything for you!")] },
+    { stop_reason: "tool_use", content: [tu("t2", "get_my_orders", { intent: "refunds" }), tu("t3", "get_my_rewards", {}), tu("t4", "search_store_info", { query: "rewards points returned order" })] },
+    { stop_reason: "end_turn", content: [txt("I checked: your return on order #1160741 was refunded ($93.05) on Oct 20. Your points history shows the 2000 points you redeemed on Sep 1, and no entry adding them back since — the rewards terms don't say redeemed points are restored on a return.")] },
+  ]);
+  const logs = [];
+  const msg = "were my points restored after my return";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, extraTools: [ordersStub, rewardsStub], callModel: s.callModel, lookupStoreInfo: async () => ({ found: true, text: "Points for online orders are rewarded 30 days after purchase." }), log: (l) => logs.push(l) });
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*support_too_soon/.test(l)), logs.join("\n"));
+  const ask = JSON.stringify(s.requests[2].messages.at(-1));
+  assert.match(ask, /before looking into it/);
+  assert.match(ask, /get_my_rewards/);
+  assert.match(ask, /search_store_info/);
+  assert.doesNotMatch(ask, /their orders \(get_my_orders/, "orders were already looked at");
+  assert.deepEqual(toolCalls, [["get_my_orders", undefined], ["get_my_orders", "refunds"], ["get_my_rewards"]]);
+  assert.match(r.text, /#1160741/);
+  assert.equal(r.supportRequested, null, "no support button once it's answered from the facts");
+});
+await test("asked for a person about points: the support button stands, no rewrite", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "contact_support", { reason: "wants a person" })] },
+    { stop_reason: "end_turn", content: [txt("Of course — tap below to reach our customer service team.")] },
+  ]);
+  const msg = "can I talk to a real person about my points?";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, extraTools: [], callModel: s.callModel, log: quiet });
+  assert.equal(r.retried, false);
+  assert.ok(r.supportRequested);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
