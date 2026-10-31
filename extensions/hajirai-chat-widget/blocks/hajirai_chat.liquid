@@ -46,6 +46,7 @@
     trueFit: {{ block.settings.truefit_size_finder | json }},
     trueFitLogo: {{ 'truefit-logo.png' | asset_url | json }},
     homeLayout: {{ block.settings.home_layout | json }},
+    focusPainImages: { heel: {{ 'focus-pain-heel.png' | asset_url | json }}, arch: {{ 'focus-pain-arch.png' | asset_url | json }}, ball: {{ 'focus-pain-ball.png' | asset_url | json }}, toes: {{ 'focus-pain-toes.png' | asset_url | json }}, whole: {{ 'focus-pain-whole.png' | asset_url | json }} },
     customerLoggedIn: {% if customer %}true{% else %}false{% endif %},
     customerFirstName: {% if customer %}{{ customer.first_name | json }}{% else %}""{% endif %},
     customerLoginUrl: {{ routes.account_login_url | json }},

@@ -1226,24 +1226,21 @@ if(FOCUS){
   panel.classList.add('is-focus');
   var _fhdr=$('.ai-chat-header',panel);
   if(_fhdr)_fhdr.insertAdjacentHTML('beforeend','<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__glow"></span><span class="ai-chat-hero__ring"></span><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div><span class="ai-chat-header__line" aria-hidden="true"></span>');
-  /* The second line of the name goes under the header's line (the approved
-     design): the line runs between "Ask Ava!" and "Aetrex Virtual Assistant",
-     and the face sits on it. */
-  var _fsub=$('.ai-chat-header__sub',_fhdr);if(_fsub)_fhdr.appendChild(_fsub);
-  focusGreetRender();
+  /* One row: the name and the controls, the face on the header's bottom
+     line. The name's second line stays out of it; the greeting takes its
+     place at the top of the home, where it scrolls away with the page. */
   focusMeasure();
   if(typeof ResizeObserver!=='undefined')new ResizeObserver(focusMeasure).observe(_fhdr);
   /* The line glows more while a reply is being written. */
   if(typeof MutationObserver!=='undefined')new MutationObserver(function(){panel.classList.toggle('is-streaming',typingEl.classList.contains('visible'))}).observe(typingEl,{attributes:true,attributeFilter:['class']});
 }
-/* Where the header's line is: on top of the second line of the name when
-   there is one, else the header's bottom. The face and the colour line
-   follow it (CSS reads --ai-focus-line). */
+/* Where the header's line is: its bottom. The face and the colour line
+   follow it (CSS reads --ai-focus-line). The name's second line is kept
+   out of the header here (the greeting stands in for it, on the home). */
 function focusMeasure(){
   var hdr=$('.ai-chat-header',panel);if(!hdr)return;
-  var sub=$('.ai-chat-header__sub',hdr),has=!!(sub&&!sub.hidden);
-  hdr.classList.toggle('has-sub',has);
-  hdr.style.setProperty('--ai-focus-line',(has?sub.offsetTop:hdr.clientHeight)+'px');
+  var sub=$('.ai-chat-header__sub',hdr);if(sub)sub.hidden=true;
+  hdr.style.setProperty('--ai-focus-line',hdr.clientHeight+'px');
 }
 var closeBtn=$('.ai-chat-close-btn',panel);
 var menuBtn=$('.ai-chat-menu-btn',panel);
@@ -1465,7 +1462,7 @@ function refreshWelcomeCtas(){
    quizzes), and Browse by, from the store's menu. The links right above the
    text box only fill it in, so a stray tap sends nothing. Classic is untouched. */
 var FOCUS_TITLE='Where does it hurt?';
-var FOCUS_HINT='Pick the spot and I’ll suggest what helps.';
+var FOCUS_HINT='Pick a spot and I’ll suggest what helps.';
 var FOCUS_ROTATE=true;/* Settings → rotate the welcome line (arrives with widget-config). */
 /* The places it can hurt: a line, what it usually is, what to ask. */
 var FOCUS_PAINS=[
@@ -1489,16 +1486,17 @@ var FOCUS_BROWSE={
   ]
 };
 var FOCUS_QUIZ_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/><path d="M8.5 11h5M11 8.5v5"/></svg>';
-/* A foot in profile, one line; the painful place marked with a dot and a
-   faint ring. Whole foot: the outline lightly tinted. */
-var FOCUS_FOOT='M13 1C12 7 8 13 5 21C3 25 4 30 9 31C15 31.5 18 25.5 24 25.5C30 25.5 33 30.5 39 31L41 31C45 31 47 29.5 47 27.5C47 25 44 23.5 40 23C32 22 27 15 24 9C22.5 5.5 21.5 1 21 1Z';
-var FOCUS_MARKS={heel:[10,25.5],arch:[23,22.5],ball:[36,27],toes:[43,27]};
+/* Each place's picture (the extension's own: a foot with the sore spot
+   glowing red), in a small round coin on the chip. */
+var FOCUS_PAIN_IMG=(C.focusPainImages&&typeof C.focusPainImages==='object')?C.focusPainImages:{};
 function focusZone(kind){
-  var m=FOCUS_MARKS[kind];
-  return '<svg class="ai-chat-focus__ico" viewBox="0 0 48 32" width="30" height="20" aria-hidden="true">'+(kind==='whole'?'<path class="ai-chat-focus__tint" d="'+FOCUS_FOOT+'"/>':'')+'<path class="ai-chat-focus__foot" d="'+FOCUS_FOOT+'"/>'+(m?'<circle class="ai-chat-focus__halo" cx="'+m[0]+'" cy="'+m[1]+'" r="5.5"/><circle class="ai-chat-focus__dot" cx="'+m[0]+'" cy="'+m[1]+'" r="2.6"/>':'')+'</svg>';
+  var u=safeUrl(FOCUS_PAIN_IMG[kind]||'');
+  return u?'<span class="ai-chat-focus__coin"><img src="'+u+'" alt="" width="30" height="30" decoding="async"></span>':'';
 }
+/* One chip per place: its picture and the place's name. What it usually
+   is stays on the tip (and for screen readers). */
 function focusPainHtml(t){
-  return '<button type="button" class="ai-chat-focus__pain" data-message="'+esc(t[3])+'"><span class="ai-chat-focus__pain-ico">'+focusZone(t[0])+'</span><span class="ai-chat-focus__pain-text"><span class="ai-chat-focus__pain-title">'+esc(t[1])+'</span><span class="ai-chat-focus__pain-sub">'+esc(t[2])+'</span></span>'+WI.arrow+'</button>';
+  return '<button type="button" class="ai-chat-focus__pain" data-message="'+esc(t[3])+'" title="'+esc(t[2])+'" aria-label="'+esc(t[1]+' · '+t[2])+'">'+focusZone(t[0])+'<span class="ai-chat-focus__pain-title">'+esc(t[1])+'</span></button>';
 }
 /* The line cards' pictures (Settings → Focus home); line drawings without. */
 var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={footwear:'',orthotics:''};
@@ -1519,39 +1517,40 @@ function focusCardHtml(kind){
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
+  h+='<div class="ai-chat-focus__greet"></div>';
   if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
   h+='<div class="ai-chat-focus__cards">'+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
   h+='<div class="ai-chat-focus__ask"><h2 class="ai-chat-focus__title">'+esc(FOCUS_TITLE)+'</h2><p class="ai-chat-focus__hint">'+esc(FOCUS_HINT)+'</p></div>';
-  h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);h+='</div>';
-  h+='<button type="button" class="ai-chat-focus__else" data-focus="type">Something else? Just tell me below.</button>';
+  h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);
+  h+='<button type="button" class="ai-chat-focus__pain ai-chat-focus__else" data-focus="type"><span class="ai-chat-focus__pain-title">Something else…</span></button></div>';
   h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><i aria-hidden="true"></i><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><i aria-hidden="true"></i><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
   panel.classList.add('is-home');
   focusMeasure();
+  focusGreetRender();
   focusGreetStart();
   focusLineToRing();
 }
-/* The header's second line is the greeting ("How can I help you today?"),
-   sliding through its languages while the shopper is at home — the same
-   frames and the same Settings switch as the classic home. In a chat it
-   settles on English. */
+/* The greeting ("How can I help you today?") at the top of the home, under
+   the name, beside the face — sliding through its languages while the
+   shopper is at home, the same frames and the same Settings switch as the
+   classic home. It scrolls away with the page and leaves with the home. */
 var focusGreetGen=0,focusGreetIdx=0;
 function focusGreetFrames(){return GREET_CTA_FRAMES&&GREET_CTA_FRAMES.length?GREET_CTA_FRAMES:[{text:GREETCTA,dir:'ltr',code:'en'}]}
 function focusGreetItem(f,cls){return '<span class="ai-chat-greet__item '+cls+'" dir="'+esc(f.dir||'ltr')+'" lang="'+esc(f.code||'en')+'">'+esc(f.text)+'</span>'}
 function focusGreetRender(){
-  var sub=$('.ai-chat-header__sub',panel);if(!sub)return;
+  var el=$('.ai-chat-focus__greet',panel);if(!el)return;
   var f=focusGreetFrames()[0];
-  sub.hidden=!f||!f.text;
-  if(sub.hidden)return;
-  var cur=$('.ai-chat-greet__item.is-in',sub);
+  if(!f||!f.text){el.innerHTML='';return}
+  var cur=$('.ai-chat-greet__item.is-in',el);
   if(cur&&cur.textContent===f.text)return;
   focusGreetIdx=0;
-  sub.innerHTML='<span class="ai-chat-greet">'+focusGreetItem(f,'is-in')+'</span>';
+  el.innerHTML='<span class="ai-chat-greet">'+focusGreetItem(f,'is-in')+'</span>';
 }
 function focusGreetShow(i){
-  var sub=$('.ai-chat-header__sub',panel),box=sub&&$('.ai-chat-greet',sub);if(!box)return;
+  var box=$('.ai-chat-focus__greet .ai-chat-greet',panel);if(!box)return;
   var frames=focusGreetFrames(),f=frames[i%frames.length];if(!f)return;
   var old=$('.ai-chat-greet__item.is-in',box);
   if(old&&old.textContent===f.text)return;
@@ -1575,7 +1574,6 @@ function focusGreetStart(){
   };
   setTimeout(tick,4200);
 }
-function focusGreetSettle(){++focusGreetGen;focusGreetShow(0)}
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
 var focusSheetEl=null,focusSheetOpener=null,focusBrowseIdx={footwear:0,orthotics:0};
@@ -1703,7 +1701,6 @@ function focusRingToLine(){
   var gen=++focusMorphGen;
   if(!focusMotionOk()||!p.ring.animate){focusSetChatting(true);return}
   focusMeasure();focusAll(p);
-  focusGreetSettle();
   p.hero.classList.add('is-morph');
   /* 1. The ring folds flat behind the face (the face stays), then the
         flat line reaches out past the face on both sides. */
