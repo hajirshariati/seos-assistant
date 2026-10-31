@@ -7276,12 +7276,10 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__links button { border: 0; background: transparent; padding: 6px 0; color: var(--seos-text-2); font: 400 13px/1.2 var(--seos-font); cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus__links button:hover { color: var(--seos-text); }
 .ai-chat-panel.is-focus .ai-chat-focus__links i { width: 3px; height: 3px; border-radius: 50%; background: var(--seos-line-strong, #c7c7cc); }
-/* The feedback survey's pill under the links (Settings → Feedback survey). */
-.ai-chat-panel.is-focus .ai-chat-focus__fb { display: flex; justify-content: center; padding: 2px 0 10px; }
-.ai-chat-panel.is-focus .ai-chat-focus__fb button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px 0 12px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.16)); border-radius: 999px; background: transparent; color: var(--seos-text); font: 500 13px/1 var(--seos-font); cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease; }
-.ai-chat-panel.is-focus .ai-chat-focus__fb button svg { width: 16px; height: 16px; color: var(--seos-text-2); }
-.ai-chat-panel.is-focus .ai-chat-focus__fb button:hover { background: var(--seos-surface); }
-.ai-chat-panel.is-focus .ai-chat-focus__fb button:focus-visible { outline: 2px solid var(--seos-ink, #0d0d12); outline-offset: 2px; }
+/* Share feedback (⋮ menu): the chat's rating card in a sheet. */
+.ai-chat-panel.is-focus .ai-chat-focus__card-ico--fb svg { width: 24px; height: 24px; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet[data-kind="feedback"] .ai-chat-focus-sheet__body { padding: 14px 20px 26px; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet[data-kind="feedback"] .ai-chat-rate { max-width: none; margin: 0; }
 
 /* The product line's sheet */
 .ai-chat-panel.is-focus .ai-chat-focus-sheet { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }

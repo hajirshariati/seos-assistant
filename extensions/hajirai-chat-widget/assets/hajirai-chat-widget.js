@@ -708,7 +708,8 @@ function menuHtml(){
   function item(action,icon,label){return '<button type="button" role="menuitem" class="ai-chat-menu-item" data-action="'+action+'">'+icon+'<span>'+esc(label)+'</span></button>'}
   var h=item('clear',MI.chat,'Start a new chat');
   if(ff&&savedFit())h+=item('refit',MI.fit,'Retake my orthotic FIT');
-  if(FOCUS&&fbShown())h+=item('feedback',WI.feedback,FB_LABEL);
+  /* Feedback (Focus): the store's survey when it is one; else the chat's own rating — the shopper's own move, whatever the automatic ask is set to. */
+  if(FOCUS){if(fbShown()&&!fbOrthotic())h+=item('survey',fbIcon(),FB_LABEL);else h+=item('feedback',WI.feedback,'Share feedback')}
   h+='<div class="ai-chat-menu-sep" role="separator"></div>';
   if(CUST_LOGGED_IN)h+=(CUST_NAME?'<div class="ai-chat-menu-who">Signed in as '+esc(CUST_NAME)+'</div>':'')+item('logout',MI.out,'Log out');
   else h+=item('login',MI.user,'Log in');
@@ -1555,9 +1556,12 @@ function seaTileHtml(){
   var tint=SEA_COLOR!=='plain'?' sea-'+SEA_COLOR:'';
   return '<button type="button" class="ai-chat-welcome__cta-btn is-season'+tint+'" data-message="'+esc(SEA_LABEL)+'" data-seasonal="1"><span class="ai-chat-welcome__cta-icon">'+(SEASON_ICONS[SEA_ICON]||SEASON_ICONS.fall)+'</span><span class="ai-chat-welcome__cta-label">'+esc(SEA_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
-function fbTileHtml(){
+function fbIcon(){
   var key=FB_ICON==='feedback'?'feedback':CTA_ICONS[FB_ICON];
-  var ic=!key?WI.feedback:key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
+  return !key?WI.feedback:key==='ruler'?WI.ruler.replace(/22/g,'18'):WI[key];
+}
+function fbTileHtml(){
+  var ic=fbIcon();
   return '<button type="button" class="ai-chat-welcome__cta-btn is-feedback'+(FB_COLOR!=='teal'?' fb-'+FB_COLOR:'')+'" data-feedback="1" aria-haspopup="dialog"><span class="ai-chat-welcome__cta-icon">'+ic+'</span><span class="ai-chat-welcome__cta-label">'+esc(FB_LABEL)+'</span><span class="ai-chat-welcome__cta-go">'+WI.arrow+'</span></button>';
 }
 /* A Popular button: sends its message, or, when the message is a Typeform
@@ -1605,7 +1609,6 @@ function refreshTexts(inWas){
 function refreshWelcomeCtas(){
   var box=$('.ai-chat-welcome__ctas',panel);
   if(box)box.innerHTML=welcomeCtasHtml(welcomeCtas());
-  if(FOCUS){var w=$('.ai-chat-welcome--focus',panel),fr=w&&$('.ai-chat-focus__fb',w);if(w){if(fr)fr.remove();w.insertAdjacentHTML('beforeend',focusFbHtml())}}
 }
 /* ── Focus home (Theme editor → Home layout → Focus) ──
    The foot-pain specialist first: the question, five places it can hurt
@@ -1689,7 +1692,6 @@ function buildFocusHome(){
   h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);
   h+='<button type="button" class="ai-chat-focus__pain ai-chat-focus__else" data-focus="type"><span class="ai-chat-focus__pain-title">Something else…</span></button></div>';
   h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><i aria-hidden="true"></i><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><i aria-hidden="true"></i><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
-  h+=focusFbHtml();
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
@@ -1766,13 +1768,11 @@ function focusTitleSync(){
   if(h)h.setAttribute('aria-hidden',chat?'true':'false');
 }
 function focusChatClass(on){panel.classList.toggle('is-chatting',!!on);focusTitleSync()}
-/* The store's feedback survey (Settings → Feedback survey) on the Focus
-   home: a quiet pill under the links — the classic home's fourth button
-   has no place here — gone once this shopper has sent it, when the
-   setting says so. The ⋮ menu carries the same line (menuHtml). */
-function focusFbHtml(){
-  return fbShown()?'<div class="ai-chat-focus__fb"><button type="button" data-feedback="1" aria-haspopup="dialog">'+WI.feedback+'<span>'+esc(FB_LABEL)+'</span></button></div>':'';
-}
+/* The store's survey (Settings → Feedback survey) in the Focus layout: as
+   Aetrex uses it for "Identify My Orthotic", one that reads as an orthotic
+   quiz is a row in the Orthotics sheet; any other is the ⋮ menu's feedback
+   line. Nothing of it on the home. */
+function fbOrthotic(){return FB_ICON==='orthotic'||/orthotic|insole|\bfit\b/i.test(FB_LABEL)}
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
 var focusSheetEl=null,focusSheetOpener=null,focusSheetShut=0,focusBrowseIdx={footwear:0,orthotics:0};
@@ -1792,8 +1792,10 @@ function focusSheetRows(kind){
       if(mine)rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono is-letter">'+esc(fitLetter(mine))+'</span>',mine.name||fitTitle(mine),'Your '+fitTitle(mine));
       else rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono">FIT</span>','Find my orthotic FIT',ff.questions&&ff.questions.length?'FITFinder · '+ff.questions.length+' quick question'+(ff.questions.length===1?'':'s'):'with FITFinder');
     }
+    var survey=fbShown()&&fbOrthotic();
+    if(survey)rows+=focusHelperRow('data-survey="1" aria-haspopup="dialog"',fbIcon(),FB_LABEL,'A quick visual quiz, right here');
     var qps=[[QP1L,QP1M],[QP2L,QP2M],[QP3L,QP3M],[QP4L,QP4M]];
-    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f)rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}
+    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f&&!(survey&&f===FB_FORM))rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}
   }
   return rows;
 }
@@ -1906,6 +1908,8 @@ if(FOCUS){
     if(hp){e.preventDefault();closeFocusSheet(true);if(!isStreaming)startHelper(hp.getAttribute('data-helper'));return}
     var fb=e.target.closest('[data-form]');
     if(fb){e.preventDefault();var op=focusSheetOpener;closeFocusSheet(true);openForm(op,fb.getAttribute('data-form'),fb.getAttribute('data-form-label'),'quiz');return}
+    var sv=e.target.closest('[data-survey]');
+    if(sv){e.preventDefault();var op2=focusSheetOpener;closeFocusSheet(true);openFeedback(op2);return}
     var m=e.target.closest('[data-message]');
     if(m){e.preventDefault();var t=m.getAttribute('data-message');closeFocusSheet(true);focusSend(t)}
   });
@@ -3032,8 +3036,8 @@ function closeSheetNow(quiet){
   /* Sent: the button makes way for Start here button 4. */
   if(fbSent&&sheetKind==='fb'){
     sheetSubmitted=false;
-    if(FOCUS){var fr=$('.ai-chat-focus__fb',panel);if(fr)fr.remove()}
-    else{var t=$('[data-feedback]',panel);if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}}
+    /* (The Focus sheets and menu read fbShown() each time they open.) */
+    if(!FOCUS){var t=$('[data-feedback]',panel);if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}}
     if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML='';sheetForm=''}
     fbOpener=null;
   }
@@ -5271,6 +5275,7 @@ function renderReturn(card,step,info){
 function keepInView(el){requestAnimationFrame(function(){
   if(!el||!msgsEl||!el.isConnected)return;
   var sc=el.closest('.ai-chat-fbsheet__list')||msgsEl;
+  if(!sc.contains(el))return;
   var m=sc.getBoundingClientRect(),r=el.getBoundingClientRect(),pad=12;
   if(r.bottom>m.bottom-pad)sc.scrollTop+=Math.max(0,Math.min(r.bottom-m.bottom+pad,r.top-m.top-pad));
   else if(r.top<m.top+pad)sc.scrollTop-=m.top+pad-r.top;
@@ -6216,6 +6221,9 @@ function rateMarkDone(){try{localStorage.setItem(RATE_DONE,String(Date.now()))}c
 /* Fold away: fade, then collapse the space it took. */
 function foldAway(row){
   if(!row||!row.isConnected||row.classList.contains('is-out'))return;
+  /* The rating card in the feedback sheet (⋮ menu): the sheet goes instead. */
+  var fsh=row.classList.contains('ai-chat-rate')&&row.closest('.ai-chat-focus-sheet');
+  if(fsh){if(focusSheetEl===fsh)closeFocusSheet();return}
   row.style.maxHeight=row.offsetHeight+'px';void row.offsetHeight;
   row.classList.add('is-out');
   setTimeout(function(){if(row.isConnected)row.remove()},window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?0:380);
@@ -6223,7 +6231,7 @@ function foldAway(row){
 function rateFinish(row){
   if(!row||!row.isConnected)return;
   row.innerHTML=rateDoneHtml();row.setAttribute('data-state','done');
-  later(function(){foldAway(row)},3200);
+  later(function(){foldAway(row)},row.closest('.ai-chat-focus-sheet')?1600:3200);
 }
 /* A new chat message while the question is still open: it steps aside. */
 function rateStepAside(){
@@ -6278,49 +6286,73 @@ function maybeAskRating(){
     /* The question for the whole chat takes the place of the answer's thumbs. */
     if(fbr)foldAway(fbr);
     var near=rateNearBottom();
-    var row=el('div','ai-chat-rate',rateAskHtml(m));
-    row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');row.setAttribute('data-moment',m||'replies');
+    var row=rateRowMake(m);
     msgsEl.appendChild(row);
     void row.offsetWidth;row.classList.add('is-in');
     if(near)keepInView(row);else if(m==='cart')rateReveal(row);
-    row.addEventListener('click',function(e){
-      var v=e.target.closest('[data-rate]');
-      if(v&&row.getAttribute('data-state')==='ask'){
-        var vote=v.getAttribute('data-rate')==='down'?'down':'up';
-        ratePost(row,vote,'','');rateMarkDone();
-        row.setAttribute('data-vote',vote);
-        if(vote==='up'){rateToComment(row,'up');return}
-        var keep=rateNearBottom();
-        row.innerHTML=rateWhyHtml(m==='cart'||m==='buy_now'||rateHadProducts());row.setAttribute('data-state','why');
-        if(keep)keepInView(row);
-        var c1=$('.ai-chat-rate__chip',row);if(c1)try{c1.focus({preventScroll:true})}catch(_){}
-        return;
-      }
-      var w=e.target.closest('[data-rate-why]');
-      if(w&&row.getAttribute('data-state')==='why'){
-        var reason=w.getAttribute('data-rate-why');
-        row.setAttribute('data-why',reason);
-        ratePost(row,'down','',reason);
-        rateToComment(row,'down');
-        return;
-      }
-      if(e.target.closest('[data-rate-x]')){
-        if(row.getAttribute('data-state')==='ask'){rateMarkDone();foldAway(row);try{inputEl.focus({preventScroll:true})}catch(_){}}
-        else rateFinish(row);
-      }
-    });
-    row.addEventListener('input',function(e){
-      if(!e.target.classList.contains('ai-chat-rate__input'))return;
-      var b=$('.ai-chat-rate__send',row);if(b)b.disabled=!e.target.value.trim();
-    });
-    row.addEventListener('submit',function(e){
-      e.preventDefault();
-      var inp=$('.ai-chat-rate__input',row),c=inp?inp.value.trim():'';
-      if(c)ratePost(row,row.getAttribute('data-vote')||'up',c,row.getAttribute('data-why')||'');
-      rateFinish(row);
-    });
-    row.addEventListener('keydown',function(e){var st=row.getAttribute('data-state');if(e.key==='Escape'&&(st==='voted'||st==='why')){e.preventDefault();e.stopPropagation();rateFinish(row)}});
   },1600);
+}
+/* The rating card as a row with its three steps — the vote, what went
+   wrong, a word to add — asked by the chat itself (maybeAskRating) or
+   opened from the ⋮ menu (openFocusFeedback). */
+function rateRowMake(m){
+  var row=el('div','ai-chat-rate',rateAskHtml(m));
+  row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');row.setAttribute('data-moment',m||'replies');
+  row.addEventListener('click',function(e){
+    var v=e.target.closest('[data-rate]');
+    if(v&&row.getAttribute('data-state')==='ask'){
+      var vote=v.getAttribute('data-rate')==='down'?'down':'up';
+      ratePost(row,vote,'','');rateMarkDone();
+      try{localStorage.setItem(rateShownKey(),'1')}catch(_){}
+      row.setAttribute('data-vote',vote);
+      if(vote==='up'){rateToComment(row,'up');return}
+      var keep=rateNearBottom();
+      row.innerHTML=rateWhyHtml(m==='cart'||m==='buy_now'||rateHadProducts());row.setAttribute('data-state','why');
+      if(keep)keepInView(row);
+      var c1=$('.ai-chat-rate__chip',row);if(c1)try{c1.focus({preventScroll:true})}catch(_){}
+      return;
+    }
+    var w=e.target.closest('[data-rate-why]');
+    if(w&&row.getAttribute('data-state')==='why'){
+      var reason=w.getAttribute('data-rate-why');
+      row.setAttribute('data-why',reason);
+      ratePost(row,'down','',reason);
+      rateToComment(row,'down');
+      return;
+    }
+    if(e.target.closest('[data-rate-x]')){
+      if(row.getAttribute('data-state')==='ask'){rateMarkDone();foldAway(row);try{inputEl.focus({preventScroll:true})}catch(_){}}
+      else rateFinish(row);
+    }
+  });
+  row.addEventListener('input',function(e){
+    if(!e.target.classList.contains('ai-chat-rate__input'))return;
+    var b=$('.ai-chat-rate__send',row);if(b)b.disabled=!e.target.value.trim();
+  });
+  row.addEventListener('submit',function(e){
+    e.preventDefault();
+    var inp=$('.ai-chat-rate__input',row),c=inp?inp.value.trim():'';
+    if(c)ratePost(row,row.getAttribute('data-vote')||'up',c,row.getAttribute('data-why')||'');
+    rateFinish(row);
+  });
+  row.addEventListener('keydown',function(e){var st=row.getAttribute('data-state');if(e.key==='Escape'&&(st==='voted'||st==='why')){e.preventDefault();e.stopPropagation();rateFinish(row)}});
+  return row;
+}
+/* Share feedback (⋮ menu, Focus): the chat's own rating in a sheet, so it
+   is there at home as well as in a chat — the same card, the same steps
+   and the same record as the rating the chat asks for itself. */
+function openFocusFeedback(opener){
+  closeFocusSheet(true);
+  focusSheetOpener=opener||null;
+  var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind','feedback');
+  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="Share feedback"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head"><span class="ai-chat-focus__card-ico ai-chat-focus__card-ico--fb">'+WI.feedback+'</span><div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Rate this chat</div><div class="ai-chat-focus-sheet__title">Share feedback</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"></div></div>';
+  var row=rateRowMake('replies');row.classList.add('is-in');
+  $('.ai-chat-focus-sheet__body',sh).appendChild(row);
+  panel.appendChild(sh);focusSheetEl=sh;
+  var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
+  focusSheetSwipe(sh);
+  requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
+  var v=$('.ai-chat-rate__vote',sh);if(v)v.focus({preventScroll:true});
 }
 
 function clearChat(){
@@ -6442,7 +6474,8 @@ menu.addEventListener('click',function(e){
   menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');
   if(a==='clear')clearChat();
   else if(a==='refit'){if(!isStreaming)startHelper('refit')}
-  else if(a==='feedback')openFeedback(menuBtn);
+  else if(a==='feedback')openFocusFeedback(menuBtn);
+  else if(a==='survey')openFeedback(menuBtn);
   else if(a==='login')location.href=loginUrl();
   /* Signing out takes this customer's chat and sizes with it. */
   else if(a==='logout'){forgetPersonal();try{localStorage.setItem(OWNER_KEY,'guest')}catch(e){}location.href=CUST_LOGOUT_URL}

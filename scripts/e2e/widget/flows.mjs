@@ -3270,59 +3270,99 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (header words): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The store's feedback survey in the Focus layout: a quiet pill under the
-  // links on the home, and a line in the ⋮ menu — the classic home's fourth
-  // button has no place here — each opening the survey inside the chat;
-  // once sent, both go. Without the survey, neither; the classic menu is
-  // as it was.
+  // The store's survey (Settings → Feedback survey) in the Focus layout:
+  // nothing of it on the home. A plain feedback survey is the ⋮ menu's
+  // feedback line, opened inside the chat. One that reads as an orthotic
+  // quiz (Aetrex's "Identify My Orthotic") is a row in the Orthotics sheet
+  // instead — once, a Popular button with the same form folding into it —
+  // and the menu offers the chat's own feedback. The classic home and menu
+  // are as they were.
+  const tfRoute = (page) => page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".css") ? "" : TF_STUB }));
+  const menuOf = async (page) => { await page.click(".ai-chat-menu-btn"); await page.waitForTimeout(150); return page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.textContent.trim() + "/" + x.dataset.action)); };
   {
     const { ctx, page, errors } = await open("/full?home=focus&fb=1", {}, { name: "Ask Ava!" });
-    await page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".css") ? "" : TF_STUB }));
+    await tfRoute(page);
     await page.waitForTimeout(500);
-    const pill = await page.evaluate(() => { const b = document.querySelector(".ai-chat-focus__fb [data-feedback]"), l = document.querySelector(".ai-chat-focus__links"); if (!b || !l) return { b: !!b, l: !!l }; const r = b.getBoundingClientRect(), lr = l.getBoundingClientRect(), cs = getComputedStyle(b); return { label: b.textContent.trim(), icon: !!b.querySelector("svg"), under: r.top >= lr.bottom - 1, centred: Math.abs((r.left + r.right) / 2 - (lr.left + lr.right) / 2) <= 2, radius: cs.borderRadius, border: cs.borderStyle, h: Math.round(r.height), tiles: document.querySelectorAll(".ai-chat-welcome__cta-btn").length }; });
-    check("home layout focus (feedback): a quiet pill — the store's label, an icon, rounded, outlined — centred under the links", pill.label === "Share feedback" && pill.icon && pill.under && pill.centred && /999/.test(pill.radius) && pill.border === "solid" && pill.h >= 30 && pill.h <= 38 && pill.tiles === 0, JSON.stringify(pill));
-    await page.click(".ai-chat-menu-btn");
-    await page.waitForTimeout(150);
-    const menu = await page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.textContent.trim() + "/" + x.dataset.action));
-    check("home layout focus (feedback): the ⋮ menu offers it under Start a new chat", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/feedback", menu.join(" | "));
-    await page.click('.ai-chat-menu-item[data-action="feedback"]');
+    const home = await page.evaluate(() => ({ pill: !!document.querySelector(".ai-chat-focus__fb"), onHome: !!document.querySelector(".ai-chat-welcome--focus [data-feedback], .ai-chat-welcome--focus [data-survey]"), tiles: document.querySelectorAll(".ai-chat-welcome__cta-btn").length }));
+    check("home layout focus (survey): nothing of it on the home", !home.pill && !home.onHome && home.tiles === 0, JSON.stringify(home));
+    const menu = await menuOf(page);
+    check("home layout focus (survey): the ⋮ menu offers the store's survey under Start a new chat — its one feedback line", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/survey" && !menu.some((m) => /\/feedback$/.test(m)), menu.join(" | "));
+    await page.click('.ai-chat-menu-item[data-action="survey"]');
     await page.waitForTimeout(800);
     const viaMenu = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, menuShut: document.querySelector(".ai-chat-menu").style.display === "none" }; });
-    check("home layout focus (feedback): the menu line opens the survey inside the chat", viaMenu.open && viaMenu.form === "jdXBrXMa" && viaMenu.menuShut, JSON.stringify(viaMenu));
+    check("home layout focus (survey): the menu line opens it inside the chat", viaMenu.open && viaMenu.form === "jdXBrXMa" && viaMenu.menuShut, JSON.stringify(viaMenu));
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(600);
-    await page.click(".ai-chat-focus__fb [data-feedback]");
-    await page.waitForTimeout(800);
-    const viaPill = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home") }; });
-    check("home layout focus (feedback): the pill opens it too, the home staying underneath", viaPill.open && viaPill.home, JSON.stringify(viaPill));
-    await page.evaluate(() => window.__tf.o.onSubmit());
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(700);
-    const sent = await page.evaluate(() => ({ pill: !!document.querySelector(".ai-chat-focus__fb"), tile: !!document.querySelector(".ai-chat-welcome__cta-btn"), stray: !!document.querySelector(".ai-chat-panel [data-feedback]"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home") }));
-    await page.click(".ai-chat-menu-btn");
-    await page.waitForTimeout(150);
-    const menuAfter = await page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.dataset.action));
-    await page.keyboard.press("Escape");
-    check("home layout focus (feedback): once sent, the pill and the menu line are gone — no classic tile takes their place, the home as it was", !sent.pill && !sent.tile && !sent.stray && sent.home && !menuAfter.includes("feedback") && menuAfter[0] === "clear", JSON.stringify({ sent, menuAfter }));
-    check("home layout focus (feedback): no JS errors", errors.length === 0, errors.join(" | "));
+    await page.waitForTimeout(500);
+    await page.click('[data-focus-sheet="orthotics"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const rows = await page.$$eval(".ai-chat-focus-sheet .ai-chat-helper", (r) => r.map((x) => x.querySelector(".ai-chat-helper__title").textContent));
+    check("home layout focus (survey): a plain survey stays out of the Orthotics sheet", !rows.includes("Share feedback") && !(await page.$(".ai-chat-focus-sheet [data-survey]")), rows.join(" | "));
+    check("home layout focus (survey): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   {
-    const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!" });
-    await page.waitForTimeout(400);
+    const { ctx, page, errors } = await open("/full?home=focus&qp=1&fb=1&fblook=1", {}, { name: "Ask Ava!" });
+    await tfRoute(page);
+    await page.waitForTimeout(500);
+    const menu = await menuOf(page);
+    check("home layout focus (orthotic quiz): the ⋮ menu offers the chat's own feedback, not the quiz", menu[1] === "Share feedback/feedback" && !menu.some((m) => /Identify My Orthotic|\/survey$/.test(m)), menu.join(" | "));
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
-    const none = await page.evaluate(() => ({ pill: !!document.querySelector(".ai-chat-focus__fb"), menu: [...document.querySelectorAll(".ai-chat-menu-item")].map((x) => x.dataset.action) }));
-    await page.keyboard.press("Escape");
+    const onHome = await page.evaluate(() => !!document.querySelector(".ai-chat-welcome--focus [data-feedback], .ai-chat-welcome--focus [data-survey], .ai-chat-focus__fb"));
+    await page.click('[data-focus-sheet="orthotics"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const rows = await page.$$eval(".ai-chat-focus-sheet .ai-chat-helper", (r) => r.map((x) => ({ title: x.querySelector(".ai-chat-helper__title").textContent, sub: x.querySelector(".ai-chat-helper__sub")?.textContent, form: x.getAttribute("data-form"), survey: x.hasAttribute("data-survey"), icon: !!x.querySelector(".ai-chat-helper__icon svg") })));
+    const quizRows = rows.filter((r) => /identify my orthotic/i.test(r.title));
+    check("home layout focus (orthotic quiz): one row in the Orthotics sheet — the store's label and icon — the Popular button with the same form folded into it, nothing on the home", !onHome && quizRows.length === 1 && quizRows[0].survey && quizRows[0].title === "Identify My Orthotic" && quizRows[0].icon && /quiz/.test(quizRows[0].sub || "") && !rows.some((r) => r.form === "ojyWbTvZ"), JSON.stringify(rows));
+    await page.click(".ai-chat-focus-sheet [data-survey]");
+    await page.waitForTimeout(800);
+    const quiz = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, sheetGone: !document.querySelector(".ai-chat-focus-sheet") }; });
+    check("home layout focus (orthotic quiz): the row opens the quiz inside the chat, the Orthotics sheet away", quiz.open && quiz.form === "ojyWbTvZ" && quiz.sheetGone, JSON.stringify(quiz));
+    check("home layout focus (orthotic quiz): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The chat's own feedback from the ⋮ menu: the rating card in a sheet —
+  // the vote, what went wrong, a word to add, thanks — recorded like the
+  // rating the chat asks for itself, at home as well as in a chat.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!" });
+    const n = feedbackBodies.length;
+    const menu = await menuOf(page);
+    check("home layout focus (feedback): without a survey the ⋮ menu offers the chat's own feedback under Start a new chat", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/feedback", menu.join(" | "));
+    await page.click('.ai-chat-menu-item[data-action="feedback"]');
+    await page.waitForTimeout(500);
+    const sheet = await page.evaluate(() => { const s = document.querySelector('.ai-chat-focus-sheet[data-kind="feedback"]'); const r = s && s.querySelector(".ai-chat-rate"); return { open: !!s && s.classList.contains("is-open"), title: s && s.querySelector(".ai-chat-focus-sheet__title").textContent, state: r && r.getAttribute("data-state"), q: r && r.querySelector(".ai-chat-rate__q").textContent, votes: r ? r.querySelectorAll("[data-rate]").length : 0, home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), focused: !!document.activeElement && document.activeElement.matches("[data-rate]"), inChat: !!document.querySelector(".ai-chat-messages .ai-chat-rate") }; });
+    check("home layout focus (feedback): a sheet with the chat's rating card — the question, thumbs up and down, the first in focus — the home underneath, nothing in the chat", sheet.open && sheet.title === "Share feedback" && sheet.state === "ask" && sheet.q === "How’s the chat going?" && sheet.votes === 2 && sheet.home && sheet.focused && !sheet.inChat, JSON.stringify(sheet));
+    await page.click('.ai-chat-focus-sheet [data-rate="down"]');
+    await page.waitForTimeout(300);
+    const why = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet .ai-chat-rate"); return { state: r.getAttribute("data-state"), chips: [...r.querySelectorAll("[data-rate-why]")].map((c) => c.dataset.rateWhy) }; });
+    await page.click('.ai-chat-focus-sheet [data-rate-why="not_answered"]');
+    await page.waitForTimeout(300);
+    await page.fill(".ai-chat-focus-sheet .ai-chat-rate__input", "Couldn’t find my size");
+    await page.press(".ai-chat-focus-sheet .ai-chat-rate__input", "Enter");
+    await page.waitForTimeout(400);
+    const done = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet .ai-chat-rate"); return { state: r && r.getAttribute("data-state"), thanks: !!r && /Thanks for the feedback/.test(r.textContent) }; });
+    await waitUntil(() => feedbackBodies.length >= n + 3);
+    const sent = feedbackBodies.slice(n);
+    check("home layout focus (feedback): thumbs down, a reason and a comment reach the store as the chat's own rating, and the card says thanks", why.state === "why" && why.chips.includes("not_answered") && done.state === "done" && done.thanks && sent.length === 3 && sent.every((b) => b.kind === "chat" && b.vote === "down" && b.moment === "replies") && sent[1].reason === "not_answered" && sent[2].comment === "Couldn’t find my size" && sent[2].reason === "not_answered", JSON.stringify({ why, done, sent }));
+    await page.waitForTimeout(2300);
+    const gone = await page.evaluate(() => ({ sheet: !!document.querySelector(".ai-chat-focus-sheet"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), inChat: !!document.querySelector(".ai-chat-messages .ai-chat-rate") }));
+    check("home layout focus (feedback): the sheet goes on its own after the thanks, the home untouched", !gone.sheet && gone.home && !gone.inChat, JSON.stringify(gone));
+    await page.click(".ai-chat-menu-btn");
+    await page.waitForTimeout(150);
+    await page.click('.ai-chat-menu-item[data-action="feedback"]');
+    await page.waitForTimeout(400);
+    await page.click(".ai-chat-focus-sheet [data-rate-x]");
+    await page.waitForTimeout(400);
+    check("home layout focus (feedback): No thanks closes the sheet, nothing sent", !(await page.$(".ai-chat-focus-sheet")) && feedbackBodies.length === n + 3);
     const p2 = await ctx.newPage();
     await p2.goto("http://localhost:4789/full?fb=1");
     await p2.click(".ai-chat-launcher");
     await p2.waitForTimeout(700);
-    await p2.click(".ai-chat-menu-btn");
-    await p2.waitForTimeout(150);
-    const classic = await p2.evaluate(() => ({ tile: !!document.querySelector(".ai-chat-welcome__cta-btn.is-feedback"), menu: [...document.querySelectorAll(".ai-chat-menu-item")].map((x) => x.dataset.action) }));
-    check("home layout focus (feedback): without the survey there is no pill and no menu line; the classic home keeps its button and its menu is as it was", !none.pill && !none.menu.includes("feedback") && classic.tile && !classic.menu.includes("feedback"), JSON.stringify({ none, classic }));
-    check("home layout focus (feedback, none): no JS errors", errors.length === 0, errors.join(" | "));
+    const classic = await p2.evaluate(() => ({ tile: !!document.querySelector(".ai-chat-welcome__cta-btn.is-feedback") }));
+    const classicMenu = await menuOf(p2);
+    check("home layout focus (feedback): the classic home keeps its survey button and its menu is as it was", classic.tile && !classicMenu.some((m) => /\/(feedback|survey)$/.test(m)), JSON.stringify({ classic, classicMenu }));
+    check("home layout focus (feedback): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // The greeting belongs to the page, not the header: on a short screen it
