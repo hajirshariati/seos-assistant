@@ -7269,7 +7269,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__pain:active { transform: scale(0.97); }
 .ai-chat-panel.is-focus .ai-chat-focus__pain-title { font: inherit; }
 .ai-chat-panel.is-focus .ai-chat-focus__pain.is-plain { padding-left: 16px; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain.ai-chat-focus__else { padding-left: 16px; }
+.ai-chat-panel.is-focus .ai-chat-focus__pain.ai-chat-focus__else { padding: 0 10px; background: transparent; color: var(--seos-text-2); font-weight: 500; }
+.ai-chat-panel.is-focus .ai-chat-focus__pain.ai-chat-focus__else:hover { background: transparent; color: var(--seos-text); }
 .ai-chat-panel.is-focus .ai-chat-focus__coin { width: 38px; height: 38px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--seos-line); }
 .ai-chat-panel.is-focus .ai-chat-focus__coin img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-focus__links { margin-top: auto; padding: 18px 0 6px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
@@ -7309,10 +7310,6 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__seg.ai-chat-focus__gender button.is-on { color: #0d0d12; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__close { order: 4; }
 /* One button for the whole line, after everything else. */
-.ai-chat-panel.is-focus .ai-chat-focus__all { margin-top: 6px; height: 46px; border: 0; border-radius: 14px; background: var(--seos-ink, #0d0d12); color: #fff; font: 600 15px/1 var(--seos-font); cursor: pointer; transition: transform 0.15s ease; }
-.ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__all { color: #0d0d12; }
-.ai-chat-panel.is-focus .ai-chat-focus__all:active { transform: scale(0.985); }
-.ai-chat-panel.is-focus .ai-chat-focus__all-text { display: inline-block; }
 /* What the switch or a tab changes fades out, changes, and fades back in. */
 .ai-chat-panel.is-focus .ai-chat-focus__swap { transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.32, 0.72, 0, 1); }
 .ai-chat-panel.is-focus .ai-chat-focus__swap.is-swapping { opacity: 0; transform: translateY(5px); transition-duration: 0.13s; }
