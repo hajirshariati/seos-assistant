@@ -3096,8 +3096,8 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(700);
     return { ctx, page, errors };
   };
-  const lineY = () => { const r = document.querySelector(".ai-chat-header__line").getBoundingClientRect(); return (r.top + r.bottom) / 2; };
-  const state = (page) => page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { focus: p.classList.contains("is-focus"), home: p.classList.contains("is-home"), chatting: p.classList.contains("is-chatting"), streaming: p.classList.contains("is-streaming"), hero: !!document.querySelector(".ai-chat-hero:not(.is-gone)"), heroGone: !!document.querySelector(".ai-chat-hero.is-gone"), line: !!document.querySelector(".ai-chat-header__line"), focusHome: !!document.querySelector(".ai-chat-welcome--focus"), sheet: !!document.querySelector(".ai-chat-focus-sheet"), classic: !!document.querySelector(".ai-chat-welcome__cta-btn, .ai-chat-welcome__helpers, .ai-chat-welcome__greeting-cta"), msgs: document.querySelectorAll(".ai-chat-msg").length, input: document.querySelector(".ai-chat-input").value, focused: document.activeElement === document.querySelector(".ai-chat-input") }; });
+  const lineY = () => { const h = document.querySelector(".ai-chat-header"); return h.getBoundingClientRect().top + parseFloat(getComputedStyle(h).getPropertyValue("--ai-focus-line")); };
+  const state = (page) => page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { focus: p.classList.contains("is-focus"), home: p.classList.contains("is-home"), chatting: p.classList.contains("is-chatting"), streaming: p.classList.contains("is-streaming"), hero: !!document.querySelector(".ai-chat-hero:not(.is-gone)"), heroGone: !!document.querySelector(".ai-chat-hero.is-gone"), line: !!document.querySelector(".ai-chat-band__ring"), focusHome: !!document.querySelector(".ai-chat-welcome--focus"), sheet: !!document.querySelector(".ai-chat-focus-sheet"), classic: !!document.querySelector(".ai-chat-welcome__cta-btn, .ai-chat-welcome__helpers, .ai-chat-welcome__greeting-cta"), msgs: document.querySelectorAll(".ai-chat-msg").length, input: document.querySelector(".ai-chat-input").value, focused: document.activeElement === document.querySelector(".ai-chat-input") }; });
   // Classic (the default): nothing of the Focus layout exists, the welcome is as always.
   {
     const { ctx, page, errors } = await open("/full");
@@ -3110,8 +3110,8 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
-    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-hero__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), tips: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].filter((b) => /Plantar|arches|Metatarsalgia|Bunions|swollen/.test(b.getAttribute("title") || "")).length, coins: [...w.querySelectorAll(".ai-chat-focus__pain[data-message] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...w.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), elseCoin: !!w.querySelector(".ai-chat-focus__else .ai-chat-focus__coin"), chipRows: new Set([...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => Math.round(b.getBoundingClientRect().top))).size, chipH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => b.getBoundingClientRect().height)), else: !!w.querySelector('.ai-chat-focus__pains .ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
-    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); the shop cards (no label, no banner where the theme has none), then Where does it hurt as one compact row of chips — each place's picture in a coin, its name, what it usually is on the tip — Something else closing the row without a picture, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick a spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.tips === 5 && parts.coins.join("|") === "heel|arch|ball|toes|whole" && parts.coinsLoaded && !parts.elseCoin && parts.chipRows <= 2 && parts.chipH >= 36 && parts.else && parts.cards.join("|") === "Shop footwear|Shop orthotics" && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
+    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-band__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), tips: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].filter((b) => /Plantar|arches|Metatarsalgia|Bunions|swollen/.test(b.getAttribute("title") || "")).length, coins: [...w.querySelectorAll(".ai-chat-focus__pain[data-message] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...w.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), elseCoin: !!w.querySelector(".ai-chat-focus__else .ai-chat-focus__coin"), chipRows: new Set([...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => Math.round(b.getBoundingClientRect().top))).size, chipH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => b.getBoundingClientRect().height)), else: !!w.querySelector('.ai-chat-focus__pains .ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
+    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); the two compact Help me find cards — Footwear, Orthotics — with no arrows (no label, no banner where the theme has none), then Where does it hurt as one compact row of chips — each place's picture in a coin, its name, what it usually is on the tip — Something else closing the row without a picture, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick a spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.tips === 5 && parts.coins.join("|") === "heel|arch|ball|toes|whole" && parts.coinsLoaded && !parts.elseCoin && parts.chipRows <= 2 && parts.chipH >= 36 && parts.else && parts.cards.join("|") === "Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 70 && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
     const geo = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const h = r(".ai-chat-hero"), d = r(".ai-chat-header"), g = r(".ai-chat-focus__greet .ai-chat-greet"), c = r(".ai-chat-focus__cards"), n = r(".ai-chat-header__name"); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom, greetTop: g.top, greetLeft: g.left, cardsTop: c.top }; }, lineY.toString());
     check("home layout focus: the face is centred on the header's bottom line, the name above it, the greeting just below it and aligned under the name, the home clear of the face", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.greetTop >= geo.line && geo.greetTop <= geo.line + 12 && Math.abs(geo.greetLeft - geo.nameLeft) <= 1 && geo.cardsTop > geo.heroBottom + 4 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
     // "Something else" and the links only touch the text box.
@@ -3128,8 +3128,8 @@ for (const coop of ["1", "2"]) {
     // The Footwear sheet.
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, big: [...s.querySelectorAll(".ai-chat-focus__big")].map((b) => b.getAttribute("data-message")), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), tf: !!s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon svg'), tfTitle: s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__title')?.textContent, modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close") }; });
-    check("home layout focus: the Footwear sheet — Shop women's / men's, Browse by shoes · condition · collections from the store's menu (no True Fit row where the store has no True Fit)", fw.title === "Footwear" && fw.big.join("|") === "Show me women’s footwear|Show me men’s footwear" && fw.tabs.join(",") === "Shoes,Condition,Collections" && fw.chips.length === 8 && fw.chips[0] === "Sneakers" && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
+    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, big: [...s.querySelectorAll(".ai-chat-focus__big")].map((b) => b.getAttribute("data-message")), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), tf: !!s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon svg'), tfTitle: s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__title')?.textContent, modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close"), eyebrow: s.querySelector(".ai-chat-focus-sheet__eyebrow")?.textContent }; });
+    check("home layout focus: the Footwear sheet — Shop women's / men's, Browse by shoes · condition · collections from the store's menu (no True Fit row where the store has no True Fit)", fw.title === "Footwear" && fw.eyebrow === "Help me find" && fw.big.join("|") === "Show me women’s footwear|Show me men’s footwear" && fw.tabs.join(",") === "Shoes,Condition,Collections" && fw.chips.length === 8 && fw.chips[0] === "Sneakers" && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
     await page.click('.ai-chat-focus-sheet [data-browse="1"]');
     await page.waitForTimeout(120);
     const act = await page.evaluate(() => ({ on: document.querySelector('.ai-chat-focus-sheet [data-browse].is-on')?.textContent, focused: document.activeElement === document.querySelector('.ai-chat-focus-sheet [data-browse].is-on'), chips: [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent) }));
@@ -3138,6 +3138,24 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(450);
     s2 = await state(page);
     check("home layout focus: Escape closes the sheet, still at home", !s2.sheet && s2.home && !s2.chatting, JSON.stringify(s2));
+    // A click on the dimmed chat outside the sheet closes it; so does a click on the page itself.
+    await page.click('[data-focus-sheet="footwear"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(400);
+    const dim = await page.evaluate(() => { const b = document.querySelector(".ai-chat-focus-sheet__back").getBoundingClientRect(), p = document.querySelector(".ai-chat-focus-sheet__panel").getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + Math.max(8, (p.top - b.top) / 2) }; });
+    await page.mouse.click(dim.x, dim.y);
+    await page.waitForTimeout(400);
+    s2 = await state(page);
+    check("home layout focus: a click on the dimmed chat outside the sheet closes it, still at home", !s2.sheet && s2.home, JSON.stringify(s2));
+    await page.click('[data-focus-sheet="footwear"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(400);
+    const outside = await page.evaluate(() => { const r = document.querySelector(".ai-chat-panel").getBoundingClientRect(); return { x: Math.max(4, r.left - 40), y: 12 }; });
+    await page.mouse.click(outside.x, outside.y);
+    await page.waitForTimeout(400);
+    s2 = await state(page);
+    const stillOpen = await page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); const r = p.getBoundingClientRect(); return r.width > 0 && getComputedStyle(p).visibility !== "hidden" && getComputedStyle(p).display !== "none"; });
+    check("home layout focus: a click on the page outside the chat closes the sheet and leaves the chat open at home", !s2.sheet && s2.home && stillOpen, JSON.stringify({ s2, stillOpen, outside }));
     // The Orthotics sheet: FITFinder and the store's visual quiz (a Typeform quick pick).
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
@@ -3153,7 +3171,7 @@ for (const coop of ["1", "2"]) {
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);/* the morph (≈1.1s) and the fades after it */
     s2 = await state(page);
-    const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__line")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
+    const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
     check("home layout focus: Shop women's sends its message and the ring becomes the header's line (the gray line gone, the face gone)", chatBodies.at(-1)?.message === "Show me women’s orthotics" && chatBodies.at(-1)?.typed === false && !s2.sheet && !s2.home && s2.chatting && s2.heroGone && !s2.hero && !s2.focusHome && look.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(look.border), JSON.stringify({ s2, look }));
     check("home layout focus: reply avatars carry no glow — the line has it", look.avatar && !/163, 92, 255/.test(look.avatar), look.avatar);
     await waitUntil(() => false, 1500);
@@ -3194,7 +3212,7 @@ for (const coop of ["1", "2"]) {
     await page.click('.ai-chat-focus__pain[data-message]');
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);
-    const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), d = r(".ai-chat-header"); const sub = document.querySelector(".ai-chat-header__sub"); return { line: eval(lineY)(), hdrBottom: d.bottom, nameLeft: n.left - d.left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__line")).opacity), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", greetGone: !document.querySelector(".ai-chat-focus__greet"), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }; }, lineY.toString());
+    const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), d = r(".ai-chat-header"); const sub = document.querySelector(".ai-chat-header__sub"); return { line: eval(lineY)(), hdrBottom: d.bottom, nameLeft: n.left - d.left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", greetGone: !document.querySelector(".ai-chat-focus__greet"), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }; }, lineY.toString());
     check("home layout focus (two-line name): in chat the colour line runs along the header's bottom, the header still one row, the name back at the left, the greeting gone with the home", c.chatting && Math.abs(c.line - c.hdrBottom) <= 2 && c.lineOpacity >= 0.7 && c.nameLeft < 40 && !c.subShown && c.greetGone, JSON.stringify(c));
     check("home layout focus (two-line name): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
@@ -3203,7 +3221,7 @@ for (const coop of ["1", "2"]) {
   // scrolls away under the header, which keeps its one row, its line and
   // the face on it.
   {
-    const { ctx, page, errors } = await open("/full?home=focus", { viewport: { width: 390, height: 520 }, isMobile: true, hasTouch: true }, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+    const { ctx, page, errors } = await open("/full?home=focus", { viewport: { width: 390, height: 440 }, isMobile: true, hasTouch: true }, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
     const sc = await page.evaluate(async (lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const m = document.querySelector(".ai-chat-messages"); const before = { greetTop: r(".ai-chat-focus__greet .ai-chat-greet").top, hdrBottom: r(".ai-chat-header").bottom, room: m.scrollHeight - m.clientHeight }; m.scrollTop = 80; await new Promise((res) => setTimeout(res, 250)); const h = r(".ai-chat-hero"); return { before, scrollTop: m.scrollTop, greetBottom: r(".ai-chat-focus__greet .ai-chat-greet").bottom, hdrBottom: r(".ai-chat-header").bottom, line: eval(lineY)(), heroMid: (h.top + h.bottom) / 2, hdrH: Math.round(r(".ai-chat-header").height) }; }, lineY.toString());
     check("home layout focus (scrolled): the greeting scrolls away under the header — not pinned, no second row left behind — while the header keeps its one row, its line and the face on it", sc.before.room >= 80 && sc.scrollTop >= 60 && sc.greetBottom <= sc.hdrBottom + 1 && sc.hdrBottom === sc.before.hdrBottom && Math.abs(sc.line - sc.hdrBottom) <= 2 && Math.abs(sc.heroMid - sc.line) <= 2 && sc.hdrH <= 56, JSON.stringify(sc));
     check("home layout focus (scrolled): no JS errors", errors.length === 0, errors.join(" | "));
@@ -3219,67 +3237,82 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(450);/* it slides in */
     const sh = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet__panel").getBoundingClientRect(); return { w: r.width, vw: innerWidth, bottom: r.bottom, vh: innerHeight }; });
     check("home layout focus (phone): the sheet fits the screen", sh.w <= sh.vw && sh.bottom <= sh.vh + 1, JSON.stringify(sh));
+    // A swipe down from the sheet's head pulls it along and closes it.
+    const cdp = await ctx.newCDPSession(page);
+    const head = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet__head").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: head.x, y: head.y }] });
+    let pulled = 0;
+    for (let i = 1; i <= 8; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: head.x, y: head.y + i * 18 }] }); await page.waitForTimeout(20); const m = await page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-focus-sheet__panel")).transform); const ty = /matrix\(([^)]+)\)/.exec(m); if (ty) pulled = Math.max(pulled, parseFloat(ty[1].split(",")[5])); }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await page.waitForTimeout(450);
+    const swiped = await page.evaluate(() => ({ sheet: !!document.querySelector(".ai-chat-focus-sheet"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home") }));
+    check("home layout focus (phone): a swipe down follows the finger and closes the sheet", pulled >= 60 && !swiped.sheet && swiped.home, JSON.stringify({ pulled, swiped }));
     check("home layout focus (phone): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The morph, step by step: the ring flattens into a short line behind the
-  // face (wider than the face, never across it) while the face stays; the
-  // face steps away; the short line grows into the header's line and hands
-  // over with the same colours. Back home is the mirror.
+  // The morph, step by step — one shape throughout: the ring folds flat
+  // into a short line behind the face (wider than the face, never across
+  // it) while the face is fully there; the face steps away; the short line
+  // reaches across the header. Nothing is swapped. Back home is the mirror.
   {
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
     const look = () => page.evaluate(() => {
-      const q = (s) => document.querySelector(s); const r = (el) => el.getBoundingClientRect(); const op = (el) => parseFloat(getComputedStyle(el).opacity);
-      const ring = q(".ai-chat-hero__ring"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), line = q(".ai-chat-header__line"), hdr = q(".ai-chat-header");
-      const rr = r(ring), pr = r(photo), hr = r(hdr);
-      return { ringW: rr.width, ringH: rr.height, ringOp: op(ring), ringLeft: rr.left - hr.left, ringRight: hr.right - rr.right, photoOp: op(photo), photoW: pr.width, lineOp: op(line), lineW: r(line).width, chatting: q(".ai-chat-panel").classList.contains("is-chatting"), gone: hero.classList.contains("is-gone"), home: q(".ai-chat-panel").classList.contains("is-home"), faceMid: (pr.left + pr.right) / 2, ringMid: (rr.left + rr.right) / 2, W: hr.width };
+      const q = (s) => document.querySelector(s); const op = (el) => parseFloat(getComputedStyle(el).opacity);
+      const panel = q(".ai-chat-panel"), ring = q(".ai-chat-band__ring"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), hdr = q(".ai-chat-header");
+      const bb = ring.getBBox(), hr = hdr.getBoundingClientRect(), pr = photo.getBoundingClientRect(), gone = hero.classList.contains("is-gone");
+      const heroMid = parseFloat(getComputedStyle(hero).left) + parseFloat(getComputedStyle(panel).getPropertyValue("--ai-hero")) / 2;
+      return { ringW: bb.width, ringH: bb.height, ringLeft: bb.x, ringRight: hdr.clientWidth - (bb.x + bb.width), ringMid: bb.x + bb.width / 2, ringOp: op(ring), photoOp: gone ? 0 : op(photo), photoW: pr.width, faceMid: gone ? null : (pr.left + pr.right) / 2 - hr.left, heroMid, chatting: panel.classList.contains("is-chatting"), gone, home: panel.classList.contains("is-home"), W: hdr.clientWidth, shapes: document.querySelectorAll(".ai-chat-band__ring, .ai-chat-header__line, .ai-chat-hero__ring").length, grad: q("#ai-chat-band-g").getAttribute("x1") };
     });
     const n = chatBodies.length;
     await page.click('.ai-chat-focus__pain[data-message]');
-    const seen = { behind: null, alone: null, growing: null, handover: null };
+    const seen = { behind: null, alone: null, growing: null, full: null };
     const t0 = Date.now();
     while (Date.now() - t0 < 2600) {
       const st = await look();
-      // The short line: 2px tall, about 1.65 faces wide, centred on the face.
-      const short = st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && Math.abs(st.ringMid - st.faceMid) <= 2;
-      if (!seen.behind && short && st.photoOp === 1 && st.photoW >= 60) seen.behind = st;
-      if (!seen.alone && short && st.photoOp === 0) seen.alone = st;
-      if (!seen.growing && st.ringH <= 4 && st.ringW > 140 && st.ringW < st.W - 40 && st.photoOp === 0 && !st.chatting) seen.growing = st;
-      if (!seen.handover && st.chatting && st.ringOp > 0 && st.ringOp < 1 && st.ringW >= st.W - 4 && st.lineOp >= 0.7) seen.handover = st;
-      if (st.gone) break;
+      // The short line: flat, about 1.5 faces wide, centred on the face.
+      const short = st.ringH <= 1 && st.ringW >= 94 && st.ringW <= 110 && Math.abs(st.ringMid - st.heroMid) <= 2;
+      if (!seen.behind && short && st.photoOp >= 0.97 && st.photoW >= 60 && Math.abs(st.ringMid - st.faceMid) <= 2) seen.behind = st;
+      if (!seen.alone && short && st.photoOp <= 0.08) seen.alone = st;
+      if (!seen.growing && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.gone) seen.growing = st;
+      if (st.chatting && st.ringW >= st.W - 4 && st.gone) { seen.full = st; break; }
       await page.waitForTimeout(12);
     }
-    check("morph 1: the ring flattens into a short line behind the face — wider than the face, centred on it — while the face is fully there", !!seen.behind, JSON.stringify(seen.behind));
+    check("morph 1: the ring folds flat into a short line behind the face — wider than the face, centred on it — while the face is fully there", !!seen.behind, JSON.stringify(seen.behind));
     check("morph 2: the face steps away and the short line is all that's left", !!seen.alone, JSON.stringify(seen.alone));
-    check("morph 3: the short line grows toward the full width before the real line is on", !!seen.growing, JSON.stringify(seen.growing));
-    check("morph 4: at full width the real line comes on underneath while the ring fades — a swap in place", !!seen.handover && Math.abs(seen.handover.ringLeft) <= 2 && Math.abs(seen.handover.ringRight) <= 2, JSON.stringify(seen.handover));
+    check("morph 3: the short line reaches across the header", !!seen.growing, JSON.stringify(seen.growing));
     await waitUntil(() => chatBodies.length > n);
+    await page.waitForTimeout(400);
+    const fin = await look();
+    check("morph 4: it ends as the header's line, edge to edge — the same shape all along, nothing swapped underneath", !!seen.full && fin.shapes === 1 && fin.ringH === 0 && fin.ringLeft <= 0 && fin.ringRight <= 0 && fin.chatting && fin.gone, JSON.stringify({ full: seen.full, fin }));
     const done = await state(page);
     check("morph: ends in chat — the line on, the face gone, no welcome", done.chatting && done.heroGone && !done.home && !done.focusHome, JSON.stringify(done));
-    const flowing = await page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-header__line"), "::before").animationPlayState);
-    check("morph: once settled, the line flows again", flowing === "running", flowing);
+    const g0 = (await look()).grad; await page.waitForTimeout(350); const g1 = (await look()).grad;
+    check("morph: once settled, the line's colours keep sliding", g0 !== g1, JSON.stringify({ g0, g1 }));
     // Back home.
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1000);
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
     await page.click('.ai-chat-menu-item[data-action="clear"]');
-    const back = { took: null, drawnIn: null, faceBack: null };
+    const back = { drawingIn: null, drawnIn: null, faceBack: null, opening: null };
     const t1 = Date.now();
     while (Date.now() - t1 < 2600) {
       const st = await look();
-      if (!back.took && st.ringOp >= 0.95 && st.ringH <= 4 && st.ringW >= st.W - 4 && st.photoOp === 0) back.took = st;
-      if (!back.drawnIn && st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && st.photoOp === 0 && !st.chatting && Math.abs(st.ringMid - st.faceMid) <= 2) back.drawnIn = st;
-      if (!back.faceBack && st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && st.photoOp >= 0.98) back.faceBack = st;
+      const short = st.ringH <= 1 && st.ringW >= 94 && st.ringW <= 110 && Math.abs(st.ringMid - st.heroMid) <= 2;
+      if (!back.drawingIn && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.gone && !st.chatting) back.drawingIn = st;
+      if (!back.drawnIn && short && st.gone) back.drawnIn = st;
+      if (!back.faceBack && short && !st.gone && st.photoOp >= 0.98) back.faceBack = st;
+      if (!back.opening && back.faceBack && st.ringH > 10 && st.ringH < 50 && st.photoOp >= 0.98) back.opening = st;
       if (st.ringH >= 60 && st.photoOp >= 0.98 && back.faceBack) break;
       await page.waitForTimeout(12);
     }
-    check("morph back 1: the ring takes the line's place at full width, the face still away", !!back.took, JSON.stringify(back.took));
-    check("morph back 2: the line draws in from both sides to the face's place", !!back.drawnIn, JSON.stringify(back.drawnIn));
+    check("morph back 1: the line draws in from both sides toward the face's place, the face still away", !!back.drawingIn, JSON.stringify(back.drawingIn));
+    check("morph back 2: it rests as the short line where the face will be", !!back.drawnIn, JSON.stringify(back.drawnIn));
     check("morph back 3: the face returns in front of the short line before it opens up", !!back.faceBack, JSON.stringify(back.faceBack));
+    check("morph back 4: the short line opens into the ring around the face", !!back.opening, JSON.stringify(back.opening));
     await page.waitForTimeout(700);
     const b2 = await state(page);
     const end = await look();
-    check("morph back: ends at home — the face in its round ring, the line off", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.lineOp === 0, JSON.stringify({ b2, end }));
+    check("morph back: ends at home — the face in its round ring, one shape, no line left over", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.shapes === 1 && Math.abs(end.ringMid - end.faceMid) <= 2, JSON.stringify({ b2, end }));
     check("morph: no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
@@ -3291,10 +3324,23 @@ for (const coop of ["1", "2"]) {
     const b = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const banner = w.querySelector(".ai-chat-welcome__banner"); const img = banner?.querySelector("img"); const r = banner?.getBoundingClientRect(); const hero = document.querySelector(".ai-chat-hero").getBoundingClientRect(); return { hasBanner: w.classList.contains("has-banner"), afterGreet: banner === w.children[1] && banner?.previousElementSibling?.classList.contains("ai-chat-focus__greet"), src: img?.getAttribute("src"), h: r?.height, clearOfFace: r ? r.top > hero.bottom + 4 : false, nextIsCards: banner?.nextElementSibling?.classList.contains("ai-chat-focus__cards") }; });
     check("home layout focus: the theme's banner sits right under the greeting, clear of the face, the shop cards under it", b.hasBanner && b.afterGreet && b.src === "/pic-footwear.svg" && b.h >= 100 && b.clearOfFace && b.nextIsCards, JSON.stringify(b));
     const greet0 = await page.evaluate(() => document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent);
-    const slid = await waitUntil(() => false, 10) || await (async () => { const t0 = Date.now(); while (Date.now() - t0 < 6500) { const g = await page.evaluate(() => { const it = document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in"); return it ? { text: it.textContent, dir: it.getAttribute("dir"), lang: it.getAttribute("lang"), n: document.querySelectorAll(".ai-chat-focus__greet .ai-chat-greet__item").length } : null; }); if (g && g.text !== greet0) return g; await page.waitForTimeout(100); } return null; })();
+    const greetSet = await page.evaluate(() => window.__AI_CHAT_CONFIG.greetingCta);
+    await page.waitForTimeout(4600);
+    const stillEn = await page.evaluate(() => document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent);
+    check("home layout focus: the greeting starts in the store's own words and stays there a good while before it starts to travel", greet0 === greetSet && stillEn === greetSet, JSON.stringify({ greet0, stillEn }));
+    const slid = await waitUntil(() => false, 10) || await (async () => { const t0 = Date.now(); while (Date.now() - t0 < 5000) { const g = await page.evaluate(() => { const it = document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in"); return it ? { text: it.textContent, dir: it.getAttribute("dir"), lang: it.getAttribute("lang"), n: document.querySelectorAll(".ai-chat-focus__greet .ai-chat-greet__item").length } : null; }); if (g && g.text !== greet0) return g; await page.waitForTimeout(100); } return null; })();
     check("home layout focus: the greeting slides to its next language under the name, marked with its language and direction", !!slid && slid.text === "¿En qué puedo ayudarte hoy?" && slid.lang === "es" && slid.dir === "ltr", JSON.stringify({ greet0, slid }));
     const sliding = await page.evaluate(() => { const it = document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in"); const cs = getComputedStyle(it); return { transition: cs.transitionProperty, box: getComputedStyle(it.parentElement).overflow }; });
     check("home layout focus: the languages slide (a transform in a clipped line), no jump", /transform/.test(sliding.transition) && sliding.box === "hidden", JSON.stringify(sliding));
+    // Closed and opened again: it starts over in the store's own words, and holds there.
+    await page.click(".ai-chat-close-btn");
+    await page.waitForTimeout(400);
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(300);
+    const re0 = await page.evaluate(() => document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent);
+    await page.waitForTimeout(4200);
+    const re1 = await page.evaluate(() => document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent);
+    check("home layout focus: opened again, the greeting starts over in the store's own words and holds", re0 === greetSet && re1 === greetSet, JSON.stringify({ re0, re1 }));
     // A right-to-left language: it reads right to left but starts where the others do, under the name — not at the far right.
     const rtl = await page.evaluate(() => { const box = document.querySelector(".ai-chat-focus__greet .ai-chat-greet"); box.insertAdjacentHTML("beforeend", '<span class="ai-chat-greet__item is-in" dir="rtl" lang="ar">كيف يمكنني مساعدتك اليوم؟</span>'); const it = box.lastElementChild; const range = document.createRange(); range.selectNodeContents(it); const text = range.getBoundingClientRect(); const name = document.querySelector(".ai-chat-header__name").getBoundingClientRect(); const cs = getComputedStyle(it); const out = { textLeft: text.left, nameLeft: name.left, boxRight: box.getBoundingClientRect().right, textRight: text.right, align: cs.textAlign, dir: cs.direction }; it.remove(); return out; });
     check("home layout focus: a right-to-left greeting stays anchored under the name (reads right to left, starts at the left)", Math.abs(rtl.textLeft - rtl.nameLeft) <= 1 && rtl.textRight < rtl.boxRight - 40 && rtl.align === "left" && rtl.dir === "rtl", JSON.stringify(rtl));
@@ -3345,8 +3391,8 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(80);
     const at = await state(page);
     await waitUntil(() => chatBodies.length > n);
-    const anim = await page.evaluate(() => document.querySelectorAll(".ai-chat-hero__ring, .ai-chat-hero__photo").length ? [...document.querySelectorAll(".ai-chat-hero__ring, .ai-chat-hero__photo")].reduce((a, el) => a + el.getAnimations().length, 0) : -1);
-    check("home layout focus (reduced motion): the line is there at once, the face gone, nothing animates", at.chatting && at.heroGone && !at.home && anim === 0, JSON.stringify({ at, anim }));
+    const anim = await page.evaluate(() => { const ring = document.querySelector(".ai-chat-band__ring"), bb = ring.getBBox(), W = document.querySelector(".ai-chat-header").clientWidth; return { running: [...document.querySelectorAll(".ai-chat-hero__photo, .ai-chat-band__ring")].reduce((a, el) => a + el.getAnimations().length, 0), fullLine: bb.height <= 1 && bb.width >= W - 2 }; });
+    check("home layout focus (reduced motion): the line is there at once, edge to edge, the face gone, nothing animates", at.chatting && at.heroGone && !at.home && anim.running === 0 && anim.fullLine, JSON.stringify({ at, anim }));
     check("home layout focus (reduced motion): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }

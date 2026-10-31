@@ -1219,28 +1219,179 @@ var typingEl=$('.ai-chat-typing',panel);
 var typingTextEl=$('.ai-chat-typing-text',panel);
 var inputEl=$('.ai-chat-input',panel);
 var sendBtn=$('.ai-chat-send',panel);
+/* ═══ The band ═══
+   One shape is the colour ring around the face at home, the header's line
+   in a chat, and every frame in between: a stroked ellipse that squashes
+   flat behind the face keeping its length (a loop of thread pressed flat
+   comes out about 1.57 faces wide), then stretches across the header as
+   the line, and back. Nothing is swapped and nothing is scaled, so
+   nothing can pop. The face has steps of its own — out once the ring has
+   folded, back in before it opens — and the band's colours slide along
+   the shape (a gradient in the shape's own space), slowly at home, faster
+   while Ava is writing. Reduced motion gets the end states at once. */
+var FOCUS_SW=3;/* the stroke */
+var FOCUS_BAND=['#ff4fa3','#a35cff','#3d7bff','#29e0d0'];
+var focusG={W:0,cy:0,hx:54,R:34};/* measured: the header's width, the line, the face's centre and radius */
+var focusS={a:31,b:31,cx:54,cy:0,fs:1,fo:1};/* the shape now: half-width, half-height, centre; the face's scale and opacity */
+var focusAnim=null,focusMorphGen=0,focusEls=null,focusFace={t:'',o:''};
+var focusPhase=0,focusSpeed=0,focusLast=0,focusFlowOn=false;
+function focusBandHtml(){
+  var stops='';for(var i=0;i<=8;i++)stops+='<stop offset="'+(i/8)+'" stop-color="'+FOCUS_BAND[i%4]+'"/>';
+  return '<svg class="ai-chat-band" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient></defs><path class="ai-chat-band__glow" d="" stroke="url(#ai-chat-band-g)"/><path class="ai-chat-band__ring" d="" stroke="url(#ai-chat-band-g)"/></svg>';
+}
+function focusParts(){
+  if(focusEls)return focusEls;
+  var hdr=$('.ai-chat-header',panel),band=hdr&&$('.ai-chat-band',hdr),hero=hdr&&$('.ai-chat-hero',hdr);
+  if(!band||!hero)return null;
+  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),glow:$('.ai-chat-band__glow',band),grad:$('#ai-chat-band-g',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
+}
+function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
+/* A cubic-bezier timing curve, the same ones CSS uses. */
+function focusBez(x1,y1,x2,y2){
+  return function(t){
+    if(t<=0)return 0;if(t>=1)return 1;
+    var lo=0,hi=1,u,x;
+    for(var i=0;i<22;i++){u=(lo+hi)/2;x=3*u*(1-u)*(1-u)*x1+3*u*u*(1-u)*x2+u*u*u;if(x<t)lo=u;else hi=u}
+    u=(lo+hi)/2;return 3*u*(1-u)*(1-u)*y1+3*u*u*(1-u)*y2+u*u*u;
+  };
+}
+var FOCUS_EASE=focusBez(0.32,0.72,0,1),FOCUS_EASE_IN=focusBez(0.4,0,0.7,0.2),FOCUS_EASE_OUT=focusBez(0.2,0.7,0.2,1),FOCUS_EASE_INOUT=focusBez(0.65,0,0.35,1),FOCUS_HOLD=function(){return 1};
+/* Where things are: the line (the header's bottom), the face's centre and
+   radius — read from the styles, so a closed panel measures right too. */
+function focusMeasure(){
+  var e=focusParts();if(!e)return;
+  var sub=$('.ai-chat-header__sub',e.hdr);if(sub)sub.hidden=true;
+  var cy=e.hdr.clientHeight;
+  e.hdr.style.setProperty('--ai-focus-line',cy+'px');
+  var R=(parseFloat(getComputedStyle(panel).getPropertyValue('--ai-hero'))||68)/2;
+  var left=parseFloat(getComputedStyle(e.hero).left);if(isNaN(left))left=20;
+  focusG={W:e.hdr.clientWidth,cy:cy,hx:left+R,R:R};
+  if(!focusAnim)focusRest(panel.classList.contains('is-chatting'));
+}
+/* The ellipse: centre, half-width, half-height. Flat, it is a plain line
+   (round caps keep its ends round); round, it is the circle. */
+function focusPath(cx,cy,a,b){
+  var f=function(n){return Math.round(n*100)/100};
+  if(b<0.05)return 'M'+f(cx-a)+' '+f(cy)+'H'+f(cx+a);
+  var A=f(a),B=f(b),y=f(cy),xl=f(cx-a),xr=f(cx+a);
+  return 'M'+xl+' '+y+'A'+A+' '+B+' 0 1 0 '+xr+' '+y+'A'+A+' '+B+' 0 1 0 '+xl+' '+y+'Z';
+}
+/* The half-width that keeps an ellipse of half-height b as long around as
+   the ring of radius r (Ramanujan's measure of its perimeter). */
+function focusPerimA(b,r){
+  var want=2*Math.PI*r,lo=Math.max(b,0),hi=2*r,a,per;
+  for(var i=0;i<30;i++){a=(lo+hi)/2;per=Math.PI*(3*(a+b)-Math.sqrt((3*a+b)*(a+3*b)));if(per<want)lo=a;else hi=a}
+  return (lo+hi)/2;
+}
+function focusDraw(){
+  var e=focusParts();if(!e)return;
+  var s=focusS,d=focusPath(s.cx,s.cy,s.a,s.b);
+  e.ring.setAttribute('d',d);e.glow.setAttribute('d',d);
+  /* The colours: two bands' worth across twice the shape, slid by the phase — one band shows, and it loops without a seam. */
+  var L=Math.max(1,2*s.a),x1=(s.cx-s.a)-L*focusPhase;
+  e.grad.setAttribute('x1',x1.toFixed(2));e.grad.setAttribute('x2',(x1+2*L).toFixed(2));
+  var t=s.fs>=0.999?'':'scale('+s.fs.toFixed(3)+')',o=s.fo>=0.999?'':s.fo.toFixed(3);
+  if(t!==focusFace.t){e.photo.style.transform=t;focusFace.t=t}
+  if(o!==focusFace.o){e.photo.style.opacity=o;focusFace.o=o}
+}
+/* At rest: the ring around the face, or the line across the header. */
+function focusRest(chat){
+  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),s=focusS;
+  if(chat){s.a=g.W/2+FOCUS_SW;s.b=0;s.cx=g.W/2;s.fs=0.6;s.fo=0}
+  else{s.a=r;s.b=r;s.cx=g.hx;s.fs=1;s.fo=1}
+  s.cy=g.cy;focusDraw();
+}
+function focusSetChatting(on){
+  focusAnim=null;++focusMorphGen;
+  panel.classList.toggle('is-chatting',!!on);
+  var e=focusParts();if(e)e.hero.classList.toggle('is-gone',!!on);
+  focusRest(!!on);
+}
+/* Plays segments one after another. Each eases the shape from wherever it
+   is to its targets, so a journey interrupted midway turns around cleanly. */
+function focusRun(segs,done){
+  var gen=++focusMorphGen,i=-1,seg=null,from=null,to=null,t0=0;
+  focusAnim={gen:gen};
+  function start(now){
+    seg=segs[++i];
+    if(!seg){focusAnim=null;done();return false}
+    if(seg.at)seg.at();
+    from={a:focusS.a,b:focusS.b,cx:focusS.cx,fs:focusS.fs,fo:focusS.fo};to=seg.to();t0=now;return true;
+  }
+  function frame(now){
+    if(!focusAnim||focusAnim.gen!==gen)return;
+    if(!seg&&!start(now))return;
+    var u=seg.ease(Math.min(1,(now-t0)/seg.dur));
+    for(var k in to)focusS[k]=from[k]+(to[k]-from[k])*u;
+    if(seg.link)seg.link();
+    focusDraw();
+    if(now-t0>=seg.dur){seg=null;if(!start(now))return}
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+/* Home → chat. */
+function focusRingToLine(){
+  var e=focusParts();if(!e||panel.classList.contains('is-chatting'))return;
+  focusMeasure();
+  if(!focusMotionOk()||typeof requestAnimationFrame!=='function'){focusSetChatting(true);return}
+  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),keep=function(){focusS.a=focusPerimA(focusS.b,r)};
+  focusRun([
+    /* 1. The ring squashes flat behind the face, keeping its length, so it ends a little past the face on both sides; the face stays. */
+    {dur:300,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:0,cx:g.hx}}},
+    {dur:60,ease:FOCUS_HOLD,to:function(){return {}}},
+    /* 2. The face steps back and fades; the short line waits. */
+    {dur:220,ease:FOCUS_EASE_IN,to:function(){return {fs:0.6,fo:0}}},
+    {dur:50,ease:FOCUS_HOLD,at:function(){e.hero.classList.add('is-gone')},to:function(){return {}}},
+    /* 3. The line reaches across the header; the name slides over to the left as it goes. */
+    {dur:500,ease:FOCUS_EASE,at:function(){panel.classList.add('is-chatting')},to:function(){return {a:focusG.W/2+FOCUS_SW,cx:focusG.W/2}}}
+  ],function(){focusSetChatting(true)});
+}
+/* Chat → home: the mirror. */
+function focusLineToRing(){
+  var e=focusParts();if(!e||!panel.classList.contains('is-chatting'))return;
+  focusMeasure();
+  if(!focusMotionOk()||typeof requestAnimationFrame!=='function'){focusSetChatting(false);return}
+  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),keep=function(){focusS.a=focusPerimA(focusS.b,r)};
+  focusRun([
+    /* 1. The line draws in from both sides to the face's place; the name slides back out of the way. */
+    {dur:500,ease:FOCUS_EASE,at:function(){panel.classList.remove('is-chatting')},to:function(){return {a:focusPerimA(0,r),b:0,cx:g.hx}}},
+    {dur:50,ease:FOCUS_HOLD,to:function(){return {}}},
+    /* 2. The face returns in front of the short line. */
+    {dur:240,ease:FOCUS_EASE_OUT,at:function(){focusS.fs=0.6;focusS.fo=0;focusDraw();e.hero.classList.remove('is-gone')},to:function(){return {fs:1,fo:1}}},
+    {dur:60,ease:FOCUS_HOLD,to:function(){return {}}},
+    /* 3. The short line rounds back up into the ring around the face, keeping its length as it goes. */
+    {dur:300,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:r}}}
+  ],function(){focusSetChatting(false)});
+}
+/* The colours' slow slide: one frame loop, asleep while the chat is closed
+   or the tab hidden. Its speed eases between the states, so nothing jumps. */
+function focusFlowStart(){if(focusFlowOn||typeof requestAnimationFrame!=='function')return;focusFlowOn=true;requestAnimationFrame(focusFlow)}
+function focusFlow(now){
+  if(!isOpen||document.hidden){focusLast=0;setTimeout(function(){requestAnimationFrame(focusFlow)},250);return}
+  var dt=focusLast?Math.min(64,now-focusLast):16;focusLast=now;
+  var chat=panel.classList.contains('is-chatting'),fast=chat&&panel.classList.contains('is-streaming');
+  var want=!focusMotionOk()?0:fast?1/4000:chat?1/10000:1/18000;
+  focusSpeed+=(want-focusSpeed)*Math.min(1,dt/500);
+  focusPhase=(focusPhase+focusSpeed*dt)%1;
+  if(!focusAnim&&focusSpeed>1e-7)focusDraw();
+  requestAnimationFrame(focusFlow);
+}
 /* Focus home: the face sits on the header's line while the shopper is at
    home; once a chat starts its colored ring becomes the line itself — a
    soft light that flows while Ava is answering (focusRingToLine). */
 if(FOCUS){
   panel.classList.add('is-focus');
   var _fhdr=$('.ai-chat-header',panel);
-  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend','<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__glow"></span><span class="ai-chat-hero__ring"></span><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div><span class="ai-chat-header__line" aria-hidden="true"></span>');
+  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend',focusBandHtml()+'<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div>');
   /* One row: the name and the controls, the face on the header's bottom
      line. The name's second line stays out of it; the greeting takes its
      place at the top of the home, where it scrolls away with the page. */
   focusMeasure();
+  focusFlowStart();
   if(typeof ResizeObserver!=='undefined')new ResizeObserver(focusMeasure).observe(_fhdr);
   /* The line glows more while a reply is being written. */
   if(typeof MutationObserver!=='undefined')new MutationObserver(function(){panel.classList.toggle('is-streaming',typingEl.classList.contains('visible'))}).observe(typingEl,{attributes:true,attributeFilter:['class']});
-}
-/* Where the header's line is: its bottom. The face and the colour line
-   follow it (CSS reads --ai-focus-line). The name's second line is kept
-   out of the header here (the greeting stands in for it, on the home). */
-function focusMeasure(){
-  var hdr=$('.ai-chat-header',panel);if(!hdr)return;
-  var sub=$('.ai-chat-header__sub',hdr);if(sub)sub.hidden=true;
-  hdr.style.setProperty('--ai-focus-line',hdr.clientHeight+'px');
 }
 var closeBtn=$('.ai-chat-close-btn',panel);
 var menuBtn=$('.ai-chat-menu-btn',panel);
@@ -1512,7 +1663,7 @@ function focusRefreshPics(){
 function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(FOCUS_PICS[kind]?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
 function focusCardHtml(kind){
   var fw=kind==='footwear';
-  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,30)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-title">'+(fw?'Shop footwear':'Shop orthotics')+'</span><span class="ai-chat-focus__card-sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</span></span>'+WI.arrow+'</button>';
+  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">Help me find</span><span class="ai-chat-focus__card-title">'+(fw?'Footwear':'Orthotics')+'</span></span></button>';
 }
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
@@ -1570,13 +1721,21 @@ function focusGreetStart(){
     var frames=focusGreetFrames();
     if(!isOpen||!FOCUS_ROTATE||!GREET_CTA_ROTATE||frames.length<2){setTimeout(tick,1500);return}
     focusGreetShow(focusGreetIdx+1);
-    setTimeout(tick,focusGreetIdx===0?4200:3400);
+    setTimeout(tick,focusGreetIdx===0?7000:3200);
   };
-  setTimeout(tick,4200);
+  setTimeout(tick,7000);
+}
+/* The chat opened at home: the greeting starts over in the store's own words. */
+function focusGreetReset(){
+  if(!panel.classList.contains('is-home'))return;
+  focusGreetIdx=0;
+  var el=$('.ai-chat-focus__greet',panel),cur=el&&$('.ai-chat-greet__item.is-in',el),f=focusGreetFrames()[0];
+  if(el&&f&&f.text&&!(cur&&cur.textContent===f.text))el.innerHTML='<span class="ai-chat-greet">'+focusGreetItem(f,'is-in')+'</span>';
+  focusGreetStart();
 }
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
-var focusSheetEl=null,focusSheetOpener=null,focusBrowseIdx={footwear:0,orthotics:0};
+var focusSheetEl=null,focusSheetOpener=null,focusSheetShut=0,focusBrowseIdx={footwear:0,orthotics:0};
 function focusHelperRow(attrs,icon,title,sub){return '<button type="button" class="ai-chat-helper" '+attrs+'><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'}
 function focusSheetRows(kind){
   var rows='';
@@ -1611,10 +1770,41 @@ function openFocusSheet(kind,opener){
   focusSheetOpener=opener||null;
   var fw=kind==='footwear',line=fw?'footwear':'orthotics';
   var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
-  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div><div class="ai-chat-focus-sheet__sub">'+(fw?'Shoes built around foot pain':'Insoles matched to your arch')+'</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"><div class="ai-chat-focus__pair"><button type="button" class="ai-chat-focus__big" data-message="Show me women’s '+line+'">Shop women’s</button><button type="button" class="ai-chat-focus__big" data-message="Show me men’s '+line+'">Shop men’s</button></div>'+focusSheetRows(kind)+'<div class="ai-chat-focus__browse">'+focusBrowseHtml(kind)+'</div></div></div>';
+  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Help me find</div><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"><div class="ai-chat-focus__pair"><button type="button" class="ai-chat-focus__big" data-message="Show me women’s '+line+'">Shop women’s</button><button type="button" class="ai-chat-focus__big" data-message="Show me men’s '+line+'">Shop men’s</button></div>'+focusSheetRows(kind)+'<div class="ai-chat-focus__browse">'+focusBrowseHtml(kind)+'</div></div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
+  var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
+  focusSheetSwipe(sh);
   requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
   var c=$('.ai-chat-focus-sheet__close',sh);if(c)c.focus({preventScroll:true});
+}
+/* A finger on the sheet pulls it down with it — from its head always, from
+   its body only once that is scrolled to the top — and lets go: far or
+   fast enough, it closes; otherwise it springs back. */
+function focusSheetSwipe(sh){
+  var p=$('.ai-chat-focus-sheet__panel',sh),body=$('.ai-chat-focus-sheet__body',sh);if(!p)return;
+  var y0=null,dy=0,t0=0,drag=false;
+  p.addEventListener('touchstart',function(e){if(e.touches.length!==1){y0=null;return}y0=e.touches[0].clientY;dy=0;t0=Date.now();drag=false},{passive:true});
+  p.addEventListener('touchmove',function(e){
+    if(y0===null||e.touches.length!==1)return;
+    var d=e.touches[0].clientY-y0;
+    if(!drag){
+      var inBody=body&&body.contains(e.target);
+      if(d>6&&(!inBody||body.scrollTop<=0))drag=true;
+      else if(d<-6||(inBody&&body.scrollTop>0)){y0=null;return}
+      else return;
+    }
+    dy=Math.max(0,d);
+    p.style.transition='none';p.style.transform='translateY('+dy+'px)';
+    e.preventDefault();
+  },{passive:false});
+  var end=function(){
+    if(y0===null)return;
+    var far=dy>90||(dy>28&&Date.now()-t0<280);y0=null;
+    p.style.transition='';p.style.transform='';
+    if(drag&&far&&focusSheetEl===sh)closeFocusSheet();
+    drag=false;
+  };
+  p.addEventListener('touchend',end);p.addEventListener('touchcancel',end);
 }
 function closeFocusSheet(now){
   var sh=focusSheetEl;if(!sh)return;focusSheetEl=null;
@@ -1647,119 +1837,10 @@ if(FOCUS){
     if(m){e.preventDefault();var t=m.getAttribute('data-message');closeFocusSheet(true);focusSend(t)}
   });
   panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&focusSheetEl){e.preventDefault();e.stopPropagation();closeFocusSheet()}},true);
+  /* Anywhere outside the sheet — the dimmed chat or the page itself — closes
+     it, and only it: that press does not go on to close the chat as well. */
+  document.addEventListener('pointerdown',function(e){var sh=focusSheetEl;if(!sh)return;var p=$('.ai-chat-focus-sheet__panel',sh);if(p&&!p.contains(e.target)){focusSheetShut=Date.now();closeFocusSheet()}},true);
 }
-/* The ring around the face becomes the header's line — one shape, three
-   steps. The ring flattens into a short line that is wider than the face
-   and sits behind it (never across it); the face steps away; the short
-   line grows into the header's line, and hands over to it with the very
-   same colours in the very same place, so nothing pops. Back home is the
-   mirror: the line draws in from both sides to the face's place, the face
-   returns in front of it, and the short line opens back up into the ring.
-   Transforms, radius and opacity only; reduced motion gets the switch
-   without the journey. */
-var FOCUS_EASE='cubic-bezier(0.32, 0.72, 0, 1)',FOCUS_EASE_IN='cubic-bezier(0.4, 0, 1, 1)',FOCUS_EASE_OUT='cubic-bezier(0, 0, 0.2, 1)';
-var FOCUS_WIDE=1.5;/* the short line, in face widths */
-var focusMorphGen=0;
-function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
-function focusCancelAnims(n){try{if(n&&n.getAnimations)n.getAnimations().forEach(function(a){a.cancel()})}catch(e){}}
-function focusParts(){
-  var hero=$('.ai-chat-hero',panel),hdr=$('.ai-chat-header',panel);
-  if(!hero||!hdr)return null;
-  var p={hero:hero,hdr:hdr,ring:$('.ai-chat-hero__ring',hero),photo:$('.ai-chat-hero__photo',hero),glow:$('.ai-chat-hero__glow',hero),line:$('.ai-chat-header__line',hdr)};
-  if(!p.ring||!p.photo||!p.glow||!p.line)return null;
-  var w=hero.offsetWidth||68;
-  p.w=w;p.W=p.line.offsetWidth||hdr.clientWidth;
-  p.sy=2/(hero.offsetHeight||w);
-  p.sx=(p.W+2)/w;
-  p.dx=p.W/2-(hero.offsetLeft+w/2);
-  p.short='translate(0px,0px) scale('+FOCUS_WIDE+','+p.sy+')';
-  p.flat='translate(0px,0px) scale(1,'+p.sy+')';
-  p.full='translate('+p.dx+'px,0px) scale('+p.sx+','+p.sy+')';
-  p.round='translate(0px,0px) scale(1,1)';
-  return p;
-}
-function focusAll(p){[p.ring,p.photo,p.glow,p.line].forEach(focusCancelAnims)}
-function focusThen(a,gen,fn){a.finished.then(function(){if(gen===focusMorphGen)fn()}).catch(function(){})}
-function focusSetChatting(on){
-  panel.classList.toggle('is-chatting',!!on);
-  var hero=$('.ai-chat-hero',panel);if(hero)hero.classList.toggle('is-gone',!!on);
-}
-/* The ring's colours at rest: the band, its first half across the ring. */
-function focusRingRest(p){return {size:(2*p.w)+'px 100%',pos:'0px 0px'}}
-/* The ring's colours as the full-width line: exactly the band the line is
-   showing right now, so the two can swap unseen. */
-function focusRingAsLine(p){
-  var tx=0;
-  try{var m=getComputedStyle(p.line,'::before').transform.match(/matrix\(([^)]+)\)/);if(m)tx=parseFloat(m[1].split(',')[4])||0}catch(e){}
-  return {size:(2*p.W/p.sx)+'px 100%',pos:((tx+1)/p.sx)+'px 0px'};
-}
-function focusPaint(p,c){p.ring.style.backgroundSize=c.size;p.ring.style.backgroundPosition=c.pos}
-function focusDone(p){p.hero.classList.remove('is-morph');focusAll(p);p.ring.style.backgroundSize='';p.ring.style.backgroundPosition=''}
-function focusRingToLine(){
-  var p=focusParts();
-  if(!p||panel.classList.contains('is-chatting'))return;
-  var gen=++focusMorphGen;
-  if(!focusMotionOk()||!p.ring.animate){focusSetChatting(true);return}
-  focusMeasure();focusAll(p);
-  p.hero.classList.add('is-morph');
-  /* 1. The ring folds flat behind the face (the face stays), then the
-        flat line reaches out past the face on both sides. */
-  p.glow.animate([{opacity:0.45},{opacity:0}],{duration:260,easing:FOCUS_EASE_IN,fill:'forwards'});
-  var a0=p.ring.animate([{transform:p.round},{transform:p.flat}],{duration:300,easing:FOCUS_EASE,fill:'forwards'});
-  focusThen(a0,gen,function(){
-  var a1=p.ring.animate([{transform:p.flat,borderRadius:'50%'},{transform:p.short,borderRadius:'1px'}],{duration:220,easing:FOCUS_EASE,fill:'forwards'});
-  focusThen(a1,gen,function(){
-    /* 2. The face steps away; the short line is all that's left. */
-    var a2=p.photo.animate([{transform:'scale(1)',opacity:1},{transform:'scale(0.72)',opacity:0}],{duration:240,easing:FOCUS_EASE_IN,fill:'forwards'});
-    focusThen(a2,gen,function(){
-      /* 3. The short line grows into the header's line. */
-      var a3=p.ring.animate([{transform:p.short},{transform:p.full}],{duration:560,easing:FOCUS_EASE,fill:'forwards'});
-      focusThen(a3,gen,function(){
-        /* 4. The real line takes over underneath, same colours, same place. */
-        panel.classList.add('is-chatting');
-        var a4=p.ring.animate([{opacity:1},{opacity:0}],{duration:260,easing:'linear',fill:'forwards'});
-        focusThen(a4,gen,function(){focusSetChatting(true);focusDone(p)});
-      });
-    });
-  });
-  });
-}
-function focusLineToRing(){
-  var p=focusParts();
-  if(!p||!panel.classList.contains('is-chatting'))return;
-  var gen=++focusMorphGen;
-  if(!focusMotionOk()||!p.ring.animate){focusSetChatting(false);return}
-  focusMeasure();focusAll(p);
-  p.hero.classList.remove('is-gone');p.hero.classList.add('is-morph');
-  /* Out of sight until their turn; the ring stands in for the line, painted
-     with the band the line is showing at this very moment. */
-  focusPaint(p,focusRingAsLine(p));
-  p.photo.animate([{transform:'scale(0.72)',opacity:0}],{duration:1,fill:'forwards'});
-  p.glow.animate([{opacity:0}],{duration:1,fill:'forwards'});
-  /* 1. The ring takes the line's place, unseen. */
-  var a1=p.ring.animate([{transform:p.full,borderRadius:'1px',opacity:0},{transform:p.full,borderRadius:'1px',opacity:1}],{duration:200,easing:'linear',fill:'forwards'});
-  focusThen(a1,gen,function(){
-    panel.classList.remove('is-chatting');
-    /* 2. The line draws in from both sides to where the face will be. */
-    var a2=p.ring.animate([{transform:p.full},{transform:p.short}],{duration:560,easing:FOCUS_EASE,fill:'forwards'});
-    focusThen(a2,gen,function(){
-      /* 3. The face returns in front of the short line. */
-      var a3=p.photo.animate([{transform:'scale(0.72)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:260,easing:FOCUS_EASE_OUT,fill:'forwards'});
-      focusThen(a3,gen,function(){
-        /* 4. The short line draws back in behind the face, then unfolds
-              into the ring around it. */
-        var rest=focusRingRest(p),now={size:p.ring.style.backgroundSize,pos:p.ring.style.backgroundPosition};
-        var a4=p.ring.animate([{transform:p.short,borderRadius:'1px',backgroundSize:now.size,backgroundPosition:now.pos},{transform:p.flat,borderRadius:'50%',backgroundSize:rest.size,backgroundPosition:rest.pos}],{duration:220,easing:FOCUS_EASE,fill:'forwards'});
-        focusThen(a4,gen,function(){
-          p.glow.animate([{opacity:0},{opacity:0.45}],{duration:320,easing:FOCUS_EASE_OUT,fill:'forwards'});
-          var a5=p.ring.animate([{transform:p.flat},{transform:p.round}],{duration:320,easing:FOCUS_EASE,fill:'forwards'});
-          focusThen(a5,gen,function(){focusDone(p)});
-        });
-      });
-    });
-  });
-}
-
 function buildWelcome(){
 if(FOCUS){buildFocusHome();return}
 var hasBanner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
@@ -2058,6 +2139,7 @@ if(isOpen){
   /* Left open in a tab for a day: open on the home screen too. */
   if(messages.length&&!isStreaming&&chatStale())clearChat();
   revealLauncher();
+  if(FOCUS)focusGreetReset();
   focusBeforeOpen=document.activeElement;
   loadFitfinder().then(renderHelpers);
   launcher.classList.add('hidden');
@@ -6195,7 +6277,7 @@ toggle(true);
 });
 closeBtn.addEventListener('click',function(){toggle(false)});
 launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
-overlay.addEventListener('click',function(){toggle(false)});
+overlay.addEventListener('click',function(){if(Date.now()-focusSheetShut<600)return;toggle(false)});
 sendBtn.addEventListener('click',function(){if(listening){stopVoice();return}sendMessage()});
 /* Talk instead of typing. The mic (in Send's place while the box is empty) listens with the browser's own
    speech recognition: words appear in the box as the shopper speaks, and the

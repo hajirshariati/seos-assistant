@@ -7190,7 +7190,7 @@ button.ai-chat-launcher__text {
    flows, brighter while a reply is being written). Everything here is
    scoped to .is-focus — the classic home is untouched.
    ═══════════════════════════════════════════════════════════════════════ */
-.ai-chat-panel.is-focus { --ai-focus-accent: #e8505b; --ai-hero: 68px; --ai-band: linear-gradient(90deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3); }
+.ai-chat-panel.is-focus { --ai-hero: 68px; }
 /* The header: one row — the name, the controls centred beside it — and the
    face on its bottom line (--ai-focus-line, measured by the widget). The
    name's second line stays out; the greeting stands in for it on the home. */
@@ -7211,33 +7211,25 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-below { transform: translateY(100%); opacity: 0; }
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-in { transform: none; opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-above { transform: translateY(-100%); opacity: 0; }
-/* The face on the line: a soft glow behind, a thin colour ring, the photo.
-   The ring carries the same colour band as the header's line (its first
-   half across the ring), so when it becomes the line nothing changes colour. */
+/* The face on the line, and the band: one SVG shape that is the colour
+   ring around the face at home, the header's line in a chat, and every
+   frame in between (the widget draws it — focusDraw). The photo sits on
+   top of it; a blurred copy of the band is its glow. */
 .ai-chat-panel.is-focus .ai-chat-hero { position: absolute; left: 20px; top: calc(var(--ai-focus-line, 100%) - var(--ai-hero) / 2); width: var(--ai-hero); height: var(--ai-hero); z-index: 4; pointer-events: none; }
 .ai-chat-panel.is-focus .ai-chat-hero.is-gone { display: none; }
-.ai-chat-panel.is-focus .ai-chat-hero__glow { position: absolute; inset: -6px; z-index: 0; border-radius: 50%; background: var(--ai-band); background-size: 200% 100%; filter: blur(9px); opacity: 0.45; }
-.ai-chat-panel.is-focus .ai-chat-hero__ring { position: absolute; inset: 0; z-index: 1; border-radius: 50%; background: var(--ai-band); background-size: 200% 100%; transform-origin: 50% 50%; will-change: transform; }
-.ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; }
+.ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-hero__mono { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; font: 700 24px/1 var(--seos-font); }
-/* The line: a colour band twice the width sliding by half of itself (a
-   transform, so no repaint loop), with a glow that breathes while Ava is
-   writing. While the face is on the move it switches at once, no fade. */
-.ai-chat-panel.is-focus .ai-chat-header__line { position: absolute; left: 0; right: 0; top: calc(var(--ai-focus-line, 100%) - 1px); height: 2px; opacity: 0; pointer-events: none; overflow: hidden; transition: opacity 0.45s ease; }
-.ai-chat-panel.is-focus .ai-chat-hero.is-morph ~ .ai-chat-header__line { transition: none; }
-.ai-chat-panel.is-focus .ai-chat-header__line::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 200%; background: var(--ai-band); will-change: transform; }
-/* While the face is on the move the line's flow holds still, so the ring can take its place to the pixel. */
-.ai-chat-panel.is-focus .ai-chat-hero.is-morph ~ .ai-chat-header__line::before { animation-play-state: paused; }
-.ai-chat-panel.is-focus .ai-chat-header__line::after { content: ""; position: absolute; inset: 0; box-shadow: 0 0 12px 2px rgba(163, 92, 255, 0.55); opacity: 0.45; }
+.ai-chat-panel.is-focus .ai-chat-band { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
+.ai-chat-panel.is-focus .ai-chat-band__ring { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; transition: opacity 0.45s ease; }
+.ai-chat-panel.is-focus .ai-chat-band__glow { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; filter: blur(7px); opacity: 0.45; transition: opacity 0.45s ease; }
+/* In a chat the line sits a little quieter, and brightens while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
-.ai-chat-panel.is-focus.is-chatting .ai-chat-header__line { opacity: 0.75; }
-.ai-chat-panel.is-focus.is-chatting .ai-chat-header__line::before { animation: aiChatLineFlow 10s linear infinite; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-header__line { opacity: 1; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-header__line::before { animation-duration: 4s; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-header__line::after { animation: aiChatLinePulse 1.5s ease-in-out infinite; }
-@keyframes aiChatLineFlow { to { transform: translateX(-50%); } }
-@keyframes aiChatLinePulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.ai-chat-panel.is-focus.is-chatting .ai-chat-band__ring { opacity: 0.8; }
+.ai-chat-panel.is-focus.is-chatting .ai-chat-band__glow { opacity: 0.35; }
+.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__ring { opacity: 1; }
+.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__glow { animation: aiChatLinePulse 1.5s ease-in-out infinite; }
+@keyframes aiChatLinePulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
 /* Small avatars beside replies: plain — the header line carries the light. */
 .ai-chat-panel.is-focus .ai-chat-msg-avatar { box-shadow: 0 0 0 1px var(--seos-line) !important; }
 
@@ -7250,15 +7242,15 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-welcome--focus .ai-chat-welcome__banner,
 .ai-chat-panel.is-focus .ai-chat-welcome--focus.has-banner .ai-chat-welcome__banner { flex: 0 0 136px; height: 136px; max-height: 136px; min-height: 136px; margin-bottom: 14px; }
 .ai-chat-panel.is-focus .ai-chat-focus__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.ai-chat-panel.is-focus .ai-chat-focus__card { display: flex; align-items: center; gap: 14px; height: 100px; padding: 0 14px 0 12px; border: 0; border-radius: 18px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; transition: box-shadow 0.18s ease, transform 0.18s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__card { display: flex; align-items: center; gap: 12px; height: 66px; padding: 0 14px 0 9px; border: 0; border-radius: 16px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; transition: box-shadow 0.18s ease, transform 0.18s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__card:hover { box-shadow: 0 0 0 1px var(--seos-line), 0 8px 24px rgba(13, 13, 18, 0.08); transform: translateY(-1px); }
-.ai-chat-panel.is-focus .ai-chat-focus__card > svg { flex: none; color: var(--seos-text-2); }
-.ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 72px; height: 72px; flex: none; border-radius: 14px; background: var(--seos-bg-raised, #fff); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px var(--seos-line); color: var(--seos-text); overflow: hidden; }
+.ai-chat-panel.is-focus .ai-chat-focus__card:active { transform: scale(0.985); }
+.ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 48px; height: 48px; flex: none; border-radius: 12px; background: var(--seos-bg-raised, #fff); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px var(--seos-line); color: var(--seos-text); overflow: hidden; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-ico.has-pic { background: var(--seos-surface); box-shadow: none; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-ico img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.ai-chat-panel.is-focus .ai-chat-focus__card-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.ai-chat-panel.is-focus .ai-chat-focus__card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.ai-chat-panel.is-focus .ai-chat-focus__card-eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus__card-title { font: 700 16px/20px var(--seos-font); letter-spacing: -0.01em; }
-.ai-chat-panel.is-focus .ai-chat-focus__card-sub { font: 400 12.5px/16px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus__ask { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 22px 0 10px; }
 .ai-chat-panel.is-focus .ai-chat-focus__title { margin: 0; font: 600 15px/20px var(--seos-font); letter-spacing: -0.01em; color: var(--seos-text); }
 .ai-chat-panel.is-focus .ai-chat-focus__hint { margin: 0; font: 400 12.5px/18px var(--seos-font); color: var(--seos-text-2); }
@@ -7278,7 +7270,7 @@ button.ai-chat-launcher__text {
 
 /* The product line's sheet */
 .ai-chat-panel.is-focus .ai-chat-focus-sheet { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__back { position: absolute; inset: 0; background: rgba(13, 13, 18, 0.32); opacity: 0; transition: opacity 0.22s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__back { position: absolute; inset: 0; background: rgba(13, 13, 18, 0.32); opacity: 0; transition: opacity 0.22s ease; cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__panel { position: relative; display: flex; flex-direction: column; max-height: 84%; background: var(--seos-bg-raised, #fff); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(13, 13, 18, 0.18); transform: translateY(48px); opacity: 0; transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__back { opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__panel { transform: none; opacity: 1; }
@@ -7287,7 +7279,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__head .ai-chat-focus__card-ico { width: 52px; height: 52px; border-radius: 12px; background: var(--seos-surface); box-shadow: none; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__titles { flex: 1 1 auto; min-width: 0; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__title { font: 700 18px/22px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__sub { font: 400 13px/17px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__close { width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: var(--seos-surface); color: var(--seos-text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__body { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 22px; overflow: auto; }
 .ai-chat-panel.is-focus .ai-chat-focus__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -7306,8 +7298,8 @@ button.ai-chat-launcher__text {
    the two line cards stacked — measured on the home itself, not the page. */
 @container (max-width: 479px) {
   .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: 1fr; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 84px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 60px; height: 60px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 62px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 44px; height: 44px; }
 }
 @media (max-width: 480px) {
   .ai-chat-panel.is-focus { --ai-hero: 60px; }
@@ -7317,11 +7309,14 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-welcome--focus { padding: 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__greet { padding-left: 76px; }
   .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: 1fr; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 84px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 60px; height: 60px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 62px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 44px; height: 44px; }
   .ai-chat-panel.is-focus .ai-chat-focus__links { gap: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel.is-focus .ai-chat-header__line::before,
-  .ai-chat-panel.is-focus .ai-chat-header__line::after { animation: none !important; }
+  .ai-chat-panel.is-focus .ai-chat-band__glow { animation: none !important; }
+  .ai-chat-panel.is-focus .ai-chat-band__ring,
+  .ai-chat-panel.is-focus .ai-chat-band__glow,
+  .ai-chat-panel.is-focus .ai-chat-header,
+  .ai-chat-panel.is-focus .ai-chat-header__info { transition: none !important; }
 }
