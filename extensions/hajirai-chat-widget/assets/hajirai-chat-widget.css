@@ -7193,10 +7193,12 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus { --ai-hero: 68px; }
 /* The header: one row — the name, the controls centred beside it — and the
    face on its bottom line (--ai-focus-line, measured by the widget). The
-   name's second line stays out; the greeting stands in for it on the home. */
+   name's second line stays out; the greeting stands in for it on the home.
+   The words sit on the row's middle, level with the controls, whether they
+   run one line or two — never down against the line. */
 .ai-chat-panel.is-focus .ai-chat-header { position: relative; z-index: 5; overflow: visible; align-items: stretch; gap: 0 12px; padding: 0 14px 0 20px; transition: border-color 0.45s ease; }
-.ai-chat-panel.is-focus .ai-chat-header__info { display: flex; flex-direction: column; justify-content: flex-end; min-height: 46px; padding-bottom: 4px; transition: padding-left 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
-.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: end; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: hidden; text-overflow: clip; }
+.ai-chat-panel.is-focus .ai-chat-header__info { display: flex; flex-direction: column; justify-content: center; min-height: 50px; transition: padding-left 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
+.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: center; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: hidden; text-overflow: clip; }
 /* The header's words: at home the store's greeting (its signed-in one for
    a known shopper), in a chat the assistant's name. Both share the name's
    box — so the header keeps its height — and trade places with the name's
