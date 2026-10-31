@@ -1,4 +1,4 @@
-import { feedbackSurveyConfig } from "../lib/feedback-survey.js";
+import { feedbackSurveyConfig, whichOrthoticConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
 import { appPromoConfig } from "../lib/app-promo.js";
 import { focusImagesConfig } from "../lib/focus-home.js";
@@ -104,6 +104,8 @@ export const loader = async ({ request }) => {
         // Settings → Feedback survey and live chat.
         feedbackSurvey: feedbackSurveyConfig(config),
         hideLiveChatButton: config.hideLiveChatButton === true,
+        // Settings → Which orthotic do I have?: the Typeform quiz, a row in the Focus Orthotics sheet.
+        whichOrthotic: whichOrthoticConfig(config),
         // Settings → Seasonal button: the first Start here button.
         seasonalCta: seasonalCtaConfig(config),
         // Settings → Your app: its own message, once per visit.

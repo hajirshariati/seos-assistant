@@ -74,6 +74,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
   if(typeof d.supportLabel==='string'&&d.supportLabel)SUPPORT_LABEL=d.supportLabel;
+  var wo=d.whichOrthotic&&typeof d.whichOrthotic==='object'?d.whichOrthotic:null;
+  WO_FORM=wo&&/^[A-Za-z0-9]{4,32}$/.test(String(wo.form||''))?String(wo.form):'';WO_LABEL=String((wo&&wo.label)||'').trim().slice(0,40)||'Identify my orthotic';
   if(d.feedbackSurvey&&typeof d.feedbackSurvey==='object'){
     var hb={fb:d.feedbackSurvey,hideChat:d.hideLiveChatButton===true},was=[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|');
     try{localStorage.setItem(HOST_KEY,JSON.stringify(hb))}catch(e){}
@@ -188,6 +190,8 @@ var FOCUS=C.homeLayout==='focus';
    right buttons straight away; the config call keeps it current. */
 var HOST_KEY='hajirai_host_buttons';
 var FB_ON=false,FB_FORM='',FB_LABEL='Share feedback',FB_COLOR='teal',FB_ICON='feedback',FB_HIDE_AFTER=true,HIDE_LIVECHAT=false;
+/* Settings → Which orthotic do I have?: the Typeform quiz (a row in the Focus Orthotics sheet). */
+var WO_FORM='',WO_LABEL='Identify my orthotic';
 function applyHostButtons(cfg){
   cfg=cfg||{};var fb=cfg.fb||{};
   FB_FORM=/^[A-Za-z0-9]{4,32}$/.test(String(fb.form||''))?String(fb.form):'';
@@ -708,8 +712,8 @@ function menuHtml(){
   function item(action,icon,label){return '<button type="button" role="menuitem" class="ai-chat-menu-item" data-action="'+action+'">'+icon+'<span>'+esc(label)+'</span></button>'}
   var h=item('clear',MI.chat,'Start a new chat');
   if(ff&&savedFit())h+=item('refit',MI.fit,'Retake my orthotic FIT');
-  /* Feedback (Focus): the store's survey when it is one; else the chat's own rating — the shopper's own move, whatever the automatic ask is set to. */
-  if(FOCUS){if(fbShown()&&!fbOrthotic())h+=item('survey',fbIcon(),FB_LABEL);else h+=item('feedback',WI.feedback,'Share feedback')}
+  /* Feedback (Focus): the store's survey (Settings → Feedback button), opened inside the chat. */
+  if(FOCUS&&fbShown()&&!fbOrthotic())h+=item('survey',fbIcon(),FB_LABEL);
   h+='<div class="ai-chat-menu-sep" role="separator"></div>';
   if(CUST_LOGGED_IN)h+=(CUST_NAME?'<div class="ai-chat-menu-who">Signed in as '+esc(CUST_NAME)+'</div>':'')+item('logout',MI.out,'Log out');
   else h+=item('login',MI.user,'Log in');
@@ -1659,12 +1663,14 @@ var FOCUS_QUIZ_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 var FOCUS_PAIN_IMG=(C.focusPainImages&&typeof C.focusPainImages==='object')?C.focusPainImages:{};
 function focusZone(kind){
   var u=safeUrl(FOCUS_PAIN_IMG[kind]||'');
-  return u?'<span class="ai-chat-focus__coin"><img src="'+u+'" alt="" width="30" height="30" decoding="async"></span>':'';
+  return u?'<span class="ai-chat-focus__coin"><img src="'+u+'" alt="" width="38" height="38" decoding="async"></span>':'';
 }
-/* One chip per place: its picture and the place's name. What it usually
-   is stays on the tip (and for screen readers). */
+/* One chip per place: its picture and the place's name — a place with no
+   picture (the whole foot) is the name alone. What it usually is stays on
+   the tip (and for screen readers). */
 function focusPainHtml(t){
-  return '<button type="button" class="ai-chat-focus__pain" data-message="'+esc(t[3])+'" title="'+esc(t[2])+'" aria-label="'+esc(t[1]+' · '+t[2])+'">'+focusZone(t[0])+'<span class="ai-chat-focus__pain-title">'+esc(t[1])+'</span></button>';
+  var coin=focusZone(t[0]);
+  return '<button type="button" class="ai-chat-focus__pain'+(coin?'':' is-plain')+'" data-message="'+esc(t[3])+'" title="'+esc(t[2])+'" aria-label="'+esc(t[1]+' · '+t[2])+'">'+coin+'<span class="ai-chat-focus__pain-title">'+esc(t[1])+'</span></button>';
 }
 /* The line cards' pictures (Settings → Focus home); line drawings without. */
 var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={footwear:'',orthotics:''};
@@ -1691,7 +1697,7 @@ function buildFocusHome(){
   h+='<div class="ai-chat-focus__ask"><h2 class="ai-chat-focus__title">'+esc(FOCUS_TITLE)+'</h2><p class="ai-chat-focus__hint">'+esc(FOCUS_HINT)+'</p></div>';
   h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);
   h+='<button type="button" class="ai-chat-focus__pain ai-chat-focus__else" data-focus="type"><span class="ai-chat-focus__pain-title">Something else…</span></button></div>';
-  h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><i aria-hidden="true"></i><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><i aria-hidden="true"></i><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
+  h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
@@ -1768,10 +1774,10 @@ function focusTitleSync(){
   if(h)h.setAttribute('aria-hidden',chat?'true':'false');
 }
 function focusChatClass(on){panel.classList.toggle('is-chatting',!!on);focusTitleSync()}
-/* The store's survey (Settings → Feedback survey) in the Focus layout: as
-   Aetrex uses it for "Identify My Orthotic", one that reads as an orthotic
-   quiz is a row in the Orthotics sheet; any other is the ⋮ menu's feedback
-   line. Nothing of it on the home. */
+/* The store's survey (Settings → Feedback button) in the Focus layout: the
+   ⋮ menu's feedback line, opening inside the chat. One that reads as an
+   orthotic quiz instead (the quiz kept in that setting) is a row in the
+   Orthotics sheet. Nothing of it on the home. */
 function fbOrthotic(){return FB_ICON==='orthotic'||/orthotic|insole|\bfit\b/i.test(FB_LABEL)}
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
@@ -1792,13 +1798,20 @@ function focusSheetRows(kind){
       if(mine)rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono is-letter">'+esc(fitLetter(mine))+'</span>',mine.name||fitTitle(mine),'Your '+fitTitle(mine));
       else rows+=focusHelperRow('data-helper="fitfinder"','<span class="ai-chat-helper__mono">FIT</span>','Find my orthotic FIT',ff.questions&&ff.questions.length?'FITFinder · '+ff.questions.length+' quick question'+(ff.questions.length===1?'':'s'):'with FITFinder');
     }
-    var survey=fbShown()&&fbOrthotic();
-    if(survey)rows+=focusHelperRow('data-survey="1" aria-haspopup="dialog"',fbIcon(),FB_LABEL,'A quick visual quiz, right here');
+    /* The "which orthotic do I have?" quiz (Settings → Which orthotic do I
+       have?; or the survey setting when that holds it), once — a Popular
+       button opening the same form folds into it. */
+    var seen={};
+    if(fbShown()&&fbOrthotic()){rows+=focusHelperRow('data-survey="1" aria-haspopup="dialog"',fbIcon(),FB_LABEL,'A quick visual quiz, right here');seen[FB_FORM]=1}
+    if(WO_FORM&&!seen[WO_FORM]){rows+=focusHelperRow('data-form="'+esc(WO_FORM)+'" data-form-label="'+esc(WO_LABEL)+'" aria-haspopup="dialog"',WI.insole,WO_LABEL,'A quick visual quiz, right here');seen[WO_FORM]=1}
     var qps=[[QP1L,QP1M],[QP2L,QP2M],[QP3L,QP3M],[QP4L,QP4M]];
-    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f&&!(survey&&f===FB_FORM))rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}
+    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f&&!seen[f]){seen[f]=1;rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}}
   }
   return rows;
 }
+/* The helper rows in one box: side by side where the sheet is wide enough
+   for two, stacked on a phone (CSS). */
+function focusHelpersHtml(kind){var rows=focusSheetRows(kind);return rows?'<div class="ai-chat-focus__helpers">'+rows+'</div>':''}
 function focusSegHtml(cls,items,on,attr){
   var h='<div class="ai-chat-focus__seg'+(cls?' '+cls:'')+'" role="tablist" style="--seg-n:'+items.length+';--seg-i:'+on+'"><span class="ai-chat-focus__seg-thumb" aria-hidden="true"></span>';
   for(var i=0;i<items.length;i++)h+='<button type="button" role="tab" aria-selected="'+(i===on?'true':'false')+'" '+attr(i)+(i===on?' class="is-on"':'')+'>'+esc(items[i])+'</button>';
@@ -1843,7 +1856,7 @@ function openFocusSheet(kind,opener){
   focusSheetOpener=opener||null;
   var fw=kind==='footwear';
   var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
-  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Help me find</div><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body">'+focusSheetRows(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div><button type="button" class="ai-chat-focus__all" data-message="'+esc(focusAllMessage(kind))+'"><span class="ai-chat-focus__all-text ai-chat-focus__swap">'+esc(focusAllMessage(kind))+'</span></button></div></div>';
+  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Help me find</div><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body">'+focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div><button type="button" class="ai-chat-focus__all" data-message="'+esc(focusAllMessage(kind))+'"><span class="ai-chat-focus__all-text ai-chat-focus__swap">'+esc(focusAllMessage(kind))+'</span></button></div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
   focusSheetSwipe(sh);
@@ -6221,9 +6234,6 @@ function rateMarkDone(){try{localStorage.setItem(RATE_DONE,String(Date.now()))}c
 /* Fold away: fade, then collapse the space it took. */
 function foldAway(row){
   if(!row||!row.isConnected||row.classList.contains('is-out'))return;
-  /* The rating card in the feedback sheet (⋮ menu): the sheet goes instead. */
-  var fsh=row.classList.contains('ai-chat-rate')&&row.closest('.ai-chat-focus-sheet');
-  if(fsh){if(focusSheetEl===fsh)closeFocusSheet();return}
   row.style.maxHeight=row.offsetHeight+'px';void row.offsetHeight;
   row.classList.add('is-out');
   setTimeout(function(){if(row.isConnected)row.remove()},window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches?0:380);
@@ -6231,7 +6241,7 @@ function foldAway(row){
 function rateFinish(row){
   if(!row||!row.isConnected)return;
   row.innerHTML=rateDoneHtml();row.setAttribute('data-state','done');
-  later(function(){foldAway(row)},row.closest('.ai-chat-focus-sheet')?1600:3200);
+  later(function(){foldAway(row)},3200);
 }
 /* A new chat message while the question is still open: it steps aside. */
 function rateStepAside(){
@@ -6293,8 +6303,7 @@ function maybeAskRating(){
   },1600);
 }
 /* The rating card as a row with its three steps — the vote, what went
-   wrong, a word to add — asked by the chat itself (maybeAskRating) or
-   opened from the ⋮ menu (openFocusFeedback). */
+   wrong, a word to add. */
 function rateRowMake(m){
   var row=el('div','ai-chat-rate',rateAskHtml(m));
   row.setAttribute('role','group');row.setAttribute('aria-label','Rate this chat');row.setAttribute('data-state','ask');row.setAttribute('data-moment',m||'replies');
@@ -6337,22 +6346,6 @@ function rateRowMake(m){
   });
   row.addEventListener('keydown',function(e){var st=row.getAttribute('data-state');if(e.key==='Escape'&&(st==='voted'||st==='why')){e.preventDefault();e.stopPropagation();rateFinish(row)}});
   return row;
-}
-/* Share feedback (⋮ menu, Focus): the chat's own rating in a sheet, so it
-   is there at home as well as in a chat — the same card, the same steps
-   and the same record as the rating the chat asks for itself. */
-function openFocusFeedback(opener){
-  closeFocusSheet(true);
-  focusSheetOpener=opener||null;
-  var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind','feedback');
-  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="Share feedback"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head"><span class="ai-chat-focus__card-ico ai-chat-focus__card-ico--fb">'+WI.feedback+'</span><div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Rate this chat</div><div class="ai-chat-focus-sheet__title">Share feedback</div></div><button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body"></div></div>';
-  var row=rateRowMake('replies');row.classList.add('is-in');
-  $('.ai-chat-focus-sheet__body',sh).appendChild(row);
-  panel.appendChild(sh);focusSheetEl=sh;
-  var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
-  focusSheetSwipe(sh);
-  requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
-  var v=$('.ai-chat-rate__vote',sh);if(v)v.focus({preventScroll:true});
 }
 
 function clearChat(){
@@ -6474,7 +6467,6 @@ menu.addEventListener('click',function(e){
   menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');
   if(a==='clear')clearChat();
   else if(a==='refit'){if(!isStreaming)startHelper('refit')}
-  else if(a==='feedback')openFocusFeedback(menuBtn);
   else if(a==='survey')openFeedback(menuBtn);
   else if(a==='login')location.href=loginUrl();
   /* Signing out takes this customer's chat and sizes with it. */

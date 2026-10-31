@@ -3110,8 +3110,10 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
-    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-band__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), tips: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].filter((b) => /Plantar|arches|Metatarsalgia|Bunions|swollen/.test(b.getAttribute("title") || "")).length, coins: [...w.querySelectorAll(".ai-chat-focus__pain[data-message] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...w.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), elseCoin: !!w.querySelector(".ai-chat-focus__else .ai-chat-focus__coin"), chipRows: new Set([...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => Math.round(b.getBoundingClientRect().top))).size, chipH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => b.getBoundingClientRect().height)), else: !!w.querySelector('.ai-chat-focus__pains .ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
-    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); the two compact Help me find cards — Footwear, Orthotics — with no arrows (no label, no banner where the theme has none), then Where does it hurt as one compact row of chips — each place's picture in a coin, its name, what it usually is on the tip — Something else closing the row without a picture, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick a spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.tips === 5 && parts.coins.join("|") === "heel|arch|ball|toes|whole" && parts.coinsLoaded && !parts.elseCoin && parts.chipRows <= 2 && parts.chipH >= 36 && parts.else && parts.cards.join("|") === "Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 70 && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
+    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-band__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), tips: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].filter((b) => /Plantar|arches|Metatarsalgia|Bunions|swollen/.test(b.getAttribute("title") || "")).length, coins: [...w.querySelectorAll(".ai-chat-focus__pain[data-message] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...w.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), plain: [...w.querySelectorAll(".ai-chat-focus__pain.is-plain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), coinW: Math.min(...[...w.querySelectorAll(".ai-chat-focus__coin")].map((c) => c.getBoundingClientRect().width)), painH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((c) => c.getBoundingClientRect().height)), elseCoin: !!w.querySelector(".ai-chat-focus__else .ai-chat-focus__coin"), chipRows: new Set([...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => Math.round(b.getBoundingClientRect().top))).size, chipH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => b.getBoundingClientRect().height)), else: !!w.querySelector('.ai-chat-focus__pains .ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
+    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); the two compact Help me find cards — Footwear, Orthotics — with no arrows (no label, no banner where the theme has none), then Where does it hurt as one compact row of chips — four places' pictures in coins big enough to read, Whole foot plain, its name, what it usually is on the tip — Something else closing the row without a picture, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick a spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.tips === 5 && parts.coins.join("|") === "heel|arch|ball|toes" && parts.plain.join("|") === "Whole foot" && parts.coinW >= 36 && parts.painH >= 44 && parts.coinsLoaded && !parts.elseCoin && parts.chipRows <= 2 && parts.chipH >= 36 && parts.else && parts.cards.join("|") === "Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 70 && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
+    const tidy = await page.evaluate(() => { const cs = (el) => getComputedStyle(el); const el = document.querySelector(".ai-chat-focus__else"), plain = document.querySelector(".ai-chat-focus__pain.is-plain"), links = [...document.querySelectorAll(".ai-chat-focus__links button")]; return { elseBg: cs(el).backgroundColor, plainBg: cs(plain).backgroundColor, elseBorder: cs(el).borderColor, plainBorder: cs(plain).borderColor, elseColor: cs(el).color, plainColor: cs(plain).color, dots: document.querySelectorAll(".ai-chat-focus__links i").length, links: links.map((b) => ({ h: Math.round(b.getBoundingClientRect().height), border: cs(b).borderStyle, radius: cs(b).borderRadius, padX: parseFloat(cs(b).paddingLeft), bg: cs(b).backgroundColor })) }; });
+    check("home layout focus: Something else is a plain chip like Whole foot (no outline), and the three links above the text box are compact outlined pills, no dots", tidy.elseBg === tidy.plainBg && tidy.elseBorder === tidy.plainBorder && tidy.elseColor === tidy.plainColor && tidy.dots === 0 && tidy.links.length === 3 && tidy.links.every((l) => l.h <= 34 && l.h >= 28 && l.border === "solid" && /999/.test(l.radius) && l.padX <= 14 && /rgba\(0, 0, 0, 0\)|transparent/.test(l.bg)), JSON.stringify(tidy));
     const geo = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const h = r(".ai-chat-hero"), d = r(".ai-chat-header"), g = r(".ai-chat-focus__greet .ai-chat-greet"), c = r(".ai-chat-focus__cards"), n = r(".ai-chat-header__name"); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom, greetTop: g.top, greetLeft: g.left, cardsTop: c.top }; }, lineY.toString());
     check("home layout focus: the face is centred on the header's bottom line, the name above it, the greeting just below it and aligned under the name, the home clear of the face", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.greetTop >= geo.line && geo.greetTop <= geo.line + 12 && Math.abs(geo.greetLeft - geo.nameLeft) <= 1 && geo.cardsTop > geo.heroBottom + 4 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
     // "Something else" and the links only touch the text box.
@@ -3270,99 +3272,85 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (header words): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The store's survey (Settings → Feedback survey) in the Focus layout:
-  // nothing of it on the home. A plain feedback survey is the ⋮ menu's
-  // feedback line, opened inside the chat. One that reads as an orthotic
-  // quiz (Aetrex's "Identify My Orthotic") is a row in the Orthotics sheet
-  // instead — once, a Popular button with the same form folding into it —
-  // and the menu offers the chat's own feedback. The classic home and menu
+  // The store's survey (Settings → Feedback button) in the Focus layout:
+  // nothing of it on the home — it is the ⋮ menu's feedback line, opened
+  // inside the chat. The "which orthotic do I have?" quiz (its own setting)
+  // is a row in the Orthotics sheet, once — a Popular button or a survey
+  // setting holding the same form folds into it. The classic home and menu
   // are as they were.
   const tfRoute = (page) => page.route("https://embed.typeform.com/**", (r) => r.fulfill({ status: 200, contentType: r.request().url().endsWith(".css") ? "text/css" : "application/javascript", body: r.request().url().endsWith(".css") ? "" : TF_STUB }));
   const menuOf = async (page) => { await page.click(".ai-chat-menu-btn"); await page.waitForTimeout(150); return page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.textContent.trim() + "/" + x.dataset.action)); };
+  const helperRows = (page) => page.$$eval(".ai-chat-focus-sheet .ai-chat-helper", (r) => r.map((x) => ({ title: x.querySelector(".ai-chat-helper__title").textContent, sub: x.querySelector(".ai-chat-helper__sub")?.textContent, form: x.getAttribute("data-form"), survey: x.hasAttribute("data-survey"), icon: !!x.querySelector(".ai-chat-helper__icon svg") })));
   {
-    const { ctx, page, errors } = await open("/full?home=focus&fb=1", {}, { name: "Ask Ava!" });
+    const { ctx, page, errors } = await open("/full?home=focus&fb=1&wo=1&qp=1", {}, { name: "Ask Ava!" });
     await tfRoute(page);
     await page.waitForTimeout(500);
-    const home = await page.evaluate(() => ({ pill: !!document.querySelector(".ai-chat-focus__fb"), onHome: !!document.querySelector(".ai-chat-welcome--focus [data-feedback], .ai-chat-welcome--focus [data-survey]"), tiles: document.querySelectorAll(".ai-chat-welcome__cta-btn").length }));
-    check("home layout focus (survey): nothing of it on the home", !home.pill && !home.onHome && home.tiles === 0, JSON.stringify(home));
+    const home = await page.evaluate(() => ({ pill: !!document.querySelector(".ai-chat-focus__fb"), onHome: !!document.querySelector(".ai-chat-welcome--focus [data-feedback], .ai-chat-welcome--focus [data-survey], .ai-chat-welcome--focus [data-form]"), tiles: document.querySelectorAll(".ai-chat-welcome__cta-btn").length }));
+    check("home layout focus (survey): nothing of the survey or the quiz on the home", !home.pill && !home.onHome && home.tiles === 0, JSON.stringify(home));
     const menu = await menuOf(page);
-    check("home layout focus (survey): the ⋮ menu offers the store's survey under Start a new chat — its one feedback line", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/survey" && !menu.some((m) => /\/feedback$/.test(m)), menu.join(" | "));
+    check("home layout focus (survey): the ⋮ menu offers the store's survey under Start a new chat — its one feedback line, no separate form", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/survey" && menu.filter((m) => /feedback|survey/i.test(m)).length === 1, menu.join(" | "));
     await page.click('.ai-chat-menu-item[data-action="survey"]');
     await page.waitForTimeout(800);
-    const viaMenu = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, menuShut: document.querySelector(".ai-chat-menu").style.display === "none" }; });
-    check("home layout focus (survey): the menu line opens it inside the chat", viaMenu.open && viaMenu.form === "jdXBrXMa" && viaMenu.menuShut, JSON.stringify(viaMenu));
+    const viaMenu = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, kind: s && s.getAttribute("data-kind"), menuShut: document.querySelector(".ai-chat-menu").style.display === "none", noRate: !document.querySelector(".ai-chat-rate") }; });
+    check("home layout focus (survey): the menu line opens the store's own Typeform survey inside the chat", viaMenu.open && viaMenu.form === "jdXBrXMa" && viaMenu.menuShut && viaMenu.noRate, JSON.stringify(viaMenu));
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const rows = await page.$$eval(".ai-chat-focus-sheet .ai-chat-helper", (r) => r.map((x) => x.querySelector(".ai-chat-helper__title").textContent));
-    check("home layout focus (survey): a plain survey stays out of the Orthotics sheet", !rows.includes("Share feedback") && !(await page.$(".ai-chat-focus-sheet [data-survey]")), rows.join(" | "));
+    const rows = await helperRows(page);
+    const quiz = rows.filter((r) => /identify my orthotic/i.test(r.title));
+    check("home layout focus (survey): the quiz from its own setting is one row in the Orthotics sheet — the Popular button with the same form folded in — and the survey is not there", quiz.length === 1 && quiz[0].form === "ojyWbTvZ" && !quiz[0].survey && quiz[0].icon && /quiz/.test(quiz[0].sub || "") && !rows.some((r) => r.survey) && !rows.some((r) => /share feedback/i.test(r.title)), JSON.stringify(rows));
+    // The two helper rows share one line where the sheet is wide enough, each whole.
+    const line = await page.evaluate(() => { const r = [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-helper")].map((e) => e.getBoundingClientRect()); const t = [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-helper__title, .ai-chat-focus-sheet .ai-chat-helper__sub")]; return { n: r.length, tops: [...new Set(r.map((x) => Math.round(x.top)))].length, whole: t.every((e) => e.scrollWidth <= e.clientWidth + 1), sideBySide: r.length === 2 && r[1].left > r[0].right }; });
+    check("home layout focus (survey): on a wide sheet the FIT and quiz rows sit on one line, their words whole", line.n === 2 && line.tops === 1 && line.sideBySide && line.whole, JSON.stringify(line));
+    await page.click('.ai-chat-focus-sheet [data-form="ojyWbTvZ"]');
+    await page.waitForTimeout(800);
+    const opened = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, sheetGone: !document.querySelector(".ai-chat-focus-sheet") }; });
+    check("home layout focus (survey): the quiz row opens the quiz inside the chat, the Orthotics sheet away", opened.open && opened.form === "ojyWbTvZ" && opened.sheetGone, JSON.stringify(opened));
     check("home layout focus (survey): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
+    const ph = await open("/full?home=focus&wo=1", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, { name: "Ask Ava!" });
+    await ph.page.click('[data-focus-sheet="orthotics"]');
+    await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const stack = await ph.page.evaluate(() => { const r = [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-helper")].map((e) => e.getBoundingClientRect()); return { n: r.length, stacked: r.length === 2 && r[1].top >= r[0].bottom && Math.abs(r[0].left - r[1].left) < 1, maxRight: Math.max(...r.map((x) => x.right)), vw: innerWidth }; });
+    check("home layout focus (survey, phone): the two rows stack, each the sheet's width", stack.n === 2 && stack.stacked && stack.maxRight <= stack.vw, JSON.stringify(stack));
+    check("home layout focus (survey, phone): no JS errors", ph.errors.length === 0, ph.errors.join(" | "));
+    await ph.ctx.close();
   }
   {
+    // The survey setting holding the quiz (as it may today): the quiz in the sheet, once, and no feedback line.
     const { ctx, page, errors } = await open("/full?home=focus&qp=1&fb=1&fblook=1", {}, { name: "Ask Ava!" });
     await tfRoute(page);
     await page.waitForTimeout(500);
     const menu = await menuOf(page);
-    check("home layout focus (orthotic quiz): the ⋮ menu offers the chat's own feedback, not the quiz", menu[1] === "Share feedback/feedback" && !menu.some((m) => /Identify My Orthotic|\/survey$/.test(m)), menu.join(" | "));
+    check("home layout focus (quiz as survey): the ⋮ menu offers no quiz and no separate feedback form", !menu.some((m) => /identify my orthotic|feedback|survey/i.test(m)), menu.join(" | "));
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
-    const onHome = await page.evaluate(() => !!document.querySelector(".ai-chat-welcome--focus [data-feedback], .ai-chat-welcome--focus [data-survey], .ai-chat-focus__fb"));
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const rows = await page.$$eval(".ai-chat-focus-sheet .ai-chat-helper", (r) => r.map((x) => ({ title: x.querySelector(".ai-chat-helper__title").textContent, sub: x.querySelector(".ai-chat-helper__sub")?.textContent, form: x.getAttribute("data-form"), survey: x.hasAttribute("data-survey"), icon: !!x.querySelector(".ai-chat-helper__icon svg") })));
-    const quizRows = rows.filter((r) => /identify my orthotic/i.test(r.title));
-    check("home layout focus (orthotic quiz): one row in the Orthotics sheet — the store's label and icon — the Popular button with the same form folded into it, nothing on the home", !onHome && quizRows.length === 1 && quizRows[0].survey && quizRows[0].title === "Identify My Orthotic" && quizRows[0].icon && /quiz/.test(quizRows[0].sub || "") && !rows.some((r) => r.form === "ojyWbTvZ"), JSON.stringify(rows));
+    const rows = await helperRows(page);
+    const quiz = rows.filter((r) => /identify my orthotic/i.test(r.title));
+    check("home layout focus (quiz as survey): one row in the Orthotics sheet with the setting's label and icon, the Popular button folded in", quiz.length === 1 && quiz[0].survey && quiz[0].title === "Identify My Orthotic" && quiz[0].icon && !rows.some((r) => r.form === "ojyWbTvZ"), JSON.stringify(rows));
     await page.click(".ai-chat-focus-sheet [data-survey]");
     await page.waitForTimeout(800);
-    const quiz = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id, sheetGone: !document.querySelector(".ai-chat-focus-sheet") }; });
-    check("home layout focus (orthotic quiz): the row opens the quiz inside the chat, the Orthotics sheet away", quiz.open && quiz.form === "ojyWbTvZ" && quiz.sheetGone, JSON.stringify(quiz));
-    check("home layout focus (orthotic quiz): no JS errors", errors.length === 0, errors.join(" | "));
+    const opened = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); return { open: !!s && s.classList.contains("is-open"), form: window.__tf && window.__tf.id }; });
+    check("home layout focus (quiz as survey): the row opens the quiz inside the chat", opened.open && opened.form === "ojyWbTvZ", JSON.stringify(opened));
+    check("home layout focus (quiz as survey): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The chat's own feedback from the ⋮ menu: the rating card in a sheet —
-  // the vote, what went wrong, a word to add, thanks — recorded like the
-  // rating the chat asks for itself, at home as well as in a chat.
   {
+    // No survey: no feedback line; the classic home keeps its button and its menu is as it was.
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!" });
-    const n = feedbackBodies.length;
     const menu = await menuOf(page);
-    check("home layout focus (feedback): without a survey the ⋮ menu offers the chat's own feedback under Start a new chat", menu[0] === "Start a new chat/clear" && menu[1] === "Share feedback/feedback", menu.join(" | "));
-    await page.click('.ai-chat-menu-item[data-action="feedback"]');
-    await page.waitForTimeout(500);
-    const sheet = await page.evaluate(() => { const s = document.querySelector('.ai-chat-focus-sheet[data-kind="feedback"]'); const r = s && s.querySelector(".ai-chat-rate"); return { open: !!s && s.classList.contains("is-open"), title: s && s.querySelector(".ai-chat-focus-sheet__title").textContent, state: r && r.getAttribute("data-state"), q: r && r.querySelector(".ai-chat-rate__q").textContent, votes: r ? r.querySelectorAll("[data-rate]").length : 0, home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), focused: !!document.activeElement && document.activeElement.matches("[data-rate]"), inChat: !!document.querySelector(".ai-chat-messages .ai-chat-rate") }; });
-    check("home layout focus (feedback): a sheet with the chat's rating card — the question, thumbs up and down, the first in focus — the home underneath, nothing in the chat", sheet.open && sheet.title === "Share feedback" && sheet.state === "ask" && sheet.q === "How’s the chat going?" && sheet.votes === 2 && sheet.home && sheet.focused && !sheet.inChat, JSON.stringify(sheet));
-    await page.click('.ai-chat-focus-sheet [data-rate="down"]');
-    await page.waitForTimeout(300);
-    const why = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet .ai-chat-rate"); return { state: r.getAttribute("data-state"), chips: [...r.querySelectorAll("[data-rate-why]")].map((c) => c.dataset.rateWhy) }; });
-    await page.click('.ai-chat-focus-sheet [data-rate-why="not_answered"]');
-    await page.waitForTimeout(300);
-    await page.fill(".ai-chat-focus-sheet .ai-chat-rate__input", "Couldn’t find my size");
-    await page.press(".ai-chat-focus-sheet .ai-chat-rate__input", "Enter");
-    await page.waitForTimeout(400);
-    const done = await page.evaluate(() => { const r = document.querySelector(".ai-chat-focus-sheet .ai-chat-rate"); return { state: r && r.getAttribute("data-state"), thanks: !!r && /Thanks for the feedback/.test(r.textContent) }; });
-    await waitUntil(() => feedbackBodies.length >= n + 3);
-    const sent = feedbackBodies.slice(n);
-    check("home layout focus (feedback): thumbs down, a reason and a comment reach the store as the chat's own rating, and the card says thanks", why.state === "why" && why.chips.includes("not_answered") && done.state === "done" && done.thanks && sent.length === 3 && sent.every((b) => b.kind === "chat" && b.vote === "down" && b.moment === "replies") && sent[1].reason === "not_answered" && sent[2].comment === "Couldn’t find my size" && sent[2].reason === "not_answered", JSON.stringify({ why, done, sent }));
-    await page.waitForTimeout(2300);
-    const gone = await page.evaluate(() => ({ sheet: !!document.querySelector(".ai-chat-focus-sheet"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), inChat: !!document.querySelector(".ai-chat-messages .ai-chat-rate") }));
-    check("home layout focus (feedback): the sheet goes on its own after the thanks, the home untouched", !gone.sheet && gone.home && !gone.inChat, JSON.stringify(gone));
     await page.click(".ai-chat-menu-btn");
-    await page.waitForTimeout(150);
-    await page.click('.ai-chat-menu-item[data-action="feedback"]');
-    await page.waitForTimeout(400);
-    await page.click(".ai-chat-focus-sheet [data-rate-x]");
-    await page.waitForTimeout(400);
-    check("home layout focus (feedback): No thanks closes the sheet, nothing sent", !(await page.$(".ai-chat-focus-sheet")) && feedbackBodies.length === n + 3);
     const p2 = await ctx.newPage();
     await p2.goto("http://localhost:4789/full?fb=1");
     await p2.click(".ai-chat-launcher");
     await p2.waitForTimeout(700);
     const classic = await p2.evaluate(() => ({ tile: !!document.querySelector(".ai-chat-welcome__cta-btn.is-feedback") }));
     const classicMenu = await menuOf(p2);
-    check("home layout focus (feedback): the classic home keeps its survey button and its menu is as it was", classic.tile && !classicMenu.some((m) => /\/(feedback|survey)$/.test(m)), JSON.stringify({ classic, classicMenu }));
-    check("home layout focus (feedback): no JS errors", errors.length === 0, errors.join(" | "));
+    check("home layout focus (no survey): no feedback line in the ⋮ menu; the classic home keeps its survey button and its menu is as it was", !menu.some((m) => /feedback|survey/i.test(m)) && classic.tile && !classicMenu.some((m) => /\/(feedback|survey)$/.test(m)), JSON.stringify({ menu, classic, classicMenu }));
+    check("home layout focus (no survey): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // The greeting belongs to the page, not the header: on a short screen it
