@@ -520,6 +520,30 @@ model ChatFeedback {
   @@index([createdAt])
 }
 
+// Lessons from thumbs-down: once a day, for every subject rated not
+// helpful more than once in the last week, one line the assistant should do
+// differently and, for a missing fact, the fact to add. A draft waits for
+// the store team on the Analytics page; approved, it joins the store's
+// knowledge (fact) or rules (behaviour); dismissed, it rests a week.
+model FeedbackLesson {
+  id          String    @id @default(cuid())
+  shop        String
+  subject     String
+  count       Int
+  lesson      String
+  kind        String    @default("behaviour")
+  fix         String    @default("")
+  examples    String[]
+  feedbackIds String[]
+  status      String    @default("draft")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  decidedAt   DateTime?
+
+  @@index([shop, status])
+  @@index([shop, createdAt])
+}
+
 // Recorded chat turns, only while the store has recording on for testing
 // (see ShopConfig.recordChatsUntil): the shopper's message as typed (contact
 // details removed), the assistant's reply and what it showed. Kept 30 days.

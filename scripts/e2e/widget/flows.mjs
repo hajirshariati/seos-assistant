@@ -571,7 +571,7 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   await page.route("https://a.klaviyo.com/**", (r) => { klaviyo.push({ url: r.request().url(), headers: r.request().headers(), body: r.request().postDataJSON() }); return r.fulfill({ status: klaviyoStatus, contentType: "application/json", body: klaviyoStatus === 202 ? "" : JSON.stringify({ errors: [{ detail: "nope" }] }) }); });
   await page.goto("http://localhost:4789/full");
   await page.click(".ai-chat-launcher__text");
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(900); // past the panel's own post-open focus timers, which would steal the focus checks below
   await page.fill(".ai-chat-input-area textarea", "when will the miles be back in stock in 13.5");
   await page.keyboard.press("Enter");
   await page.waitForSelector(".ai-chat-msg:last-child .ai-bis", { timeout: 6000 });
@@ -3128,12 +3128,22 @@ for (const coop of ["1", "2"]) {
     // The Footwear sheet.
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
-    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, big: [...s.querySelectorAll(".ai-chat-focus__big")].map((b) => b.getAttribute("data-message")), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), tf: !!s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon svg'), tfTitle: s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__title')?.textContent, modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close"), eyebrow: s.querySelector(".ai-chat-focus-sheet__eyebrow")?.textContent }; });
-    check("home layout focus: the Footwear sheet — Shop women's / men's, Browse by shoes · condition · collections from the store's menu (no True Fit row where the store has no True Fit)", fw.title === "Footwear" && fw.eyebrow === "Help me find" && fw.big.join("|") === "Show me women’s footwear|Show me men’s footwear" && fw.tabs.join(",") === "Shoes,Condition,Collections" && fw.chips.length === 8 && fw.chips[0] === "Sneakers" && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
+    const fw = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, gender: [...s.querySelectorAll("[data-gender]")].map((b) => b.textContent + (b.classList.contains("is-on") ? "*" : "")), all: s.querySelector(".ai-chat-focus__all")?.getAttribute("data-message"), allText: s.querySelector(".ai-chat-focus__all-text")?.textContent, thumb: getComputedStyle(s.querySelector(".ai-chat-focus__gender")).getPropertyValue("--seg-i").trim(), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.textContent), tf: !!s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon .ai-chat-tf-logo, .ai-chat-helper[data-helper="truefit"] .ai-chat-helper__icon svg'), tfTitle: s.querySelector('.ai-chat-helper[data-helper="truefit"] .ai-chat-helper__title')?.textContent, modal: s.querySelector('[role="dialog"]')?.getAttribute("aria-modal"), closeFocused: document.activeElement === s.querySelector(".ai-chat-focus-sheet__close"), eyebrow: s.querySelector(".ai-chat-focus-sheet__eyebrow")?.textContent }; });
+    check("home layout focus: the Footwear sheet — a Women's / Men's switch on Women's, one Show me all button, Browse by shoes · condition · collections from the store's women's menu (no True Fit row where the store has no True Fit)", fw.title === "Footwear" && fw.eyebrow === "Help me find" && fw.gender.join("|") === "Women’s*|Men’s" && fw.thumb === "0" && fw.all === "Show me all women’s footwear" && fw.allText === fw.all && fw.tabs.join(",") === "Shoes,Condition,Collections" && fw.chips.length === 10 && fw.chips[0] === "Sneakers" && fw.chips.includes("Wedges & heels") && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
     await page.click('.ai-chat-focus-sheet [data-browse="1"]');
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(360); // the chips crossfade: 140ms out, then the new chips in
     const act = await page.evaluate(() => ({ on: document.querySelector('.ai-chat-focus-sheet [data-browse].is-on')?.textContent, focused: document.activeElement === document.querySelector('.ai-chat-focus-sheet [data-browse].is-on'), chips: [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent) }));
     check("home layout focus: Browse by → Condition swaps the chips and keeps the keyboard on the tab", act.on === "Condition" && act.focused && act.chips.length === 8 && act.chips[0] === "Plantar fasciitis", JSON.stringify(act));
+    // The switch: Men's slides the thumb, fades the browse box out and in, and brings the men's menu — Occasion in place of Collections, the all-button for men.
+    await page.click('.ai-chat-focus-sheet [data-gender="men"]');
+    const mid = await page.evaluate(() => ({ swapping: document.querySelector(".ai-chat-focus-sheet .ai-chat-focus__browse").classList.contains("is-swapping"), thumb: getComputedStyle(document.querySelector(".ai-chat-focus__gender")).getPropertyValue("--seg-i").trim(), transition: getComputedStyle(document.querySelector(".ai-chat-focus__gender .ai-chat-focus__seg-thumb")).transitionProperty }));
+    await page.waitForTimeout(500);
+    const men = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { on: [...s.querySelectorAll("[data-gender].is-on")].map((b) => b.textContent), all: s.querySelector(".ai-chat-focus__all")?.getAttribute("data-message"), allText: s.querySelector(".ai-chat-focus__all-text")?.textContent, tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), tab: s.querySelector("[data-browse].is-on")?.textContent, chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.getAttribute("data-message")), swapping: s.querySelector(".ai-chat-focus__browse").classList.contains("is-swapping"), opacity: getComputedStyle(s.querySelector(".ai-chat-focus__browse")).opacity }; });
+    check("home layout focus: Men's — the thumb slides over, the browse box fades out then back in with the men's menu (Shoes · Condition · Occasion), still on Condition, the all-button for men", mid.swapping && mid.thumb === "1" && /transform/.test(mid.transition) && men.on.join("") === "Men’s" && men.all === "Show me all men’s footwear" && men.allText === men.all && men.tabs.join(",") === "Shoes,Condition,Occasion" && men.tab === "Condition" && men.chips.length === 5 && men.chips[0] === "Men’s shoes for plantar fasciitis" && !men.swapping && men.opacity === "1", JSON.stringify({ mid, men }));
+    await page.click('.ai-chat-focus-sheet [data-browse="2"]');
+    await page.waitForTimeout(400);
+    const occ = await page.evaluate(() => [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent));
+    check("home layout focus: Men's → Occasion lists the store's men's occasions", occ.join("|") === "Vacation comfort|Beach getaway|Sports & active|At home", JSON.stringify(occ));
     await page.keyboard.press("Escape");
     await page.waitForTimeout(450);
     s2 = await state(page);
@@ -3159,20 +3169,24 @@ for (const coop of ["1", "2"]) {
     // The Orthotics sheet: FITFinder and the store's visual quiz (a Typeform quick pick).
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const kept = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { on: [...s.querySelectorAll("[data-gender].is-on")].map((b) => b.textContent).join(""), all: s.querySelector(".ai-chat-focus__all")?.getAttribute("data-message"), chip: s.querySelector(".ai-chat-focus__chips [data-message]")?.getAttribute("data-message") }; });
+    check("home layout focus: the Orthotics sheet remembers Men's from the Footwear sheet — its all-button and chips are men's", kept.on === "Men’s" && kept.all === "Show me all men’s orthotics" && /^Men’s orthotics/.test(kept.chip), JSON.stringify(kept));
+    await page.click('.ai-chat-focus-sheet [data-gender="women"]');
+    await page.waitForTimeout(500);
     const or = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { title: s.querySelector(".ai-chat-focus-sheet__title")?.textContent, fit: s.querySelector('.ai-chat-helper[data-helper="fitfinder"] .ai-chat-helper__title')?.textContent, fitMono: s.querySelector('.ai-chat-helper[data-helper="fitfinder"] .ai-chat-helper__mono')?.textContent, quiz: s.querySelector(".ai-chat-helper[data-form]")?.getAttribute("data-form"), quizLabel: s.querySelector("[data-form]")?.getAttribute("data-form-label"), tabs: [...s.querySelectorAll("[data-browse]")].map((t) => t.textContent), chips: [...s.querySelectorAll(".ai-chat-focus__chips [data-message]")].map((b) => b.getAttribute("data-message")) }; });
-    check("home layout focus: the Orthotics sheet — the chat's own Find my orthotic FIT row, the store's visual quiz, Browse by condition · activity · collections from the store's menu", or.title === "Orthotics" && or.fit === "Find my orthotic FIT" && or.fitMono === "FIT" && or.quiz === "ojyWbTvZ" && or.quizLabel === "Identify my orthotic" && or.tabs.join(",") === "Condition,Activity,Collections" && or.chips.length === 8 && or.chips[0] === "Orthotics for plantar fasciitis", JSON.stringify(or));
+    check("home layout focus: the Orthotics sheet — the chat's own Find my orthotic FIT row, the store's visual quiz, Browse by condition · activity · collections from the store's menu", or.title === "Orthotics" && or.fit === "Find my orthotic FIT" && or.fitMono === "FIT" && or.quiz === "ojyWbTvZ" && or.quizLabel === "Identify my orthotic" && or.tabs.join(",") === "Condition,Activity,Collections" && or.chips.length === 8 && or.chips[0] === "Women’s orthotics for plantar fasciitis", JSON.stringify(or));
     await page.click('.ai-chat-focus-sheet [data-browse="2"]');
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(400);
     const col = await page.evaluate(() => [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__chips [data-message]")].map((b) => b.textContent));
     check("home layout focus: Orthotics → Collections lists the store's orthotic collections", col.length === 10 && col[0] === "Premium Memory Foam" && col.includes("Speed") && col.includes("Work"), JSON.stringify(col));
-    // Shop women's sends; the face's ring becomes the header's line.
+    // Show me all women's orthotics sends; the face's ring becomes the header's line.
     n = chatBodies.length;
-    await page.click('.ai-chat-focus-sheet .ai-chat-focus__big[data-message="Show me women’s orthotics"]');
+    await page.click('.ai-chat-focus-sheet .ai-chat-focus__all[data-message="Show me all women’s orthotics"]');
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);/* the morph (≈1.1s) and the fades after it */
     s2 = await state(page);
     const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
-    check("home layout focus: Shop women's sends its message and the ring becomes the header's line (the gray line gone, the face gone)", chatBodies.at(-1)?.message === "Show me women’s orthotics" && chatBodies.at(-1)?.typed === false && !s2.sheet && !s2.home && s2.chatting && s2.heroGone && !s2.hero && !s2.focusHome && look.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(look.border), JSON.stringify({ s2, look }));
+    check("home layout focus: Show me all women's orthotics sends its message and the ring becomes the header's line (the gray line gone, the face gone)", chatBodies.at(-1)?.message === "Show me all women’s orthotics" && chatBodies.at(-1)?.typed === false && !s2.sheet && !s2.home && s2.chatting && s2.heroGone && !s2.hero && !s2.focusHome && look.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(look.border), JSON.stringify({ s2, look }));
     check("home layout focus: reply avatars carry no glow — the line has it", look.avatar && !/163, 92, 255/.test(look.avatar), look.avatar);
     await waitUntil(() => false, 1500);
     s2 = await state(page);
@@ -3256,32 +3270,52 @@ for (const coop of ["1", "2"]) {
   // reaches across the header. Nothing is swapped. Back home is the mirror.
   {
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
-    const look = () => page.evaluate(() => {
+    // One look at the shape, as source: the test takes one on demand, and a
+    // sampler on the page records one every animation frame.
+    const lookSrc = `() => {
       const q = (s) => document.querySelector(s); const op = (el) => parseFloat(getComputedStyle(el).opacity);
       const panel = q(".ai-chat-panel"), ring = q(".ai-chat-band__ring"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), hdr = q(".ai-chat-header");
       const bb = ring.getBBox(), hr = hdr.getBoundingClientRect(), pr = photo.getBoundingClientRect(), gone = hero.classList.contains("is-gone");
       const heroMid = parseFloat(getComputedStyle(hero).left) + parseFloat(getComputedStyle(panel).getPropertyValue("--ai-hero")) / 2;
-      return { ringW: bb.width, ringH: bb.height, ringLeft: bb.x, ringRight: hdr.clientWidth - (bb.x + bb.width), ringMid: bb.x + bb.width / 2, ringOp: op(ring), photoOp: gone ? 0 : op(photo), photoW: pr.width, faceMid: gone ? null : (pr.left + pr.right) / 2 - hr.left, heroMid, chatting: panel.classList.contains("is-chatting"), gone, home: panel.classList.contains("is-home"), W: hdr.clientWidth, shapes: document.querySelectorAll(".ai-chat-band__ring, .ai-chat-header__line, .ai-chat-hero__ring").length, grad: q("#ai-chat-band-g").getAttribute("x1") };
-    });
+      return { t: performance.now(), ringW: bb.width, ringH: bb.height, ringLeft: bb.x, ringRight: hdr.clientWidth - (bb.x + bb.width), ringMid: bb.x + bb.width / 2, ringOp: op(ring), photoOp: gone ? 0 : op(photo), photoW: pr.width, faceMid: gone ? null : (pr.left + pr.right) / 2 - hr.left, heroMid, chatting: panel.classList.contains("is-chatting"), gone, home: panel.classList.contains("is-home"), W: hdr.clientWidth, shapes: document.querySelectorAll(".ai-chat-band__ring, .ai-chat-header__line, .ai-chat-hero__ring").length, grad: q("#ai-chat-band-g").getAttribute("x1") };
+    }`;
+    const look = () => page.evaluate(`(${lookSrc})()`);
+    // The steps and the continuity are read from the page's own frames: once
+    // a morph is under way, a sampler registered behind it records the shape
+    // every animation frame for three seconds. Frame to frame the line's
+    // size and the face's opacity may move no faster than the eases allow
+    // (a frame the runner delays moves the time-based shape further, never
+    // faster); a leap or a pop would be a speed far beyond that.
+    const record = async () => {
+      await page.evaluate(`(() => { const look = ${lookSrc}; window.__tr = []; window.__trDone = false; let t0 = 0; const tick = (t) => { if (!t0) t0 = t; const s = look(); s.t = t; window.__tr.push(s); if (t - t0 < 3000 && window.__tr.length < 400) requestAnimationFrame(tick); else window.__trDone = true; }; requestAnimationFrame(tick); })()`);
+      await page.waitForFunction(() => window.__trDone, null, { timeout: 10000 });
+      return page.evaluate(() => window.__tr);
+    };
+    // The steps are read from the frames filled in at 10ms — the shape moves
+    // smoothly between frames, so a short step (the face half in while the
+    // line is still short) is found even when the renderer is slow.
+    const dense = (tr) => { const out = []; const num = (k) => (a, b, u) => a[k] == null || b[k] == null ? a[k] : a[k] + (b[k] - a[k]) * u; const keys = ["ringW", "ringH", "ringLeft", "ringRight", "ringMid", "ringOp", "photoOp", "photoW", "faceMid", "heroMid", "W"]; for (let i = 1; i < tr.length; i++) { const a = tr[i - 1], b = tr[i], steps = Math.max(1, Math.ceil((b.t - a.t) / 10)); for (let k = 0; k < steps; k++) { const u = k / steps, st = { ...a, t: a.t + (b.t - a.t) * u }; for (const key of keys) st[key] = num(key)(a, b, u); out.push(st); } } if (tr.length) out.push(tr[tr.length - 1]); return out; };
+    const speeds = (tr) => { let w = 0, h = 0, f = 0, n = 0, maxDt = 0; for (let i = 1; i < tr.length; i++) { const dt = tr[i].t - tr[i - 1].t; if (dt <= 0) continue; n++; maxDt = Math.max(maxDt, dt); w = Math.max(w, Math.abs(tr[i].ringW - tr[i - 1].ringW) / dt); h = Math.max(h, Math.abs(tr[i].ringH - tr[i - 1].ringH) / dt); f = Math.max(f, Math.abs(tr[i].photoOp - tr[i - 1].photoOp) / dt); } return { w: +w.toFixed(3), h: +h.toFixed(3), face: +f.toFixed(4), n, maxDt: Math.round(maxDt) }; };
+    // The eases' peak speeds (px/ms, opacity/ms), with room: the line reaches across ~410px in 580–620ms, the fold drops ~68px in 380ms, the face fades in 280–340ms — each at most ~2.9× (3.5× for the ease-out) its average speed.
+    const calm = (sp, min) => sp.n >= min && sp.w <= 2.6 && sp.h <= 0.8 && sp.face <= 0.015;
     const n = chatBodies.length;
     await page.click('.ai-chat-focus__pain[data-message]');
+    const tr = await record();
     const seen = { behind: null, alone: null, growing: null, full: null };
-    const t0 = Date.now();
-    while (Date.now() - t0 < 2600) {
-      const st = await look();
-      // The short line: flat, about 1.5 faces wide, centred on the face.
-      const short = st.ringH <= 1 && st.ringW >= 94 && st.ringW <= 110 && Math.abs(st.ringMid - st.heroMid) <= 2;
-      if (!seen.behind && short && st.photoOp >= 0.97 && st.photoW >= 60 && Math.abs(st.ringMid - st.faceMid) <= 2) seen.behind = st;
-      if (!seen.alone && short && st.photoOp <= 0.08) seen.alone = st;
-      if (!seen.growing && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.gone) seen.growing = st;
+    for (const st of dense(tr)) {
+      // The short line: flat, about 1.57 faces wide, centred on the face.
+      const short = st.ringH <= 3 && st.ringW >= 94 && st.ringW <= 112 && Math.abs(st.ringMid - st.heroMid) <= 2;
+      if (!seen.behind && short && st.photoOp >= 0.9 && st.photoW >= 60 && Math.abs(st.ringMid - st.faceMid) <= 2) seen.behind = st;
+      if (!seen.alone && st.ringH <= 1 && st.ringW <= 130 && st.photoOp <= 0.15) seen.alone = st;
+      if (!seen.growing && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.photoOp <= 0.02) seen.growing = st;
       if (st.chatting && st.ringW >= st.W - 4 && st.gone) { seen.full = st; break; }
-      await page.waitForTimeout(12);
     }
-    check("morph 1: the ring folds flat into a short line behind the face — wider than the face, centred on it — while the face is fully there", !!seen.behind, JSON.stringify(seen.behind));
-    check("morph 2: the face steps away and the short line is all that's left", !!seen.alone, JSON.stringify(seen.alone));
-    check("morph 3: the short line reaches across the header", !!seen.growing, JSON.stringify(seen.growing));
+    check("morph 1: the ring folds flat into a short line behind the face — wider than the face, centred on it — while the face is still there", !!seen.behind, JSON.stringify(seen.behind));
+    check("morph 2: the face eases away while the line is still short", !!seen.alone, JSON.stringify(seen.alone));
+    check("morph 3: the short line reaches across the header once the face has gone", !!seen.growing, JSON.stringify(seen.growing));
+    const sp = speeds(tr);
+    check("morph: one continuous motion — frame to frame the line's size and the face's opacity move no faster than the eases allow (no leap, no pop)", calm(sp, 30), JSON.stringify(sp));
     await waitUntil(() => chatBodies.length > n);
-    await page.waitForTimeout(400);
     const fin = await look();
     check("morph 4: it ends as the header's line, edge to edge — the same shape all along, nothing swapped underneath", !!seen.full && fin.shapes === 1 && fin.ringH === 0 && fin.ringLeft <= 0 && fin.ringRight <= 0 && fin.chatting && fin.gone, JSON.stringify({ full: seen.full, fin }));
     const done = await state(page);
@@ -3289,27 +3323,26 @@ for (const coop of ["1", "2"]) {
     const g0 = (await look()).grad; await page.waitForTimeout(350); const g1 = (await look()).grad;
     check("morph: once settled, the line's colours keep sliding", g0 !== g1, JSON.stringify({ g0, g1 }));
     // Back home.
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(600);
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
     await page.click('.ai-chat-menu-item[data-action="clear"]');
-    const back = { drawingIn: null, drawnIn: null, faceBack: null, opening: null };
-    const t1 = Date.now();
-    while (Date.now() - t1 < 2600) {
-      const st = await look();
-      const short = st.ringH <= 1 && st.ringW >= 94 && st.ringW <= 110 && Math.abs(st.ringMid - st.heroMid) <= 2;
+    const btr = await record();
+    const back = { drawingIn: null, faceComing: null, faceBack: null, opening: null };
+    for (const st of dense(btr)) {
+      const nearFace = Math.abs(st.ringMid - st.heroMid) <= 3 && st.ringW <= 132;
       if (!back.drawingIn && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.gone && !st.chatting) back.drawingIn = st;
-      if (!back.drawnIn && short && st.gone) back.drawnIn = st;
-      if (!back.faceBack && short && !st.gone && st.photoOp >= 0.98) back.faceBack = st;
-      if (!back.opening && back.faceBack && st.ringH > 10 && st.ringH < 50 && st.photoOp >= 0.98) back.opening = st;
+      if (!back.faceComing && st.ringH <= 2 && nearFace && !st.gone && st.photoOp > 0.2 && st.photoOp < 0.9) back.faceComing = st;
+      if (!back.faceBack && st.ringH <= 12 && nearFace && st.photoOp >= 0.95) back.faceBack = st;
+      if (!back.opening && back.faceBack && st.ringH > 12 && st.ringH < 50 && st.photoOp >= 0.95) back.opening = st;
       if (st.ringH >= 60 && st.photoOp >= 0.98 && back.faceBack) break;
-      await page.waitForTimeout(12);
     }
     check("morph back 1: the line draws in from both sides toward the face's place, the face still away", !!back.drawingIn, JSON.stringify(back.drawingIn));
-    check("morph back 2: it rests as the short line where the face will be", !!back.drawnIn, JSON.stringify(back.drawnIn));
-    check("morph back 3: the face returns in front of the short line before it opens up", !!back.faceBack, JSON.stringify(back.faceBack));
+    check("morph back 2: as the line nears the face's place, the face eases in in front of it", !!back.faceComing, JSON.stringify(back.faceComing));
+    check("morph back 3: the face is there before the short line starts to open", !!back.faceBack, JSON.stringify(back.faceBack));
     check("morph back 4: the short line opens into the ring around the face", !!back.opening, JSON.stringify(back.opening));
-    await page.waitForTimeout(700);
+    const bsp = speeds(btr);
+    check("morph back: one continuous motion — nothing leaps, nothing pops, frame to frame", calm(bsp, 30), JSON.stringify(bsp));
     const b2 = await state(page);
     const end = await look();
     check("morph back: ends at home — the face in its round ring, one shape, no line left over", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.shapes === 1 && Math.abs(end.ringMid - end.faceMid) <= 2, JSON.stringify({ b2, end }));

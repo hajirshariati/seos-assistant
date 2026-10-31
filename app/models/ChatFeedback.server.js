@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { feedbackSubject } from "../lib/chat-rating.js";
 import prisma from "../db.server";
 
 // Keyed with the app's secret, so a stored hash can't be turned back into
@@ -172,10 +173,13 @@ export async function getFeedbackSummary(shop, range = 30) {
   };
 }
 
-export async function getRecentQuestions(shop, range = 30, limit = 15) {
+// Every rating in the range, newest first — the same rows the summary
+// counts, so the analytics page's list and its Satisfaction number agree.
+// A row without a saved transcript still shows the reply that was rated.
+export async function getRecentQuestions(shop, range = 30, limit = 300) {
   const { start, end } = resolveRange(range);
   const records = await prisma.chatFeedback.findMany({
-    where: { shop, createdAt: { gte: start, lte: end }, conversation: { not: null } },
+    where: { shop, createdAt: { gte: start, lte: end } },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -189,15 +193,16 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
       botResponse: true,
       createdAt: true,
     },
-    take: limit * 2,
+    take: limit,
   });
   const questions = [];
   for (const r of records) {
     try {
-      const conv = JSON.parse(r.conversation);
-      if (!Array.isArray(conv)) continue;
-      const firstUser = conv.find((m) => m.role === "user");
-      if (!firstUser?.content) continue;
+      let conv = [];
+      if (r.conversation) {
+        try { const parsed = JSON.parse(r.conversation); if (Array.isArray(parsed)) conv = parsed; } catch {}
+      }
+      const firstUser = conv.find((m) => m && m.role === "user" && typeof m.content === "string" && m.content);
       const transcript = conv
         .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
         .slice(-20)
@@ -208,8 +213,12 @@ export async function getRecentQuestions(shop, range = 30, limit = 15) {
       const lastUser = [...transcript].reverse().find((m) => m.role === "user");
       questions.push({
         id: r.id,
-        question: String(firstUser.content).slice(0, 200),
+        question: firstUser ? String(firstUser.content).slice(0, 200) : null,
         lastUserQuestion: lastUser?.content || null,
+        // What it was about, from the shopper's words (else from the reply).
+        subject: feedbackSubject(lastUser?.content || firstUser?.content || r.botResponse),
+        // The reply that was rated, for rows with no saved transcript.
+        aiResponse: r.botResponse ? String(r.botResponse).slice(0, 300) : null,
         // For down-voted rows, surface the AI's response that was
         // flagged. Rendered inline as 'AI RESPONDED' on the row so
         // the merchant can see the failure mode without expanding.

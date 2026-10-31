@@ -6,6 +6,7 @@ import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
+import { draftAllLessons } from "./feedback-lessons.server";
 import { refreshAllFitData } from "./fit-confidence.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +38,13 @@ async function runOnce() {
     await readAllPendingConcerns();
   } catch (err) {
     console.error("[retention] readAllPendingConcerns failed:", err?.message || err);
+  }
+  // Lessons from thumbs-down: a draft for every subject rated not helpful
+  // more than once this week, for the store team to approve or dismiss.
+  try {
+    await draftAllLessons();
+  } catch (err) {
+    console.error("[retention] draftAllLessons failed:", err?.message || err);
   }
   try {
     await cleanupOldRecordings();

@@ -49,6 +49,38 @@ export function cleanMoment(v, kind = "answer") {
   return v === "order" ? v : null;
 }
 
+// What a rated chat was about, from the shopper's own words — a few broad
+// subjects, so repeat trouble shows up as a count on the analytics page.
+// The first rule that matches wins, so the order below matters (an order
+// question that mentions shipping is about the order).
+export const FEEDBACK_SUBJECTS = {
+  orders: "Orders & tracking",
+  returns: "Returns & exchanges",
+  account: "Account & emails",
+  sizing: "Sizing & fit",
+  price: "Price & discounts",
+  shipping: "Shipping",
+  stores: "Stores & stock",
+  products: "Finding products",
+  other: "Something else",
+};
+const SUBJECT_RULES = [
+  ["orders", /\b(order|orders|tracking|track my|where is my|shipped yet|confirmation number|delivery status|my package)\b/i],
+  ["returns", /\b(return|returns|returning|exchange|exchanges|refund|refunds|send (it |them )?back|warranty)\b/i],
+  ["account", /\b(unsubscribe|unsubscribing|subscribe|subscription|email|emails|account|password|log ?in|sign ?in|newsletter|text messages|sms|stop (texting|messaging))\b/i],
+  ["sizing", /\b(size|sizes|sizing|fit|fits|fitting|wide|narrow|width|too (big|small|tight|loose)|half size|true fit|run (big|small|large))\b/i],
+  ["price", /\b(price|prices|cost|discount|discounts|coupon|promo|promo code|code|sale|cheaper|deal|deals)\b/i],
+  ["shipping", /\b(shipping|ship to|ship internationally|deliver|delivery|how long|arrive|arrives)\b/i],
+  ["stores", /\b(store|stores|in stock|stock|restock|back in stock|available|availability|near me|location|locations|retailer)\b/i],
+  ["products", /\b(sneaker|sneakers|sandal|sandals|shoe|shoes|boot|boots|slipper|slippers|clog|clogs|loafer|loafers|orthotic|orthotics|insole|insoles|arch|heel|plantar|bunion|bunions|recommend|recommendation|looking for|show me|color|colour|style|styles|collection)\b/i],
+];
+export function feedbackSubject(text) {
+  const t = String(text ?? "").trim();
+  if (!t) return null;
+  for (const [key, re] of SUBJECT_RULES) if (re.test(t)) return key;
+  return "other";
+}
+
 // The widget's id for one vote (its reason, picked after, updates the
 // same row).
 export function cleanVoteKey(v) {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useLoaderData, useSearchParams, Link, useRouteLoaderData } from "react-router";
+import { useLoaderData, useSearchParams, Link, useRouteLoaderData, useFetcher } from "react-router";
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
@@ -25,7 +25,8 @@ import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
-import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
+import { FEEDBACK_REASONS, FEEDBACK_MOMENTS, FEEDBACK_SUBJECTS } from "../lib/chat-rating.js";
+import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
 
 function parseRange(searchParams) {
   const preset = searchParams.get("range") || "30d";
@@ -78,13 +79,13 @@ export const loader = async ({ request }) => {
   const prevRange = { startDate: prevStart, endDate: prevEnd };
 
   const weekRange = { startDate: new Date(Date.now() - 7 * 86400000), endDate: new Date() };
-  const [usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage] = await Promise.all([
+  const [usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage, lessons] = await Promise.all([
     getUsageSummary(session.shop, rangeArg),
     getFeedbackSummary(session.shop, rangeArg),
     getTopProducts(session.shop, rangeArg, 10),
     getProductsByTool(session.shop, rangeArg, 10),
     getInterestBreakdown(session.shop, rangeArg),
-    getRecentQuestions(session.shop, rangeArg, 20),
+    getRecentQuestions(session.shop, rangeArg, 300),
     getShopTimeZone(admin, session.shop).then((timeZone) => getDailySeries(session.shop, rangeArg, { timeZone })),
     getUsageSummary(session.shop, prevRange),
     getFeedbackSummary(session.shop, prevRange),
@@ -93,6 +94,7 @@ export const loader = async ({ request }) => {
     getShopConfig(session.shop),
     getTopicRows(session.shop, { days: 7 }).catch(() => []),
     getUsageSummary(session.shop, weekRange),
+    listLessons(session.shop).catch(() => ({ drafts: [], decided: [] })),
   ]);
   // Cost estimator: real traffic, this store's priced setup, recorded replies.
   const [traffic, modeled, costRows] = await Promise.all([
@@ -105,7 +107,7 @@ export const loader = async ({ request }) => {
   cleanupOldMentions().catch(() => {});
 
   return {
-    usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, conversions,
+    usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, conversions, lessons,
     week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
     estimator: {
       traffic,
@@ -125,6 +127,20 @@ export const loader = async ({ request }) => {
     },
     range: { preset, label, startDate: startDate.toISOString(), endDate: endDate.toISOString(), days: spanDays },
   };
+};
+
+// Lessons from thumbs-down: approve or dismiss one, or draft today's now.
+export const action = async ({ request }) => {
+  const { session } = await authenticate.admin(request);
+  const form = await request.formData();
+  const intent = String(form.get("intent") || "");
+  try {
+    if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
+    if (intent === "lessons_draft") return await draftLessonsNow(session.shop);
+  } catch (err) {
+    return { error: String(err?.message || err) };
+  }
+  return { error: "Unknown action." };
 };
 
 function formatCost(n) {
@@ -213,8 +229,19 @@ const ANALYTICS_CSS = `
   .an-pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #616161; background: rgba(26,46,38,0.06); white-space: nowrap; }
   .an-pill.is-up { color: #2D6B4F; background: rgba(45,107,79,0.10); }
   .an-pill.is-down { color: #a33d3d; background: rgba(185,90,90,0.13); }
-  .an-why { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 16px 12px; }
-  .an-why__label { font-size: 12px; line-height: 16px; font-weight: 600; color: #616161; margin-right: 2px; }
+  .an-lesson { padding: 12px 16px 14px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .an-lesson__line { margin-top: 4px; font-size: 14px; line-height: 20px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
+  .an-lesson__fix { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(45,107,79,0.06); font-size: 13px; line-height: 18px; color: #1a2e26; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .an-lesson__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .an-lesson__past { display: grid; gap: 5px; padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); font-size: 12.5px; line-height: 18px; color: #616161; }
+  .an-lesson__done { display: flex; align-items: flex-start; gap: 8px; }
+  .an-lesson__done span:last-child { overflow-wrap: anywhere; }
+  .an-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 16px 12px; padding: 9px 12px; border-radius: 10px; background: rgba(185,90,90,0.07); }
+  .an-flags__label { font-size: 12px; line-height: 16px; font-weight: 650; color: #8a3a3a; margin-right: 2px; }
+  .an-flags__none { font-size: 12px; line-height: 16px; color: #7a5a5a; }
+  .an-chip.is-down { color: #a33d3d; background: #fff; box-shadow: inset 0 0 0 1px rgba(163,61,61,0.35); }
+  .an-chip.is-down:hover { box-shadow: inset 0 0 0 1px rgba(163,61,61,0.7); }
+  .an-chip.is-down[aria-pressed="true"] { background: #a33d3d; color: #fff; box-shadow: none; }
   .an-convo__q { font-size: 13.5px; line-height: 19px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .an-convo__line { margin-top: 2px; font-size: 12.5px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
   .an-convo__line b { font-weight: 600; color: #616161; }
@@ -417,11 +444,13 @@ function ConversationRow({ row, mounted }) {
         {row.reason && FEEDBACK_REASONS[row.reason] && <span className="an-pill is-down">{FEEDBACK_REASONS[row.reason]}</span>}
         {chat && <span className="an-pill">{row.moment && FEEDBACK_MOMENTS[row.moment] ? `Whole chat · ${FEEDBACK_MOMENTS[row.moment].toLowerCase()}` : "Rated the whole chat"}</span>}
         {!chat && row.moment === "order" && <span className="an-pill">{FEEDBACK_MOMENTS.order}</span>}
+        {row.vote === "down" && row.subject && FEEDBACK_SUBJECTS[row.subject] && <span className="an-pill">{FEEDBACK_SUBJECTS[row.subject]}</span>}
         {products.length > 0 && <span className="an-pill">{`${products.length} product${products.length > 1 ? "s" : ""}`}</span>}
       </div>
       {(row.lastUserQuestion || row.question) && <div className="an-convo__q an-clamp">{row.lastUserQuestion || row.question}</div>}
       {row.comment && <div className="an-convo__line"><b>Comment:</b> {row.comment}</div>}
       {row.flaggedAiResponse && <div className="an-convo__line an-clamp"><b>AVA said:</b> {row.flaggedAiResponse}</div>}
+      {!row.flaggedAiResponse && !row.lastUserQuestion && !row.question && row.aiResponse && <div className="an-convo__line an-clamp"><b>AVA said:</b> {row.aiResponse}</div>}
       {transcript.length > 0 && (
         <button type="button" className="an-convo__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           {open ? "Hide conversation" : `Read the conversation (${transcript.length} message${transcript.length > 1 ? "s" : ""})`}
@@ -439,69 +468,161 @@ function ConversationRow({ row, mounted }) {
   );
 }
 
-// Recent rated / finished chats: filter chips, the latest few, the rest on
-// demand. Export downloads the active filter.
-function ConversationsCard({ rows, reasons, onExport, exporting, mounted }) {
-  const [filter, setFilter] = useState("all");
+// Lessons from thumbs-down, waiting for a decision: once a day (or on Draft
+// now) the assistant reads the week's not-helpful chats and drafts, for
+// every subject with two or more, one line to do differently and, for a
+// missing fact, the fact. Approve writes it into Knowledge or Rules;
+// Dismiss rests it a week. Nothing reaches the assistant until approved.
+function LessonsCard({ lessons, mounted }) {
+  const fetcher = useFetcher();
+  const busy = fetcher.state !== "idle";
+  const drafting = busy && fetcher.formData?.get("intent") === "lessons_draft";
+  const drafts = lessons?.drafts || [];
+  const decided = lessons?.decided || [];
+  const result = fetcher.state === "idle" ? fetcher.data : null;
+  return (
+    <Card padding="0">
+      <Row
+        title={<InlineStack gap="200" blockAlign="center"><span>Lessons to review</span>{drafts.length > 0 && <Badge tone="attention">{String(drafts.length)}</Badge>}</InlineStack>}
+        help="Once a day AVA reads the chats rated not helpful this week and, for every subject with two or more, drafts one line to do differently — and, when a fact was missing, the fact to add. Approve adds it to Knowledge (a fact) or Rules (how to handle it); Dismiss rests it for a week. Nothing changes until you approve."
+        control={
+          <fetcher.Form method="post">
+            <input type="hidden" name="intent" value="lessons_draft" />
+            <Button size="slim" submit loading={drafting} disabled={busy && !drafting}>Draft now</Button>
+          </fetcher.Form>
+        }
+      />
+      {result?.error && <div className="an-callout">{result.error}</div>}
+      {result && !result.error && typeof result.drafted === "number" && (
+        <div className="an-callout">{result.drafted > 0 ? `${result.drafted} new lesson${result.drafted === 1 ? "" : "s"} drafted.` : "Nothing new to draft: no subject has two or more thumbs down this week, or its lesson is already here."}</div>
+      )}
+      {drafts.length === 0 ? (
+        <div className="an-empty">No lessons waiting. A draft appears once a subject gets two or more thumbs down in a week.</div>
+      ) : drafts.map((l) => (
+        <div key={l.id} className="an-lesson">
+          <div className="an-convo__meta">
+            <span className="an-pill is-down">{l.label}</span>
+            <span className="an-pill">{`${l.count} thumbs down`}</span>
+            <span className="an-pill">{l.kind === "knowledge" && l.fix ? "A fact to add" : "How to handle it"}</span>
+            {mounted && <span>{new Date(l.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
+          </div>
+          <div className="an-lesson__line">{l.lesson}</div>
+          {l.kind === "knowledge" && l.fix && <div className="an-lesson__fix">{l.fix}</div>}
+          {l.examples.length > 0 && <div className="an-convo__line"><b>Shoppers asked:</b> {l.examples.map((q) => `“${q}”`).join(" · ")}</div>}
+          <div className="an-lesson__actions">
+            <fetcher.Form method="post">
+              <input type="hidden" name="intent" value="lesson_decide" />
+              <input type="hidden" name="id" value={l.id} />
+              <input type="hidden" name="decision" value="approved" />
+              <Button size="slim" variant="primary" submit disabled={busy}>{l.kind === "knowledge" && l.fix ? "Approve — add to Knowledge" : "Approve — add to Rules"}</Button>
+            </fetcher.Form>
+            <fetcher.Form method="post">
+              <input type="hidden" name="intent" value="lesson_decide" />
+              <input type="hidden" name="id" value={l.id} />
+              <input type="hidden" name="decision" value="dismissed" />
+              <Button size="slim" submit disabled={busy}>Dismiss</Button>
+            </fetcher.Form>
+          </div>
+        </div>
+      ))}
+      {decided.length > 0 && (
+        <div className="an-lesson__past">
+          {decided.map((l) => (
+            <div key={l.id} className="an-lesson__done">
+              <span className={`an-pill${l.status === "approved" ? " is-up" : ""}`}>{l.status === "approved" ? "Approved" : "Dismissed"}</span>
+              <span>{`${l.label}: ${l.lesson}`}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Every rating in the range — the same votes behind the Satisfaction
+// number — newest first: thumbs under a reply, and the check-in on the
+// whole chat. What came up more than once among the thumbs-down (a
+// subject raised, a reason picked) is flagged on top; each flag filters
+// the list. Export downloads the vote filter you pick.
+function RatingsCard({ rows, onExport, exporting, mounted }) {
+  const [vote, setVote] = useState("all");
+  const [flag, setFlag] = useState(null);
   const [showAll, setShowAll] = useState(false);
-  const filtered = useMemo(() => {
-    if (filter === "down") return rows.filter((r) => r.vote === "down");
-    if (filter === "up") return rows.filter((r) => r.vote === "up");
-    if (filter === "unrated") return rows.filter((r) => r.vote !== "up" && r.vote !== "down");
-    if (filter === "comments") return rows.filter((r) => r.comment);
-    return rows;
-  }, [rows, filter]);
   // Counts derive from the loaded rows so each chip matches what it shows.
   const counts = useMemo(() => {
-    let up = 0, down = 0;
+    let up = 0, down = 0, comments = 0;
     for (const r of rows) {
       if (r.vote === "up") up++;
       else if (r.vote === "down") down++;
+      if (r.comment) comments++;
     }
-    return { up, down, unrated: rows.length - up - down, comments: rows.filter((r) => r.comment).length };
+    return { up, down, comments };
   }, [rows]);
-  // The one-tap reasons after a thumbs-down, most picked first (the range).
-  const why = useMemo(
-    () => Object.entries(reasons || {}).filter(([key, n]) => FEEDBACK_REASONS[key] && n > 0).sort((a, b) => b[1] - a[1]),
-    [reasons],
-  );
+  // Flagged: among the thumbs-down, subjects and reasons seen more than once.
+  const flags = useMemo(() => {
+    const subjects = {}, reasons = {};
+    for (const r of rows) {
+      if (r.vote !== "down") continue;
+      if (r.subject && FEEDBACK_SUBJECTS[r.subject]) subjects[r.subject] = (subjects[r.subject] || 0) + 1;
+      if (r.reason && FEEDBACK_REASONS[r.reason]) reasons[r.reason] = (reasons[r.reason] || 0) + 1;
+    }
+    const pick = (o, kind, labels) => Object.entries(o).filter(([, n]) => n > 1).sort((x, y) => y[1] - x[1]).map(([key, n]) => ({ kind, key, n, label: labels[key] }));
+    return [...pick(subjects, "subject", FEEDBACK_SUBJECTS), ...pick(reasons, "reason", FEEDBACK_REASONS)];
+  }, [rows]);
+  const filtered = useMemo(() => rows.filter((r) => {
+    if (vote === "down" && r.vote !== "down") return false;
+    if (vote === "up" && r.vote !== "up") return false;
+    if (vote === "comments" && !r.comment) return false;
+    if (flag) {
+      if (r.vote !== "down") return false;
+      if (flag.kind === "subject" && r.subject !== flag.key) return false;
+      if (flag.kind === "reason" && r.reason !== flag.key) return false;
+    }
+    return true;
+  }), [rows, vote, flag]);
   const FIRST = 5;
   const shown = showAll ? filtered : filtered.slice(0, FIRST);
 
   const chips = [
-    { value: "all", label: "All", n: rows.length },
+    { value: "all", label: "All votes", n: rows.length },
     { value: "down", label: "Not helpful", n: counts.down },
     { value: "up", label: "Helpful", n: counts.up },
-    { value: "unrated", label: "No vote", n: counts.unrated },
     { value: "comments", label: "With comments", n: counts.comments },
   ].filter((c) => c.value === "all" || c.n > 0);
+  const isOn = (f) => Boolean(flag && flag.kind === f.kind && flag.key === f.key);
 
   return (
     <Card padding="0">
       <Row
-        title={<InlineStack gap="200" blockAlign="center"><span>Customer conversations</span><Badge>{String(rows.length)}</Badge></InlineStack>}
-        help="Recent chats customers rated, or that ended with a recommendation. Export downloads the filter you pick."
+        title={<InlineStack gap="200" blockAlign="center"><span>Ratings</span><Badge>{String(rows.length)}</Badge></InlineStack>}
+        help={`Every thumbs up or down from this range, newest first — the same ${rows.length} vote${rows.length === 1 ? "" : "s"} behind the Satisfaction number (${counts.up} helpful · ${counts.down} not). Some rate one reply, some the whole chat at the check-in. Export downloads the vote filter you pick.`}
         control={
-          <Button size="slim" onClick={() => onExport("conversations", filter === "all" ? {} : { vote: filter })} loading={exporting === "conversations"} disabled={Boolean(exporting) && exporting !== "conversations"}>
+          <Button size="slim" onClick={() => onExport("conversations", vote === "all" ? {} : { vote })} loading={exporting === "conversations"} disabled={Boolean(exporting) && exporting !== "conversations"}>
             Export
           </Button>
         }
       />
       <div className="an-chips" role="group" aria-label="Show">
         {chips.map((c) => (
-          <button key={c.value} type="button" className="an-chip" aria-pressed={filter === c.value} onClick={() => { setFilter(c.value); setShowAll(false); }}>
+          <button key={c.value} type="button" className="an-chip" aria-pressed={vote === c.value} onClick={() => { setVote(c.value); setShowAll(false); }}>
             {c.label}<small>{c.n}</small>
           </button>
         ))}
       </div>
-      {why.length > 0 && (
-        <div className="an-why">
-          <span className="an-why__label">Why not helpful</span>
-          {why.map(([key, n]) => <span key={key} className="an-pill is-down">{`${FEEDBACK_REASONS[key]} · ${n}`}</span>)}
+      {counts.down > 0 && (
+        <div className="an-flags" role="group" aria-label="Flagged for review">
+          <span className="an-flags__label">Flagged — more than one thumbs down</span>
+          {flags.length === 0
+            ? <span className="an-flags__none">Nothing repeated yet: no subject or reason has more than one thumbs down in this range.</span>
+            : flags.map((f) => (
+              <button key={`${f.kind}:${f.key}`} type="button" className="an-chip is-down" aria-pressed={isOn(f)} title={f.kind === "subject" ? "What the customer was asking about" : "The reason the customer picked"} onClick={() => { setFlag(isOn(f) ? null : { kind: f.kind, key: f.key }); setShowAll(false); }}>
+                {f.kind === "reason" ? `Reason: ${f.label}` : f.label}<small>{f.n}</small>
+              </button>
+            ))}
         </div>
       )}
       {shown.length === 0 ? (
-        <div className="an-empty" style={{ borderTop: "1px solid rgba(30,27,51,0.07)" }}>No conversations match this filter.</div>
+        <div className="an-empty" style={{ borderTop: "1px solid rgba(30,27,51,0.07)" }}>No ratings match this filter.</div>
       ) : (
         shown.map((r) => <ConversationRow key={r.id} row={r} mounted={mounted} />)
       )}
@@ -604,7 +725,7 @@ function ExportMenu({ onExport, exporting }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, recentQuestions, daily, conversions, previous, range, estimator, week } = useLoaderData();
+  const { usage, feedback, productsByTool, recentQuestions, daily, conversions, previous, range, estimator, week, lessons } = useLoaderData();
   // The chat's order tag carries the app's brand (AVA on the Aetrex app).
   const orderTag = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME);
   const [searchParams] = useSearchParams();
@@ -703,7 +824,7 @@ export default function Analytics() {
             <Kpi
               label="Satisfaction"
               value={feedback.total > 0 ? `${feedback.satisfactionRate}%` : "—"}
-              sub={feedback.total > 0 ? `${feedback.up} helpful · ${feedback.down} not` : "No votes yet"}
+              sub={feedback.total > 0 ? `${feedback.up} helpful · ${feedback.down} not · ${feedback.total} vote${feedback.total === 1 ? "" : "s"}` : "No votes yet"}
               curr={feedback.satisfactionRate}
               prev={previous.satisfaction}
             />
@@ -734,8 +855,11 @@ export default function Analytics() {
 
           <ProductsCard searched={top5(productsByTool?.searched)} viewed={top5(productsByTool?.viewed)} />
 
+          {(feedback.down > 0 || lessons?.drafts?.length > 0 || lessons?.decided?.length > 0) && (
+            <LessonsCard lessons={lessons} mounted={mounted} />
+          )}
           {recentQuestions.length > 0 && (
-            <ConversationsCard rows={recentQuestions} reasons={feedback.reasons} onExport={handleExport} exporting={exporting} mounted={mounted} />
+            <RatingsCard rows={recentQuestions} onExport={handleExport} exporting={exporting} mounted={mounted} />
           )}
 
           <div>
