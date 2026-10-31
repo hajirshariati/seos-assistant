@@ -203,6 +203,7 @@ await test("admin form posts forwarded as plain HTTP pass the cross-site check; 
 
 console.log(`\nstorefront path (production build, ${productCount} products, stand-in model)`);
 await test("a signed chat turn streams the reply, two product cards and done", async () => {
+  const before = modelCalls.length;
   const r = await chat("i need supportive sandals");
   assert.equal(r.status, 200);
   const types = r.events.map((e) => e.type);
@@ -212,6 +213,8 @@ await test("a signed chat turn streams the reply, two product cards and done", a
   assert.equal(r.events[1].products.length, 2);
   assert.ok(r.events[1].products.every((p) => /sandal/i.test(p.title) && p.price_formatted === "$119.95"));
   assert.ok(modelCalls.at(-1).model === "claude-sonnet-4-6", "a deprecated stored model is never sent to Anthropic");
+  // The turn's first model call carries the shopper's message (later calls end with tool results).
+  assert.match(modelCalls[before].last, /\(Right now it's \w{3}, \w{3} \d{1,2}, \d{4}, .* Eastern \(.* Pacific\)\.\)/, "the current date and time go with every turn's message");
 });
 await test("the turn is recorded as healthy with its latency", async () => {
   await new Promise((r) => setTimeout(r, 200));

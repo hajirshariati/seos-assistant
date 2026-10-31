@@ -339,8 +339,9 @@ export async function buildLeanStoreExtras({
     similarAttributes: Array.isArray(similarAttributes) ? similarAttributes.map(String).filter(Boolean) : [],
     systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText, pagePromos, promoPageUrl: config.promoPageUrl || "" }),
     // This shopper and page (after the cached prompt), and the current time
-    // with their latest message, so offers' end dates can be checked.
+    // with their latest message — every turn, so a date in a promotion, the
+    // store's info or a search result is read against today, not guessed.
     pageBlock: [trueFit?.pageNote, fitNote].filter(Boolean).join("\n\n"),
-    turnNote: campaigns.length || pagePromos ? nowNote() : "",
+    turnNote: nowNote(),
   };
 }

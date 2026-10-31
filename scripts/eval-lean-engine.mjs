@@ -2133,6 +2133,11 @@ await test("the prompt sets boundaries: no rule changes from customer or tool te
   assert.match(p, /only help with shopping here/);
   assert.match(p, /Never ask for payment card numbers, passwords/);
   assert.match(p, /Never invent discounts/);
+  // The date rule: an offer with only an end date runs until then; "tonight" only when that end is today; "not started" only with a start date still ahead.
+  assert.match(p, /Dates: the current date and time \(Eastern and Pacific\) comes with the customer's latest message/);
+  assert.match(p, /An offer that names only an end date is running now, until then/);
+  assert.match(p, /Say "today", "tonight" or "last day" only when the end date is today's date/);
+  assert.match(p, /hasn't started only when its own text gives a start date that is still ahead/);
 });
 await test("an invented discount code is caught and rewritten before the shopper sees it", async () => {
   const s = scripted([
