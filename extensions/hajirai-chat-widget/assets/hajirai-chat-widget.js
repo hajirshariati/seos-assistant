@@ -708,6 +708,7 @@ function menuHtml(){
   function item(action,icon,label){return '<button type="button" role="menuitem" class="ai-chat-menu-item" data-action="'+action+'">'+icon+'<span>'+esc(label)+'</span></button>'}
   var h=item('clear',MI.chat,'Start a new chat');
   if(ff&&savedFit())h+=item('refit',MI.fit,'Retake my orthotic FIT');
+  if(FOCUS&&fbShown())h+=item('feedback',WI.feedback,FB_LABEL);
   h+='<div class="ai-chat-menu-sep" role="separator"></div>';
   if(CUST_LOGGED_IN)h+=(CUST_NAME?'<div class="ai-chat-menu-who">Signed in as '+esc(CUST_NAME)+'</div>':'')+item('logout',MI.out,'Log out');
   else h+=item('login',MI.user,'Log in');
@@ -1303,7 +1304,7 @@ function focusRest(chat){
 }
 function focusSetChatting(on){
   focusAnim=null;++focusMorphGen;
-  panel.classList.toggle('is-chatting',!!on);
+  focusChatClass(on);
   var e=focusParts();if(e)e.hero.classList.toggle('is-gone',!!on);
   focusRest(!!on);
 }
@@ -1346,7 +1347,7 @@ function focusRingToLine(){
   focusPlay([
     {at:0,dur:380,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:0,cx:g.hx}}},
     {at:340,dur:280,ease:FOCUS_EASE_INOUT,to:function(){return {fs:0.72,fo:0}}},
-    {at:540,dur:620,ease:FOCUS_EASE_INOUT,start:function(){panel.classList.add('is-chatting')},to:function(){return {a:focusG.W/2+FOCUS_SW,cx:focusG.W/2}}}
+    {at:540,dur:620,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(true)},to:function(){return {a:focusG.W/2+FOCUS_SW,cx:focusG.W/2}}}
   ],function(){focusSetChatting(true)});
 }
 /* Chat → home: the mirror. The line draws in from both sides; as it
@@ -1358,7 +1359,7 @@ function focusLineToRing(){
   if(!focusMotionOk()||typeof requestAnimationFrame!=='function'){focusSetChatting(false);return}
   var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),keep=function(){focusS.a=focusPerimA(focusS.b,r)};
   focusPlay([
-    {at:0,dur:580,ease:FOCUS_EASE_INOUT,start:function(){panel.classList.remove('is-chatting')},to:function(){return {a:focusPerimA(0,r),b:0,cx:g.hx}}},
+    {at:0,dur:580,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(false)},to:function(){return {a:focusPerimA(0,r),b:0,cx:g.hx}}},
     {at:400,dur:340,ease:FOCUS_EASE_OUT,start:function(){focusS.fs=0.72;focusS.fo=0;focusDraw();e.hero.classList.remove('is-gone')},to:function(){return {fs:1,fo:1}}},
     {at:620,dur:400,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:r}}}
   ],function(){focusSetChatting(false)});
@@ -1381,6 +1382,7 @@ function focusFlow(now){
    soft light that flows while Ava is answering (focusRingToLine). */
 if(FOCUS){
   panel.classList.add('is-focus');
+  focusTitleBuild();
   var _fhdr=$('.ai-chat-header',panel);
   if(_fhdr)_fhdr.insertAdjacentHTML('beforeend',focusBandHtml()+'<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div>');
   /* One row: the name and the controls, the face on the header's bottom
@@ -1588,7 +1590,7 @@ function welcomeGreetingText(){
 }
 /* Settings' chat text arrived after the chat was drawn: put it in place. */
 function refreshTexts(inWas){
-  var hn=$('.ai-chat-header__name',panel);if(hn)hn.textContent=NAME;
+  var hn=$('.ai-chat-header__name',panel);if(hn){if(FOCUS)focusTitleBuild();else hn.textContent=NAME}
   var hs=$('.ai-chat-header__sub',panel);if(hs){hs.textContent=NAME_SUB;hs.hidden=!NAME_SUB}
   if(FOCUS){focusGreetRender();focusMeasure()}
   var lt=$('.ai-chat-launcher__text',launcher);if(lt){lt.textContent=LPLACE;lt.setAttribute('aria-label',LPLACE+' — open the shopping assistant')}
@@ -1603,6 +1605,7 @@ function refreshTexts(inWas){
 function refreshWelcomeCtas(){
   var box=$('.ai-chat-welcome__ctas',panel);
   if(box)box.innerHTML=welcomeCtasHtml(welcomeCtas());
+  if(FOCUS){var w=$('.ai-chat-welcome--focus',panel),fr=w&&$('.ai-chat-focus__fb',w);if(w){if(fr)fr.remove();w.insertAdjacentHTML('beforeend',focusFbHtml())}}
 }
 /* ── Focus home (Theme editor → Home layout → Focus) ──
    The foot-pain specialist first: the question, five places it can hurt
@@ -1686,6 +1689,7 @@ function buildFocusHome(){
   h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);
   h+='<button type="button" class="ai-chat-focus__pain ai-chat-focus__else" data-focus="type"><span class="ai-chat-focus__pain-title">Something else…</span></button></div>';
   h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><i aria-hidden="true"></i><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><i aria-hidden="true"></i><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
+  h+=focusFbHtml();
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
@@ -1743,6 +1747,31 @@ function focusGreetReset(){
   var el=$('.ai-chat-focus__greet',panel),cur=el&&$('.ai-chat-greet__item.is-in',el),f=focusGreetFrames()[0];
   if(el&&f&&f.text&&!(cur&&cur.textContent===f.text))el.innerHTML='<span class="ai-chat-greet">'+focusGreetItem(f,'is-in')+'</span>';
   focusGreetStart();
+}
+/* The header's words (Focus): at home, the store's greeting — its signed-in
+   one, with the shopper's name, for a known shopper — where the name was;
+   once a chat starts, the assistant's name. Both sit in the name's box, so
+   the header keeps its height; the CSS trades them with the name's slide
+   to the left (is-chatting), and only the one showing is read out. The
+   classic header keeps the plain name. */
+function focusHomeTitle(){return welcomeGreetingText()||NAME}
+function focusTitleBuild(){
+  var hn=$('.ai-chat-header__name',panel);if(!hn)return;
+  hn.innerHTML='<span class="ai-chat-header__title ai-chat-header__title--chat">'+esc(NAME)+'</span><span class="ai-chat-header__title ai-chat-header__title--home">'+esc(focusHomeTitle())+'</span>';
+  focusTitleSync();
+}
+function focusTitleSync(){
+  var chat=panel.classList.contains('is-chatting'),c=$('.ai-chat-header__title--chat',panel),h=$('.ai-chat-header__title--home',panel);
+  if(c)c.setAttribute('aria-hidden',chat?'false':'true');
+  if(h)h.setAttribute('aria-hidden',chat?'true':'false');
+}
+function focusChatClass(on){panel.classList.toggle('is-chatting',!!on);focusTitleSync()}
+/* The store's feedback survey (Settings → Feedback survey) on the Focus
+   home: a quiet pill under the links — the classic home's fourth button
+   has no place here — gone once this shopper has sent it, when the
+   setting says so. The ⋮ menu carries the same line (menuHtml). */
+function focusFbHtml(){
+  return fbShown()?'<div class="ai-chat-focus__fb"><button type="button" data-feedback="1" aria-haspopup="dialog">'+WI.feedback+'<span>'+esc(FB_LABEL)+'</span></button></div>':'';
 }
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
@@ -3003,8 +3032,8 @@ function closeSheetNow(quiet){
   /* Sent: the button makes way for Start here button 4. */
   if(fbSent&&sheetKind==='fb'){
     sheetSubmitted=false;
-    var t=$('[data-feedback]',panel);
-    if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}
+    if(FOCUS){var fr=$('.ai-chat-focus__fb',panel);if(fr)fr.remove()}
+    else{var t=$('[data-feedback]',panel);if(t){if(CTA4L&&CTA4M)t.outerHTML=ctaTileHtml({l:CTA4L,m:CTA4M,i:CTA4I});else t.remove()}}
     if(fbSheet){var f=$('.ai-chat-fbsheet__form',fbSheet);if(f)f.innerHTML='';sheetForm=''}
     fbOpener=null;
   }
@@ -5105,6 +5134,7 @@ function resumeAfterSignIn(){
   if(!r||Date.now()-(r.at||0)>15*60*1000)return;
   resumeAfterSignIn.busy=true;setTimeout(function(){resumeAfterSignIn.busy=false},3000);
   CUST_LOGGED_IN=true;
+  if(FOCUS)focusTitleBuild();
   var pill=panel.querySelector('.ai-chat-header__login-pill');if(pill)pill.remove();
   /* The sign-in cards above have done their job. */
   var done=panel.querySelectorAll('[data-ord-login]');
@@ -6412,6 +6442,7 @@ menu.addEventListener('click',function(e){
   menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');
   if(a==='clear')clearChat();
   else if(a==='refit'){if(!isStreaming)startHelper('refit')}
+  else if(a==='feedback')openFeedback(menuBtn);
   else if(a==='login')location.href=loginUrl();
   /* Signing out takes this customer's chat and sizes with it. */
   else if(a==='logout'){forgetPersonal();try{localStorage.setItem(OWNER_KEY,'guest')}catch(e){}location.href=CUST_LOGOUT_URL}

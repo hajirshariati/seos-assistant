@@ -119,6 +119,20 @@
       "default": "AI Shopping Assistant"
     },
     {
+      "type": "textarea",
+      "id": "greeting",
+      "label": "Greeting",
+      "info": "The chat's first words. On the Focus home it stands at the top of the chat in place of the name, which takes over once a chat starts; on the Classic home it is the welcome title.",
+      "default": "Hi! I'm your personal shopping assistant."
+    },
+    {
+      "type": "textarea",
+      "id": "greeting_logged_in",
+      "label": "Greeting (logged in)",
+      "info": "The same, for logged-in customers. Use {name} for their first name. Leave blank to use the greeting above.",
+      "default": "Welcome back, {name}! How can I help you today?"
+    },
+    {
       "type": "image_picker",
       "id": "avatar",
       "label": "Avatar Image"
@@ -137,19 +151,6 @@
     {
       "type": "header",
       "content": "Messages"
-    },
-    {
-      "type": "textarea",
-      "id": "greeting",
-      "label": "Greeting",
-      "default": "Hi! I'm your personal shopping assistant."
-    },
-    {
-      "type": "textarea",
-      "id": "greeting_logged_in",
-      "label": "Greeting (logged in)",
-      "info": "Personalized greeting for logged-in customers. Use {name} for their first name. Leave blank to use the default greeting.",
-      "default": "Welcome back, {name}! How can I help you today?"
     },
     {
       "type": "text",

@@ -931,8 +931,8 @@ function LookSection({ d, values, set }) {
               <TextField label="Under the chat name" value={values.textNameSub} onChange={set("textNameSub")} placeholder="Optional, e.g. Aetrex Virtual Assistant" maxLength={TEXT_MAX.nameSub} autoComplete="off" helpText="A smaller gray line under the name. Left blank, the header shows just the name." />
             </div>
             <div className="set-grid">
-              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={TEXT_DEFAULT.greeting} maxLength={TEXT_MAX.greeting} autoComplete="off" />
-              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={TEXT_DEFAULT.greetingLoggedIn} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="{name} becomes the shopper's first name." />
+              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={TEXT_DEFAULT.greeting} maxLength={TEXT_MAX.greeting} autoComplete="off" helpText="The chat's first words. On the Focus home, the header's words in place of the chat name until a chat starts; on the Classic home, the welcome title." />
+              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={TEXT_DEFAULT.greetingLoggedIn} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="The same, for signed-in shoppers; {name} becomes their first name. Left blank, the greeting above is used." />
             </div>
             <div className="set-grid set-grid--3">
               <TextField label="“Start here” heading" value={values.textStartHeading} onChange={set("textStartHeading")} placeholder={TEXT_DEFAULT.startHeading} maxLength={TEXT_MAX.startHeading} autoComplete="off" />

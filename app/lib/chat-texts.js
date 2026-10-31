@@ -1,5 +1,7 @@
 // The chat's own words, set in Settings → Look & feel → Chat text: its name
-// (and an optional smaller line under it in the header), the welcome greetings, the "Start here" / "Popular" headings, the chat
+// (and an optional smaller line under it in the header), the greetings (the
+// Classic welcome title; the Focus header's words until a chat starts), the
+// "Start here" / "Popular" headings, the chat
 // button, the message box and the product cards' fit & size button (shown
 // with Fit confidence on). Stored as one JSON object; a blank one keeps
 // the theme editor's text (or the built-in default). Pure.
