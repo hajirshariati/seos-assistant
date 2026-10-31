@@ -3110,13 +3110,13 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
-    const parts = await page.evaluate(() => ({ heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-hero__glow"), title: document.querySelector(".ai-chat-focus__title")?.textContent, line: document.querySelector(".ai-chat-focus__line")?.textContent, tiles: document.querySelectorAll(".ai-chat-focus__tile").length, tileMsgs: document.querySelectorAll(".ai-chat-focus__tile[data-message]").length, feet: document.querySelectorAll(".ai-chat-focus__tile .ai-chat-focus__ico .ai-chat-focus__foot").length, zones: document.querySelectorAll(".ai-chat-focus__zone").length, plain: !document.querySelector('.ai-chat-focus__tile[data-focus="type"] svg'), cards: [...document.querySelectorAll("[data-focus-sheet]")].map((c) => c.getAttribute("data-focus-sheet")), pics: document.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: document.querySelectorAll("[data-prefill]").length }));
-    check("home layout focus: the face on the line (the photo, or the initial when the store has none), the question, five footprint tiles with the painful place marked + Something else without an icon, Footwear + Orthotics cards (line drawings until pictures are set), three quiet links — none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.title === "Where does it hurt?" && /Tap where your foot hurts/.test(parts.line) && parts.tiles === 6 && parts.tileMsgs === 5 && parts.feet === 5 && parts.zones === 5 && parts.plain && parts.cards.join(",") === "footwear,orthotics" && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
+    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-hero__glow"), greet: document.querySelector(".ai-chat-header__sub .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), subs: w.querySelectorAll(".ai-chat-focus__pain .ai-chat-focus__pain-sub").length, feet: w.querySelectorAll(".ai-chat-focus__pain .ai-chat-focus__ico .ai-chat-focus__foot").length, marks: w.querySelectorAll(".ai-chat-focus__pain .ai-chat-focus__dot").length, tint: w.querySelectorAll(".ai-chat-focus__pain .ai-chat-focus__tint").length, else: !!w.querySelector('.ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
+    check("home layout focus: the face on the line, the greeting under the name; the shop cards first (no label, no banner where the theme has none), then Where does it hurt as five rows — a foot in profile with the spot marked, what it usually is — a quiet Something else, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__else,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick the spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.subs === 5 && parts.feet === 5 && parts.marks === 4 && parts.tint === 1 && parts.else && parts.cards.join("|") === "Shop footwear|Shop orthotics" && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
     const geo = await page.evaluate((lineY) => { const h = document.querySelector(".ai-chat-hero").getBoundingClientRect(), d = document.querySelector(".ai-chat-header").getBoundingClientRect(), t = document.querySelector(".ai-chat-focus__title").getBoundingClientRect(), n = document.querySelector(".ai-chat-header__name").getBoundingClientRect(); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, titleTop: t.top, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom }; }, lineY.toString());
-    check("home layout focus: the face is centred on the header's line (the header's bottom when the name has no second line), clear of the name and of the question", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.titleTop > geo.heroBottom + 6 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
+    check("home layout focus: the face is centred on the header's line, the name above it, the greeting row below it, clear of the name and of the home", Math.abs(geo.heroMid - geo.line) <= 2 && geo.line < geo.hdrBottom && geo.nameBottom <= geo.line && geo.titleTop > geo.heroBottom + 6 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
     // "Something else" and the links only touch the text box.
     let n = chatBodies.length;
-    await page.click('.ai-chat-focus__tile[data-focus="type"]');
+    await page.click('.ai-chat-focus__else[data-focus="type"]');
     await page.waitForTimeout(250);
     let s2 = await state(page);
     check("home layout focus: Something else only puts the cursor in the text box", s2.focused && s2.home && chatBodies.length === n, JSON.stringify(s2));
@@ -3165,11 +3165,11 @@ for (const coop of ["1", "2"]) {
     await page.click('.ai-chat-menu-item[data-action="clear"]');
     await page.waitForTimeout(1200);
     s2 = await state(page);
-    const again = await page.evaluate(() => document.querySelectorAll(".ai-chat-focus__tile").length);
-    check("home layout focus: New chat brings the face and the home back", s2.home && !s2.chatting && s2.hero && !s2.heroGone && s2.focusHome && again === 6, JSON.stringify(s2));
+    const again = await page.evaluate(() => document.querySelectorAll(".ai-chat-focus__pain").length);
+    check("home layout focus: New chat brings the face and the home back", s2.home && !s2.chatting && s2.hero && !s2.heroGone && s2.focusHome && again === 5, JSON.stringify(s2));
     // A pain tile sends its question; after a reload the chat opens with the line, no face.
     n = chatBodies.length;
-    await page.click('.ai-chat-focus__tile[data-message]');
+    await page.click('.ai-chat-focus__pain[data-message]');
     await waitUntil(() => chatBodies.length > n);
     check("home layout focus: a pain tile sends its question", /heel pain/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.typed === false, chatBodies.at(-1)?.message);
     await page.waitForTimeout(1500);
@@ -3186,10 +3186,11 @@ for (const coop of ["1", "2"]) {
   // the same place, the second line still under it.
   {
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+    const window_greet = await page.evaluate(() => window.__AI_CHAT_CONFIG.greetingCta);
     const g = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), su = r(".ai-chat-header__sub"), h = r(".ai-chat-hero"), d = r(".ai-chat-header"), t = r(".ai-chat-focus__title"), a = r(".ai-chat-header__actions"); const subCs = getComputedStyle(document.querySelector(".ai-chat-header__sub")); return { name: document.querySelector(".ai-chat-header__name").textContent, sub: document.querySelector(".ai-chat-header__sub").textContent, line: eval(lineY)(), nameBottom: n.bottom, subTop: su.top, subLeft: su.left + parseFloat(subCs.paddingLeft), nameLeft: n.left, heroMid: (h.top + h.bottom) / 2, heroRight: h.right, heroBottom: h.bottom, hdrBottom: d.bottom, titleTop: t.top, actionsMid: (a.top + a.bottom) / 2, subBorder: subCs.borderTopWidth, subBorderColor: subCs.borderTopColor, hdrBorder: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomWidth }; }, lineY.toString());
-    check("home layout focus (two-line name): Ask Ava! above the line, Aetrex Virtual Assistant below it, the face centred on the line, both lines clear of the face, no second line under the header", g.name === "Ask Ava!" && g.sub === "Aetrex Virtual Assistant" && g.nameBottom <= g.line && g.subTop >= g.line - 1 && Math.abs(g.heroMid - g.line) <= 2 && g.nameLeft > g.heroRight + 6 && g.subLeft > g.heroRight + 6 && g.subBorder === "1px" && g.hdrBorder === "0px" && g.titleTop > g.heroBottom + 6 && g.actionsMid < g.line, JSON.stringify(g));
+    check("home layout focus (two-line name): Ask Ava! above the line, the greeting below it (in place of the name's second line), the face centred on the line, both lines clear of the face, no second line under the header", g.name === "Ask Ava!" && g.sub.trim() === window_greet && g.nameBottom <= g.line && g.subTop >= g.line - 1 && Math.abs(g.heroMid - g.line) <= 2 && g.nameLeft > g.heroRight + 6 && g.subLeft > g.heroRight + 6 && g.subBorder === "1px" && g.hdrBorder === "0px" && g.titleTop > g.heroBottom + 6 && g.actionsMid < g.line, JSON.stringify(g));
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__tile[data-message]');
+    await page.click('.ai-chat-focus__pain[data-message]');
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);
     const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), su = r(".ai-chat-header__sub"); const subCs = getComputedStyle(document.querySelector(".ai-chat-header__sub")); return { line: eval(lineY)(), nameBottom: n.bottom, subTop: su.top, nameLeft: n.left - document.querySelector(".ai-chat-header").getBoundingClientRect().left, subLeft: su.left + parseFloat(subCs.paddingLeft) - document.querySelector(".ai-chat-header").getBoundingClientRect().left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__line")).opacity), subBorderColor: subCs.borderTopColor, chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }; }, lineY.toString());
@@ -3200,8 +3201,8 @@ for (const coop of ["1", "2"]) {
   // Phone: two columns of tiles, cards stacked, the sheet within the screen.
   {
     const { ctx, page, errors } = await open("/full?home=focus", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-    const ph = await page.evaluate(() => { const t = [...document.querySelectorAll(".ai-chat-focus__tile")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("[data-focus-sheet]")].map((e) => e.getBoundingClientRect()); return { cols: new Set(t.map((r) => Math.round(r.left))).size, cardCols: new Set(c.map((r) => Math.round(r.left))).size, maxRight: Math.max(...t.map((r) => r.right), ...c.map((r) => r.right)), sw: document.documentElement.scrollWidth, vw: innerWidth, tileH: Math.min(...t.map((r) => r.height)) }; });
-    check("home layout focus (phone): two columns of tiles, cards stacked, nothing off-screen, tiles tall enough to tap", ph.cols === 2 && ph.cardCols === 1 && ph.maxRight <= ph.vw && ph.sw <= ph.vw && ph.tileH >= 44, JSON.stringify(ph));
+    const ph = await page.evaluate(() => { const t = [...document.querySelectorAll(".ai-chat-focus__pain")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("[data-focus-sheet]")].map((e) => e.getBoundingClientRect()); return { cols: new Set(t.map((r) => Math.round(r.left))).size, cardCols: new Set(c.map((r) => Math.round(r.left))).size, maxRight: Math.max(...t.map((r) => r.right), ...c.map((r) => r.right)), sw: document.documentElement.scrollWidth, vw: innerWidth, rowH: Math.min(...t.map((r) => r.height)) }; });
+    check("home layout focus (phone): one column of rows, cards stacked, nothing off-screen, rows tall enough to tap", ph.cols === 1 && ph.cardCols === 1 && ph.maxRight <= ph.vw && ph.sw <= ph.vw && ph.rowH >= 44, JSON.stringify(ph));
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
     await page.waitForTimeout(450);/* it slides in */
@@ -3210,62 +3211,86 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (phone): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The morph, step by step: the ring squishes to a short line while the
-  // face stays; the face steps away; the short line grows to the full width.
-  // Back home: the line draws in to the face's place, the face returns, the
-  // line opens up around it.
+  // The morph, step by step: the ring flattens into a short line behind the
+  // face (wider than the face, never across it) while the face stays; the
+  // face steps away; the short line grows into the header's line and hands
+  // over with the same colours. Back home is the mirror.
   {
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
-    const at = (sel) => page.evaluate((sel) => { const el = document.querySelector(sel); const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { w: r.width, h: r.height, op: parseFloat(cs.opacity), display: cs.display, clip: cs.clipPath }; }, sel);
-    const SEL = ".ai-chat-hero__ring, .ai-chat-hero__photo, .ai-chat-hero__glow, .ai-chat-hero__bar, .ai-chat-header__line";
-    const pause = () => page.evaluate((SEL) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => a.pause())), SEL);
-    const seek = (t) => page.evaluate(({ SEL, t }) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => { a.currentTime = t; })), { SEL, t });
-    const play = () => page.evaluate((SEL) => document.querySelectorAll(SEL).forEach((n) => n.getAnimations().forEach((a) => a.play())), SEL);
+    const look = () => page.evaluate(() => {
+      const q = (s) => document.querySelector(s); const r = (el) => el.getBoundingClientRect(); const op = (el) => parseFloat(getComputedStyle(el).opacity);
+      const ring = q(".ai-chat-hero__ring"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), line = q(".ai-chat-header__line"), hdr = q(".ai-chat-header");
+      const rr = r(ring), pr = r(photo), hr = r(hdr);
+      return { ringW: rr.width, ringH: rr.height, ringOp: op(ring), ringLeft: rr.left - hr.left, ringRight: hr.right - rr.right, photoOp: op(photo), photoW: pr.width, lineOp: op(line), lineW: r(line).width, chatting: q(".ai-chat-panel").classList.contains("is-chatting"), gone: hero.classList.contains("is-gone"), home: q(".ai-chat-panel").classList.contains("is-home"), faceMid: (pr.left + pr.right) / 2, ringMid: (rr.left + rr.right) / 2, W: hr.width };
+    });
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__tile[data-message]');
-    await page.waitForTimeout(30);
-    await pause(); await seek(300);
-    const s1 = { ring: await at(".ai-chat-hero__ring"), photo: await at(".ai-chat-hero__photo"), bar: await at(".ai-chat-hero__bar") };
-    check("morph 1: the ring is squished to a short line across the face (2px tall, the face's width) while the face is still fully there", s1.ring.h <= 4 && s1.ring.w >= 60 && s1.bar.op > 0.9 && s1.bar.h === 2 && s1.photo.op === 1 && s1.photo.h >= 56, JSON.stringify(s1));
-    await play();
-    await waitUntil(() => chatBodies.length > n);
-    // Step 2 runs right after step 1 (the face fades); catch step 3: the line clipped to the face's span, then full.
-    const seen = { narrow: false, full: false, faceGone: false };
+    await page.click('.ai-chat-focus__pain[data-message]');
+    const seen = { behind: null, alone: null, growing: null, handover: null };
     const t0 = Date.now();
-    while (Date.now() - t0 < 2500) {
-      const st = await page.evaluate(() => { const l = document.querySelector(".ai-chat-header__line"), p = document.querySelector(".ai-chat-hero__photo"), panel = document.querySelector(".ai-chat-panel"); const cs = getComputedStyle(l); return { clip: cs.clipPath, chatting: panel.classList.contains("is-chatting"), photoOp: parseFloat(getComputedStyle(p).opacity), gone: document.querySelector(".ai-chat-hero").classList.contains("is-gone") }; });
-      if (st.chatting && /inset\(0px \d+/.test(st.clip) && !/inset\(0px 0px 0px 0px\)/.test(st.clip)) seen.narrow = true;
-      if (st.chatting && st.photoOp === 0) seen.faceGone = true;
-      if (st.gone) { seen.full = true; break; }
-      await page.waitForTimeout(16);
+    while (Date.now() - t0 < 2600) {
+      const st = await look();
+      // The short line: 2px tall, about 1.65 faces wide, centred on the face.
+      const short = st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && Math.abs(st.ringMid - st.faceMid) <= 2;
+      if (!seen.behind && short && st.photoOp === 1 && st.photoW >= 60) seen.behind = st;
+      if (!seen.alone && short && st.photoOp === 0) seen.alone = st;
+      if (!seen.growing && st.ringH <= 4 && st.ringW > 140 && st.ringW < st.W - 40 && st.photoOp === 0 && !st.chatting) seen.growing = st;
+      if (!seen.handover && st.chatting && st.ringOp > 0 && st.ringOp < 1 && st.ringW >= st.W - 4 && st.lineOp >= 0.7) seen.handover = st;
+      if (st.gone) break;
+      await page.waitForTimeout(12);
     }
-    check("morph 3: the face steps away, then the short line grows into the full header line", seen.faceGone && seen.narrow && seen.full, JSON.stringify(seen));
+    check("morph 1: the ring flattens into a short line behind the face — wider than the face, centred on it — while the face is fully there", !!seen.behind, JSON.stringify(seen.behind));
+    check("morph 2: the face steps away and the short line is all that's left", !!seen.alone, JSON.stringify(seen.alone));
+    check("morph 3: the short line grows toward the full width before the real line is on", !!seen.growing, JSON.stringify(seen.growing));
+    check("morph 4: at full width the real line comes on underneath while the ring fades — a swap in place", !!seen.handover && Math.abs(seen.handover.ringLeft) <= 2 && Math.abs(seen.handover.ringRight) <= 2, JSON.stringify(seen.handover));
+    await waitUntil(() => chatBodies.length > n);
     const done = await state(page);
     check("morph: ends in chat — the line on, the face gone, no welcome", done.chatting && done.heroGone && !done.home && !done.focusHome, JSON.stringify(done));
+    const flowing = await page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-header__line"), "::before").animationPlayState);
+    check("morph: once settled, the line flows again", flowing === "running", flowing);
     // Back home.
     await page.waitForTimeout(1200);
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
     await page.click('.ai-chat-menu-item[data-action="clear"]');
-    await page.waitForTimeout(30);
-    await pause(); await seek(300);
-    const b1 = await page.evaluate(() => { const l = getComputedStyle(document.querySelector(".ai-chat-header__line")); const p = getComputedStyle(document.querySelector(".ai-chat-hero__photo")); return { clip: l.clipPath, chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting"), photoOp: parseFloat(p.opacity) }; });
-    check("morph back 1: the line draws in from the sides (clipped) while the face is still away", b1.chatting && /inset\(0px \d+/.test(b1.clip) && !/inset\(0px 0px 0px 0px\)/.test(b1.clip) && b1.photoOp === 0, JSON.stringify(b1));
-    await play();
-    const back = { faceUnderBar: false };
+    const back = { took: null, drawnIn: null, faceBack: null };
     const t1 = Date.now();
-    while (Date.now() - t1 < 1500) {
-      const st = await page.evaluate(() => ({ bar: parseFloat(getComputedStyle(document.querySelector(".ai-chat-hero__bar")).opacity), photo: parseFloat(getComputedStyle(document.querySelector(".ai-chat-hero__photo")).opacity), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }));
-      if (!st.chatting && st.bar > 0.9 && st.photo > 0.9) { back.faceUnderBar = true; break; }
-      await page.waitForTimeout(16);
+    while (Date.now() - t1 < 2600) {
+      const st = await look();
+      if (!back.took && st.ringOp >= 0.95 && st.ringH <= 4 && st.ringW >= st.W - 4 && st.photoOp === 0) back.took = st;
+      if (!back.drawnIn && st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && st.photoOp === 0 && !st.chatting && Math.abs(st.ringMid - st.faceMid) <= 2) back.drawnIn = st;
+      if (!back.faceBack && st.ringH <= 4 && st.ringW >= 100 && st.ringW <= 125 && st.photoOp >= 0.98) back.faceBack = st;
+      if (st.ringH >= 60 && st.photoOp >= 0.98 && back.faceBack) break;
+      await page.waitForTimeout(12);
     }
-    check("morph back 2: the face is back under the short line before the line opens up around it", back.faceUnderBar, JSON.stringify(back));
-    await page.waitForTimeout(900);
+    check("morph back 1: the ring takes the line's place at full width, the face still away", !!back.took, JSON.stringify(back.took));
+    check("morph back 2: the line draws in from both sides to the face's place", !!back.drawnIn, JSON.stringify(back.drawnIn));
+    check("morph back 3: the face returns in front of the short line before it opens up", !!back.faceBack, JSON.stringify(back.faceBack));
+    await page.waitForTimeout(700);
     const b2 = await state(page);
-    const ring = await at(".ai-chat-hero__ring");
-    const bar = await at(".ai-chat-hero__bar");
-    check("morph back: ends at home — the face in its ring, the line off", b2.home && !b2.chatting && b2.hero && ring.h >= 56 && ring.op === 1 && bar.op === 0, JSON.stringify({ b2, ring, bar }));
+    const end = await look();
+    check("morph back: ends at home — the face in its round ring, the line off", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.lineOp === 0, JSON.stringify({ b2, end }));
     check("morph: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The theme's banner on top (as the classic home shows it), and the
+  // greeting sliding through its languages in the header.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus&banner=1&gct=1", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
+    const b = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const first = w.firstElementChild; const img = first?.querySelector("img"); const r = first?.getBoundingClientRect(); const hero = document.querySelector(".ai-chat-hero").getBoundingClientRect(); return { hasBanner: w.classList.contains("has-banner"), firstIsBanner: first?.classList.contains("ai-chat-welcome__banner"), src: img?.getAttribute("src"), h: r?.height, clearOfFace: r ? r.top > hero.bottom + 4 : false, nextIsCards: first?.nextElementSibling?.classList.contains("ai-chat-focus__cards") }; });
+    check("home layout focus: the theme's banner sits on top, clear of the face, the shop cards right under it", b.hasBanner && b.firstIsBanner && b.src === "/pic-footwear.svg" && b.h >= 100 && b.clearOfFace && b.nextIsCards, JSON.stringify(b));
+    const greet0 = await page.evaluate(() => document.querySelector(".ai-chat-header__sub .ai-chat-greet__item.is-in")?.textContent);
+    const slid = await waitUntil(() => false, 10) || await (async () => { const t0 = Date.now(); while (Date.now() - t0 < 6500) { const g = await page.evaluate(() => { const it = document.querySelector(".ai-chat-header__sub .ai-chat-greet__item.is-in"); return it ? { text: it.textContent, dir: it.getAttribute("dir"), lang: it.getAttribute("lang"), n: document.querySelectorAll(".ai-chat-header__sub .ai-chat-greet__item").length } : null; }); if (g && g.text !== greet0) return g; await page.waitForTimeout(100); } return null; })();
+    check("home layout focus: the greeting slides to its next language in the header, marked with its language and direction", !!slid && slid.text === "¿En qué puedo ayudarte hoy?" && slid.lang === "es" && slid.dir === "ltr", JSON.stringify({ greet0, slid }));
+    const sliding = await page.evaluate(() => { const it = document.querySelector(".ai-chat-header__sub .ai-chat-greet__item.is-in"); const cs = getComputedStyle(it); return { transition: cs.transitionProperty, box: getComputedStyle(it.parentElement).overflow }; });
+    check("home layout focus: the languages slide (a transform in a clipped line), no jump", /transform/.test(sliding.transition) && sliding.box === "hidden", JSON.stringify(sliding));
+    // In a chat the greeting settles on English and stays.
+    const n = chatBodies.length;
+    await page.click('.ai-chat-focus__pain[data-message]');
+    await waitUntil(() => chatBodies.length > n);
+    await page.waitForTimeout(2200);
+    const settled = await page.evaluate(() => document.querySelector(".ai-chat-header__sub .ai-chat-greet__item.is-in")?.textContent);
+    check("home layout focus: once a chat starts the greeting settles on the store's own words", settled === greet0, JSON.stringify({ settled, greet0 }));
+    check("home layout focus (banner, greeting): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // On a shoe page with True Fit, the Footwear sheet carries the chat's own True Fit row — same logo, same words.
@@ -3301,7 +3326,7 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus", { reducedMotion: "reduce" });
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__tile[data-message]');
+    await page.click('.ai-chat-focus__pain[data-message]');
     await page.waitForTimeout(80);
     const at = await state(page);
     await waitUntil(() => chatBodies.length > n);
