@@ -7264,16 +7264,25 @@ button.ai-chat-launcher__text {
    below it is taller than the classic one. */
 .ai-chat-panel.is-focus .ai-chat-welcome--focus .ai-chat-welcome__banner,
 .ai-chat-panel.is-focus .ai-chat-welcome--focus.has-banner .ai-chat-welcome__banner { flex: 0 0 136px; height: 136px; max-height: 136px; min-height: 136px; margin-bottom: 14px; }
+/* Three flat cards: Foot pain wide across the top (the heel picture, a line
+   on what happens), Footwear and Orthotics side by side under it. No
+   shadows — a tint that deepens a touch under the pointer. */
 .ai-chat-panel.is-focus .ai-chat-focus__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.ai-chat-panel.is-focus .ai-chat-focus__card { display: flex; align-items: center; gap: 12px; height: 66px; padding: 0 14px 0 9px; border: 0; border-radius: 16px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; transition: box-shadow 0.18s ease, transform 0.18s ease; }
-.ai-chat-panel.is-focus .ai-chat-focus__card:hover { box-shadow: 0 0 0 1px var(--seos-line), 0 8px 24px rgba(13, 13, 18, 0.08); transform: translateY(-1px); }
+.ai-chat-panel.is-focus .ai-chat-focus__card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0; padding: 14px 14px 15px; border: 0; border-radius: 18px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; box-shadow: none; -webkit-tap-highlight-color: transparent; transition: background-color 0.18s ease, transform 0.18s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__card:hover { background: color-mix(in srgb, var(--seos-surface) 94%, var(--seos-text)); }
 .ai-chat-panel.is-focus .ai-chat-focus__card:active { transform: scale(0.985); }
-.ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 48px; height: 48px; flex: none; border-radius: 12px; background: var(--seos-bg-raised, #fff); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px var(--seos-line); color: var(--seos-text); overflow: hidden; }
-.ai-chat-panel.is-focus .ai-chat-focus__card-ico.has-pic { background: var(--seos-surface); box-shadow: none; }
+.ai-chat-panel.is-focus .ai-chat-focus__card:focus-visible { outline: 2px solid var(--seos-text); outline-offset: 2px; }
+.ai-chat-panel.is-focus .ai-chat-focus__card--pain { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 14px; min-height: 104px; padding: 14px 18px 14px 14px; }
+.ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 44px; height: 44px; flex: none; border-radius: 13px; background: var(--seos-bg-raised, #fff); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px var(--seos-line); color: var(--seos-text); overflow: hidden; }
+.ai-chat-panel.is-focus .ai-chat-focus__card-ico.has-pic { background: transparent; box-shadow: none; }
+.ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-ico { width: 76px; height: 76px; border-radius: 20px; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-ico img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
-.ai-chat-panel.is-focus .ai-chat-focus__card-eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__card-eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); letter-spacing: 0.01em; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-title { font: 700 16px/20px var(--seos-font); letter-spacing: -0.01em; }
+.ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title { font-size: 18px; line-height: 22px; }
+.ai-chat-panel.is-focus .ai-chat-focus__card-sub { margin-top: 4px; font: 400 12.5px/16px var(--seos-font); color: var(--seos-text-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; text-wrap: pretty; }
+.ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-sub { font-size: 13px; line-height: 17px; }
 .ai-chat-panel.is-focus .ai-chat-focus__coin { width: 38px; height: 38px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--seos-line); }
 .ai-chat-panel.is-focus .ai-chat-focus__coin img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-focus__links { margin-top: auto; padding: 18px 0 6px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
@@ -7385,12 +7394,15 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__next,
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__ask-btn { color: #0d0d12; }
 
-/* Narrow chats (the default 500px panel, and phones): two columns of tiles,
-   the two line cards stacked — measured on the home itself, not the page. */
+/* Narrow chats (the default 500px panel, and phones): the Foot pain card a
+   little tighter — measured on the home itself, not the page. */
 @container (max-width: 479px) {
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { min-height: 96px; padding: 12px 16px 12px 12px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-ico { width: 68px; height: 68px; border-radius: 18px; }
+}
+/* Very narrow (small phones): the two line cards stack too. */
+@container (max-width: 339px) {
   .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: 1fr; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 62px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 44px; height: 44px; }
 }
 @media (max-width: 480px) {
   .ai-chat-panel.is-focus { --ai-hero: 60px; }
@@ -7401,9 +7413,8 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__login-pill { display: none; }
   .ai-chat-panel.is-focus .ai-chat-welcome--focus { padding: 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__greet { padding-left: 76px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: 1fr; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card { height: 62px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card-ico { width: 44px; height: 44px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { min-height: 96px; padding: 12px 16px 12px 12px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-ico { width: 68px; height: 68px; border-radius: 18px; }
   .ai-chat-panel.is-focus .ai-chat-focus__helpers { grid-template-columns: 1fr; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { order: 5; flex-basis: 100%; width: auto; margin: 2px 0 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 36px; font-size: 14px; }

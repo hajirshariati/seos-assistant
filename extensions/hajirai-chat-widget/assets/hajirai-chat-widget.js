@@ -1717,9 +1717,15 @@ function focusRefreshPics(){
 }
 function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(focusPicOf(kind)?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
 function focusCardWords(kind){return kind==='pain'?['Help me with','Foot pain']:['Help me find',kind==='footwear'?'Footwear':'Orthotics']}
+/* One line under each card's name on what it does. */
+function focusCardSub(kind){
+  return kind==='pain'?'Say where it hurts and what you wear. A few taps, then Ava\u2019s best match.'
+    :kind==='footwear'?'Sneakers, sandals, boots and more \u2014 support built in.'
+    :'Inserts for the shoes you already own, matched to your arch.';
+}
 function focusCardHtml(kind){
-  var w=focusCardWords(kind);
-  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span></span></button>';
+  var w=focusCardWords(kind),pain=kind==='pain';
+  return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,pain?30:24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span></span></button>';
 }
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
@@ -1891,7 +1897,7 @@ function focusSetGender(sh,g){
    FIT answers the last two). A summary lets any line be changed, and one
    button sends it all to Ava as the shopper's own words. Answers are kept
    while the page is open, so the sheet reopens where they left it. */
-var focusPain={where:[],what:'',kind:'',width:'',shoes:'',arch:'',ball:''},focusPainStep=0,focusPainBusy=false;
+var focusPain={where:[],what:'',kind:'',width:'',shoes:'',arch:'',ball:''},focusPainStep=0,focusPainBusy=false,focusPainTrail=[];
 function focusPainSteps(){
   var s=['where','what'];
   if(focusPain.what==='footwear')s.push('kind','width');
@@ -2030,10 +2036,19 @@ function focusPainAnswered(step){return step==='where'?focusPain.where.length>0:
 function focusPainNext(sh){
   var steps=focusPainSteps(),i=focusPainStep+1;
   while(i<steps.length-1&&focusPainAnswered(steps[i]))i++;
+  focusPainTrail.push(steps[focusPainStep]);
   focusPainGo(sh,steps[Math.min(i,steps.length-1)]);
 }
+/* A summary row: back to that step (Back returns to the summary). */
+function focusPainEdit(sh,name){focusPainTrail.push(focusPainSteps()[focusPainStep]);focusPainGo(sh,name)}
+/* Back walks the path the shopper came by, skipped steps and all. */
+function focusPainBack(sh){
+  var steps=focusPainSteps(),prev=focusPainTrail.pop();
+  while(prev&&(steps.indexOf(prev)<0||prev===steps[focusPainStep]))prev=focusPainTrail.pop();
+  if(prev)focusPainGo(sh,prev);else focusPainGo(sh,-1);
+}
 function focusPainNav(sh,a){
-  if(a==='back'){focusPainGo(sh,-1);return}
+  if(a==='back'){focusPainBack(sh);return}
   if(a==='next'){if(focusPain.where.length)focusPainNext(sh);return}
   if(a==='ask'){var t=focusPainMessage();closeFocusSheet(true);focusSend(t)}
 }
@@ -2048,7 +2063,7 @@ function openFocusSheet(kind,opener){
   var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
   sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+w[1]+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">'+w[0]+'</div><div class="ai-chat-focus-sheet__title">'+w[1]+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body">'+(pain?'<div class="ai-chat-focus__quiz"></div>':focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div>')+'</div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
-  if(pain){focusPainStep=0;focusPainRender(sh,0)}
+  if(pain){focusPainStep=0;focusPainTrail=[];focusPainRender(sh,0)}
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
   focusSheetSwipe(sh);
   requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
@@ -2119,7 +2134,7 @@ if(FOCUS){
     var pv=e.target.closest('[data-pain-nav]');
     if(pv){e.preventDefault();focusPainNav(sh,pv.getAttribute('data-pain-nav'));return}
     var pd=e.target.closest('[data-pain-edit]');
-    if(pd){e.preventDefault();focusPainGo(sh,pd.getAttribute('data-pain-edit'));return}
+    if(pd){e.preventDefault();focusPainEdit(sh,pd.getAttribute('data-pain-edit'));return}
     var m=e.target.closest('[data-message]');
     if(m){e.preventDefault();var t=m.getAttribute('data-message');closeFocusSheet(true);focusSend(t)}
   });
