@@ -1865,17 +1865,15 @@ function focusSegHtml(cls,items,on,attr){
   for(var i=0;i<items.length;i++)h+='<button type="button" role="tab" aria-selected="'+(i===on?'true':'false')+'" '+attr(i)+(i===on?' class="is-on"':'')+'>'+esc(items[i])+'</button>';
   return h+'</div>';
 }
-/* The chips of one Browse by tab, and last a "View all" chip like them
-   that asks for the whole line ("Show me all women's footwear"). */
-function focusChipsHtml(chips,kind){
+/* The chips of one Browse by tab. */
+function focusChipsHtml(chips){
   var h='';for(var j=0;j<chips.length;j++)h+='<button type="button" data-message="'+esc(chips[j][1])+'">'+esc(chips[j][0])+'</button>';
-  if(kind)h+='<button type="button" class="ai-chat-focus__chip-all" data-message="'+esc(focusAllMessage(kind))+'">View all</button>';
   return h;
 }
 function focusBrowseHtml(kind){
   var groups=focusBrowseGroups(kind,focusGender),on=Math.min(focusBrowseIdx[kind]||0,groups.length-1),names=[];
   for(var i=0;i<groups.length;i++)names.push(groups[i][0]);
-  return '<div class="ai-chat-focus__label">Browse by</div>'+focusSegHtml('',names,on,function(i){return 'data-browse="'+i+'"'})+'<div class="ai-chat-focus__chips ai-chat-focus__swap">'+focusChipsHtml(groups[on]?groups[on][1]:[],kind)+'</div>';
+  return '<div class="ai-chat-focus__label">Browse by</div>'+focusSegHtml('',names,on,function(i){return 'data-browse="'+i+'"'})+'<div class="ai-chat-focus__chips ai-chat-focus__swap">'+focusChipsHtml(groups[on]?groups[on][1]:[])+'</div>';
 }
 /* Moves a tab strip's thumb and its pressed tab. */
 function focusSegPick(seg,i){
@@ -1890,7 +1888,6 @@ function focusSwap(box,fill){
   box.classList.add('is-swapping');
   setTimeout(function(){fill();void box.offsetWidth;box.classList.remove('is-swapping')},140);
 }
-function focusAllMessage(kind){return 'Show me all '+focusGenderWord(focusGender)+' '+(kind==='footwear'?'footwear':'orthotics')}
 /* Women's or men's: the choice is kept for both sheets and across visits;
    the all-button and Browse by follow it. */
 function focusSetGender(sh,g){
@@ -2138,7 +2135,7 @@ if(FOCUS){
     var gb=e.target.closest('[data-gender]');
     if(gb){e.preventDefault();focusSetGender(sh,gb.getAttribute('data-gender')==='men'?'men':'women');return}
     var tab=e.target.closest('[data-browse]');
-    if(tab){var kind=sh.getAttribute('data-kind')||'footwear',i=parseInt(tab.getAttribute('data-browse'),10)||0;if(i===(focusBrowseIdx[kind]||0))return;focusBrowseIdx[kind]=i;focusSegPick(tab.closest('.ai-chat-focus__seg'),i);var groups=focusBrowseGroups(kind,focusGender),chips=$('.ai-chat-focus__chips',sh);focusSwap(chips,function(){chips.innerHTML=focusChipsHtml(groups[i]?groups[i][1]:[],kind)});return}
+    if(tab){var kind=sh.getAttribute('data-kind')||'footwear',i=parseInt(tab.getAttribute('data-browse'),10)||0;if(i===(focusBrowseIdx[kind]||0))return;focusBrowseIdx[kind]=i;focusSegPick(tab.closest('.ai-chat-focus__seg'),i);var groups=focusBrowseGroups(kind,focusGender),chips=$('.ai-chat-focus__chips',sh);focusSwap(chips,function(){chips.innerHTML=focusChipsHtml(groups[i]?groups[i][1]:[])});return}
     var hp=e.target.closest('[data-helper]');
     if(hp){e.preventDefault();closeFocusSheet(true);if(!isStreaming)startHelper(hp.getAttribute('data-helper'));return}
     var fb=e.target.closest('[data-form]');
