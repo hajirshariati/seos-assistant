@@ -7198,7 +7198,8 @@ button.ai-chat-launcher__text {
    lifts to the row's middle, level with the controls. */
 .ai-chat-panel.is-focus .ai-chat-header { position: relative; z-index: 5; overflow: visible; align-items: stretch; gap: 0 12px; padding: 0 14px 0 20px; transition: border-color 0.45s ease; }
 .ai-chat-panel.is-focus .ai-chat-header__info { display: flex; flex-direction: column; justify-content: flex-end; min-height: 46px; padding-bottom: 4px; transition: padding-left 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
-.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: end; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: hidden; text-overflow: clip; }
+/* The box is never clipped: with a one-line greeting it is a single line tall, and the chat title lifts above it. */
+.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: end; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: visible; }
 /* The header's words: at home the store's greeting (its signed-in one for
    a known shopper), in a chat the assistant's name. Both share the name's
    box — so the header keeps its height — and trade places with the name's
@@ -7235,25 +7236,21 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-hero__mono { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; font: 700 24px/1 var(--seos-font); }
 .ai-chat-panel.is-focus .ai-chat-band { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
-.ai-chat-panel.is-focus .ai-chat-band__ring,
-.ai-chat-panel.is-focus .ai-chat-band__line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.ai-chat-panel.is-focus .ai-chat-band__line { opacity: 0.8; transition: opacity 0.45s ease; }
-.ai-chat-panel.is-focus .ai-chat-band__glow { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; filter: blur(7px); opacity: 0.35; transition: opacity 0.45s ease; }
-/* In a chat the line sits a little quieter, and brightens while Ava is writing. */
+/* The band is a soft glow, not a line: four strokes of the same path, from
+   wide and faint to narrow and dim, so there is no hard edge anywhere. Drawn
+   without blur, which Safari smears into bands; the ring and the line alike,
+   on phones too. */
+.ai-chat-panel.is-focus .ai-chat-band__linel,
+.ai-chat-panel.is-focus .ai-chat-band__ringl { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--4, .ai-chat-panel.is-focus .ai-chat-band__ringl--4 { stroke-width: 16; opacity: 0.045; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--3, .ai-chat-panel.is-focus .ai-chat-band__ringl--3 { stroke-width: 10; opacity: 0.08; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: 6; opacity: 0.15; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: 3; opacity: 0.3; }
+.ai-chat-panel.is-focus .ai-chat-band__lit { transition: opacity 0.45s ease; }
+/* In a chat the gray header line goes; the glow breathes while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__line { opacity: 1; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__glow { animation: aiChatLinePulse 1.5s ease-in-out infinite; }
-@keyframes aiChatLinePulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
-/* On phones and other touch screens the blurred glow goes: Safari draws a
-   blurred SVG stroke as a banded smear under the line. The line and the
-   ring stay crisp on their own, and while Ava writes the line itself
-   breathes instead. */
-@media (max-width: 480px), (hover: none) and (pointer: coarse) {
-  .ai-chat-panel.is-focus .ai-chat-band__glow { display: none; }
-  .ai-chat-panel.is-focus .ai-chat-band__line { opacity: 0.9; }
-  .ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__line { animation: aiChatLineBreath 1.5s ease-in-out infinite; }
-}
-@keyframes aiChatLineBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__lit { animation: aiChatLineBreath 1.5s ease-in-out infinite; }
+@keyframes aiChatLineBreath { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 /* Small avatars beside replies: plain — the header line carries the light. */
 .ai-chat-panel.is-focus .ai-chat-msg-avatar { box-shadow: 0 0 0 1px var(--seos-line) !important; }
 
@@ -7440,11 +7437,9 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__opts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel.is-focus .ai-chat-band__glow,
-  .ai-chat-panel.is-focus .ai-chat-band__line { animation: none !important; }
+  .ai-chat-panel.is-focus .ai-chat-band__lit { animation: none !important; }
   .ai-chat-panel.is-focus .ai-chat-band__ring,
-  .ai-chat-panel.is-focus .ai-chat-band__line,
-  .ai-chat-panel.is-focus .ai-chat-band__glow,
+  .ai-chat-panel.is-focus .ai-chat-band__lit,
   .ai-chat-panel.is-focus .ai-chat-header,
   .ai-chat-panel.is-focus .ai-chat-header__info,
   .ai-chat-panel.is-focus .ai-chat-header__title,

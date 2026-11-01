@@ -1248,13 +1248,15 @@ function focusBandHtml(){
   var stops='';for(var i=0;i<=8;i++)stops+='<stop offset="'+(i/8)+'" stop-color="'+FOCUS_BAND[i%4]+'"/>';
   var sweep='',ease=[[0,255],[0.2,236],[0.4,180],[0.6,96],[0.8,30],[1,0]];
   for(var j=0;j<ease.length;j++){var v=ease[j][1];sweep+='<stop offset="'+ease[j][0]+'" stop-color="rgb('+v+','+v+','+v+')"/>'}
-  return '<svg class="ai-chat-band" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask></defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)"><path class="ai-chat-band__glow" d="" stroke="url(#ai-chat-band-g)"/><path class="ai-chat-band__line" d="" stroke="url(#ai-chat-band-g)"/></g><path class="ai-chat-band__ring" d="" stroke="url(#ai-chat-band-g)"/></svg>';
+  /* Four strokes of one path, wide and faint to narrow and dim: a soft glow with no hard line. */
+  var lay=function(cls,id){var h='';for(var k=4;k>=1;k--)h+='<use class="'+cls+' '+cls+'--'+k+(k===1&&cls==='ai-chat-band__linel'?' ai-chat-band__line':'')+'" href="#'+id+'" xlink:href="#'+id+'" stroke="url(#ai-chat-band-g)"/>';return h};
+  return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/></defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring">'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
 }
 function focusParts(){
   if(focusEls)return focusEls;
   var hdr=$('.ai-chat-header',panel),band=hdr&&$('.ai-chat-band',hdr),hero=hdr&&$('.ai-chat-hero',hdr);
   if(!band||!hero)return null;
-  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),line:$('.ai-chat-band__line',band),glow:$('.ai-chat-band__glow',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
+  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),ringPath:$('#ai-chat-band-rp',band),linePath:$('#ai-chat-band-lp',band),line:$('.ai-chat-band__line',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
 }
 function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
 /* A cubic-bezier timing curve, the same ones CSS uses. */
@@ -1288,8 +1290,8 @@ function focusLinePath(W,cy){var f=function(n){return Math.round(n*100)/100};ret
 function focusDraw(){
   var e=focusParts();if(!e)return;
   var g=focusG,s=focusS,r=Math.max(1,g.R-FOCUS_SW/2);
-  e.ring.setAttribute('d',focusCirclePath(g.hx,g.cy,r));
-  var ld=focusLinePath(g.W,g.cy);e.line.setAttribute('d',ld);e.glow.setAttribute('d',ld);
+  e.ringPath.setAttribute('d',focusCirclePath(g.hx,g.cy,r));
+  e.linePath.setAttribute('d',focusLinePath(g.W,g.cy));
   /* The light: at 0 the mask is dark along the whole line; at 1 its white
      end has passed the line's end, the tail and all. */
   var tail=Math.max(80,g.W*FOCUS_TAIL),head=-FOCUS_SW+s.lit*(g.W+2*FOCUS_SW+tail);
