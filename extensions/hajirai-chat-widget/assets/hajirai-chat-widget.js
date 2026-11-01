@@ -1249,19 +1249,14 @@ function focusBandHtml(){
   var sweep='',ease=[[0,255],[0.2,236],[0.4,180],[0.6,96],[0.8,30],[1,0]];
   for(var j=0;j<ease.length;j++){var v=ease[j][1];sweep+='<stop offset="'+ease[j][0]+'" stop-color="rgb('+v+','+v+','+v+')"/>'}
   /* Four strokes of one path, wide and faint to narrow and dim: a soft glow with no hard line. */
-  /* Around the face at home: three faint colour halos — a radial fade each,
-     nothing inside the ring, a whisper just outside it, gone a little
-     further out (no filter, so no smear) — drifting slowly on their own in
-     CSS so the glow is never even. Kept quiet: the ring itself is the light. */
-  var halo=function(n,c){return '<radialGradient id="ai-chat-halo-'+n+'"><stop offset="0.66" stop-color="'+c+'" stop-opacity="0"/><stop offset="0.71" stop-color="'+c+'" stop-opacity="0.2"/><stop offset="0.8" stop-color="'+c+'" stop-opacity="0.08"/><stop offset="0.92" stop-color="'+c+'" stop-opacity="0"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient>'};
   var lay=function(cls,id){var h='';for(var k=4;k>=1;k--)h+='<use class="'+cls+' '+cls+'--'+k+(k===1&&cls==='ai-chat-band__linel'?' ai-chat-band__line':'')+'" href="#'+id+'" xlink:href="#'+id+'" stroke="url(#ai-chat-band-g)"/>';return h};
-  return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/>'+halo(1,FOCUS_BAND[0])+halo(2,FOCUS_BAND[2])+halo(3,FOCUS_BAND[3])+'</defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring"><circle class="ai-chat-band__halo ai-chat-band__halo--1" fill="url(#ai-chat-halo-1)"/><circle class="ai-chat-band__halo ai-chat-band__halo--2" fill="url(#ai-chat-halo-2)"/><circle class="ai-chat-band__halo ai-chat-band__halo--3" fill="url(#ai-chat-halo-3)"/>'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
+  return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/></defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring">'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
 }
 function focusParts(){
   if(focusEls)return focusEls;
   var hdr=$('.ai-chat-header',panel),band=hdr&&$('.ai-chat-band',hdr),hero=hdr&&$('.ai-chat-hero',hdr);
   if(!band||!hero)return null;
-  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),halos:band.querySelectorAll('.ai-chat-band__halo'),ringPath:$('#ai-chat-band-rp',band),linePath:$('#ai-chat-band-lp',band),line:$('.ai-chat-band__line',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
+  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),halo:$('.ai-chat-hero__halo',hero),ringPath:$('#ai-chat-band-rp',band),linePath:$('#ai-chat-band-lp',band),line:$('.ai-chat-band__line',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
 }
 function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
 /* A cubic-bezier timing curve, the same ones CSS uses. */
@@ -1296,15 +1291,12 @@ function focusDraw(){
   var e=focusParts();if(!e)return;
   var g=focusG,s=focusS,r=Math.max(1,g.R-FOCUS_SW/2);
   e.ringPath.setAttribute('d',focusCirclePath(g.hx,g.cy,r));
-  /* The halos: half as wide again as the ring, so the ring sits at two thirds of each fade. */
-  var Rh=(r*1.5).toFixed(2);
-  for(var hi=0;hi<e.halos.length;hi++){var hc=e.halos[hi];if(hc.getAttribute('r')!==Rh||hc.getAttribute('cx')!==String(g.hx)){hc.setAttribute('cx',g.hx);hc.setAttribute('cy',g.cy);hc.setAttribute('r',Rh)}}
   e.linePath.setAttribute('d',focusLinePath(g.W,g.cy));
   /* The light: at 0 the mask is dark along the whole line; at 1 its white
      end has passed the line's end, the tail and all. */
   var tail=Math.max(80,g.W*FOCUS_TAIL),head=-FOCUS_SW+s.lit*(g.W+2*FOCUS_SW+tail);
   if(s.lit!==focusLitLast){e.sweep.setAttribute('x1',(head-tail).toFixed(2));e.sweep.setAttribute('x2',head.toFixed(2));focusLitLast=s.lit}
-  if(s.ro!==focusRoLast){e.ring.style.opacity=s.ro>=0.999?'':s.ro.toFixed(3);focusRoLast=s.ro}
+  if(s.ro!==focusRoLast){var ro=s.ro>=0.999?'':s.ro.toFixed(3);e.ring.style.opacity=ro;if(e.halo)e.halo.style.setProperty('--ro',ro||'1');focusRoLast=s.ro}
   /* The colours: two bands' worth across twice the shape showing, slid by the phase — one band shows, and it loops without a seam. */
   var onLine=s.lit>0||panel.classList.contains('is-chatting'),L=Math.max(1,onLine?g.W+2*FOCUS_SW:2*r),x0=onLine?-FOCUS_SW:g.hx-r,x1=x0-L*focusPhase;
   e.grad.setAttribute('x1',x1.toFixed(2));e.grad.setAttribute('x2',(x1+2*L).toFixed(2));
@@ -1398,7 +1390,7 @@ if(FOCUS){
   panel.classList.add('is-focus');
   focusTitleBuild();
   var _fhdr=$('.ai-chat-header',panel);
-  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend',focusBandHtml()+'<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div>');
+  if(_fhdr)_fhdr.insertAdjacentHTML('beforeend',focusBandHtml()+'<div class="ai-chat-hero" aria-hidden="true"><span class="ai-chat-hero__halo"></span><span class="ai-chat-hero__photo">'+(AVATAR&&safeUrl(AVATAR)?'<img src="'+safeUrl(AVATAR)+'" alt="">':'<span class="ai-chat-hero__mono">'+esc(String(NAME||'A').replace(/^ask\s+/i,'').charAt(0).toUpperCase()||'A')+'</span>')+'</span></div>');
   /* One row: the name and the controls, the face on the header's bottom
      line. The name's second line stays out of it; the greeting takes its
      place at the top of the home, where it scrolls away with the page. */
@@ -1984,7 +1976,13 @@ function focusPainOptHtml(step,o,multi){
 function focusPainRow(step,k,v,edit){return '<button type="button" class="ai-chat-focus__sum-row" '+(edit?'data-pain-edit="'+step+'"':'disabled')+'><span class="ai-chat-focus__sum-k">'+esc(k)+'</span><span class="ai-chat-focus__sum-v">'+esc(v)+'</span>'+(edit?'<span class="ai-chat-focus__sum-go">'+WI.arrow+'</span>':'')+'</button>'}
 function focusPainStepHtml(){
   var steps=focusPainSteps(),i=Math.min(focusPainStep,steps.length-1),step=steps[i],ask=focusPainAsk(step),multi=step==='where';
-  var h='<div class="ai-chat-focus__dots" aria-hidden="true">';for(var d=0;d<steps.length;d++)h+='<i'+(d<=i?' class="is-done"':'')+'></i>';h+='</div>';
+  /* Four stages whatever the path — where, what, the details, the summary —
+     so the bar never grows; the details stage fills a question at a time. */
+  var det=steps.filter(function(x){return x!=='where'&&x!=='what'&&x!=='done'}),di=det.indexOf(step),stage=step==='where'?0:step==='what'?1:step==='done'?3:2;
+  var fill=stage>2?1:stage<2?0:det.length?(di+1)/det.length:1;
+  var h='<div class="ai-chat-focus__dots" aria-hidden="true">';
+  for(var d=0;d<4;d++){var cls=d<stage||(d===stage&&d!==2)||(d===2&&fill>=1&&stage>=2)?' class="is-done"':d===2&&stage===2?' class="is-part" style="--fill:'+fill.toFixed(2)+'"':'';h+='<i'+cls+'></i>'}
+  h+='</div>';
   h+='<div class="ai-chat-focus__q-head"><h3 class="ai-chat-focus__q-title" tabindex="-1">'+esc(ask[0])+'</h3>'+(ask[1]?'<p class="ai-chat-focus__q-hint">'+esc(ask[1])+'</p>':'')+'</div>';
   if(step==='done'){
     var fit=savedFit(),what=focusPain.what;
