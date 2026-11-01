@@ -177,9 +177,28 @@ const OFFER_VERB = /\boffers?\s+(?!(?:on|for|codes?|right|today|now|running|avai
 // "Boots on sale" / "more sale sneakers" asks for marked-down shoes, not the
 // store-wide offer list (orthotics stay: their offers are about orthotics).
 const SHOE_WORD = /\b(boots?|booties?|sneakers?|sandals?|shoes?|loafers?|flats|heels?|wedges?|slippers?|clogs?|mules?|slides?|flip[- ]?flops?|oxfords?|mary janes?|footwear)\b/i;
+// A standing program — a discount for a group, a way to pay, price matching —
+// is a question about the store's info, not "what's running": the answer is
+// on a page (or in the store team's notes), found with search_store_info.
+// A group alone isn't one ("shoes for nurses" is a shoe question).
+const PROGRAM_GROUP = /\b(military|veterans?|service ?members?|armed forces|first responders?|police|firefighters?|ems|paramedics?|nurses?|healthcare workers?|medical (?:staff|workers?|professionals?)|teachers?|educators?|students?|seniors?|aarp|government employees?)\b/i;
+const PROGRAM_WORD = /\b(discounts?|programs?|offers?|deals?|savings?|pricing|promo\w*|coupons?|rates?)\b/i;
+const PAYMENT_PROGRAM = /\b(govx|id\.me|hsa|fsa|truemed|price[- ]?match\w*|payment plans?|installments?|afterpay|affirm|klarna|sezzle|shop pay|paypal|apple pay|google pay|layaway)\b/i;
+export function asksAboutProgram(text) {
+  const t = String(text || "");
+  return PAYMENT_PROGRAM.test(t) || (PROGRAM_GROUP.test(t) && PROGRAM_WORD.test(t));
+}
 export function asksAboutOffers(text) {
   const t = String(text || "").replace(OFFER_VERB, " ");
-  return OFFER_QUESTION.test(t) && !ONE_PRODUCT.test(t) && !SHOE_WORD.test(t);
+  return OFFER_QUESTION.test(t) && !ONE_PRODUCT.test(t) && !SHOE_WORD.test(t) && !asksAboutProgram(t);
+}
+// Asked about a program and told "we don't have that" without the store's
+// info having been searched: one rewrite, search first.
+const DENIES = /\b(?:don['’]t|do not|doesn['’]t|does not|can['’]t|cannot|isn['’]t|is not|aren['’]t|are not|no longer|not (?:currently|yet|able to)|unable to|unfortunately|sorry)\b[^.!?\n]{0,80}\b(?:offer|have|provide|accept|take|support|run|available|discount|program)|\bno\s+(?:\w+\s+){0,3}(?:discounts?|programs?)\b/i;
+export function programUnchecked({ latestUserMessage = "", text = "", called = [], available = [] } = {}) {
+  if (!asksAboutProgram(latestUserMessage)) return false;
+  if (!available.includes("search_store_info") || called.includes("search_store_info")) return false;
+  return DENIES.test(String(text || ""));
 }
 // The offers were already listed earlier in this chat: don't list them again.
 export function offersAlreadyListed(messages = []) {
@@ -517,7 +536,7 @@ export async function runLeanTurn({
   const lastAssistantText = [...messages].reverse().find((m) => m?.role === "assistant" && typeof m.content === "string")?.content || "";
   // A sales word, offers running, not listed yet in this chat → Claude is
   // told how to answer either meaning, and the check model says which it is.
-  const offersMaybe = (askYesNo ? OFFER_QUESTION.test(latestUserMessage) : asksAboutOffers(latestUserMessage)) &&
+  const offersMaybe = (askYesNo ? OFFER_QUESTION.test(latestUserMessage) && !asksAboutProgram(latestUserMessage) : asksAboutOffers(latestUserMessage)) &&
     hasRunningOffers(extraSystem) && !offersAlreadyListed(messages.slice(0, -1));
   const offersCheck = offersMaybe && askYesNo
     ? Promise.resolve().then(() => askYesNo(offersQuestion(lastAssistantText, latestUserMessage))).catch(() => null)
@@ -895,6 +914,14 @@ export async function runLeanTurn({
       issues.push({
         code: "support_too_soon",
         detail: `You're sending them to customer service before looking into it. Investigate first with your tools: ${lookFirst.map((t) => LOOK_INTO[t]).join("; ")}. Then answer from what you found — the order number, the dates, the refund, the points entries — and connect it to their question; say plainly what the records don't show, never guess. Offer customer service (contact_support) only if the facts can't settle it, and then say what you checked.`,
+      });
+    }
+    // "We don't have a military discount" without having looked: the program
+    // may be on a page the store's info holds — search, then answer.
+    if (programUnchecked({ latestUserMessage, text, called: [...calledTools], available: tools.map((t) => t.name) })) {
+      issues.push({
+        code: "program_unchecked",
+        detail: "You're telling the customer the store doesn't have this without having looked. It's a standing program question (a discount for a group, a way to pay, price matching) — these live in the store's info, not under ACTIVE PROMOTIONS. Search first: search_store_info with the program's words (\"military discount GovX\", \"HSA FSA Truemed\", \"student discount\"), once more with other words if it misses. If it's there, answer from it — who it's for, how to get it, its link. Only if nothing comes back say you don't see such a program, and share what you do know that helps.",
       });
     }
     // A restock question, or a size picked for a card that's sold out, with

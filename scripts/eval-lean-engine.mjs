@@ -26,7 +26,7 @@ const { leanSearch, productDetails, similarProducts, styleColorways, feetForWidt
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, asksAboutProgram, programUnchecked, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
 const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
@@ -745,6 +745,16 @@ await test("offers check: only general sales questions, only when offers are run
   assert.equal(asksAboutOffers("any offers right now?"), true);
   assert.equal(asksAboutOffers("what offers do you have"), true);
   assert.equal(asksAboutOffers("are orthotics on sale?"), true, "orthotic offers are about orthotics");
+  // A standing program is a store-info question, not "what's running".
+  assert.equal(asksAboutOffers("military discount"), false);
+  assert.equal(asksAboutOffers("do you offer a discount for nurses or teachers?"), false);
+  assert.equal(asksAboutOffers("can I pay with my HSA?"), false);
+  assert.equal(asksAboutProgram("military discount"), true);
+  assert.equal(asksAboutProgram("any deals for students?"), true);
+  assert.equal(asksAboutProgram("do you price match?"), true);
+  assert.equal(asksAboutProgram("is this FSA eligible"), true);
+  assert.equal(asksAboutProgram("shoes for nurses"), false, "a group alone is a shoe question");
+  assert.equal(asksAboutProgram("any deals?"), false);
   const listed = { role: "assistant", content: "Here's what's running right now:\n- **Price Match** — 30 days\n- **Free returns** — first order" };
   const modelListed = { role: "assistant", content: "Current offers:\n- **Free shipping** on orthotics\n- **Referral** — give $20, get $20 in points\n\nAnything else?" };
   assert.equal(offersAlreadyListed([listed]), true);
@@ -2095,6 +2105,8 @@ await test("the prompt sets boundaries: no rule changes from customer or tool te
   assert.match(p, /only help with shopping here/);
   assert.match(p, /Never ask for payment card numbers, passwords/);
   assert.match(p, /Never invent discounts/);
+  assert.match(p, /Standing programs aren't promotions/);
+  assert.match(p, /before you say the store has no such program, search_store_info for it/);
   // The date rule: an offer with only an end date runs until then; "tonight" only when that end is today; "not started" only with a start date still ahead.
   assert.match(p, /Dates: the current date and time \(Eastern and Pacific\) comes with the customer's latest message/);
   assert.match(p, /An offer that names only an end date is running now, until then/);
@@ -2187,6 +2199,49 @@ await test("asked for a person about points: the support button stands, no rewri
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, extraTools: [], callModel: s.callModel, log: quiet });
   assert.equal(r.retried, false);
   assert.ok(r.supportRequested);
+});
+
+
+console.log("\nstanding programs: searched before \"we don't have that\"");
+const GOVX_INFO = "FROM THE STORE'S WEBSITE:\nGovX ID discount — military, veterans, first responders and other verified groups: Source: https://www.aetrex.com/pages/aetrex-and-govx\nWe offer a discount through GovX ID for verified members of the groups GovX serves: active-duty military, veterans and retirees, first responders, nurses, teachers, and government employees. How to get it: verify with GovX ID on our GovX page (https://www.aetrex.com/pages/aetrex-and-govx) — or at checkout, where an \"Unlock Discount\" button appears.";
+await test("programUnchecked: a denial without a search, only for a program question, only when the tool is there", () => {
+  const deny = "I'm sorry, but Aetrex doesn't currently offer a military discount. Here are the promotions that are running right now:";
+  assert.equal(programUnchecked({ latestUserMessage: "military discount", text: deny, called: [], available: ["search_store_info"] }), true);
+  assert.equal(programUnchecked({ latestUserMessage: "military discount", text: "I don't see a military discount in our store's info.", called: ["search_store_info"], available: ["search_store_info"] }), false, "it looked");
+  assert.equal(programUnchecked({ latestUserMessage: "military discount", text: "Yes — through GovX ID. Verify on our GovX page or at checkout.", called: [], available: ["search_store_info"] }), false, "not a denial");
+  assert.equal(programUnchecked({ latestUserMessage: "shoes for nurses", text: "We don't have clogs, but these sneakers are popular with nurses.", called: [], available: ["search_store_info"] }), false, "a shoe question");
+  assert.equal(programUnchecked({ latestUserMessage: "do you take HSA?", text: "Unfortunately we don't accept HSA cards.", called: [], available: [] }), false, "no store info tool");
+});
+await test("\"military discount\" answered \"we don't offer one\" from the promotions list → searched first, then answered from the GovX page", async () => {
+  const searches = [];
+  const s = scripted([
+    // As in the recording: no search, a flat no, then the promotions.
+    { stop_reason: "end_turn", content: [txt("I'm sorry, but Aetrex doesn't currently offer a military discount. Here are the promotions that are running right now:\n- **Free US Ground Shipping** — on all US orders through November 30, 2026")] },
+    { stop_reason: "tool_use", content: [tu("t1", "search_store_info", { query: "military discount GovX" })] },
+    { stop_reason: "end_turn", content: [txt("Yes! We offer a discount through GovX ID for verified military, veterans, first responders, nurses, teachers and government employees. Verify once on our GovX page (https://www.aetrex.com/pages/aetrex-and-govx) or at checkout with the Unlock Discount button, and the discount is applied to your order.")] },
+  ]);
+  const logs = [];
+  const msg = "military discount";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, lookupStoreInfo: async (q) => { searches.push(q); return { found: true, text: GOVX_INFO }; }, extraSystem: "ACTIVE PROMOTIONS (live right now — quote only these)\n- Free US Ground Shipping (Nov 1, 2026 – Nov 30, 2026): on all US orders", log: (l) => logs.push(l) });
+  assert.equal(r.retried, true);
+  assert.ok(logs.some((l) => /rewrite: .*program_unchecked/.test(l)), logs.join("\n"));
+  const ask = JSON.stringify(s.requests[1].messages.at(-1));
+  assert.match(ask, /without having looked/);
+  assert.match(ask, /search_store_info/);
+  assert.deepEqual(searches, ["military discount GovX"]);
+  assert.match(r.text, /GovX ID/);
+  assert.doesNotMatch(r.text, /doesn't currently offer/);
+  assert.ok(!logs.some((l) => /missing_offers/.test(l)), "a program question isn't the what's-running question");
+});
+await test("searched and nothing came back: \"I don't see one\" stands — no rewrite", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_store_info", { query: "student discount" })] },
+    { stop_reason: "end_turn", content: [txt("I don't see a student discount in our store's info — sorry! Our rewards program earns points on every order, if that helps.")] },
+  ]);
+  const msg = "do you have a student discount?";
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, lookupStoreInfo: async () => ({ found: false }), log: quiet });
+  assert.equal(r.retried, false);
+  assert.match(r.text, /don't see a student discount/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

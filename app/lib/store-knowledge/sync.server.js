@@ -19,6 +19,7 @@ import { getShopConfig } from "../../models/ShopConfig.server.js";
 import { chunkKnowledgeFile, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { embedTexts, vectorLiteral, resolveShopEmbedding, EMBEDDING_DIMENSIONS } from "../embeddings.server.js";
 import { decodeEntities, htmlToText, parseSitemap, parseThemeJson, POLICY_SLUGS, splitSections, themeTemplateText, toKnowledgeDoc } from "./extract.js";
+import { GOVX_EMBED, GOVX_RULE, govxProgram, parseDiscountSummary } from "./programs.js";
 
 export const STORE_SOURCE_PREFIX = "store:";
 const MIN_TEXT_CHARS = 120;
@@ -174,9 +175,13 @@ async function collectPages({ admin, domain, ownHosts, fetchImpl, log }) {
   const templates = source === "admin" ? await themePageTemplates(admin, thin.map((p) => p.templateSuffix), domain, log) : new Map();
   let webFetches = 0;
   let fromTheme = 0;
+  // Pages that are a GovX ID embed (filled in by GovX's script, empty to a
+  // reader): the program they host is written down separately.
+  const govxPages = [];
   const docs = (await mapLimit(pages, 4, async (p) => {
     const url = p.url || `${domain}/pages/${p.handle}`;
     let text = htmlToText(p.body, { ownHosts });
+    let govx = GOVX_EMBED.test(String(p.body || ""));
     const tpl = p.templateSuffix ? templates.get(String(p.templateSuffix).toLowerCase()) : "";
     if (text.length < THIN_BODY_CHARS && tpl && tpl.length > text.length) {
       text = [text, tpl].filter(Boolean).join("\n\n");
@@ -187,14 +192,38 @@ async function collectPages({ admin, domain, ownHosts, fetchImpl, log }) {
       const html = await fetchText(url, fetchImpl);
       const live = html ? htmlToText(html, { ownHosts }) : "";
       if (live.length > text.length) text = live;
+      if (html && GOVX_EMBED.test(html)) govx = true;
       if (html && (!p.title || p.title === titleFromSlug(p.handle))) {
         const t = html.match(/<title>([^<]+)<\/title>/i)?.[1];
         if (t) p.title = decodeEntities(t).split(/\s[|–—-]\s/)[0].trim();
       }
     }
+    if (govx) govxPages.push({ handle: p.handle, title: p.title, url });
     return toKnowledgeDoc({ kind: "page", handle: p.handle, title: p.title, url, text });
   })).filter((d) => d.chars >= MIN_TEXT_CHARS);
-  return { docs, source, webFetches, fromTheme };
+  return { docs, source, webFetches, fromTheme, govxPages };
+}
+
+// GovX's Shopify app keeps its discount as a price rule ("GovX Price Rule");
+// the rule's summary gives the amount. Needs read_discounts — without it,
+// the program is still learned, without an amount.
+async function collectGovxRule({ admin, log }) {
+  try {
+    const data = await gql(admin, `#graphql
+      query { discountNodes(first: 10, query: "govx") { nodes { discount {
+        ... on DiscountCodeBasic { title status summary }
+        ... on DiscountAutomaticBasic { title status summary }
+      } } } }`);
+    for (const n of data?.discountNodes?.nodes || []) {
+      const d = n?.discount;
+      if (!d || !GOVX_RULE.test(d.title || "") || d.status !== "ACTIVE") continue;
+      const rule = parseDiscountSummary(d.summary);
+      if (rule.amount) return rule;
+    }
+  } catch (err) {
+    if (!err.accessDenied) log(`[store-knowledge] discounts via admin failed: ${err.message}`);
+  }
+  return null;
 }
 
 async function collectArticles({ admin, domain, ownHosts, log }) {
@@ -345,6 +374,10 @@ export async function syncStoreKnowledge({ admin, shop, fetchImpl = fetch, log =
     log(`[store-knowledge] ${shop}: nothing collected (policies=${policies.source} pages=${pages.source}) — keeping previous store knowledge`);
     return { ok: false, docs: 0, policiesSource: policies.source, pagesSource: pages.source };
   }
+  // Programs that live in apps, not page text (GovX ID).
+  const govx = govxProgram({ pages: pages.govxPages || [], rule: await collectGovxRule({ admin, log }) });
+  const programs = govx ? [toKnowledgeDoc(govx)] : [];
+  docs.push(...programs);
   const config = await getShopConfig(shop);
   const stored = await storeDocs(shop, docs, config, log, {
     preserve: articles.source === "none" ? [`${STORE_SOURCE_PREFIX}article:`] : [],
@@ -352,7 +385,7 @@ export async function syncStoreKnowledge({ admin, shop, fetchImpl = fetch, log =
   log(
     `[store-knowledge] ${shop}: docs=${docs.length} (policies=${policies.docs.length} via ${policies.source}, ` +
     `pages=${pages.docs.length} via ${pages.source}, from-theme=${pages.fromTheme || 0}, web-fetches=${pages.webFetches || 0}, ` +
-    `articles=${articles.docs.length}) chunks=${stored.chunks} (+${stored.added} −${stored.removed}) embedded=${stored.embedded} ms=${Date.now() - started}`,
+    `articles=${articles.docs.length}, programs=${programs.length}) chunks=${stored.chunks} (+${stored.added} −${stored.removed}) embedded=${stored.embedded} ms=${Date.now() - started}`,
   );
   return { ok: true, docs: docs.length, ...stored, policiesSource: policies.source, pagesSource: pages.source, articles: articles.docs.length };
 }
@@ -384,7 +417,7 @@ export async function lexicalStoreKnowledge(shop, query, { limit = 4 } = {}) {
   return lexicalRetrieveChunks(await storeChunksAsFiles(shop), query, { limit, minOverlap: 0.25 });
 }
 
-const KIND_LABELS = { store_policy: "Policy", store_page: "Page", store_article: "Article" };
+const KIND_LABELS = { store_policy: "Policy", store_page: "Page", store_article: "Article", store_program: "Program" };
 
 // Admin summary: one row per learned document.
 export async function listStoreKnowledge(shop) {

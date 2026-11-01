@@ -44,6 +44,7 @@ global.prismaGlobal = {
 
 const { htmlToText, parseSitemap, splitSections, toKnowledgeDoc, themeTemplateText } = await import("../app/lib/store-knowledge/extract.js");
 const { syncStoreKnowledge, lexicalStoreKnowledge, listStoreKnowledge, STORE_SOURCE_PREFIX } = await import("../app/lib/store-knowledge/sync.server.js");
+const { parseDiscountSummary, govxProgram } = await import("../app/lib/store-knowledge/programs.js");
 
 let passed = 0;
 let failed = 0;
@@ -103,7 +104,7 @@ const WEB = {
   "https://www.aetrex.test/pages/empty": shell("<h1>Empty</h1>"),
 };
 
-function fakeAdmin({ scopes = true, pages = null, articles = [], templates = {}, themes = true, articlesOk = true } = {}) {
+function fakeAdmin({ scopes = true, pages = null, articles = [], templates = {}, themes = true, articlesOk = true, discounts = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -122,6 +123,8 @@ function fakeAdmin({ scopes = true, pages = null, articles = [], templates = {},
           : denied();
       }
       if (/themes\(first/.test(query)) return scopes && themes ? ok({ themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/1" }] } }) : denied();
+      // read_discounts: only when the test grants it.
+      if (/discountNodes\(/.test(query)) return discounts ? ok({ discountNodes: { nodes: discounts.map((d) => ({ discount: d })) } }) : denied();
       if (/theme\(id/.test(query)) {
         const nodes = (variables?.filenames || []).filter((f) => templates[f]).map((f) => ({ filename: f, body: { content: templates[f] } }));
         return ok({ theme: { files: { nodes } } });
@@ -440,6 +443,78 @@ await test("without theme access, every thin page is read live — no cap on how
   const r = await syncStoreKnowledge({ admin: fakeAdmin({ pages: many, themes: false }), shop: "demo.myshopify.com", fetchImpl: stubFetch(web, fetched), log: () => {} });
   assert.equal(fetched.filter((u) => /\/pages\/tech-/.test(u)).length, 160);
   assert.equal(r.docs, 161, "160 pages + the refund policy");
+});
+
+
+// ── Programs that live in apps, not page text ─────────────────────
+console.log("\nprograms that live in apps — GovX ID");
+const GOVX_PAGE = { title: "Aetrex and GOVX", handle: "aetrex-and-govx", body: '<div data-govx-id="page"></div>', isPublished: true, templateSuffix: "page" };
+const GOVX_RULE = { title: "GovX Price Rule -- DO NOT DELETE", status: "ACTIVE", summary: "15% off NONE SALE • One use per customer" };
+await test("the discount summary: the amount and one-per-customer are read, nothing else is", () => {
+  assert.deepEqual(parseDiscountSummary("15% off NONE SALE • One use per customer"), { amount: "15% off", oncePerCustomer: true });
+  assert.deepEqual(parseDiscountSummary("$10 off all orders"), { amount: "$10 off", oncePerCustomer: false });
+  assert.deepEqual(parseDiscountSummary("Free shipping on all orders"), { amount: "", oncePerCustomer: false });
+  assert.equal(govxProgram({ pages: [], rule: null }), null, "no sign of GovX → no program");
+});
+await test("a page that is only the GovX embed (empty to a reader) is learned as the program it hosts, with the page's link — no amount without read_discounts", async () => {
+  chunks.length = 0;
+  const r = await syncStoreKnowledge({ admin: fakeAdmin({ pages: [GOVX_PAGE] }), shop: "demo.myshopify.com", fetchImpl: stubFetch(WEB), log: () => {} });
+  assert.equal(r.ok, true);
+  assert.equal(chunks.filter((c) => c.sourceFileId === "store:page:aetrex-and-govx").length, 0, "the empty page itself isn't a document");
+  const prog = chunks.filter((c) => c.sourceFileId === "store:program:govx");
+  assert.ok(prog.length >= 1, "the program is");
+  const text = prog.map((c) => c.content).join("\n");
+  assert.match(text, /Source: https:\/\/www\.aetrex\.test\/pages\/aetrex-and-govx/);
+  assert.match(text, /GovX ID/);
+  assert.match(text, /active-duty military, veterans and retirees/);
+  assert.match(text, /first responders \(police, fire, EMS\)/);
+  assert.match(text, /Unlock Discount/);
+  assert.match(text, /shown once you've verified/);
+  assert.doesNotMatch(text, /15% off/);
+  assert.equal(prog[0].fileType, "store_program");
+  const list = await listStoreKnowledge("demo.myshopify.com");
+  const row = list.find((d) => d.id === "store:program:govx");
+  assert.equal(row.kind, "Program");
+  assert.equal(row.url, "https://www.aetrex.test/pages/aetrex-and-govx");
+  assert.match(row.title, /^GovX ID discount/);
+});
+await test("\"military discount?\" finds the program", async () => {
+  const hits = await lexicalStoreKnowledge("demo.myshopify.com", "do you have a military discount?");
+  assert.ok(hits.some((h) => /GovX ID/.test(h.content)), JSON.stringify(hits.map((h) => h.sectionTitle)));
+  const vet = await lexicalStoreKnowledge("demo.myshopify.com", "veterans first responders nurses discount");
+  assert.ok(vet.some((h) => /GovX ID/.test(h.content)));
+});
+await test("with read_discounts, the GovX price rule's amount is quoted — 15% off, one use per customer", async () => {
+  chunks.length = 0;
+  await syncStoreKnowledge({ admin: fakeAdmin({ pages: [GOVX_PAGE], discounts: [GOVX_RULE] }), shop: "demo.myshopify.com", fetchImpl: stubFetch(WEB), log: () => {} });
+  const text = chunks.filter((c) => c.sourceFileId === "store:program:govx").map((c) => c.content).join("\n");
+  assert.match(text, /The GovX ID discount is 15% off, one use per customer\./);
+  assert.doesNotMatch(text, /shown once you've verified/);
+});
+await test("the rule alone (no page) still teaches the program — verify at checkout; an inactive or unrelated rule doesn't", async () => {
+  chunks.length = 0;
+  await syncStoreKnowledge({ admin: fakeAdmin({ discounts: [GOVX_RULE] }), shop: "demo.myshopify.com", fetchImpl: stubFetch(WEB), log: () => {} });
+  const text = chunks.filter((c) => c.sourceFileId === "store:program:govx").map((c) => c.content).join("\n");
+  assert.match(text, /verify with GovX ID at checkout/);
+  assert.doesNotMatch(text, /on our GovX page/);
+  chunks.length = 0;
+  await syncStoreKnowledge({ admin: fakeAdmin({ discounts: [{ ...GOVX_RULE, status: "EXPIRED" }, { title: "WELCOME10", status: "ACTIVE", summary: "10% off all orders" }] }), shop: "demo.myshopify.com", fetchImpl: stubFetch(WEB), log: () => {} });
+  assert.equal(chunks.filter((c) => c.sourceFileId === "store:program:govx").length, 0);
+});
+await test("without the content scopes, the embed is seen on the live page (sitemap fallback)", async () => {
+  chunks.length = 0;
+  const sitemap = `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://www.aetrex.test/pages/shipping-returns</loc></url><url><loc>https://www.aetrex.test/pages/aetrex-and-govx</loc></url></urlset>`;
+  const web = { ...WEB, "https://www.aetrex.test/sitemap_pages_1.xml": sitemap, "https://www.aetrex.test/pages/aetrex-and-govx": shell('<h1>Aetrex and GOVX</h1><div data-govx-id="page"></div>') };
+  const r = await syncStoreKnowledge({ admin: fakeAdmin({ scopes: false }), shop: "demo.myshopify.com", fetchImpl: stubFetch(web), log: () => {} });
+  assert.equal(r.ok, true);
+  const text = chunks.filter((c) => c.sourceFileId === "store:program:govx").map((c) => c.content).join("\n");
+  assert.match(text, /on our GovX page \(https:\/\/www\.aetrex\.test\/pages\/aetrex-and-govx\)/);
+});
+await test("a page that merely mentions GovX in prose is an ordinary page, not the program", async () => {
+  chunks.length = 0;
+  await syncStoreKnowledge({ admin: fakeAdmin({ pages: [{ title: "Press", handle: "press", body: "<p>" + "Aetrex partnered with GovX this spring to thank those who serve. ".repeat(8) + "</p>", isPublished: true }] }), shop: "demo.myshopify.com", fetchImpl: stubFetch(WEB), log: () => {} });
+  assert.equal(chunks.filter((c) => c.sourceFileId === "store:program:govx").length, 0);
+  assert.ok(chunks.some((c) => c.sourceFileId === "store:page:press"));
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

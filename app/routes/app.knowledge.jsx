@@ -462,6 +462,7 @@ const KNOWLEDGE_CSS = `
   .kn-kind--Policy { background: #eaf4ff; color: #00527c; }
   .kn-kind--Page { background: rgba(26,46,38,0.07); color: #4a4a4a; }
   .kn-kind--Article { background: #e6f4ec; color: #1f6b44; }
+  .kn-kind--Program { background: #fff3e0; color: #8a4b00; }
   .kn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px 8px 16px; border-top: 1px solid rgba(30,27,51,0.07);
     font-size: 12.5px; color: #616161; font-variant-numeric: tabular-nums; }
   .kn-empty { padding: 22px 16px; border-top: 1px solid rgba(30,27,51,0.07); text-align: center; font-size: 13px; color: #616161; }
@@ -974,7 +975,7 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
   );
 }
 
-const KIND_LABEL = { Policy: "Policy", Page: "Page", Article: "Blog" };
+const KIND_LABEL = { Policy: "Policy", Page: "Page", Article: "Blog", Program: "Program" };
 
 function StoreKnowledgeCard({ docs }) {
   const fetcher = useFetcher();
@@ -1000,6 +1001,7 @@ function StoreKnowledgeCard({ docs }) {
     { id: "Page", label: "Pages", n: count("Page") },
     { id: "Article", label: "Blog", n: count("Article") },
     { id: "Policy", label: "Policies", n: count("Policy") },
+    ...(count("Program") ? [{ id: "Program", label: "Programs", n: count("Program") }] : []),
   ];
   const [tab, setTab] = useState(0);
   const [query, setQuery] = useState("");
@@ -1011,7 +1013,7 @@ function StoreKnowledgeCard({ docs }) {
   const pages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const at = Math.min(pageIndex, pages - 1);
   const shown = filtered.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE);
-  const breakdown = [plural(count("Policy"), "policy", "policies"), plural(count("Page"), "page", "pages"), plural(count("Article"), "blog article", "blog articles")].join(" · ");
+  const breakdown = [plural(count("Policy"), "policy", "policies"), plural(count("Page"), "page", "pages"), plural(count("Article"), "blog article", "blog articles"), ...(count("Program") ? [plural(count("Program"), "program", "programs")] : [])].join(" · ");
   return (
     <Card padding="0">
       <Row

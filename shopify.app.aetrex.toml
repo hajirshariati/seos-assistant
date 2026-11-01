@@ -54,7 +54,7 @@ api_version = "2026-04"
 # read_returns: the order cards read each order's returns (status, return
 # tracking); without it the Admin API refuses the whole order query, so the
 # lookups fall back to orders without returns until the store approves it.
-scopes = "read_customers,read_metaobjects,read_orders,read_all_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_returns,read_themes"
+scopes = "read_customers,read_metaobjects,read_orders,read_all_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_returns,read_themes,read_discounts"
 
 [auth]
 redirect_urls = [
