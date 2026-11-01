@@ -7294,8 +7294,12 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ai-chat-panel.is-focus .ai-chat-focus__card--pain { grid-column: auto; }
 }
-.ai-chat-panel.is-focus .ai-chat-focus__coin { width: 38px; height: 38px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--seos-line); }
-.ai-chat-panel.is-focus .ai-chat-focus__coin img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A tile's picture (where it hurts): the whole left side of the tile, edge
+   to edge and full height, so more of it shows — no coin. */
+.ai-chat-panel.is-focus .ai-chat-focus__coin { position: relative; flex: 0 0 74px; align-self: stretch; margin-right: 10px; overflow: hidden; background: #fff; }
+.ai-chat-panel.is-focus .ai-chat-focus__coin img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt:has(> .ai-chat-focus__coin) { padding: 0 34px 0 0; gap: 0; overflow: hidden; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt:has(> .ai-chat-focus__coin) .ai-chat-focus__opt-text { padding: 8px 0; }
 .ai-chat-panel.is-focus .ai-chat-focus__links { margin-top: auto; padding: 18px 0 6px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 /* The text box's hint (Settings → Chat text) keeps to one line — long
    words end in an ellipsis rather than a second line. */
@@ -7445,6 +7449,12 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { width: 100%; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 36px; font-size: 14px; }
   .ai-chat-panel.is-focus .ai-chat-focus__opt { min-height: 56px; }
+  /* Tiles with a picture (where it hurts) take the full width, one under
+     the other — half a phone has no room for the picture and the words —
+     and the bar with Continue stays in view while they scroll. */
+  .ai-chat-panel.is-focus .ai-chat-focus__opts:has(.ai-chat-focus__coin) { grid-template-columns: 1fr; }
+  .ai-chat-panel.is-focus .ai-chat-focus__opt:has(> .ai-chat-focus__coin) { min-height: 62px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__bar { position: sticky; bottom: -22px; z-index: 2; margin: 2px -20px -22px; padding: 10px 20px 22px; background: var(--seos-bg-raised, #fff); }
   .ai-chat-panel.is-focus .ai-chat-focus__sum-k { flex-basis: 92px; }
 }
 @media (max-width: 340px) {
