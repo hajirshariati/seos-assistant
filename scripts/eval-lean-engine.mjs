@@ -600,6 +600,34 @@ await test("invented product → fact check → Claude rewrites once", async () 
   assert.equal(r.text, "The Ashley wedge in navy is the dressiest match.");
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Automatic fact check/);
 });
+// The live failure (Nov 1): asked to rewrite, the model argued with the
+// check — "the customer's latest message was about… no correction is needed"
+// — and that went to the shopper. Now the first reply goes out instead.
+await test("a rewrite that answers the fact check instead of the customer → the first reply stands", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"] })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]] })] },
+    { stop_reason: "end_turn", content: [txt("The Ashley in navy, or the Savannah sandal.")] },
+    { stop_reason: "end_turn", content: [txt("I think there may be some confusion — the customer's latest message was about a wedge. My previous reply correctly addressed it. No correction is needed here; I'll wait for the customer's next message.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "dressy wedge" }], callModel: s.callModel, log: (l) => logs.push(String(l)) });
+  assert.equal(r.retried, true, "the fact check asked for a rewrite");
+  assert.equal(r.text, "The Ashley in navy, or the Savannah sandal.", "the first reply, not the argument");
+  assert.ok(logs.some((l) => /rewrite answered the check/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Write only words for the customer/);
+});
+await test("no store word list: \"signed in through Shop\" and \"return at UPS STORE\" trigger no store rule", async () => {
+  const { PUSHBACK } = await import("../app/lib/lean/engine.js");
+  for (const m of ["I am signed in through Shop and it is not working. Do I have to sign in through Atrex", "i already recieved the package but i am making a return. can the return be make at UPS STORE"]) {
+    const s = scripted([{ stop_reason: "end_turn", content: [txt("Let me look into that for you.")] }]);
+    const logs = [];
+    const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: m }], latestUserMessage: m, callModel: s.callModel, log: (l) => logs.push(String(l)), config: { storeLocatorStores: "scanner" } });
+    assert.ok(!logs.some((l) => /store_too_soon|store_ask_reply/.test(l)), logs.join("\n"));
+    assert.equal(r.text, "Let me look into that for you.");
+  }
+  assert.equal(PUSHBACK.test("Totally understand — here's how returns work."), false, "ordinary replies never trip the pushback check");
+});
 // The live failure: on a product page, "i have these but in size 8" — the
 // assistant didn't know which product "these" was. Now the page's product is
 // in the prompt, and naming it (and its price) needs no new card.
@@ -1766,23 +1794,6 @@ await test("stores on the map have the foot scanner: the size worry first (True 
   assert.match(ran.note, /most may not carry the shoes, so it's worth calling ahead/);
   assert.equal(ran._events[0].type, "map_cta");
 });
-await test("first ask to try on in person (scanner stores): a reply that brings up the map or scanners goes back", async () => {
-  const { storeTooSoon } = await import("../app/lib/lean/engine.js");
-  const ask = "where can i try the aetrex charlotte sneaker";
-  const said = "Order it here with our 30-day guarantee — and I can show you a store with an Aetrex foot scanner near you too.";
-  const base = { scannerStores: true, messages: [{ role: "user", content: ask }], latestUserMessage: ask };
-  assert.equal(storeTooSoon({ ...base, text: said }), true, "scanner offered on the first ask");
-  assert.equal(storeTooSoon({ ...base, text: "Here it is — True Fit finds your size.", mapShown: true }), true, "map shown on the first ask");
-  assert.equal(storeTooSoon({ ...base, text: "Not sure of your size? True Fit finds it in a minute, and returns are easy." }), false, "a clean reply");
-  assert.equal(storeTooSoon({ ...base, scannerStores: false, text: said }), false, "stores that sell the products: unchanged");
-  // They insist: asked before, or say so.
-  const insisted = [{ role: "user", content: "is there a store near me?" }, { role: "assistant", content: "True Fit can find your size…" }, { role: "user", content: ask }];
-  assert.equal(storeTooSoon({ ...base, messages: insisted, text: said, mapShown: true }), false, "asked again");
-  assert.equal(storeTooSoon({ ...base, latestUserMessage: "I'd still rather try them on in a store", messages: [{ role: "user", content: "I'd still rather try them on in a store" }], text: said, mapShown: true }), false, "insists");
-  // A scan or orthotics: the map is right.
-  assert.equal(storeTooSoon({ ...base, latestUserMessage: "where can I get my feet scanned near me?", messages: [{ role: "user", content: "where can I get my feet scanned near me?" }], text: said, mapShown: true }), false, "scan");
-  assert.equal(storeTooSoon({ ...base, latestUserMessage: "can I try your orthotics in a store?", messages: [{ role: "user", content: "can I try your orthotics in a store?" }], text: said, mapShown: true }), false, "orthotics");
-});
 await test("tap choices the quick replies already offer go — one set of buttons, never two", async () => {
   const { dedupeChoices } = await import("../app/lib/lean/engine.js");
   const qr = ["Find my size in the Charlotte", "See the Charlotte in other colors", "Do any come in wide?"];
@@ -1848,55 +1859,6 @@ await test("scanner stores: the locator alone (after they insisted) goes back on
   assert.match(back, /shopping for sandals/);
   assert.match(back, /keep the door open online in one short sentence/);
   assert.doesNotMatch(back, /each store picks its own selection/);
-});
-await test("scanner stores, first ask: the map and the scanner mention are taken back; the rewrite helps buying here", async () => {
-  const msg = "where can i try the savannah sandal";
-  const s = scripted([
-    { stop_reason: "tool_use", content: [tu("t1", "show_store_locator", {})] },
-    { stop_reason: "tool_use", content: [tu("t2", "search_products", { query: "savannah", gender: "women" })] },
-    { stop_reason: "tool_use", content: [tu("t3", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
-    { stop_reason: "end_turn", content: [txt("Here's the Savannah — and the map shows a store with an Aetrex foot scanner near you.")] },
-    { stop_reason: "end_turn", content: [txt("Totally understand wanting to try the Savannah on first. If it's your size you're unsure about, I can help right now — and returns are easy if it's not right. <<Find my size>><<See other colors>>")] },
-  ]);
-  const logs = [];
-  const r = await runLeanTurn({ catalog, model: "m", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }, messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, extraTools: [locatorTool], log: (l) => logs.push(l) });
-  assert.equal(r.retried, true);
-  assert.ok(logs.some((l) => /rewrite: .*store_too_soon/.test(l)), logs.join("\n"));
-  assert.match(JSON.stringify(s.requests.at(-1).messages.at(-1)), /Don't mention stores, the store locator, the map, foot scanners or scanner locations in this reply/);
-  assert.ok(!r.events.some((e) => e.type === "map_cta"), "the map is taken back");
-  assert.doesNotMatch(r.text, /scanner|store/i);
-  assert.deepEqual(r.cards.map((c) => c.title), ["Savannah Adjustable Quarter Strap Sandal - Red"]);
-  assert.deepEqual(r.issues, []);
-});
-await test("scanner stores, first ask: \"tap the button\" alone goes back — heard, the size help, the returns", async () => {
-  const { storeAskMisses } = await import("../app/lib/lean/engine.js");
-  const ask = "where can i try the aetrex charlotte sneaker";
-  const base = { scannerStores: true, messages: [{ role: "user", content: ask }], latestUserMessage: ask };
-  const robotic = "Tap Find my size with True Fit on the card to get your size for the Charlotte, then you're all set to add it to your cart! Would you like to see it in other colors too?";
-  assert.deepEqual(storeAskMisses({ ...base, text: robotic }), ["heard", "returns"]);
-  assert.deepEqual(storeAskMisses({ ...base, text: "Totally understand wanting to try the Charlotte on first. If it's your size you're unsure about, I can help right now. Want me to find it?" }), ["returns"]);
-  assert.deepEqual(storeAskMisses({ ...base, text: "Totally understand wanting to try the Charlotte on first — fit is everything with shoes. If it's your size you're unsure about, I can help right now, and with the 30-day Health Guarantee, returns are easy." }), []);
-  assert.deepEqual(storeAskMisses({ ...base, scannerStores: false, text: robotic }), [], "stores that sell the products: unchanged");
-  const dense = "Totally understand wanting to try Aetrex shoes on before committing — fit really is everything! If it's your size you're unsure about, I can help right now: True Fit can match you to your size in any specific shoe in about a minute, using real data from shoppers who've worn it. And ordering here is low-risk — Aetrex's 30-day Health Guarantee lets you actually wear the shoes, and if you're not completely satisfied, you can return them (even worn!), with the $5.95 return fee waived on your very first order.\n\nIs there a particular style you're interested in?";
-  assert.deepEqual(storeAskMisses({ ...base, text: dense }), ["paragraphs"], "one dense block goes back");
-  assert.deepEqual(storeAskMisses({ ...base, text: "I totally get it — sometimes you just want to feel a shoe on before you buy. 😊\n\nIf it's mostly about the size, True Fit can find your best fit in about a minute, from real shoppers' feedback.\n\nAnd here's what makes trying it easier: with the 30-day Health Guarantee you can actually wear them and still return them if they're not quite right. <<Find my size>><<See other colors>>" }), [], "three short paragraphs");
-  assert.deepEqual(storeAskMisses({ ...base, latestUserMessage: "where can I get my feet scanned near me?", messages: [{ role: "user", content: "where can I get my feet scanned near me?" }], text: robotic }), [], "a scan question");
-  const msg = "where can i try the savannah sandal";
-  const s = scripted([
-    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "savannah", gender: "women" })] },
-    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Savannah Adjustable Quarter Strap Sandal - Red"]] })] },
-    { stop_reason: "end_turn", content: [txt("Tap Find my size on the card, then add it to your cart!")] },
-    { stop_reason: "end_turn", content: [txt("Totally understand wanting to try the Savannah on first — fit is everything. If it's your size you're unsure about, I can help right now, and returns are easy if it's not right. <<Find my size>><<See other colors>>")] },
-  ]);
-  const logs = [];
-  const r = await runLeanTurn({ catalog, model: "m", config: { storeLocatorMapId: "15ecd30bd8acd4", storeLocatorStores: "scanner" }, messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: (l) => logs.push(l) });
-  assert.equal(r.retried, true);
-  assert.ok(logs.some((l) => /rewrite: .*store_ask_reply/.test(l)), logs.join("\n"));
-  const back = JSON.stringify(s.requests.at(-1).messages.at(-1));
-  assert.match(back, /doesn't show you heard that and doesn't take the risk away\./);
-  assert.match(back, /Never just \\"tap the button\\"/);
-  assert.match(r.text, /^Totally understand/);
-  assert.deepEqual(r.issues, []);
 });
 await test("scanner stores, they insist: the map stays", async () => {
   const msg = "i'd still like to try it on in a store";

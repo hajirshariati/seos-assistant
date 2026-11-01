@@ -203,33 +203,14 @@ export function shoppingFor(message, vocab = {}) {
 }
 
 // Stores whose locator shows foot-scanning locations (Settings → Store
-// locator → "Have our foot scanner"): the first time a shopper asks to try
-// on or buy a style in person, the answer is help buying here — never the
-// map or the scanner locations. Later (they insist), or for a scan or
-// orthotics, the map is right. Pure.
-const STORE_ASK = /\b(stores?|shops?|retailers?|dealers?|boutiques?|in[- ]person|near me|nearby|close to me|try (?:\w+ ){0,4}on|where can i (?:try|see|feel))\b/i;
-const SCAN_ASK = /\b(scan(?:ner|ned|ning|s)?|fitting|fitted|orthotics?|insoles?|arch supports?|locator|map)\b/i;
-const INSIST = /\b(still|anyway|anyways|insist|rather|really (?:want|need|would like)|prefer (?:to )?(?:try|see|go))\b/i;
-const LOCATOR_SAID = /\b(foot[- ]?scanners?|scanner locations?|scanning locations?|store locator|store map|find a store|stores? near you|locations? near you|nearby (?:stores?|locations?)|retail locations?)\b/i;
+// locator → "Have our foot scanner"): when the map is shown, the reply is
+// checked for honesty and warmth (locatorReplyMisses). Whether a message is
+// a store question is the model's call, from the prompt — no word list here:
+// one matched "Shop" (the Shop app) and "UPS Store" and sent shoppers a
+// try-on speech instead of an answer.
+// Words a reply to the customer never has — a rewrite that argued with the fact check instead.
+export const PUSHBACK = /\b(?:the customer(?:'s)?|fact[- ]?check|my (?:previous|earlier|last|original) (?:reply|answer|response)|no correction|the (?:previous|earlier) reply|i'll wait for the customer)\b/i;
 const textOf = (m) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((b) => (b?.type === "text" ? b.text : "")).join(" ") : "");
-// The first ask, at such a store, to try on or buy a style in person.
-export function firstStoreAsk({ scannerStores = false, messages = [], latestUserMessage = "" } = {}) {
-  if (!scannerStores) return false;
-  const latest = String(latestUserMessage || "");
-  if (!STORE_ASK.test(latest) || SCAN_ASK.test(latest) || INSIST.test(latest)) return false;
-  // Asked about stores before in this conversation: now they insist.
-  const users = messages.filter((m) => m?.role === "user").map(textOf);
-  if (users.length && users[users.length - 1].trim() === latest.trim()) users.pop();
-  return !users.some((u) => STORE_ASK.test(u) || SCAN_ASK.test(u));
-}
-export function storeTooSoon({ text = "", mapShown = false, ...ask } = {}) {
-  return firstStoreAsk(ask) && (mapShown || LOCATOR_SAID.test(String(text || "")));
-}
-// The answer a sales associate gives that first time: it shows they heard
-// the question ("totally understand wanting to try it on…") and takes the
-// risk away (the returns). Which of the two the reply leaves out.
-const HEARD = /\b(understand|totally|of course|makes (?:total |perfect )?sense|i get (?:it|that)|get it|fair enough|great question|good question|love that|want(?:ing)? to (?:try|see|feel)|try (?:\w+ ){0,3}on|in person|before (?:you )?(?:buy|order|commit|decide))\b/i;
-const RETURNS = /\b(returns?|returned|returning|exchanges?|guarantee|money[- ]back|risk[- ]free)\b/i;
 // When the map is shown at such a store (they insisted, or a scan): an
 // honest heads-up to call ahead, the ZIP code they gave said back, and no
 // robotic opener ("If you'd still prefer… after that"). What it leaves out.
@@ -247,14 +228,6 @@ export function locatorReplyMisses({ scannerStores = false, messages = [], lates
     ...(SCRIPTED_OPENER.test(t) ? ["opener"] : []),
   ];
 }
-export function storeAskMisses({ text = "", ...ask } = {}) {
-  if (!firstStoreAsk(ask)) return [];
-  const t = String(text || "");
-  // Short paragraphs, not one dense block.
-  const dense = t.split(/\n\s*\n/).some((para) => para.replace(/<<[^<>]*>>/g, "").trim().length > 280);
-  return [...(HEARD.test(t) ? [] : ["heard"]), ...(RETURNS.test(t) ? [] : ["returns"]), ...(dense ? ["paragraphs"] : [])];
-}
-
 // The catalog's product line names, worked out once per catalog.
 const lineNameCache = new WeakMap();
 function lineNamesOf(catalog) {
@@ -600,6 +573,7 @@ export async function runLeanTurn({
   const usage = {};
   let toolCalls = 0;
   let retried = false;
+  let rejected = ""; // the reply the fact check sent back, kept in case the rewrite answers the check instead of the customer
   let text = "";
   let finalIssues = [];
   const searches = [];
@@ -900,25 +874,6 @@ export async function runLeanTurn({
           : `You showed the store locator, but no products. They're shopping for ${shopping}: also show a few they can order online right now (search_products, then show_products), and say warmly that each store picks its own selection while the full range — every style, color, size and width — is online, ready to order right here.`,
       });
     }
-    // A first ask to try on or buy a style in person, at a store whose
-    // locator shows foot-scanning locations: help buying here — no map, no
-    // scanner locations (a map already shown is taken back).
-    if (storeTooSoon({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text, mapShown: events.some((e) => e?.type === "map_cta") })) {
-      for (let i = events.length - 1; i >= 0; i--) if (events[i]?.type === "map_cta") events.splice(i, 1);
-      issues.push({
-        code: "store_too_soon",
-        detail: "They asked about trying on or buying a style in person, for the first time. Don't mention stores, the store locator, the map, foot scanners or scanner locations in this reply — its locations are for foot scans and orthotics, and most don't carry the shoes (the map is only for when they insist, or want a scan). Help them buy with confidence right here, like the store's best associate: if it's the size or fit they want to be sure of, you can help now — True Fit for their size in the shoe (open_true_fit, when you have it); easy returns as the store's info says them (search_store_info); the style itself, ready to order; then an inviting next step with tap choices.",
-      });
-    }
-    // That first ask deserves a person's answer: heard, and the risk taken
-    // away — never just "tap the button".
-    const misses = storeAskMisses({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text });
-    if (misses.length) {
-      issues.push({
-        code: "store_ask_reply",
-        detail: `They'd like to try it on in person, and your reply ${[misses.includes("heard") && "doesn't show you heard that", misses.includes("returns") && "doesn't take the risk away", misses.includes("paragraphs") && "is one dense block"].filter(Boolean).join(" and ")}. Answer like a friendly, professional associate, in three short paragraphs with a blank line between them, one or two sentences each: show you get it, in your own words ("I totally get it — sometimes you just want to feel a shoe on before you buy. 😊"); then, if it's mostly about the size, True Fit can find their best fit in about a minute, from real shoppers' feedback; then what makes trying it easy — the returns as the store's info says them (search_store_info, only what it actually says); then one short, warm question toward buying (with the cards, the next steps go in show_products follow_ups, not as tap choices). Never just "tap the button".`,
-      });
-    }
     // The map at such a store: honest, and it heard where they are.
     const mapMisses = locatorReplyMisses({ scannerStores: storeLocatorConfig(config)?.stores === "scanner", messages, latestUserMessage, text, mapShown: events.some((e) => e?.type === "map_cta") });
     if (mapMisses.length) {
@@ -973,6 +928,7 @@ export async function runLeanTurn({
     // A rewrite needs a step left to happen in; on the last step the issues stand.
     if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;
+      rejected = text;
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";
       // Its hand-off to customer service waits for what the rewrite finds.
@@ -980,7 +936,7 @@ export async function runLeanTurn({
       log(`[lean] fact-check failed → rewrite: ${issues.map((i) => i.code).join(",")}`);
       conv.push({
         role: "user",
-        content: `[Automatic fact check — the customer has not seen your reply yet.] ${issues.map((i) => i.detail).join(" ")} Write your reply to the customer again, corrected. You may use tools.`,
+        content: `[Automatic fact check — the customer has not seen your reply yet.] ${issues.map((i) => i.detail).join(" ")} Write your reply to the customer again, corrected. You may use tools. Write only words for the customer — nothing about this check, "the customer" or your previous reply; if you find nothing to correct, write the same reply again.`,
       });
       continue;
     }
@@ -988,6 +944,13 @@ export async function runLeanTurn({
     break;
   }
 
+  // A rewrite that argued with the check ("the customer's latest message was
+  // about…", "no correction is needed") is talk for the engine, not the
+  // shopper: the first reply goes out instead.
+  if (retried && rejected && PUSHBACK.test(text)) {
+    log(`[lean] rewrite answered the check, not the customer — the first reply stands: ${JSON.stringify(text.slice(0, 120))}`);
+    text = rejected;
+  }
   if (finalIssues.some((i) => i.code === "missing_offers")) log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
 
   const fellBack = !text;
