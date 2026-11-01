@@ -1249,14 +1249,19 @@ function focusBandHtml(){
   var sweep='',ease=[[0,255],[0.2,236],[0.4,180],[0.6,96],[0.8,30],[1,0]];
   for(var j=0;j<ease.length;j++){var v=ease[j][1];sweep+='<stop offset="'+ease[j][0]+'" stop-color="rgb('+v+','+v+','+v+')"/>'}
   /* Four strokes of one path, wide and faint to narrow and dim: a soft glow with no hard line. */
+  /* Around the face at home: three soft colour halos — a radial fade each,
+     clear inside the ring, brightest just outside it, gone a little further
+     out (no filter, so no smear) — drifting slowly on their own in CSS so
+     the glow is never even. */
+  var halo=function(n,c){return '<radialGradient id="ai-chat-halo-'+n+'"><stop offset="0.58" stop-color="'+c+'" stop-opacity="0"/><stop offset="0.667" stop-color="'+c+'" stop-opacity="0.6"/><stop offset="0.8" stop-color="'+c+'" stop-opacity="0.22"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient>'};
   var lay=function(cls,id){var h='';for(var k=4;k>=1;k--)h+='<use class="'+cls+' '+cls+'--'+k+(k===1&&cls==='ai-chat-band__linel'?' ai-chat-band__line':'')+'" href="#'+id+'" xlink:href="#'+id+'" stroke="url(#ai-chat-band-g)"/>';return h};
-  return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/></defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring">'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
+  return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/>'+halo(1,FOCUS_BAND[0])+halo(2,FOCUS_BAND[2])+halo(3,FOCUS_BAND[3])+'</defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring"><circle class="ai-chat-band__halo ai-chat-band__halo--1" fill="url(#ai-chat-halo-1)"/><circle class="ai-chat-band__halo ai-chat-band__halo--2" fill="url(#ai-chat-halo-2)"/><circle class="ai-chat-band__halo ai-chat-band__halo--3" fill="url(#ai-chat-halo-3)"/>'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
 }
 function focusParts(){
   if(focusEls)return focusEls;
   var hdr=$('.ai-chat-header',panel),band=hdr&&$('.ai-chat-band',hdr),hero=hdr&&$('.ai-chat-hero',hdr);
   if(!band||!hero)return null;
-  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),ringPath:$('#ai-chat-band-rp',band),linePath:$('#ai-chat-band-lp',band),line:$('.ai-chat-band__line',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
+  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),halos:band.querySelectorAll('.ai-chat-band__halo'),ringPath:$('#ai-chat-band-rp',band),linePath:$('#ai-chat-band-lp',band),line:$('.ai-chat-band__line',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
 }
 function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
 /* A cubic-bezier timing curve, the same ones CSS uses. */
@@ -1291,6 +1296,9 @@ function focusDraw(){
   var e=focusParts();if(!e)return;
   var g=focusG,s=focusS,r=Math.max(1,g.R-FOCUS_SW/2);
   e.ringPath.setAttribute('d',focusCirclePath(g.hx,g.cy,r));
+  /* The halos: half as wide again as the ring, so the ring sits at two thirds of each fade. */
+  var Rh=(r*1.5).toFixed(2);
+  for(var hi=0;hi<e.halos.length;hi++){var hc=e.halos[hi];if(hc.getAttribute('r')!==Rh||hc.getAttribute('cx')!==String(g.hx)){hc.setAttribute('cx',g.hx);hc.setAttribute('cy',g.cy);hc.setAttribute('r',Rh)}}
   e.linePath.setAttribute('d',focusLinePath(g.W,g.cy));
   /* The light: at 0 the mask is dark along the whole line; at 1 its white
      end has passed the line's end, the tail and all. */

@@ -7247,6 +7247,15 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: 6; opacity: 0.15; }
 .ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: 3; opacity: 0.3; }
 .ai-chat-panel.is-focus .ai-chat-band__lit { transition: opacity 0.45s ease; }
+/* The halos around the face: each drifts and breathes a little on its own
+   clock, so the colour sits unevenly around the ring and never holds still. */
+.ai-chat-panel.is-focus .ai-chat-band__halo { transform-box: fill-box; transform-origin: center; }
+.ai-chat-panel.is-focus .ai-chat-band__halo--1 { animation: aiChatHaloA 7s ease-in-out infinite; }
+.ai-chat-panel.is-focus .ai-chat-band__halo--2 { animation: aiChatHaloB 9.5s ease-in-out infinite; }
+.ai-chat-panel.is-focus .ai-chat-band__halo--3 { animation: aiChatHaloC 12s ease-in-out infinite; }
+@keyframes aiChatHaloA { 0%, 100% { transform: translate(3px, -2px) scale(1); } 50% { transform: translate(-3px, 2px) scale(1.06); } }
+@keyframes aiChatHaloB { 0%, 100% { transform: translate(-3px, -3px) scale(1.04); } 50% { transform: translate(2px, 3px) scale(0.98); } }
+@keyframes aiChatHaloC { 0%, 100% { transform: translate(2px, 3px) scale(1.02); } 50% { transform: translate(-3px, -2px) scale(1.07); } }
 /* In a chat the gray header line goes; the glow breathes while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
 .ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__lit { animation: aiChatLineBreath 1.5s ease-in-out infinite; }
@@ -7461,7 +7470,8 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__opts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel.is-focus .ai-chat-band__lit { animation: none !important; }
+  .ai-chat-panel.is-focus .ai-chat-band__lit,
+  .ai-chat-panel.is-focus .ai-chat-band__halo { animation: none !important; }
   .ai-chat-panel.is-focus .ai-chat-band__ring,
   .ai-chat-panel.is-focus .ai-chat-band__lit,
   .ai-chat-panel.is-focus .ai-chat-header,
