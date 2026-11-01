@@ -51,7 +51,10 @@ api_version = "2026-04"
 # Shopify grants it on request (Dev Dashboard → the app → Access requests →
 # Read all orders; granted 2026-10-30) — a version that declares it before
 # that is refused. The store approves the new scope on its next open of the app.
-scopes = "read_customers,read_metaobjects,read_orders,read_all_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_themes"
+# read_returns: the order cards read each order's returns (status, return
+# tracking); without it the Admin API refuses the whole order query, so the
+# lookups fall back to orders without returns until the store approves it.
+scopes = "read_customers,read_metaobjects,read_orders,read_all_orders,read_products,write_orders,read_content,read_legal_policies,read_reports,read_returns,read_themes"
 
 [auth]
 redirect_urls = [

@@ -12,7 +12,7 @@
 // when it's full rather than forgetting anyone's tries.
 
 import crypto from "node:crypto";
-import { adminGraphql, toOrderCard, ORDER_FIELDS } from "./orders.server.js";
+import { adminGraphql, toOrderCard, withoutReturnsIfDenied } from "./orders.server.js";
 
 const EMAIL = /^[^\s@<>()",;:]{1,64}@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 // Order names are letters, digits and dashes ("1171674", "AE-1001");
@@ -35,9 +35,9 @@ export function guestSearch(order) {
   return `name:"#${order}" OR name:"${order}" OR confirmation_number:"${order}"`;
 }
 
-const GUEST_ORDER_QUERY = `
+const guestOrderQuery = (fields) => `
   query GuestOrder($q: String!) {
-    orders(first: 5, query: $q, sortKey: CREATED_AT, reverse: true) { nodes { ${ORDER_FIELDS} email confirmationNumber } }
+    orders(first: 5, query: $q, sortKey: CREATED_AT, reverse: true) { nodes { ${fields} email confirmationNumber } }
   }
 `;
 
@@ -80,7 +80,7 @@ export function guestOrderCard(o, { trackingBase = "", returnsBase = "", now = D
 }
 
 export async function lookupGuestOrder({ shop, accessToken, order, email, trackingBase = "", returnsBase = "", graphql = adminGraphql }) {
-  const data = await graphql({ shop, accessToken, query: GUEST_ORDER_QUERY, variables: { q: guestSearch(order) } });
+  const data = await withoutReturnsIfDenied(shop, (fields) => graphql({ shop, accessToken, query: guestOrderQuery(fields), variables: { q: guestSearch(order) } }));
   const found = matchGuestOrder(data?.orders?.nodes || [], { order, email });
   // Who looked is never logged — only that a lookup happened, and how it went.
   console.log(`[pii-access] shop=${shop} guest_order_lookup result=${found ? "found" : "no_match"} purpose=customer_service source=admin_api`);

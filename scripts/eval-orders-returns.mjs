@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
-const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts, returnFacts } = await import("../app/lib/orders.server.js");
+const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts, returnFacts, orderFields, ORDER_FIELDS, returnsDenied, forgetReturnsDenied } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 const { cleanLookup, guestSearch, matchGuestOrder, guestOrderCard, lookupGuestOrder, createLookupLimiter, GUEST_LIMITS } = await import("../app/lib/guest-order.server.js");
@@ -498,5 +498,79 @@ await test("chat tool: an account with orders the chat can't list (older than 60
     assert.match((await t.run({})).note, /No orders on this account yet/, "a new account");
   } finally { globalThis.fetch = realFetch; }
 });
+
+// Production, 2026-10-31: every signed-in "where is my order" failed with
+// "Admin API: Access denied for returns field" — the returns block needs the
+// read_returns scope the store hadn't approved yet, and Shopify refuses the
+// whole query. The lookup must fall back to the order without its returns.
+await test("orders without read_returns: the query is retried without the returns block, once per store for a while", async () => {
+  forgetReturnsDenied();
+  const realFetch = globalThis.fetch, log = console.warn;
+  const bodies = [];
+  const denied = { errors: [{ message: "Access denied for returns field. Required access: `read_returns` access scope.", extensions: { code: "ACCESS_DENIED" } }] };
+  const ok = { data: { customer: { email: "jo@x.com", numberOfOrders: 1, orders: { nodes: [order()] } } } };
+  console.warn = () => {};
+  globalThis.fetch = async (u, init) => {
+    const q = JSON.parse(init.body).query;
+    bodies.push(q);
+    return new Response(JSON.stringify(/returns\(first/.test(q) ? denied : ok), { status: 200 });
+  };
+  try {
+    assert.match(ORDER_FIELDS, /returns\(first: 3\)/, "the full fields ask for returns");
+    assert.doesNotMatch(orderFields({ returns: false }), /returns\(/, "the fallback fields don't");
+    const { orders } = await getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async () => [] });
+    assert.equal(orders.length, 1, "the shopper still gets the order");
+    assert.equal(orders[0].number, "1171674");
+    assert.equal(bodies.length, 2, "asked with returns, then without");
+    assert.match(bodies[0], /returns\(first/);
+    assert.doesNotMatch(bodies[1], /returns\(first/);
+    assert.equal(returnsDenied("s"), true, "the store is remembered");
+    assert.equal(returnsDenied("other-shop"), false);
+    bodies.length = 0;
+    await getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async () => [] });
+    assert.equal(bodies.length, 1, "the next lookup skips the failing try");
+    assert.doesNotMatch(bodies[0], /returns\(first/);
+    // getOwnedOrder (starting a return) uses the same fallback.
+    bodies.length = 0;
+    globalThis.fetch = async (u, init) => { bodies.push(JSON.parse(init.body).query); return new Response(JSON.stringify({ data: { order: { ...order(), email: "jo@x.com" } } }), { status: 200 }); };
+    const owned = await getOwnedOrder({ shop: "s", accessToken: "t", customerId: "77", orderId: "5001" });
+    assert.equal(owned?.name, "#1171674");
+    assert.doesNotMatch(bodies[0], /returns\(first/);
+    // Once the memory lapses the full query is tried again (the scope may be approved by then).
+    forgetReturnsDenied();
+    bodies.length = 0;
+    globalThis.fetch = async (u, init) => { bodies.push(JSON.parse(init.body).query); return new Response(JSON.stringify(ok), { status: 200 }); };
+    await getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async () => [] });
+    assert.equal(bodies.length, 1);
+    assert.match(bodies[0], /returns\(first/, "with the scope approved, returns come back");
+    assert.equal(returnsDenied("s"), false);
+    // Any other Admin API error still fails the lookup.
+    globalThis.fetch = async () => new Response(JSON.stringify({ errors: [{ message: "Throttled" }] }), { status: 200 });
+    await assert.rejects(getOrderCards({ shop: "s", accessToken: "t", customerId: "77", lookupReturns: async () => [] }), /Throttled/);
+    assert.equal(returnsDenied("s"), false, "only the returns denial is remembered");
+  } finally { globalThis.fetch = realFetch; console.warn = log; forgetReturnsDenied(); }
+});
+
+await test("guest lookup without read_returns: same fallback", async () => {
+  forgetReturnsDenied();
+  const log = console.log, warn = console.warn;
+  console.log = () => {}; console.warn = () => {};
+  const queries = [];
+  const graphql = async ({ query }) => {
+    queries.push(query);
+    if (/returns\(first/.test(query)) throw new Error("Admin API: Access denied for returns field. Required access: `read_returns` access scope.");
+    return { orders: { nodes: [{ ...order(), email: "pat@example.com", confirmationNumber: "ABC123" }] } };
+  };
+  try {
+    const r = await lookupGuestOrder({ shop: "g", accessToken: "t", order: "1171674", email: "pat@example.com", graphql });
+    assert.equal(r.order?.number, "1171674", "the guest still gets the order");
+    assert.equal(queries.length, 2);
+    assert.match(queries[0], /returns\(first/);
+    assert.doesNotMatch(queries[1], /returns\(first/);
+    assert.match(queries[1], /email confirmationNumber/, "the guest fields stay");
+    assert.equal(returnsDenied("g"), true);
+  } finally { console.log = log; console.warn = warn; forgetReturnsDenied(); }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -9,7 +9,21 @@
 import { ADMIN_API_VERSION } from "./admin-api-version.js";
 import { findChatReturns } from "../models/ChatReturn.server.js";
 
-export const ORDER_FIELDS = `
+// The returns an order has (Shopify's own Return objects). Reading them needs
+// the read_returns scope; a store that hasn't approved that scope yet gets
+// "Access denied for returns field" for the WHOLE query, so the order
+// lookups below retry without this block (see withoutReturnsIfDenied).
+export const RETURNS_FIELDS = `
+  returns(first: 3) {
+    nodes {
+      name status createdAt requestApprovedAt closedAt totalQuantity
+      reverseFulfillmentOrders(first: 3) { nodes { reverseDeliveries(first: 3) { nodes { deliverable { ... on ReverseDeliveryShippingDeliverable { tracking { carrierName number url } } } } } } }
+    }
+  }
+`;
+
+// `returns`: with the returns block (default) or without it.
+export const orderFields = ({ returns = true } = {}) => `
   id
   name
   createdAt
@@ -20,12 +34,7 @@ export const ORDER_FIELDS = `
   discountCodes
   totalRefundedSet { shopMoney { amount currencyCode } }
   refunds(first: 5) { createdAt totalRefundedSet { shopMoney { amount currencyCode } } }
-  returns(first: 3) {
-    nodes {
-      name status createdAt requestApprovedAt closedAt totalQuantity
-      reverseFulfillmentOrders(first: 3) { nodes { reverseDeliveries(first: 3) { nodes { deliverable { ... on ReverseDeliveryShippingDeliverable { tracking { carrierName number url } } } } } } }
-    }
-  }
+  ${returns ? RETURNS_FIELDS : ""}
   customer { id }
   lineItems(first: 20) {
     nodes {
@@ -45,20 +54,21 @@ export const ORDER_FIELDS = `
     trackingInfo { company number url }
   }
 `;
+export const ORDER_FIELDS = orderFields();
 
-const CUSTOMER_ORDERS_QUERY = `
+const customerOrdersQuery = (fields) => `
   query ChatOrders($id: ID!, $first: Int!) {
     customer(id: $id) {
       email
       numberOfOrders
-      orders(first: $first, sortKey: CREATED_AT, reverse: true) { nodes { ${ORDER_FIELDS} } }
+      orders(first: $first, sortKey: CREATED_AT, reverse: true) { nodes { ${fields} } }
     }
   }
 `;
 
-const ORDER_QUERY = `
+const orderQuery = (fields) => `
   query ChatOrder($id: ID!) {
-    order(id: $id) { ${ORDER_FIELDS} email }
+    order(id: $id) { ${fields} email }
   }
 `;
 
@@ -73,6 +83,31 @@ export async function adminGraphql({ shop, accessToken, query, variables, timeou
   const json = await res.json();
   if (json.errors?.length) throw new Error(`Admin API: ${json.errors.map((e) => e.message).join("; ").slice(0, 300)}`);
   return json.data;
+}
+
+// Shopify refuses the whole order query when the store hasn't approved the
+// read_returns scope ("Access denied for returns field"). The order itself
+// is still readable, so the lookup runs again without the returns block and
+// the shopper gets their order (just without return tracking). The store is
+// remembered for a while so the next lookups skip the failing try — and try
+// again later, in case the scope has been approved since.
+const RETURNS_DENIED = /access denied for returns field/i;
+const RETURNS_DENIED_TTL = 10 * 60_000;
+const returnsDeniedUntil = new Map();
+export const returnsDenied = (shop, now = Date.now()) => (returnsDeniedUntil.get(shop) || 0) > now;
+export const forgetReturnsDenied = () => returnsDeniedUntil.clear();
+
+// run(fields) performs the query with these order fields.
+export async function withoutReturnsIfDenied(shop, run) {
+  if (returnsDenied(shop)) return run(orderFields({ returns: false }));
+  try {
+    return await run(orderFields());
+  } catch (e) {
+    if (!RETURNS_DENIED.test(String(e?.message || ""))) throw e;
+    console.warn(`[orders] shop=${shop} read_returns not approved yet — reading orders without returns (approve the new permission in Shopify admin)`);
+    returnsDeniedUntil.set(shop, Date.now() + RETURNS_DENIED_TTL);
+    return run(orderFields({ returns: false }));
+  }
 }
 
 const numericId = (gid) => String(gid || "").match(/(\d+)$/)?.[1] || "";
@@ -255,10 +290,10 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
 // server-side for prefilled tracking/return links). `first` up to 25 (an
 // order number, or returns and refunds, look further back).
 export async function getOrderCards({ shop, accessToken, customerId, first = 5, orderNumber = "", trackingBase = "", returnsBase = "", policy = returnPolicy(), lookupReturns = findChatReturns }) {
-  const data = await adminGraphql({
-    shop, accessToken, query: CUSTOMER_ORDERS_QUERY,
+  const data = await withoutReturnsIfDenied(shop, (fields) => adminGraphql({
+    shop, accessToken, query: customerOrdersQuery(fields),
     variables: { id: `gid://shopify/Customer/${customerId}`, first: orderNumber ? 25 : Math.min(Math.max(first, 1), 25) },
-  });
+  }));
   const customer = data?.customer;
   if (!customer) return { orders: [], numberOfOrders: 0 };
   console.log(`[pii-access] shop=${shop} customer=${customerId} fields=orders purpose=customer_service source=admin_api`);
@@ -288,7 +323,7 @@ export async function getCustomerEmail({ shop, accessToken, customerId }) {
 export async function getOwnedOrder({ shop, accessToken, customerId, orderId }) {
   const id = String(orderId || "").replace(/\D/g, "");
   if (!id) return null;
-  const data = await adminGraphql({ shop, accessToken, query: ORDER_QUERY, variables: { id: `gid://shopify/Order/${id}` } });
+  const data = await withoutReturnsIfDenied(shop, (fields) => adminGraphql({ shop, accessToken, query: orderQuery(fields), variables: { id: `gid://shopify/Order/${id}` } }));
   const o = data?.order;
   if (!o || numericId(o.customer?.id) !== String(customerId)) return null;
   return o;
