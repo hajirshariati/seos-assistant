@@ -1723,9 +1723,13 @@ function focusCardSub(kind){
     :kind==='footwear'?'Sneakers, sandals, boots and more \u2014 support built in.'
     :'Inserts for the shoes you already own, matched to your arch.';
 }
+/* The small call to action in each card's corner. */
+function focusCardCta(kind){return kind==='pain'?'Start':kind==='footwear'?'Browse':'Find mine'}
+var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+/* Words on the left, the picture filling the right side, the call to action under the words. */
 function focusCardHtml(kind){
-  var w=focusCardWords(kind),pain=kind==='pain';
-  return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,pain?30:24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span></span></button>';
+  var w=focusCardWords(kind);
+  return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
