@@ -1249,11 +1249,11 @@ function focusBandHtml(){
   var sweep='',ease=[[0,255],[0.2,236],[0.4,180],[0.6,96],[0.8,30],[1,0]];
   for(var j=0;j<ease.length;j++){var v=ease[j][1];sweep+='<stop offset="'+ease[j][0]+'" stop-color="rgb('+v+','+v+','+v+')"/>'}
   /* Four strokes of one path, wide and faint to narrow and dim: a soft glow with no hard line. */
-  /* Around the face at home: three soft colour halos — a radial fade each,
-     clear inside the ring, brightest just outside it, gone a little further
-     out (no filter, so no smear) — drifting slowly on their own in CSS so
-     the glow is never even. */
-  var halo=function(n,c){return '<radialGradient id="ai-chat-halo-'+n+'"><stop offset="0.58" stop-color="'+c+'" stop-opacity="0"/><stop offset="0.667" stop-color="'+c+'" stop-opacity="0.6"/><stop offset="0.8" stop-color="'+c+'" stop-opacity="0.22"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient>'};
+  /* Around the face at home: three faint colour halos — a radial fade each,
+     nothing inside the ring, a whisper just outside it, gone a little
+     further out (no filter, so no smear) — drifting slowly on their own in
+     CSS so the glow is never even. Kept quiet: the ring itself is the light. */
+  var halo=function(n,c){return '<radialGradient id="ai-chat-halo-'+n+'"><stop offset="0.66" stop-color="'+c+'" stop-opacity="0"/><stop offset="0.71" stop-color="'+c+'" stop-opacity="0.2"/><stop offset="0.8" stop-color="'+c+'" stop-opacity="0.08"/><stop offset="0.92" stop-color="'+c+'" stop-opacity="0"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></radialGradient>'};
   var lay=function(cls,id){var h='';for(var k=4;k>=1;k--)h+='<use class="'+cls+' '+cls+'--'+k+(k===1&&cls==='ai-chat-band__linel'?' ai-chat-band__line':'')+'" href="#'+id+'" xlink:href="#'+id+'" stroke="url(#ai-chat-band-g)"/>';return h};
   return '<svg class="ai-chat-band" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask><path id="ai-chat-band-lp" d=""/><path id="ai-chat-band-rp" d=""/>'+halo(1,FOCUS_BAND[0])+halo(2,FOCUS_BAND[2])+halo(3,FOCUS_BAND[3])+'</defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)">'+lay('ai-chat-band__linel','ai-chat-band-lp')+'</g><g class="ai-chat-band__ring"><circle class="ai-chat-band__halo ai-chat-band__halo--1" fill="url(#ai-chat-halo-1)"/><circle class="ai-chat-band__halo ai-chat-band__halo--2" fill="url(#ai-chat-halo-2)"/><circle class="ai-chat-band__halo ai-chat-band__halo--3" fill="url(#ai-chat-halo-3)"/>'+lay('ai-chat-band__ringl','ai-chat-band-rp')+'</g></svg>';
 }
