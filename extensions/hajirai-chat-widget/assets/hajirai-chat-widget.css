@@ -7312,12 +7312,19 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__back { opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__panel { transform: none; opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__grip { width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--seos-line-strong, #d1d1d6); }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px 0 20px; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__head .ai-chat-focus__card-ico { width: 52px; height: 52px; border-radius: 12px; background: var(--seos-surface); box-shadow: none; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__titles { flex: 1 1 auto; min-width: 0; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__title { font: 700 18px/22px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); }
+/* The head reads as a window's own title bar: the grip, then a bar with
+   the words centred (a spacer the close button's size on the left keeps
+   them so) and the round close button at the right, the Women's / Men's
+   switch on its own row, and a hairline under it all that the content
+   scrolls beneath. No picture. */
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__head { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 4px 16px 14px; border-bottom: 1px solid var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__bar { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__spacer { width: 36px; height: 36px; flex: none; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__titles { flex: 1 1 auto; min-width: 0; text-align: center; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__title { font: 700 18px/22px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__eyebrow { font: 600 11px/14px var(--seos-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__close { width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: var(--seos-surface); color: var(--seos-text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__close:hover { background: color-mix(in srgb, var(--seos-surface) 92%, var(--seos-text)); }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__body { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 22px; overflow: auto; }
 /* The helper rows share a line where two fit (a column needs 220px), else
    stack. Side by side, the chevron steps out and the line under the title
@@ -7336,15 +7343,12 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-winter .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(80, 160, 240, 0.17), rgba(43, 120, 194, 0.09)); box-shadow: inset 0 0 0 1px rgba(80, 160, 240, 0.18); }
 .ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-spring .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(240, 110, 160, 0.17), rgba(90, 190, 110, 0.09)); box-shadow: inset 0 0 0 1px rgba(240, 110, 160, 0.18); }
 .ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-summer .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(255, 190, 60, 0.17), rgba(224, 122, 11, 0.09)); box-shadow: inset 0 0 0 1px rgba(255, 190, 60, 0.18); }
-/* Women's / Men's: a switch in the head, beside the close button with a
-   little room from it (its thumb slides); on a phone it takes its own
-   line under the title. Browse by and the button at the end follow it. */
-.ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { order: 3; flex: none; width: 196px; margin: 0 0 0 auto; border-radius: 999px; }
+/* Women's / Men's: a switch on its own row under the title (its thumb slides). */
+.ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { flex: none; width: min(100%, 300px); margin: 0 auto; border-radius: 999px; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender .ai-chat-focus__seg-thumb { border-radius: 999px; background: var(--seos-ink, #0d0d12); box-shadow: none; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 32px; border-radius: 999px; font-size: 13.5px; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button.is-on { color: #fff; }
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__seg.ai-chat-focus__gender button.is-on { color: #0d0d12; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__close { order: 4; }
 /* One button for the whole line, after everything else. */
 /* What the switch or a tab changes fades out, changes, and fades back in. */
 .ai-chat-panel.is-focus .ai-chat-focus__swap { transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.32, 0.72, 0, 1); }
@@ -7438,7 +7442,7 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-welcome--focus { padding: 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__greet { padding-left: 76px; }
   .ai-chat-panel.is-focus .ai-chat-focus__helpers { grid-template-columns: 1fr; }
-  .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { order: 5; flex-basis: 100%; width: auto; margin: 2px 0 0; }
+  .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { width: 100%; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 36px; font-size: 14px; }
   .ai-chat-panel.is-focus .ai-chat-focus__opt { min-height: 56px; }
   .ai-chat-panel.is-focus .ai-chat-focus__sum-k { flex-basis: 92px; }
