@@ -1727,7 +1727,7 @@ function focusCardSub(kind){
     :'Inserts for the shoes you already own, matched to your arch.';
 }
 /* The small call to action in each card's corner. */
-function focusCardCta(kind){return kind==='pain'?'Start':kind==='footwear'?'Browse':'Find mine'}
+function focusCardCta(kind){return kind==='pain'?'Start':'Browse'}
 var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
 /* Words on the left, the picture filling the right side, the call to action under the words. */
 function focusCardHtml(kind){
