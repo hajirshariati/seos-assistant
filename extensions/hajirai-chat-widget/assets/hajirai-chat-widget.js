@@ -1225,31 +1225,36 @@ var typingEl=$('.ai-chat-typing',panel);
 var typingTextEl=$('.ai-chat-typing-text',panel);
 var inputEl=$('.ai-chat-input',panel);
 var sendBtn=$('.ai-chat-send',panel);
-/* ═══ The band ═══
-   One shape is the colour ring around the face at home, the header's line
-   in a chat, and every frame in between: a stroked ellipse that squashes
-   flat behind the face keeping its length (a loop of thread pressed flat
-   comes out about 1.57 faces wide), then stretches across the header as
-   the line, and back. Nothing is swapped and nothing is scaled, so
-   nothing can pop. The face has steps of its own — out once the ring has
-   folded, back in before it opens — and the band's colours slide along
-   the shape (a gradient in the shape's own space), slowly at home, faster
-   while Ava is writing. Reduced motion gets the end states at once. */
+/* The band: one SVG in the header. Two shapes — the colour ring around the
+   face at home, and the line along the header's bottom in a chat — on one
+   gradient that slides slowly along them, faster while Ava is writing.
+   Home → chat: the ring fades out with the face while the line lights up
+   from the left, its light reaching the far end with a long soft tail (a
+   mask that travels along it). Chat → home: the light withdraws the same way
+   and the ring fades back in around the face. Touch screens get no blurred
+   stroke (CSS). Reduced motion gets the end states at once. */
 var FOCUS_SW=3;/* the stroke */
 var FOCUS_BAND=['#ff4fa3','#a35cff','#3d7bff','#29e0d0'];
+var FOCUS_TAIL=0.55;/* the light's tail, as a share of the header's width */
 var focusG={W:0,cy:0,hx:54,R:34};/* measured: the header's width, the line, the face's centre and radius */
-var focusS={a:31,b:31,cx:54,cy:0,fs:1,fo:1};/* the shape now: half-width, half-height, centre; the face's scale and opacity */
-var focusAnim=null,focusMorphGen=0,focusEls=null,focusFace={t:'',o:''};
+var focusS={ro:1,lit:0,fs:1,fo:1};/* now: the ring's opacity, how far the line is lit (0–1), the face's scale and opacity */
+var focusAnim=null,focusMorphGen=0,focusEls=null,focusFace={t:'',o:''},focusLitLast=-1,focusRoLast=-1;
 var focusPhase=0,focusSpeed=0,focusLast=0,focusFlowOn=false;
+/* Two shapes on one gradient: the ring around the face, and the line along
+   the header's bottom. The line (and its glow) is seen through a mask — a
+   second gradient, white to black over the tail, that travels along it:
+   where it is white the line is lit. */
 function focusBandHtml(){
   var stops='';for(var i=0;i<=8;i++)stops+='<stop offset="'+(i/8)+'" stop-color="'+FOCUS_BAND[i%4]+'"/>';
-  return '<svg class="ai-chat-band" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient></defs><path class="ai-chat-band__glow" d="" stroke="url(#ai-chat-band-g)"/><path class="ai-chat-band__ring" d="" stroke="url(#ai-chat-band-g)"/></svg>';
+  var sweep='',ease=[[0,255],[0.2,236],[0.4,180],[0.6,96],[0.8,30],[1,0]];
+  for(var j=0;j<ease.length;j++){var v=ease[j][1];sweep+='<stop offset="'+ease[j][0]+'" stop-color="rgb('+v+','+v+','+v+')"/>'}
+  return '<svg class="ai-chat-band" aria-hidden="true"><defs><linearGradient id="ai-chat-band-g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">'+stops+'</linearGradient><linearGradient id="ai-chat-band-s" gradientUnits="userSpaceOnUse" x1="-1000" y1="0" x2="-999" y2="0">'+sweep+'</linearGradient><mask id="ai-chat-band-m" maskUnits="userSpaceOnUse" x="-100" y="-100" width="6000" height="1000"><rect x="-100" y="-100" width="6000" height="1000" fill="url(#ai-chat-band-s)"/></mask></defs><g class="ai-chat-band__lit" mask="url(#ai-chat-band-m)"><path class="ai-chat-band__glow" d="" stroke="url(#ai-chat-band-g)"/><path class="ai-chat-band__line" d="" stroke="url(#ai-chat-band-g)"/></g><path class="ai-chat-band__ring" d="" stroke="url(#ai-chat-band-g)"/></svg>';
 }
 function focusParts(){
   if(focusEls)return focusEls;
   var hdr=$('.ai-chat-header',panel),band=hdr&&$('.ai-chat-band',hdr),hero=hdr&&$('.ai-chat-hero',hdr);
   if(!band||!hero)return null;
-  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),glow:$('.ai-chat-band__glow',band),grad:$('#ai-chat-band-g',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
+  return focusEls={hdr:hdr,band:band,ring:$('.ai-chat-band__ring',band),line:$('.ai-chat-band__line',band),glow:$('.ai-chat-band__glow',band),grad:$('#ai-chat-band-g',band),sweep:$('#ai-chat-band-s',band),hero:hero,photo:$('.ai-chat-hero__photo',hero)};
 }
 function focusMotionOk(){try{return !matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return true}}
 /* A cubic-bezier timing curve, the same ones CSS uses. */
@@ -1274,38 +1279,36 @@ function focusMeasure(){
   focusG={W:e.hdr.clientWidth,cy:cy,hx:left+R,R:R};
   if(!focusAnim)focusRest(panel.classList.contains('is-chatting'));
 }
-/* The ellipse: centre, half-width, half-height. Flat, it is a plain line
-   (round caps keep its ends round); round, it is the circle. */
-function focusPath(cx,cy,a,b){
+/* The ring's path around the face, and the line's, edge to edge. */
+function focusCirclePath(cx,cy,r){
   var f=function(n){return Math.round(n*100)/100};
-  if(b<0.05)return 'M'+f(cx-a)+' '+f(cy)+'H'+f(cx+a);
-  var A=f(a),B=f(b),y=f(cy),xl=f(cx-a),xr=f(cx+a);
-  return 'M'+xl+' '+y+'A'+A+' '+B+' 0 1 0 '+xr+' '+y+'A'+A+' '+B+' 0 1 0 '+xl+' '+y+'Z';
+  return 'M'+f(cx-r)+' '+f(cy)+'A'+f(r)+' '+f(r)+' 0 1 0 '+f(cx+r)+' '+f(cy)+'A'+f(r)+' '+f(r)+' 0 1 0 '+f(cx-r)+' '+f(cy)+'Z';
 }
-/* The half-width that keeps an ellipse of half-height b as long around as
-   the ring of radius r (Ramanujan's measure of its perimeter). */
-function focusPerimA(b,r){
-  var want=2*Math.PI*r,lo=Math.max(b,0),hi=2*r,a,per;
-  for(var i=0;i<30;i++){a=(lo+hi)/2;per=Math.PI*(3*(a+b)-Math.sqrt((3*a+b)*(a+3*b)));if(per<want)lo=a;else hi=a}
-  return (lo+hi)/2;
-}
+function focusLinePath(W,cy){var f=function(n){return Math.round(n*100)/100};return 'M'+f(-FOCUS_SW)+' '+f(cy)+'L'+f(W+FOCUS_SW)+' '+f(cy)}
 function focusDraw(){
   var e=focusParts();if(!e)return;
-  var s=focusS,d=focusPath(s.cx,s.cy,s.a,s.b);
-  e.ring.setAttribute('d',d);e.glow.setAttribute('d',d);
-  /* The colours: two bands' worth across twice the shape, slid by the phase — one band shows, and it loops without a seam. */
-  var L=Math.max(1,2*s.a),x1=(s.cx-s.a)-L*focusPhase;
+  var g=focusG,s=focusS,r=Math.max(1,g.R-FOCUS_SW/2);
+  e.ring.setAttribute('d',focusCirclePath(g.hx,g.cy,r));
+  var ld=focusLinePath(g.W,g.cy);e.line.setAttribute('d',ld);e.glow.setAttribute('d',ld);
+  /* The light: at 0 the mask is dark along the whole line; at 1 its white
+     end has passed the line's end, the tail and all. */
+  var tail=Math.max(80,g.W*FOCUS_TAIL),head=-FOCUS_SW+s.lit*(g.W+2*FOCUS_SW+tail);
+  if(s.lit!==focusLitLast){e.sweep.setAttribute('x1',(head-tail).toFixed(2));e.sweep.setAttribute('x2',head.toFixed(2));focusLitLast=s.lit}
+  if(s.ro!==focusRoLast){e.ring.style.opacity=s.ro>=0.999?'':s.ro.toFixed(3);focusRoLast=s.ro}
+  /* The colours: two bands' worth across twice the shape showing, slid by the phase — one band shows, and it loops without a seam. */
+  var onLine=s.lit>0||panel.classList.contains('is-chatting'),L=Math.max(1,onLine?g.W+2*FOCUS_SW:2*r),x0=onLine?-FOCUS_SW:g.hx-r,x1=x0-L*focusPhase;
   e.grad.setAttribute('x1',x1.toFixed(2));e.grad.setAttribute('x2',(x1+2*L).toFixed(2));
   var t=s.fs>=0.999?'':'scale('+s.fs.toFixed(3)+')',o=s.fo>=0.999?'':s.fo.toFixed(3);
   if(t!==focusFace.t){e.photo.style.transform=t;focusFace.t=t}
   if(o!==focusFace.o){e.photo.style.opacity=o;focusFace.o=o}
 }
-/* At rest: the ring around the face, or the line across the header. */
+/* At rest: the ring around the face and the line dark, or the line lit
+   edge to edge and the ring out. */
 function focusRest(chat){
-  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),s=focusS;
-  if(chat){s.a=g.W/2+FOCUS_SW;s.b=0;s.cx=g.W/2;s.fs=0.6;s.fo=0}
-  else{s.a=r;s.b=r;s.cx=g.hx;s.fs=1;s.fo=1}
-  s.cy=g.cy;focusDraw();
+  var s=focusS;
+  if(chat){s.ro=0;s.lit=1;s.fs=0.6;s.fo=0}
+  else{s.ro=1;s.lit=0;s.fs=1;s.fo=1}
+  focusDraw();
 }
 function focusSetChatting(on){
   focusAnim=null;++focusMorphGen;
@@ -1327,7 +1330,7 @@ function focusPlay(tracks,done){
     for(var i=0;i<tracks.length;i++){
       var k=tracks[i];
       if(t<k.at||k.over)continue;
-      if(!k.from){if(k.start)k.start();k.from={a:focusS.a,b:focusS.b,cx:focusS.cx,fs:focusS.fs,fo:focusS.fo};k.target=k.to()}
+      if(!k.from){if(k.start)k.start();k.from={ro:focusS.ro,lit:focusS.lit,fs:focusS.fs,fo:focusS.fo};k.target=k.to()}
       var u=k.ease(Math.min(1,(t-k.at)/k.dur));
       for(var key in k.target)focusS[key]=k.from[key]+(k.target[key]-k.from[key])*u;
       if(k.link)k.link();
@@ -1339,34 +1342,30 @@ function focusPlay(tracks,done){
   }
   requestAnimationFrame(frame);
 }
-/* Home → chat: the ring squashes flat behind the face keeping its length;
-   as it settles the face eases back and fades; while the face is still
-   going the line sets off across the header, the name sliding over with
-   it. Every step starts before the last has ended — nothing waits,
-   nothing jumps. */
+/* Home → chat: the ring fades out as the face eases back and fades; from
+   the left, the line lights up — its light setting off gently, travelling
+   to the far end with a long soft tail and slowing as it arrives — the name
+   sliding over with it. */
 function focusRingToLine(){
   var e=focusParts();if(!e||panel.classList.contains('is-chatting'))return;
   focusMeasure();
   if(!focusMotionOk()||typeof requestAnimationFrame!=='function'){focusSetChatting(true);return}
-  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),keep=function(){focusS.a=focusPerimA(focusS.b,r)};
   focusPlay([
-    {at:0,dur:380,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:0,cx:g.hx}}},
-    {at:340,dur:280,ease:FOCUS_EASE_INOUT,to:function(){return {fs:0.72,fo:0}}},
-    {at:540,dur:620,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(true)},to:function(){return {a:focusG.W/2+FOCUS_SW,cx:focusG.W/2}}}
+    {at:0,dur:340,ease:FOCUS_EASE_INOUT,to:function(){return {ro:0}}},
+    {at:40,dur:300,ease:FOCUS_EASE_INOUT,to:function(){return {fs:0.72,fo:0}}},
+    {at:120,dur:1300,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(true)},to:function(){return {lit:1}}}
   ],function(){focusSetChatting(true)});
 }
-/* Chat → home: the mirror. The line draws in from both sides; as it
-   nears the face's place the face eases in in front of it; as the face
-   settles the short line rounds up into the ring around it. */
+/* Chat → home: the light withdraws to the left the same way; as it goes
+   the face eases in and its ring fades up around it. */
 function focusLineToRing(){
   var e=focusParts();if(!e||!panel.classList.contains('is-chatting'))return;
   focusMeasure();
   if(!focusMotionOk()||typeof requestAnimationFrame!=='function'){focusSetChatting(false);return}
-  var g=focusG,r=Math.max(1,g.R-FOCUS_SW/2),keep=function(){focusS.a=focusPerimA(focusS.b,r)};
   focusPlay([
-    {at:0,dur:580,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(false)},to:function(){return {a:focusPerimA(0,r),b:0,cx:g.hx}}},
-    {at:400,dur:340,ease:FOCUS_EASE_OUT,start:function(){focusS.fs=0.72;focusS.fo=0;focusDraw();e.hero.classList.remove('is-gone')},to:function(){return {fs:1,fo:1}}},
-    {at:620,dur:400,ease:FOCUS_EASE_INOUT,link:keep,to:function(){return {b:r}}}
+    {at:0,dur:760,ease:FOCUS_EASE_INOUT,start:function(){focusChatClass(false)},to:function(){return {lit:0}}},
+    {at:380,dur:380,ease:FOCUS_EASE_OUT,start:function(){focusS.fs=0.72;focusS.fo=0;focusDraw();e.hero.classList.remove('is-gone')},to:function(){return {fs:1,fo:1}}},
+    {at:380,dur:420,ease:FOCUS_EASE_INOUT,to:function(){return {ro:1}}}
   ],function(){focusSetChatting(false)});
 }
 /* The colours' slow slide: one frame loop, asleep while the chat is closed
@@ -1383,8 +1382,8 @@ function focusFlow(now){
   requestAnimationFrame(focusFlow);
 }
 /* Focus home: the face sits on the header's line while the shopper is at
-   home; once a chat starts its colored ring becomes the line itself — a
-   soft light that flows while Ava is answering (focusRingToLine). */
+   home; once a chat starts its colour ring gives way to the line, lit from
+   the left — a soft light that flows while Ava is answering (focusRingToLine). */
 if(FOCUS){
   panel.classList.add('is-focus');
   focusTitleBuild();
@@ -1528,6 +1527,9 @@ var WI={
   heart:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20s-7.5-4.6-9.2-9.3C1.7 7.5 3.8 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.2 0 5.3 3 4.2 6.2C19.5 15.4 12 20 12 20z"/></svg>',
   star:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
   chat:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 15a2 2 0 01-2 2H8l-4 3.5V6a2 2 0 012-2h12a2 2 0 012 2z"/></svg>',
+  /* A footprint, the sore spot marked at the heel. */
+  foot:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.6 22.2c-2.7 0-4.3-1.9-4.3-4.4 0-1.7.8-2.9 1.1-4.4.4-1.9-.7-3.6-.7-5.6C5.7 4.7 7.5 2.6 10 2.6c2.8 0 4.6 2.5 4.6 5.7 0 2.2-1 3.9-1 6.1 0 1.6.9 2.7.9 4.3 0 2.1-1.9 3.5-4.9 3.5z"/><circle cx="17.6" cy="4.6" r="1.3"/><circle cx="19.6" cy="7.6" r="1"/><circle cx="20.4" cy="10.6" r=".9"/><circle cx="9.3" cy="17.6" r="1.7" fill="currentColor" stroke="none"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   pin:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0113 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>'
 };
 /* Icons a store can pick for each "Start here" button (theme editor). */
@@ -1615,23 +1617,58 @@ function refreshWelcomeCtas(){
   if(box)box.innerHTML=welcomeCtasHtml(welcomeCtas());
 }
 /* ── Focus home (Theme editor → Home layout → Focus) ──
-   The foot-pain specialist first: the question, five places it can hurt
-   (each sends a message; "Something else" puts the cursor in the text box),
-   then the two product lines as single cards whose tools open in a sheet —
-   Women / Men, the store's own helpers (True Fit, FITFinder, its visual
-   quizzes), and Browse by, from the store's menu. The links right above the
-   text box only fill it in, so a stray tap sends nothing. Classic is untouched. */
+   The foot-pain specialist first: three cards whose tools open in a sheet.
+   Foot pain is a guided flow — where it hurts, footwear or orthotics, the
+   shoes, arch, ball of foot — that writes one message with everything Ava
+   needs, so she answers with products instead of questions. Footwear and
+   Orthotics: Women / Men, the store's own helpers (True Fit, FITFinder,
+   its visual quizzes), and Browse by, from the store's menu. The three
+   links right above the text box each send their question. Classic is
+   untouched. */
 var FOCUS_TITLE='Where does it hurt?';
-var FOCUS_HINT='Pick a spot and I’ll suggest what helps.';
+var FOCUS_HINT='Tap all that apply.';
 var FOCUS_ROTATE=true;/* Settings → rotate the welcome line (arrives with widget-config). */
-/* The places it can hurt: a line, what it usually is, what to ask. */
-var FOCUS_PAINS=[
-  ['heel','Heel','Plantar fasciitis, heel spurs, first-step pain','I have heel pain (plantar fasciitis). What would help?'],
-  ['arch','Arch','Flat feet, fallen or tired arches','My arches hurt and I have flat feet. What would help?'],
-  ['ball','Ball of foot','Metatarsalgia, burning under the toes','I have pain in the ball of my foot. What would help?'],
-  ['toes','Toes & bunions','Bunions, hammertoes, pressure on the toes','I have bunions and my toes hurt. What would help?'],
-  ['whole','Whole foot','Tired, aching or swollen feet','My feet are tired and swollen by the end of the day. What would help?']
+/* Where it hurts: the place, what it usually is, and how the shopper would
+   say it — the words Ava reads ("heel pain (plantar fasciitis)"). */
+var FOCUS_WHERE=[
+  ['heel','Heel','Plantar fasciitis, heel spurs','heel pain (plantar fasciitis)'],
+  ['arch','Arch','Arch pain, flat feet','arch pain'],
+  ['ball','Ball of foot','Burning under the toes','pain under the ball of my foot (metatarsalgia)'],
+  ['toes','Toes & bunions','Bunions, hammertoes','bunions and sore toes'],
+  ['whole','Whole foot','Tired, aching or swollen','tired, aching feet by the end of the day'],
+  ['none','No pain','Just comfort and support','']
 ];
+/* Footwear or orthotics (or let Ava weigh it up). */
+var FOCUS_WHAT=[
+  ['footwear','Footwear','Shoes built for your feet'],
+  ['orthotics','Orthotics','Insoles for shoes you own'],
+  ['both','Not sure — show me both','Ava weighs up what fits best']
+];
+/* The kinds of shoes the store's own menu lists for each line, and the
+   word for the message. */
+function focusKinds(g){
+  var k=g==='men'
+    ?[['sneakers','Sneakers','sneakers'],['sandals','Sandals','sandals'],['clogs','Clogs','clogs']]
+    :[['sneakers','Sneakers','sneakers'],['sandals','Sandals','sandals'],['loafers','Loafers & oxfords','loafers or oxfords'],['slipons','Slip-ons','slip-ons'],['maryjanes','Mary Janes','Mary Janes'],['boots','Boots','boots'],['slippers','Slippers','slippers'],['clogs','Clogs','clogs'],['heels','Wedges & heels','wedges or heels']];
+  k.push(['any','Any kind','Show me what fits best','shoes']);
+  return k;
+}
+var FOCUS_WIDTH=[['regular','Regular width',''],['wide','Wide','Roomier through the foot'],['narrow','Narrow',''],['unsure','Not sure','']];
+/* The shoes an orthotic goes in — the lines' own "Best for" (sneakers and
+   everyday shoes, running, training, dress, work boots, hiking and golf,
+   winter boots, cleats) — and the words for the message. */
+var FOCUS_SHOES=[
+  ['everyday','Sneakers & everyday shoes','Walking, casual','my sneakers and everyday shoes'],
+  ['running','Running shoes','','running shoes'],
+  ['gym','Gym & training shoes','','gym and training shoes'],
+  ['dress','Dress shoes & heels','Slim, or no removable insole','dress shoes and heels'],
+  ['work','Work boots','On my feet all day','work boots (I’m on my feet all day)'],
+  ['hike','Hiking & golf shoes','','hiking and golf shoes'],
+  ['winter','Winter boots','','winter boots'],
+  ['cleats','Cleats','','cleats']
+];
+var FOCUS_ARCH=[['flat_low','Flat or low','My feet roll inward'],['medium_high','Medium or high','A clear arch'],['not_sure','Not sure','Ava can help']];
+var FOCUS_BALL=[['yes','Yes',''],['no','No','']];
 /* Browse by: the store's own menu (aetrex.com) for the line and the
    gender picked — one group per tab, each chip a question to ask. The
    women's and men's footwear menus differ (men's has Occasion where
@@ -1665,39 +1702,32 @@ function focusZone(kind){
   var u=safeUrl(FOCUS_PAIN_IMG[kind]||'');
   return u?'<span class="ai-chat-focus__coin"><img src="'+u+'" alt="" width="38" height="38" decoding="async"></span>':'';
 }
-/* One chip per place: its picture and the place's name — a place with no
-   picture (the whole foot) is the name alone. What it usually is stays on
-   the tip (and for screen readers). */
-function focusPainHtml(t){
-  var coin=focusZone(t[0]);
-  return '<button type="button" class="ai-chat-focus__pain'+(coin?'':' is-plain')+'" data-message="'+esc(t[3])+'" title="'+esc(t[2])+'" aria-label="'+esc(t[1]+' · '+t[2])+'">'+coin+'<span class="ai-chat-focus__pain-title">'+esc(t[1])+'</span></button>';
-}
-/* The line cards' pictures (Settings → Focus home); line drawings without. */
+/* The cards' pictures: the two lines' from Settings → Focus home, Foot
+   pain's the heel picture above; line drawings without. */
 var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={footwear:'',orthotics:''};
 try{var _fpics=JSON.parse(localStorage.getItem(FOCUS_PICS_KEY)||'null');if(_fpics&&typeof _fpics==='object')FOCUS_PICS={footwear:safeUrl(_fpics.footwear),orthotics:safeUrl(_fpics.orthotics)}}catch(e){}
+function focusPicOf(kind){return kind==='pain'?safeUrl(FOCUS_PAIN_IMG.heel||''):(FOCUS_PICS[kind]||'')}
 function focusLineIcon(kind,size){
-  var pic=FOCUS_PICS[kind];
-  return pic?'<img src="'+pic+'" alt="" decoding="async">':(kind==='footwear'?WI.shoe:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"');
+  var pic=focusPicOf(kind);
+  return pic?'<img src="'+pic+'" alt="" decoding="async">':(kind==='footwear'?WI.shoe:kind==='pain'?WI.foot:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"');
 }
 function focusRefreshPics(){
   var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
-  for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!FOCUS_PICS[k])}
+  for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!focusPicOf(k))}
 }
-function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(FOCUS_PICS[kind]?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
+function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(focusPicOf(kind)?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
+function focusCardWords(kind){return kind==='pain'?['Help me with','Foot pain']:['Help me find',kind==='footwear'?'Footwear':'Orthotics']}
 function focusCardHtml(kind){
-  var fw=kind==='footwear';
-  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">Help me find</span><span class="ai-chat-focus__card-title">'+(fw?'Footwear':'Orthotics')+'</span></span></button>';
+  var w=focusCardWords(kind);
+  return '<button type="button" class="ai-chat-focus__card" data-focus-sheet="'+kind+'" aria-haspopup="dialog">'+focusIcoBox(kind,24)+'<span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span></span></button>';
 }
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
   h+='<div class="ai-chat-focus__greet"></div>';
   if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
-  h+='<div class="ai-chat-focus__cards">'+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
-  h+='<div class="ai-chat-focus__ask"><h2 class="ai-chat-focus__title">'+esc(FOCUS_TITLE)+'</h2><p class="ai-chat-focus__hint">'+esc(FOCUS_HINT)+'</p></div>';
-  h+='<div class="ai-chat-focus__pains">';for(var i=0;i<FOCUS_PAINS.length;i++)h+=focusPainHtml(FOCUS_PAINS[i]);
-  h+='<button type="button" class="ai-chat-focus__pain ai-chat-focus__else" data-focus="type"><span class="ai-chat-focus__pain-title">Something else…</span></button></div>';
-  h+='<div class="ai-chat-focus__links"><button type="button" data-prefill="Where is my order?">Track my order</button><button type="button" data-prefill="I’d like to return or exchange something.">Returns &amp; exchanges</button><button type="button" data-prefill="What deals are running right now?">Deals</button></div>';
+  h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
+  h+='<div class="ai-chat-focus__links"><button type="button" data-message="Where is my order?">Track my order</button><button type="button" data-message="I’d like to return or exchange something.">Returns &amp; exchanges</button><button type="button" data-message="What deals are running right now?">Deals</button></div>';
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
@@ -1849,16 +1879,176 @@ function focusSetGender(sh,g){
   if(g!==focusGender){focusGender=g;try{localStorage.setItem(FOCUS_GENDER_KEY,g)}catch(e){}}
   var kind=sh.getAttribute('data-kind')||'footwear';
   focusSegPick($('.ai-chat-focus__gender',sh),g==='men'?1:0);
+  if(kind==='pain'){focusPainGenderChanged();focusPainRender(sh,0);return}
   var box=$('.ai-chat-focus__browse',sh);
   focusSwap(box,function(){box.innerHTML=focusBrowseHtml(kind)});
+}
+/* ── The Foot pain flow ──
+   One question a step, each answer a tile: where it hurts (several), then
+   footwear or orthotics, then what that needs — footwear: the kind of shoe
+   and the width; orthotics: the shoes it goes in, the arch, pain under the
+   ball of the foot (the four things the orthotic finder asks for; a saved
+   FIT answers the last two). A summary lets any line be changed, and one
+   button sends it all to Ava as the shopper's own words. Answers are kept
+   while the page is open, so the sheet reopens where they left it. */
+var focusPain={where:[],what:'',kind:'',width:'',shoes:'',arch:'',ball:''},focusPainStep=0,focusPainBusy=false;
+function focusPainSteps(){
+  var s=['where','what'];
+  if(focusPain.what==='footwear')s.push('kind','width');
+  else if(focusPain.what==='orthotics'){s.push('shoes');if(!savedFit()){s.push('arch');if(focusPain.where.indexOf('ball')<0)s.push('ball')}}
+  s.push('done');return s;
+}
+function focusPainOpts(step){
+  if(step==='where')return FOCUS_WHERE;if(step==='what')return FOCUS_WHAT;if(step==='kind')return focusKinds(focusGender);
+  if(step==='width')return FOCUS_WIDTH;if(step==='shoes')return FOCUS_SHOES;if(step==='arch')return FOCUS_ARCH;if(step==='ball')return FOCUS_BALL;return [];
+}
+function focusPainAsk(step){
+  if(step==='where')return [FOCUS_TITLE,FOCUS_HINT];
+  if(step==='what')return ['What should I look for?',''];
+  if(step==='kind')return ['What kind of shoes?',''];
+  if(step==='width')return ['How should they fit?','Aetrex makes many styles in wide widths.'];
+  if(step==='shoes')return ['Which shoes will they go in?','Each line is shaped for certain shoes.'];
+  if(step==='arch')return ['What’s your arch like?','Not sure? A wet footprint that shows the whole sole means flat or low.'];
+  if(step==='ball')return ['Any pain under the ball of your foot?','Just behind the toes — it decides whether you need a metatarsal pad.'];
+  return ['Here’s what I’ll tell Ava','Tap a line to change it.'];
+}
+function focusPainLabel(step,id){var o=focusPainOpts(step);for(var i=0;i<o.length;i++)if(o[i][0]===id)return o[i][1];return ''}
+function focusPainWord(step,id){var o=focusPainOpts(step);for(var i=0;i<o.length;i++)if(o[i][0]===id)return o[i][o[i].length-1];return ''}
+function focusPainWhereLabels(){var l=[];for(var i=0;i<FOCUS_WHERE.length;i++)if(focusPain.where.indexOf(FOCUS_WHERE[i][0])>=0)l.push(FOCUS_WHERE[i][1]);return l}
+/* "heel pain (plantar fasciitis) and arch pain" */
+function focusPainWords(){
+  var w=[];for(var i=0;i<FOCUS_WHERE.length;i++){var o=FOCUS_WHERE[i];if(o[3]&&focusPain.where.indexOf(o[0])>=0)w.push(o[3])}
+  return w.length<=1?w.join(''):w.slice(0,-1).join(', ')+' and '+w[w.length-1];
+}
+/* The message, in the shopper's own voice, with everything Ava needs. */
+function focusPainMessage(){
+  var G=focusGenderWord(focusGender),pains=focusPainWords(),fit=savedFit();
+  if(focusPain.what==='footwear'){
+    var wd=focusPain.width==='wide'?', in a wide width':focusPain.width==='narrow'?', in a narrow width':'';
+    return 'I’m looking for '+G+' '+(focusPainWord('kind',focusPain.kind)||'shoes')+(pains?' for '+pains:' for everyday comfort and support')+wd+'. What would you recommend?';
+  }
+  if(focusPain.what==='orthotics'){
+    var s=['I’m looking for '+G+' orthotics for '+(focusPainWord('shoes',focusPain.shoes)||'my everyday shoes')+'.'];
+    s.push(pains?'I have '+pains+'.':'No particular pain — I want comfort and support.');
+    if(fit)s.push('My FIT is '+fitLetter(fit)+'.');
+    else{
+      s.push(focusPain.arch==='flat_low'?'My arches are flat or low and my feet roll inward.':focusPain.arch==='medium_high'?'I have medium to high arches.':'I’m not sure of my arch type.');
+      if(focusPain.where.indexOf('ball')<0)s.push(focusPain.ball==='yes'?'I also have pain under the ball of my foot.':'No pain in the front of my foot.');
+    }
+    s.push('Which one would you recommend?');
+    return s.join(' ');
+  }
+  return pains?'I have '+pains+'. I’m open to '+G+' footwear or orthotics — what would help most?':'I’m after everyday comfort and support. Would '+G+' footwear or orthotics help most?';
+}
+/* The picks so far, for the line under the tiles: "Heel, Arch · Orthotics · Running shoes". */
+function focusPainPicks(upto){
+  var steps=focusPainSteps(),out=[];
+  for(var i=0;i<steps.length&&i<upto;i++){
+    var st=steps[i];
+    if(st==='where'){var w=focusPainWhereLabels();if(w.length)out.push(w.join(', '))}
+    else if(st!=='done'&&focusPain[st])out.push(focusPainLabel(st,focusPain[st]));
+  }
+  return out.join(' · ');
+}
+function focusPainOptHtml(step,o,multi){
+  var on=step==='where'?focusPain.where.indexOf(o[0])>=0:focusPain[step]===o[0];
+  var pic=step==='where'?focusZone(o[0]):'',ico=step==='what'?'<span class="ai-chat-focus__opt-ico">'+(o[0]==='footwear'?WI.shoe:o[0]==='orthotics'?WI.insole:WI.spark)+'</span>':'';
+  return '<button type="button" class="ai-chat-focus__opt'+(on?' is-on':'')+(pic||ico?'':' is-plain')+'" data-pain-opt="'+esc(o[0])+'" role="'+(multi?'checkbox':'radio')+'" aria-checked="'+(on?'true':'false')+'">'+pic+ico+'<span class="ai-chat-focus__opt-text"><span class="ai-chat-focus__opt-title">'+esc(o[1])+'</span>'+(o[2]?'<span class="ai-chat-focus__opt-sub">'+esc(o[2])+'</span>':'')+'</span><span class="ai-chat-focus__opt-check" aria-hidden="true">'+WI.check+'</span></button>';
+}
+function focusPainRow(step,k,v,edit){return '<button type="button" class="ai-chat-focus__sum-row" '+(edit?'data-pain-edit="'+step+'"':'disabled')+'><span class="ai-chat-focus__sum-k">'+esc(k)+'</span><span class="ai-chat-focus__sum-v">'+esc(v)+'</span>'+(edit?'<span class="ai-chat-focus__sum-go">'+WI.arrow+'</span>':'')+'</button>'}
+function focusPainStepHtml(){
+  var steps=focusPainSteps(),i=Math.min(focusPainStep,steps.length-1),step=steps[i],ask=focusPainAsk(step),multi=step==='where';
+  var h='<div class="ai-chat-focus__dots" aria-hidden="true">';for(var d=0;d<steps.length;d++)h+='<i'+(d<=i?' class="is-done"':'')+'></i>';h+='</div>';
+  h+='<div class="ai-chat-focus__q-head"><h3 class="ai-chat-focus__q-title" tabindex="-1">'+esc(ask[0])+'</h3>'+(ask[1]?'<p class="ai-chat-focus__q-hint">'+esc(ask[1])+'</p>':'')+'</div>';
+  if(step==='done'){
+    var fit=savedFit(),what=focusPain.what;
+    h+='<div class="ai-chat-focus__sum">';
+    h+=focusPainRow('where','Where it hurts',focusPainWhereLabels().join(', ')||'—',true);
+    h+=focusPainRow('what','Looking for',what==='both'?'Footwear or orthotics':focusPainLabel('what',what),true);
+    if(what==='footwear'){h+=focusPainRow('kind','Kind',focusPainLabel('kind',focusPain.kind)||'Any kind',true);h+=focusPainRow('width','Fit',focusPainLabel('width',focusPain.width)||'Not sure',true)}
+    if(what==='orthotics'){
+      h+=focusPainRow('shoes','Shoes',focusPainLabel('shoes',focusPain.shoes),true);
+      if(fit)h+=focusPainRow('arch','Arch & ball of foot','Your '+fitTitle(fit)+' · from FITFinder',false);
+      else{h+=focusPainRow('arch','Arch',focusPainLabel('arch',focusPain.arch),true);if(focusPain.where.indexOf('ball')<0)h+=focusPainRow('ball','Ball of foot',focusPainLabel('ball',focusPain.ball),true)}
+    }
+    h+='</div>';
+    h+='<button type="button" class="ai-chat-focus__ask-btn" data-pain-nav="ask">'+WI.spark+'<span>Ask Ava for my match</span></button>';
+    h+='<div class="ai-chat-focus__bar"><button type="button" class="ai-chat-focus__back" data-pain-nav="back" aria-label="Back">'+WI.arrow+'</button><span class="ai-chat-focus__picks">'+esc(focusGenderWord(focusGender).charAt(0).toUpperCase()+focusGenderWord(focusGender).slice(1))+' · switch above</span></div>';
+    return h;
+  }
+  var opts=focusPainOpts(step);
+  h+='<div class="ai-chat-focus__opts" role="'+(multi?'group':'radiogroup')+'" aria-label="'+esc(ask[0])+'">';for(var k=0;k<opts.length;k++)h+=focusPainOptHtml(step,opts[k],multi);h+='</div>';
+  if(multi)h+='<button type="button" class="ai-chat-focus__else" data-pain-else>Something else…</button>';
+  h+='<div class="ai-chat-focus__bar">'+(i>0?'<button type="button" class="ai-chat-focus__back" data-pain-nav="back" aria-label="Back">'+WI.arrow+'</button>':'')+'<span class="ai-chat-focus__picks">'+esc(focusPainPicks(i))+'</span>'+(multi?'<button type="button" class="ai-chat-focus__next" data-pain-nav="next"'+(focusPain.where.length?'':' disabled')+'>Continue</button>':'')+'</div>';
+  return h;
+}
+/* Draws the current step: forward, the old one slips left and the new one
+   comes in from the right; back, the other way; no direction, a plain fade. */
+function focusPainRender(sh,dir){
+  var box=$('.ai-chat-focus__quiz',sh),body=$('.ai-chat-focus-sheet__body',sh);if(!box)return;
+  var fill=function(){box.innerHTML=focusPainStepHtml();if(body)body.scrollTop=0;if(dir){var t=$('.ai-chat-focus__q-title',box);if(t)t.focus({preventScroll:true})}};
+  if(!focusMotionOk()){fill();focusPainBusy=false;return}
+  focusPainBusy=true;
+  box.style.setProperty('--q-dir',(dir>0?-10:dir<0?10:0)+'px');box.classList.add('is-leaving');
+  setTimeout(function(){
+    fill();box.classList.remove('is-leaving');
+    box.style.setProperty('--q-dir',(dir>0?16:dir<0?-16:0)+'px');box.classList.add('is-entering');void box.offsetWidth;box.classList.remove('is-entering');
+    focusPainBusy=false;
+  },dir?130:100);
+}
+function focusPainGo(sh,to){
+  var steps=focusPainSteps(),i=typeof to==='number'?focusPainStep+to:steps.indexOf(to);
+  if(i<0||i>=steps.length)return;
+  var dir=i>focusPainStep?1:i<focusPainStep?-1:0;focusPainStep=i;focusPainRender(sh,dir);
+}
+/* A tap on a tile: where it hurts toggles (No pain stands alone); any other
+   step takes the answer and moves on after a beat. */
+function focusPainPick(sh,id){
+  if(focusPainBusy)return;
+  var step=focusPainSteps()[focusPainStep];
+  if(step==='where'){
+    var w=focusPain.where,at=w.indexOf(id);
+    if(at>=0)w.splice(at,1);else if(id==='none')focusPain.where=w=['none'];else{var n=w.indexOf('none');if(n>=0)w.splice(n,1);w.push(id)}
+    var tiles=sh.querySelectorAll('[data-pain-opt]');
+    for(var i=0;i<tiles.length;i++){var on=focusPain.where.indexOf(tiles[i].getAttribute('data-pain-opt'))>=0;tiles[i].classList.toggle('is-on',on);tiles[i].setAttribute('aria-checked',on?'true':'false')}
+    var next=$('.ai-chat-focus__next',sh);if(next)next.disabled=!focusPain.where.length;
+    return;
+  }
+  if(step==='done')return;
+  /* A different path (footwear ↔ orthotics ↔ both) asks its own questions afresh. */
+  if(step==='what'&&focusPain.what!==id){focusPain.kind='';focusPain.width='';focusPain.shoes='';focusPain.arch='';focusPain.ball=''}
+  focusPain[step]=id;
+  var all=sh.querySelectorAll('[data-pain-opt]');
+  for(var k=0;k<all.length;k++){var hit=all[k].getAttribute('data-pain-opt')===id;all[k].classList.toggle('is-on',hit);all[k].setAttribute('aria-checked',hit?'true':'false')}
+  focusPainBusy=true;
+  setTimeout(function(){focusPainBusy=false;if(focusSheetEl===sh)focusPainNext(sh)},focusMotionOk()?170:0);
+}
+/* Answered? (where it hurts: at least one place.) */
+function focusPainAnswered(step){return step==='where'?focusPain.where.length>0:!!focusPain[step]}
+/* Forward: the first step after this one still waiting for an answer — so a
+   change from the summary goes straight back to it — else the summary. */
+function focusPainNext(sh){
+  var steps=focusPainSteps(),i=focusPainStep+1;
+  while(i<steps.length-1&&focusPainAnswered(steps[i]))i++;
+  focusPainGo(sh,steps[Math.min(i,steps.length-1)]);
+}
+function focusPainNav(sh,a){
+  if(a==='back'){focusPainGo(sh,-1);return}
+  if(a==='next'){if(focusPain.where.length)focusPainNext(sh);return}
+  if(a==='ask'){var t=focusPainMessage();closeFocusSheet(true);focusSend(t)}
+}
+/* Women's ↔ Men's: a kind of shoe the other line doesn't list is dropped. */
+function focusPainGenderChanged(){
+  if(focusPain.kind&&!focusPainLabel('kind',focusPain.kind))focusPain.kind='';
 }
 function openFocusSheet(kind,opener){
   closeFocusSheet(true);
   focusSheetOpener=opener||null;
-  var fw=kind==='footwear';
+  var pain=kind==='pain',w=focusCardWords(kind);
   var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
-  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+(fw?'Footwear':'Orthotics')+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">Help me find</div><div class="ai-chat-focus-sheet__title">'+(fw?'Footwear':'Orthotics')+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body">'+focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div></div></div>';
+  sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+w[1]+'"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head">'+focusIcoBox(kind,26)+'<div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">'+w[0]+'</div><div class="ai-chat-focus-sheet__title">'+w[1]+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div><div class="ai-chat-focus-sheet__body">'+(pain?'<div class="ai-chat-focus__quiz"></div>':focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div>')+'</div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
+  if(pain){focusPainStep=0;focusPainRender(sh,0)}
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
   focusSheetSwipe(sh);
   requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
@@ -1908,10 +2098,8 @@ if(FOCUS){
   panel.addEventListener('click',function(e){
     var card=e.target.closest('[data-focus-sheet]');
     if(card){e.preventDefault();openFocusSheet(card.getAttribute('data-focus-sheet'),card);return}
-    var pf=e.target.closest('[data-prefill]');
-    if(pf){e.preventDefault();inputEl.disabled=false;sendBtn.disabled=false;inputEl.value=pf.getAttribute('data-prefill')||'';inputEl.focus();return}
     var ty=e.target.closest('[data-focus="type"]');
-    if(ty){e.preventDefault();inputEl.disabled=false;inputEl.placeholder='Tell me what’s going on with your feet…';inputEl.focus();return}
+    if(ty){e.preventDefault();inputEl.disabled=false;inputEl.placeholder=IPLACE;inputEl.focus();return}
     var sh=focusSheetEl;if(!sh||!sh.contains(e.target))return;
     if(e.target.closest('[data-focus-close]')){e.preventDefault();closeFocusSheet();return}
     var gb=e.target.closest('[data-gender]');
@@ -1924,6 +2112,14 @@ if(FOCUS){
     if(fb){e.preventDefault();var op=focusSheetOpener;closeFocusSheet(true);openForm(op,fb.getAttribute('data-form'),fb.getAttribute('data-form-label'),'quiz');return}
     var sv=e.target.closest('[data-survey]');
     if(sv){e.preventDefault();var op2=focusSheetOpener;closeFocusSheet(true);openFeedback(op2);return}
+    var pe=e.target.closest('[data-pain-else]');
+    if(pe){e.preventDefault();closeFocusSheet(true);inputEl.disabled=false;inputEl.placeholder=IPLACE;inputEl.focus();return}
+    var po=e.target.closest('[data-pain-opt]');
+    if(po){e.preventDefault();focusPainPick(sh,po.getAttribute('data-pain-opt'));return}
+    var pv=e.target.closest('[data-pain-nav]');
+    if(pv){e.preventDefault();focusPainNav(sh,pv.getAttribute('data-pain-nav'));return}
+    var pd=e.target.closest('[data-pain-edit]');
+    if(pd){e.preventDefault();focusPainGo(sh,pd.getAttribute('data-pain-edit'));return}
     var m=e.target.closest('[data-message]');
     if(m){e.preventDefault();var t=m.getAttribute('data-message');closeFocusSheet(true);focusSend(t)}
   });

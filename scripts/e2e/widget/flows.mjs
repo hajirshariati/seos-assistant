@@ -3097,6 +3097,8 @@ for (const coop of ["1", "2"]) {
     return { ctx, page, errors };
   };
   const lineY = () => { const h = document.querySelector(".ai-chat-header"); return h.getBoundingClientRect().top + parseFloat(getComputedStyle(h).getPropertyValue("--ai-focus-line")); };
+  // Starts a chat from the home in one tap: the Deals link above the text box sends its question.
+  const startChat = (page) => page.click('.ai-chat-focus__links [data-message="What deals are running right now?"]');
   const state = (page) => page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { focus: p.classList.contains("is-focus"), home: p.classList.contains("is-home"), chatting: p.classList.contains("is-chatting"), streaming: p.classList.contains("is-streaming"), hero: !!document.querySelector(".ai-chat-hero:not(.is-gone)"), heroGone: !!document.querySelector(".ai-chat-hero.is-gone"), line: !!document.querySelector(".ai-chat-band__ring"), focusHome: !!document.querySelector(".ai-chat-welcome--focus"), sheet: !!document.querySelector(".ai-chat-focus-sheet"), classic: !!document.querySelector(".ai-chat-welcome__cta-btn, .ai-chat-welcome__helpers, .ai-chat-welcome__greeting-cta"), msgs: document.querySelectorAll(".ai-chat-msg").length, input: document.querySelector(".ai-chat-input").value, focused: document.activeElement === document.querySelector(".ai-chat-input") }; });
   // Classic (the default): nothing of the Focus layout exists, the welcome is as always.
   {
@@ -3110,23 +3112,32 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
-    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-band__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), title: w.querySelector(".ai-chat-focus__title")?.textContent, hint: w.querySelector(".ai-chat-focus__hint")?.textContent, rotating: !!w.querySelector(".ai-chat-focus__line"), pains: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), tips: [...w.querySelectorAll(".ai-chat-focus__pain[data-message]")].filter((b) => /Plantar|arches|Metatarsalgia|Bunions|swollen/.test(b.getAttribute("title") || "")).length, coins: [...w.querySelectorAll(".ai-chat-focus__pain[data-message] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...w.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), plain: [...w.querySelectorAll(".ai-chat-focus__pain.is-plain[data-message]")].map((b) => b.querySelector(".ai-chat-focus__pain-title").textContent), coinW: Math.min(...[...w.querySelectorAll(".ai-chat-focus__coin")].map((c) => c.getBoundingClientRect().width)), painH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((c) => c.getBoundingClientRect().height)), elseCoin: !!w.querySelector(".ai-chat-focus__else .ai-chat-focus__coin"), chipRows: new Set([...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => Math.round(b.getBoundingClientRect().top))).size, chipH: Math.min(...[...w.querySelectorAll(".ai-chat-focus__pain")].map((b) => b.getBoundingClientRect().height)), else: !!w.querySelector('.ai-chat-focus__pains .ai-chat-focus__else[data-focus="type"]'), cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, links: w.querySelectorAll("[data-prefill]").length }; });
-    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); the two compact Help me find cards — Footwear, Orthotics — with no arrows (no label, no banner where the theme has none), then Where does it hurt as one compact row of chips — four places' pictures in coins big enough to read, Whole foot plain, its name, what it usually is on the tip — Something else closing the row without a picture, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__ask,ai-chat-focus__pains,ai-chat-focus__links" && parts.title === "Where does it hurt?" && /Pick a spot/.test(parts.hint) && parts.pains.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot" && parts.tips === 5 && parts.coins.join("|") === "heel|arch|ball|toes" && parts.plain.join("|") === "Whole foot" && parts.coinW >= 36 && parts.painH >= 44 && parts.coinsLoaded && !parts.elseCoin && parts.chipRows <= 2 && parts.chipH >= 36 && parts.else && parts.cards.join("|") === "Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 70 && parts.pics === 0 && parts.links === 3, JSON.stringify({ st, parts }));
-    const tidy = await page.evaluate(() => { const cs = (el) => getComputedStyle(el); const el = document.querySelector(".ai-chat-focus__else"), plain = document.querySelector(".ai-chat-focus__pain.is-plain"), links = [...document.querySelectorAll(".ai-chat-focus__links button")]; return { elseBg: cs(el).backgroundColor, plainBg: cs(plain).backgroundColor, elseBorder: cs(el).borderColor, plainBorder: cs(plain).borderColor, elseColor: cs(el).color, plainColor: cs(plain).color, dots: document.querySelectorAll(".ai-chat-focus__links i").length, links: links.map((b) => ({ h: Math.round(b.getBoundingClientRect().height), border: cs(b).borderStyle, radius: cs(b).borderRadius, padX: parseFloat(cs(b).paddingLeft), bg: cs(b).backgroundColor })) }; });
-    check("home layout focus: Something else is plain gray text (no background, no outline), and the three links above the text box are compact outlined pills, no dots", /rgba\(0, 0, 0, 0\)|transparent/.test(tidy.elseBg) && /rgba\(0, 0, 0, 0\)|transparent/.test(tidy.elseBorder) && tidy.elseColor !== tidy.plainColor && tidy.dots === 0 && tidy.links.length === 3 && tidy.links.every((l) => l.h <= 34 && l.h >= 28 && l.border === "solid" && /999/.test(l.radius) && l.padX <= 14 && /rgba\(0, 0, 0, 0\)|transparent/.test(l.bg)), JSON.stringify(tidy));
+    const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: !!document.querySelector(".ai-chat-band__glow"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), rotating: !!w.querySelector(".ai-chat-focus__line"), chips: w.querySelectorAll(".ai-chat-focus__pain, .ai-chat-focus__pains, .ai-chat-focus__ask, .ai-chat-focus__else").length, cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.querySelector(".ai-chat-focus__card-title").textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, painPic: (w.querySelector('[data-focus-sheet="pain"] .ai-chat-focus__card-ico img')?.getAttribute("src") || "").replace(/^.*focus-pain-/, ""), painPicLoaded: (() => { const i = w.querySelector('[data-focus-sheet="pain"] .ai-chat-focus__card-ico img'); return !!i && i.complete && i.naturalWidth > 0; })(), links: w.querySelectorAll(".ai-chat-focus__links [data-message]").length }; });
+    check("home layout focus: the face on the header's line, one row in the header, the greeting first on the home (under the name); three compact cards — Foot pain (Help me with, the heel picture), Footwear, Orthotics (Help me find) — with no arrows (no label, no banner where the theme has none), no chips row, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__links" && parts.chips === 0 && parts.cards.join("|") === "Foot pain|Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me with|Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 70 && parts.pics === 1 && parts.painPic === "heel.png" && parts.painPicLoaded && parts.links === 3, JSON.stringify({ st, parts }));
+    const tidy = await page.evaluate(() => { const cs = (el) => getComputedStyle(el); const links = [...document.querySelectorAll(".ai-chat-focus__links button")]; return { dots: document.querySelectorAll(".ai-chat-focus__links i").length, links: links.map((b) => ({ h: Math.round(b.getBoundingClientRect().height), border: cs(b).borderStyle, radius: cs(b).borderRadius, padX: parseFloat(cs(b).paddingLeft), bg: cs(b).backgroundColor })) }; });
+    check("home layout focus: the three links above the text box are compact outlined pills, no dots", tidy.dots === 0 && tidy.links.length === 3 && tidy.links.every((l) => l.h <= 34 && l.h >= 28 && l.border === "solid" && /999/.test(l.radius) && l.padX <= 14 && /rgba\(0, 0, 0, 0\)|transparent/.test(l.bg)), JSON.stringify(tidy));
     const geo = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const h = r(".ai-chat-hero"), d = r(".ai-chat-header"), g = r(".ai-chat-focus__greet .ai-chat-greet"), c = r(".ai-chat-focus__cards"), n = r(".ai-chat-header__name"); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom, greetTop: g.top, greetLeft: g.left, cardsTop: c.top }; }, lineY.toString());
     check("home layout focus: the face is centred on the header's bottom line, the name above it, the greeting just below it and aligned under the name, the home clear of the face", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.greetTop >= geo.line && geo.greetTop <= geo.line + 12 && Math.abs(geo.greetLeft - geo.nameLeft) <= 1 && geo.cardsTop > geo.heroBottom + 4 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
-    // "Something else" and the links only touch the text box.
+    // "Something else" (under the Foot pain sheet's first question) only puts the cursor in the text box.
     let n = chatBodies.length;
-    await page.click('.ai-chat-focus__else[data-focus="type"]');
+    await page.click('[data-focus-sheet="pain"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(400);
+    await page.click("[data-pain-else]");
     await page.waitForTimeout(250);
     let s2 = await state(page);
-    check("home layout focus: Something else only puts the cursor in the text box", s2.focused && s2.home && chatBodies.length === n, JSON.stringify(s2));
-    await page.click('[data-prefill="Where is my order?"]');
-    await page.waitForTimeout(250);
-    s2 = await state(page);
-    check("home layout focus: a link fills the text box without sending", s2.input === "Where is my order?" && s2.home && chatBodies.length === n, JSON.stringify(s2));
-    await page.fill(".ai-chat-input", "");
+    const hint = await page.evaluate(() => document.querySelector(".ai-chat-input").getAttribute("placeholder"));
+    check("home layout focus: Something else (in the Foot pain sheet) closes it and only puts the cursor in the text box — its hint the store's own (Settings → Chat text), not a line of its own", s2.focused && s2.home && !s2.sheet && chatBodies.length === n && hint === "How can I help you today?", JSON.stringify({ ...s2, hint }));
+    // A link above the text box sends its question straight away (no Send to tap).
+    await page.click('.ai-chat-focus__links [data-message="Where is my order?"]');
+    await waitUntil(() => chatBodies.length > n);
+    check("home layout focus: a link above the text box sends its question straight away", chatBodies.at(-1)?.message === "Where is my order?" && chatBodies.at(-1)?.typed === false, JSON.stringify(chatBodies.at(-1)));
+    await page.waitForTimeout(1500);
+    await page.click(".ai-chat-menu-btn");
+    await page.waitForTimeout(150);
+    await page.click('.ai-chat-menu-item[data-action="clear"]');
+    await page.waitForTimeout(1200);
+    n = chatBodies.length;
     // The Footwear sheet.
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
@@ -3187,7 +3198,7 @@ for (const coop of ["1", "2"]) {
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);/* the morph (≈1.1s) and the fades after it */
     s2 = await state(page);
-    const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
+    const look = await page.evaluate(() => ({ lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__line")).opacity), border: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, avatar: getComputedStyle(document.querySelector(".ai-chat-msg--assistant .ai-chat-msg-avatar") || document.body).boxShadow }));
     check("home layout focus: the View all chip sends Show me all women's orthotics and the ring becomes the header's line (the gray line gone, the face gone)", chatBodies.at(-1)?.message === "Show me all women’s orthotics" && chatBodies.at(-1)?.typed === false && !s2.sheet && !s2.home && s2.chatting && s2.heroGone && !s2.hero && !s2.focusHome && look.lineOpacity >= 0.7 && /rgba\(\d+, \d+, \d+, 0\)|transparent/.test(look.border), JSON.stringify({ s2, look }));
     check("home layout focus: reply avatars carry no glow — the line has it", look.avatar && !/163, 92, 255/.test(look.avatar), look.avatar);
     await waitUntil(() => false, 1500);
@@ -3199,13 +3210,52 @@ for (const coop of ["1", "2"]) {
     await page.click('.ai-chat-menu-item[data-action="clear"]');
     await page.waitForTimeout(1200);
     s2 = await state(page);
-    const again = await page.evaluate(() => document.querySelectorAll(".ai-chat-focus__pain[data-message]").length);
-    check("home layout focus: New chat brings the face and the home back", s2.home && !s2.chatting && s2.hero && !s2.heroGone && s2.focusHome && again === 5, JSON.stringify(s2));
-    // A pain tile sends its question; after a reload the chat opens with the line, no face.
+    const again = await page.evaluate(() => document.querySelectorAll("[data-focus-sheet]").length);
+    check("home layout focus: New chat brings the face and the home back", s2.home && !s2.chatting && s2.hero && !s2.heroGone && s2.focusHome && again === 3, JSON.stringify(s2));
+    // The Foot pain flow: where it hurts, orthotics, the shoes, the arch, the ball of the foot — then one message with it all; after a reload the chat opens with the line, no face.
     n = chatBodies.length;
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await page.click('[data-focus-sheet="pain"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(400);
+    const q1 = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-focus-sheet"); return { title: sh.querySelector(".ai-chat-focus__q-title")?.textContent, hint: sh.querySelector(".ai-chat-focus__q-hint")?.textContent, tiles: [...sh.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent), subs: [...sh.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-sub")?.textContent || ""), coins: [...sh.querySelectorAll("[data-pain-opt] .ai-chat-focus__coin img")].map((i) => (i.getAttribute("src") || "").replace(/^.*focus-pain-/, "").replace(/\.png$/, "")), coinsLoaded: [...sh.querySelectorAll(".ai-chat-focus__coin img")].every((i) => i.complete && i.naturalWidth > 0), cols: new Set([...sh.querySelectorAll("[data-pain-opt]")].map((b) => Math.round(b.getBoundingClientRect().left))).size, tileH: Math.min(...[...sh.querySelectorAll("[data-pain-opt]")].map((b) => b.getBoundingClientRect().height)), gender: !!sh.querySelector(".ai-chat-focus__gender"), eyebrow: sh.querySelector(".ai-chat-focus-sheet__eyebrow")?.textContent, name: sh.querySelector(".ai-chat-focus-sheet__title")?.textContent, next: sh.querySelector('[data-pain-nav="next"]')?.disabled, dots: sh.querySelectorAll(".ai-chat-focus__dots i").length, done: sh.querySelectorAll(".ai-chat-focus__dots i.is-done").length, back: !!sh.querySelector('[data-pain-nav="back"]'), else: !!sh.querySelector("[data-pain-else]"), roles: [...sh.querySelectorAll("[data-pain-opt]")].every((b) => b.getAttribute("role") === "checkbox" && b.getAttribute("aria-checked") === "false") }; });
+    check("foot pain sheet: opens like the other two (Help me with · Foot pain, the Women's / Men's switch) on Where does it hurt — six tiles in two columns with what each usually is, the four pictures in coins, Continue waiting for a pick, no Back yet, Something else under them", q1.eyebrow === "Help me with" && q1.name === "Foot pain" && q1.gender && q1.title === "Where does it hurt?" && /Tap all/.test(q1.hint) && q1.tiles.join("|") === "Heel|Arch|Ball of foot|Toes & bunions|Whole foot|No pain" && /Plantar/.test(q1.subs[0]) && q1.coins.join("|") === "heel|arch|ball|toes" && q1.coinsLoaded && q1.cols === 2 && q1.tileH >= 52 && q1.next === true && q1.dots === 3 && q1.done === 1 && !q1.back && q1.else && q1.roles, JSON.stringify(q1));
+    await page.click('[data-pain-opt="heel"]');
+    await page.click('[data-pain-opt="none"]');
+    const q1b = await page.evaluate(() => [...document.querySelectorAll("[data-pain-opt].is-on")].map((b) => b.getAttribute("data-pain-opt")).join("|"));
+    await page.click('[data-pain-opt="heel"]');
+    await page.click('[data-pain-opt="arch"]');
+    const q1c = await page.evaluate(() => ({ on: [...document.querySelectorAll("[data-pain-opt].is-on")].map((b) => b.getAttribute("data-pain-opt")).join("|"), checked: document.querySelectorAll('[data-pain-opt][aria-checked="true"]').length, next: document.querySelector('[data-pain-nav="next"]').disabled, sheet: !!document.querySelector(".ai-chat-focus-sheet") }));
+    check("foot pain sheet: several places can be picked (No pain stands alone and clears them), the tiles say which are on, nothing sent yet", q1b === "none" && q1c.on === "heel|arch" && q1c.checked === 2 && q1c.next === false && q1c.sheet && chatBodies.length === n, JSON.stringify({ q1b, q1c }));
+    await page.click('[data-pain-nav="next"]');
+    await page.waitForTimeout(450);
+    const q2 = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-focus-sheet"); return { title: sh.querySelector(".ai-chat-focus__q-title")?.textContent, tiles: [...sh.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent), back: !!sh.querySelector('[data-pain-nav="back"]'), picks: sh.querySelector(".ai-chat-focus__picks")?.textContent, focused: document.activeElement === sh.querySelector(".ai-chat-focus__q-title"), radios: [...sh.querySelectorAll("[data-pain-opt]")].every((b) => b.getAttribute("role") === "radio") }; });
+    check("foot pain sheet: then footwear, orthotics or both — Back and the picks so far under the tiles, the question focused for screen readers", q2.title === "What should I look for?" && q2.tiles.join("|") === "Footwear|Orthotics|Not sure — show me both" && q2.back && q2.picks === "Heel, Arch" && q2.focused && q2.radios, JSON.stringify(q2));
+    await page.click('[data-pain-opt="orthotics"]');
+    await page.waitForTimeout(500);
+    const q3 = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-focus-sheet"); return { title: sh.querySelector(".ai-chat-focus__q-title")?.textContent, tiles: [...sh.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent), dots: sh.querySelectorAll(".ai-chat-focus__dots i").length, done: sh.querySelectorAll(".ai-chat-focus__dots i.is-done").length }; });
+    check("foot pain sheet: orthotics ask which shoes they go in — the lines' own Best for — and the path grows to six steps", q3.title === "Which shoes will they go in?" && q3.tiles.join("|") === "Sneakers & everyday shoes|Running shoes|Gym & training shoes|Dress shoes & heels|Work boots|Hiking & golf shoes|Winter boots|Cleats" && q3.dots === 6 && q3.done === 3, JSON.stringify(q3));
+    await page.click('[data-pain-opt="running"]');
+    await page.waitForTimeout(500);
+    const q4 = await page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent + " / " + [...document.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent).join("|"));
+    await page.click('[data-pain-opt="flat_low"]');
+    await page.waitForTimeout(500);
+    const q5 = await page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent + " / " + [...document.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent).join("|"));
+    check("foot pain sheet: then the arch (flat or low, medium or high, not sure) and pain under the ball of the foot — the four things the orthotic finder needs", q4 === "What’s your arch like? / Flat or low|Medium or high|Not sure" && q5 === "Any pain under the ball of your foot? / Yes|No", JSON.stringify({ q4, q5 }));
+    await page.click('[data-pain-opt="no"]');
+    await page.waitForTimeout(500);
+    const sum = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-focus-sheet"); return { title: sh.querySelector(".ai-chat-focus__q-title")?.textContent, rows: [...sh.querySelectorAll(".ai-chat-focus__sum-row")].map((r) => r.querySelector(".ai-chat-focus__sum-k").textContent + ": " + r.querySelector(".ai-chat-focus__sum-v").textContent), ask: sh.querySelector('[data-pain-nav="ask"]')?.textContent.trim(), done: sh.querySelectorAll(".ai-chat-focus__dots i.is-done").length, dots: sh.querySelectorAll(".ai-chat-focus__dots i").length }; });
+    check("foot pain sheet: a summary — each line a row to change — and one button to ask Ava", sum.title === "Here’s what I’ll tell Ava" && sum.rows.join(" | ") === "Where it hurts: Heel, Arch | Looking for: Orthotics | Shoes: Running shoes | Arch: Flat or low | Ball of foot: No" && sum.ask === "Ask Ava for my match" && sum.done === sum.dots, JSON.stringify(sum));
+    // A row opens its step again with the answer marked; a new answer goes straight back to the summary.
+    await page.click('[data-pain-edit="shoes"]');
+    await page.waitForTimeout(450);
+    const ed = await page.evaluate(() => ({ title: document.querySelector(".ai-chat-focus__q-title")?.textContent, on: document.querySelector("[data-pain-opt].is-on")?.getAttribute("data-pain-opt") }));
+    await page.click('[data-pain-opt="gym"]');
+    await page.waitForTimeout(500);
+    const ed2 = await page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent + " / " + [...document.querySelectorAll(".ai-chat-focus__sum-row")].map((r) => r.querySelector(".ai-chat-focus__sum-v").textContent).join("|"));
+    check("foot pain sheet: a summary row reopens its step with the answer marked; a new answer goes straight back to the summary", ed.title === "Which shoes will they go in?" && ed.on === "running" && ed2 === "Here’s what I’ll tell Ava / Heel, Arch|Orthotics|Gym & training shoes|Flat or low|No", JSON.stringify({ ed, ed2 }));
+    await page.click('[data-pain-nav="ask"]');
     await waitUntil(() => chatBodies.length > n);
-    check("home layout focus: a pain tile sends its question", /heel pain/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.typed === false, chatBodies.at(-1)?.message);
+    check("foot pain sheet: Ask Ava sends one message in the shopper's own words with everything the orthotic finder needs — women's, the shoes, the pain, the arch, the ball of the foot — nothing typed, the sheet gone", chatBodies.at(-1)?.message === "I’m looking for women’s orthotics for gym and training shoes. I have heel pain (plantar fasciitis) and arch pain. My arches are flat or low and my feet roll inward. No pain in the front of my foot. Which one would you recommend?" && chatBodies.at(-1)?.typed === false && !(await state(page)).sheet, chatBodies.at(-1)?.message);
     await page.waitForTimeout(1500);
     await page.reload();
     await page.click(".ai-chat-launcher");
@@ -3225,10 +3275,10 @@ for (const coop of ["1", "2"]) {
     const g = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), gr = r(".ai-chat-focus__greet .ai-chat-greet"), h = r(".ai-chat-hero"), d = r(".ai-chat-header"), c = r(".ai-chat-focus__cards"), a = r(".ai-chat-header__actions"); const sub = document.querySelector(".ai-chat-header__sub"); return { name: document.querySelector(".ai-chat-header__title--chat").textContent, nameOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--chat")).opacity), words: document.querySelector(".ai-chat-header__title--home").textContent, wordsOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--home")).opacity), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, line: eval(lineY)(), nameBottom: n.bottom, greetTop: gr.top, greetLeft: gr.left, nameLeft: n.left, heroMid: (h.top + h.bottom) / 2, heroRight: h.right, heroBottom: h.bottom, hdrBottom: d.bottom, cardsTop: c.top, actionsMid: (a.top + a.bottom) / 2, hdrH: Math.round(d.height) }; }, lineY.toString());
     check("home layout focus (two-line name): one row in the header — the greeting as its words above the line, Ask Ava! unseen, its second line kept out — the greeting CTA at the top of the home under it, the face centred on the header's line and clear of both, the controls centred on the row", g.name === "Ask Ava!" && g.nameOp === 0 && g.words === "Hi! I'm your personal shopping assistant." && g.wordsOp === 1 && !g.subShown && g.greet === window_greet && g.nameBottom <= g.line && Math.abs(g.line - g.hdrBottom) <= 2 && g.greetTop >= g.line && Math.abs(g.greetLeft - g.nameLeft) <= 1 && Math.abs(g.heroMid - g.line) <= 2 && g.nameLeft > g.heroRight + 6 && g.cardsTop > g.heroBottom + 4 && g.actionsMid < g.line && g.hdrH <= 56, JSON.stringify(g));
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await startChat(page);
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(1900);
-    const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), d = r(".ai-chat-header"); const sub = document.querySelector(".ai-chat-header__sub"); return { name: document.querySelector(".ai-chat-header__title--chat").textContent, nameOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--chat")).opacity), wordsOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--home")).opacity), hdrH: Math.round(d.height), line: eval(lineY)(), hdrBottom: d.bottom, nameLeft: n.left - d.left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", greetGone: !document.querySelector(".ai-chat-focus__greet"), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting"), titleMid: (() => { const t = r(".ai-chat-header__title--chat"); return (t.top + t.bottom) / 2 - d.top; })(), rowMid: (() => { const a = r(".ai-chat-header__actions"); return (a.top + a.bottom) / 2 - d.top; })(), titleBottom: r(".ai-chat-header__title--chat").bottom - d.top }; }, lineY.toString());
+    const c = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const n = r(".ai-chat-header__name"), d = r(".ai-chat-header"); const sub = document.querySelector(".ai-chat-header__sub"); return { name: document.querySelector(".ai-chat-header__title--chat").textContent, nameOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--chat")).opacity), wordsOp: parseFloat(getComputedStyle(document.querySelector(".ai-chat-header__title--home")).opacity), hdrH: Math.round(d.height), line: eval(lineY)(), hdrBottom: d.bottom, nameLeft: n.left - d.left, lineOpacity: parseFloat(getComputedStyle(document.querySelector(".ai-chat-band__line")).opacity), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", greetGone: !document.querySelector(".ai-chat-focus__greet"), chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting"), titleMid: (() => { const t = r(".ai-chat-header__title--chat"); return (t.top + t.bottom) / 2 - d.top; })(), rowMid: (() => { const a = r(".ai-chat-header__actions"); return (a.top + a.bottom) / 2 - d.top; })(), titleBottom: r(".ai-chat-header__title--chat").bottom - d.top }; }, lineY.toString());
     check("home layout focus (two-line name): in chat the colour line runs along the header's bottom, the header still one row and the same height, Ask Ava! its words now and back at the left, the greeting gone with the home", c.chatting && c.name === "Ask Ava!" && c.nameOp === 1 && c.wordsOp === 0 && c.hdrH === g.hdrH && Math.abs(c.line - c.hdrBottom) <= 2 && c.lineOpacity >= 0.7 && c.nameLeft < 40 && !c.subShown && c.greetGone, JSON.stringify(c));
     check("home layout focus (two-line name): in chat Ask Ava! sits on the row's middle, level with the controls — not down against the line", Math.abs(c.titleMid - c.rowMid) <= 1.5 && c.hdrH - c.titleBottom >= 12, JSON.stringify({ titleMid: c.titleMid, rowMid: c.rowMid, titleBottom: c.titleBottom, hdrH: c.hdrH }));
     check("home layout focus (two-line name): no JS errors", errors.length === 0, errors.join(" | "));
@@ -3255,7 +3305,7 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (header words): at home the signed-in greeting, with the shopper's name, stands where the name was — the name unseen and out of the reading order", at.home === "Welcome back, Ann!" && at.homeOp === 1 && at.homeHidden === "false" && at.chat === "Ask Ava!" && at.chatOp === 0 && at.chatHidden === "true" && !at.chatting, JSON.stringify(at));
     const n0 = chatBodies.length;
     await record("(s) => s.chatting && s.chatOp >= 0.999 && s.homeOp <= 0.001");
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await startChat(page);
     const into = await recorded();
     const inEnd = into[into.length - 1], inS = smooth(into);
     // The greeting leaves upward, the name comes up from below — never the other way.
@@ -3270,9 +3320,71 @@ for (const coop of ["1", "2"]) {
     const home = await recorded();
     const hEnd = home[home.length - 1], hS = smooth(home);
     check("home layout focus (header words): a new chat brings the greeting back the same way — the name sinks away as the greeting settles in", !hEnd.chatting && hEnd.home === "Welcome back, Ann!" && hEnd.homeOp >= 0.999 && hEnd.chatOp <= 0.001 && hEnd.homeHidden === "false" && hEnd.chatHidden === "true" && calm(hS) && home.every((s) => s.hdrH === at.hdrH), JSON.stringify({ ...hS, end: hEnd }));
-    const level = await page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const d = r(".ai-chat-header"), a = r(".ai-chat-header__actions"), h = r(".ai-chat-header__title--home"), c = r(".ai-chat-header__title--chat"); return { rowMid: (a.top + a.bottom) / 2 - d.top, homeMid: (h.top + h.bottom) / 2 - d.top, chatMid: (c.top + c.bottom) / 2 - d.top, hdrH: Math.round(d.height) }; });
-    check("home layout focus (header words): a one-line greeting sits on the row's middle too, level with the controls", Math.abs(level.homeMid - level.rowMid) <= 1.5 && level.hdrH === at.hdrH, JSON.stringify(level));
+    const level = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const d = r(".ai-chat-header"), h = r(".ai-chat-header__title--home"); return { line: eval(lineY)(), homeBottom: h.bottom, hdrH: Math.round(d.height) }; }, lineY.toString());
+    check("home layout focus (header words): at home a one-line greeting keeps its place just above the line (only the name in a chat is centred)", level.line - level.homeBottom >= 0 && level.line - level.homeBottom <= 8 && level.hdrH === at.hdrH, JSON.stringify(level));
     check("home layout focus (header words): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // The Foot pain sheet's other paths: footwear (the kind, the width), "show me both", Men's, and reopened.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus&qp=1");
+    const openPain = async () => { await page.click('[data-focus-sheet="pain"]'); await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }); await page.waitForTimeout(400); };
+    const tap = async (sel) => { await page.click(sel); await page.waitForTimeout(500); };
+    const newChat = async () => { await page.waitForTimeout(1500); await page.click(".ai-chat-menu-btn"); await page.waitForTimeout(150); await page.click('.ai-chat-menu-item[data-action="clear"]'); await page.waitForTimeout(1200); };
+    const titles = () => page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent + " / " + [...document.querySelectorAll("[data-pain-opt]")].map((b) => b.querySelector(".ai-chat-focus__opt-title").textContent).join("|"));
+    const rows = () => page.evaluate(() => [...document.querySelectorAll(".ai-chat-focus__sum-row")].map((r) => r.querySelector(".ai-chat-focus__sum-k").textContent + ": " + r.querySelector(".ai-chat-focus__sum-v").textContent).join(" | "));
+    let n = chatBodies.length;
+    await openPain();
+    await tap('[data-pain-opt="heel"]'); await tap('[data-pain-nav="next"]'); await tap('[data-pain-opt="footwear"]');
+    const k1 = await titles();
+    await tap('[data-pain-opt="sneakers"]');
+    const k2 = await titles();
+    await tap('[data-pain-opt="wide"]');
+    const k3 = await rows();
+    check("foot pain sheet (footwear): the kind of shoe from the women's menu, then the width, then the summary", k1 === "What kind of shoes? / Sneakers|Sandals|Loafers & oxfords|Slip-ons|Mary Janes|Boots|Slippers|Clogs|Wedges & heels|Any kind" && k2 === "How should they fit? / Regular width|Wide|Narrow|Not sure" && k3 === "Where it hurts: Heel | Looking for: Footwear | Kind: Sneakers | Fit: Wide", JSON.stringify({ k1, k2, k3 }));
+    await page.click('[data-pain-nav="ask"]');
+    await waitUntil(() => chatBodies.length > n);
+    check("foot pain sheet (footwear): the message names the line, the kind, the pain and the width", chatBodies.at(-1)?.message === "I’m looking for women’s sneakers for heel pain (plantar fasciitis), in a wide width. What would you recommend?", chatBodies.at(-1)?.message);
+    await newChat();
+    // Reopened, the answers are still there: Continue runs straight to the summary.
+    n = chatBodies.length;
+    await openPain();
+    const kept = await page.evaluate(() => [...document.querySelectorAll("[data-pain-opt].is-on")].map((b) => b.getAttribute("data-pain-opt")).join("|"));
+    await tap('[data-pain-nav="next"]');
+    const sum2 = await page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent);
+    check("foot pain sheet: reopened, the picks are kept and Continue goes straight to the summary", kept === "heel" && sum2 === "Here’s what I’ll tell Ava", JSON.stringify({ kept, sum2 }));
+    // Men's, and "show me both": the switch in the head; Not sure skips the detail steps.
+    await tap('[data-pain-edit="what"]');
+    await tap('[data-gender="men"]');
+    await tap('[data-pain-opt="both"]');
+    const b1 = await page.evaluate(() => ({ title: document.querySelector(".ai-chat-focus__q-title")?.textContent, rows: [...document.querySelectorAll(".ai-chat-focus__sum-row")].map((r) => r.querySelector(".ai-chat-focus__sum-v").textContent).join("|"), who: document.querySelector(".ai-chat-focus__picks")?.textContent }));
+    await page.click('[data-pain-nav="ask"]');
+    await waitUntil(() => chatBodies.length > n);
+    check("foot pain sheet (both, men's): Not sure skips the detail steps — the summary, then a message that leaves the choice to Ava for the men's line", b1.title === "Here’s what I’ll tell Ava" && b1.rows === "Heel|Footwear or orthotics" && /Men’s/.test(b1.who) && chatBodies.at(-1)?.message === "I have heel pain (plantar fasciitis). I’m open to men’s footwear or orthotics — what would help most?", JSON.stringify({ b1, msg: chatBodies.at(-1)?.message }));
+    await newChat();
+    // Men's footwear: the kinds are the men's menu, and the message says men's.
+    n = chatBodies.length;
+    await openPain();
+    await tap('[data-pain-nav="next"]');
+    await tap('[data-pain-edit="what"]');
+    await tap('[data-pain-opt="footwear"]');
+    const m1 = await titles();
+    await tap('[data-pain-opt="clogs"]');
+    await tap('[data-pain-opt="regular"]');
+    const m2 = await rows();
+    await page.click('[data-pain-nav="ask"]');
+    await waitUntil(() => chatBodies.length > n);
+    check("foot pain sheet (men's footwear): the kinds are the men's menu, the summary follows, and the message says men's", m1 === "What kind of shoes? / Sneakers|Sandals|Clogs|Any kind" && m2 === "Where it hurts: Heel | Looking for: Footwear | Kind: Clogs | Fit: Regular width" && chatBodies.at(-1)?.message === "I’m looking for men’s clogs for heel pain (plantar fasciitis). What would you recommend?", JSON.stringify({ m1, m2, msg: chatBodies.at(-1)?.message }));
+    await newChat();
+    // Back walks the path the other way; Escape closes the sheet.
+    await openPain();
+    await tap('[data-pain-nav="next"]');
+    await tap('[data-pain-nav="back"]');
+    const bk = await page.evaluate(() => document.querySelector(".ai-chat-focus__q-title")?.textContent);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(350);
+    check("foot pain sheet: Back walks the path the other way, Escape closes the sheet", bk === "Where does it hurt?" && !(await state(page)).sheet && (await state(page)).home, JSON.stringify({ bk }));
+    check("foot pain sheet: no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // The store's survey (Settings → Feedback button) in the Focus layout:
@@ -3372,8 +3484,18 @@ for (const coop of ["1", "2"]) {
     const words = () => page.evaluate(() => { const h = document.querySelector(".ai-chat-header__title--home"), pill = document.querySelector(".ai-chat-header__login-pill"); return { words: h.textContent, whole: h.scrollHeight <= h.clientHeight + 1, lines: Math.round(h.getBoundingClientRect().height / 19), pill: pill ? getComputedStyle(pill).display !== "none" : null, chatting: document.querySelector(".ai-chat-panel").classList.contains("is-chatting") }; });
     const pw = await words();
     check("home layout focus (phone): the greeting is the header's words, whole on two lines — the Log in pill steps out of its way at home (the menu has Log in)", pw.words === "Hi! I'm your personal shopping assistant." && pw.whole && pw.lines <= 2 && pw.pill === false && !pw.chatting, JSON.stringify(pw));
-    const ph = await page.evaluate(() => { const t = [...document.querySelectorAll(".ai-chat-focus__pain")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("[data-focus-sheet]")].map((e) => e.getBoundingClientRect()); return { rows: new Set(t.map((r) => Math.round(r.top))).size, cardCols: new Set(c.map((r) => Math.round(r.left))).size, maxRight: Math.max(...t.map((r) => r.right), ...c.map((r) => r.right)), sw: document.documentElement.scrollWidth, vw: innerWidth, chipH: Math.min(...t.map((r) => r.height)) }; });
-    check("home layout focus (phone): the chips wrap into a few rows, cards stacked, nothing off-screen, chips tall enough to tap", ph.rows >= 2 && ph.rows <= 4 && ph.cardCols === 1 && ph.maxRight <= ph.vw && ph.sw <= ph.vw && ph.chipH >= 36, JSON.stringify(ph));
+    const crisp = await page.evaluate(() => { const g = document.querySelector(".ai-chat-band__glow"), r = document.querySelector(".ai-chat-band__ring"), i = document.querySelector(".ai-chat-input"); return { glow: getComputedStyle(g).display, ring: getComputedStyle(r).display, ringOp: parseFloat(getComputedStyle(r).opacity), hintWrap: getComputedStyle(i, "::placeholder").whiteSpace }; });
+    check("home layout focus (phone): no blurred glow on the band — the ring (and the line in a chat) stays crisp on its own; the text box's hint keeps to one line", crisp.glow === "none" && crisp.ring !== "none" && crisp.ringOp > 0.5 && crisp.hintWrap === "nowrap", JSON.stringify(crisp));
+    const ph = await page.evaluate(() => { const c = [...document.querySelectorAll("[data-focus-sheet]")].map((e) => e.getBoundingClientRect()); return { cards: c.length, cardCols: new Set(c.map((r) => Math.round(r.left))).size, maxRight: Math.max(...c.map((r) => r.right)), sw: document.documentElement.scrollWidth, vw: innerWidth, cardH: Math.min(...c.map((r) => r.height)) }; });
+    check("home layout focus (phone): the three cards stacked, nothing off-screen, tall enough to tap", ph.cards === 3 && ph.cardCols === 1 && ph.maxRight <= ph.vw && ph.sw <= ph.vw && ph.cardH >= 56, JSON.stringify(ph));
+    // The Foot pain sheet on a phone: two columns of tiles within the screen, Continue in reach.
+    await page.click('[data-focus-sheet="pain"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(450);
+    const pq = await page.evaluate(() => { const t = [...document.querySelectorAll("[data-pain-opt]")].map((e) => e.getBoundingClientRect()); const p = document.querySelector(".ai-chat-focus-sheet__panel").getBoundingClientRect(); const nx = document.querySelector('[data-pain-nav="next"]').getBoundingClientRect(); return { cols: new Set(t.map((r) => Math.round(r.left))).size, maxRight: Math.max(...t.map((r) => r.right)), vw: innerWidth, tileH: Math.min(...t.map((r) => r.height)), bottom: p.bottom, vh: innerHeight, nextIn: nx.bottom <= p.bottom && nx.height >= 40 }; });
+    check("home layout focus (phone): the Foot pain tiles sit in two columns within the screen, tall enough to tap, Continue within the sheet", pq.cols === 2 && pq.maxRight <= pq.vw && pq.tileH >= 52 && pq.bottom <= pq.vh + 1 && pq.nextIn, JSON.stringify(pq));
+    await page.click(".ai-chat-focus-sheet__close");
+    await page.waitForTimeout(350);
     await page.click('[data-focus-sheet="footwear"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
     await page.waitForTimeout(450);/* it slides in */
@@ -3392,89 +3514,81 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (phone): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
-  // The morph, step by step — one shape throughout: the ring folds flat
-  // into a short line behind the face (wider than the face, never across
-  // it) while the face is fully there; the face steps away; the short line
-  // reaches across the header. Nothing is swapped. Back home is the mirror.
+  // Home → chat, frame by frame: the ring fades out with the face while the
+  // line lights up from the left — its light travelling to the far end with
+  // a long soft tail, one way only, no leap. Back home is the mirror: the
+  // light withdraws, the face comes in and its ring fades up around it.
   {
     const { ctx, page, errors } = await open("/full?home=focus", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
-    // One look at the shape, as source: the test takes one on demand, and a
+    // One look at the band, as source: the test takes one on demand, and a
     // sampler on the page records one every animation frame.
     const lookSrc = `() => {
       const q = (s) => document.querySelector(s); const op = (el) => parseFloat(getComputedStyle(el).opacity);
-      const panel = q(".ai-chat-panel"), ring = q(".ai-chat-band__ring"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), hdr = q(".ai-chat-header");
-      const bb = ring.getBBox(), hr = hdr.getBoundingClientRect(), pr = photo.getBoundingClientRect(), gone = hero.classList.contains("is-gone");
-      const heroMid = parseFloat(getComputedStyle(hero).left) + parseFloat(getComputedStyle(panel).getPropertyValue("--ai-hero")) / 2;
-      return { t: performance.now(), ringW: bb.width, ringH: bb.height, ringLeft: bb.x, ringRight: hdr.clientWidth - (bb.x + bb.width), ringMid: bb.x + bb.width / 2, ringOp: op(ring), photoOp: gone ? 0 : op(photo), photoW: pr.width, faceMid: gone ? null : (pr.left + pr.right) / 2 - hr.left, heroMid, chatting: panel.classList.contains("is-chatting"), gone, home: panel.classList.contains("is-home"), W: hdr.clientWidth, shapes: document.querySelectorAll(".ai-chat-band__ring, .ai-chat-header__line, .ai-chat-hero__ring").length, grad: q("#ai-chat-band-g").getAttribute("x1") };
+      const panel = q(".ai-chat-panel"), ring = q(".ai-chat-band__ring"), line = q(".ai-chat-band__line"), sweep = q("#ai-chat-band-s"), grad = q("#ai-chat-band-g"), photo = q(".ai-chat-hero__photo"), hero = q(".ai-chat-hero"), hdr = q(".ai-chat-header"), lit = q(".ai-chat-band__lit");
+      const lb = line.getBBox(), rb = ring.getBBox(), W = hdr.clientWidth, gone = hero.classList.contains("is-gone");
+      const x1 = parseFloat(sweep.getAttribute("x1")), x2 = parseFloat(sweep.getAttribute("x2")), tail = x2 - x1;
+      return { t: performance.now(), W, ringOp: op(ring), ringW: rb.width, ringH: rb.height, lineW: lb.width, lineH: lb.height, lineLeft: lb.x, lineRight: W - (lb.x + lb.width), head: x2, tail, lit: Math.min(1, Math.max(0, (x2 + 3) / (W + 6 + tail))), photoOp: gone ? 0 : op(photo), chatting: panel.classList.contains("is-chatting"), gone, grad: grad.getAttribute("x1"), masked: !!lit && lit.getAttribute("mask") === "url(#ai-chat-band-m)" && lit.contains(line) };
     }`;
     const look = () => page.evaluate(`(${lookSrc})()`);
-    // The steps and the continuity are read from the page's own frames: once
-    // a morph is under way, a sampler registered behind it records the shape
-    // every animation frame for three seconds. Frame to frame the line's
-    // size and the face's opacity may move no faster than the eases allow
-    // (a frame the runner delays moves the time-based shape further, never
-    // faster); a leap or a pop would be a speed far beyond that.
+    // Once a transition is under way, a sampler registered behind it records
+    // the band every animation frame for three seconds; the steps are read
+    // from those frames filled in at 10ms, so a short moment is found even
+    // when the renderer is slow. Frame to frame the light's head, the ring's
+    // and the face's opacity may move no faster than the eases allow (a frame
+    // the runner delays moves the time-based state further, never faster).
     const record = async () => {
       await page.evaluate(`(() => { const look = ${lookSrc}; window.__tr = []; window.__trDone = false; let t0 = 0; const tick = (t) => { if (!t0) t0 = t; const s = look(); s.t = t; window.__tr.push(s); if (t - t0 < 3000 && window.__tr.length < 400) requestAnimationFrame(tick); else window.__trDone = true; }; requestAnimationFrame(tick); })()`);
       await page.waitForFunction(() => window.__trDone, null, { timeout: 10000 });
       return page.evaluate(() => window.__tr);
     };
-    // The steps are read from the frames filled in at 10ms — the shape moves
-    // smoothly between frames, so a short step (the face half in while the
-    // line is still short) is found even when the renderer is slow.
-    const dense = (tr) => { const out = []; const num = (k) => (a, b, u) => a[k] == null || b[k] == null ? a[k] : a[k] + (b[k] - a[k]) * u; const keys = ["ringW", "ringH", "ringLeft", "ringRight", "ringMid", "ringOp", "photoOp", "photoW", "faceMid", "heroMid", "W"]; for (let i = 1; i < tr.length; i++) { const a = tr[i - 1], b = tr[i], steps = Math.max(1, Math.ceil((b.t - a.t) / 10)); for (let k = 0; k < steps; k++) { const u = k / steps, st = { ...a, t: a.t + (b.t - a.t) * u }; for (const key of keys) st[key] = num(key)(a, b, u); out.push(st); } } if (tr.length) out.push(tr[tr.length - 1]); return out; };
-    const speeds = (tr) => { let w = 0, h = 0, f = 0, n = 0, maxDt = 0; for (let i = 1; i < tr.length; i++) { const dt = tr[i].t - tr[i - 1].t; if (dt <= 0) continue; n++; maxDt = Math.max(maxDt, dt); w = Math.max(w, Math.abs(tr[i].ringW - tr[i - 1].ringW) / dt); h = Math.max(h, Math.abs(tr[i].ringH - tr[i - 1].ringH) / dt); f = Math.max(f, Math.abs(tr[i].photoOp - tr[i - 1].photoOp) / dt); } return { w: +w.toFixed(3), h: +h.toFixed(3), face: +f.toFixed(4), n, maxDt: Math.round(maxDt) }; };
-    // The eases' peak speeds (px/ms, opacity/ms), with room: the line reaches across ~410px in 580–620ms, the fold drops ~68px in 380ms, the face fades in 280–340ms — each at most ~2.9× (3.5× for the ease-out) its average speed.
-    const calm = (sp, min) => sp.n >= min && sp.w <= 2.6 && sp.h <= 0.8 && sp.face <= 0.015;
+    const dense = (tr) => { const out = []; const keys = ["ringOp", "head", "tail", "lit", "photoOp", "W"]; for (let i = 1; i < tr.length; i++) { const a = tr[i - 1], b = tr[i]; const steps = Math.max(1, Math.round((b.t - a.t) / 10)); for (let k = 0; k < steps; k++) { const u = k / steps; const st = { ...a }; for (const key of keys) st[key] = a[key] + (b[key] - a[key]) * u; st.chatting = u < 0.5 ? a.chatting : b.chatting; st.gone = u < 0.5 ? a.gone : b.gone; out.push(st); } } if (tr.length) out.push(tr[tr.length - 1]); return out; };
+    const speeds = (tr) => { let head = 0, ring = 0, face = 0, n = 0, maxDt = 0; for (let i = 1; i < tr.length; i++) { const dt = tr[i].t - tr[i - 1].t; if (dt <= 0) continue; n++; maxDt = Math.max(maxDt, dt); head = Math.max(head, Math.abs(tr[i].head - tr[i - 1].head) / dt); ring = Math.max(ring, Math.abs(tr[i].ringOp - tr[i - 1].ringOp) / dt); face = Math.max(face, Math.abs(tr[i].photoOp - tr[i - 1].photoOp) / dt); } return { n, maxDt: Math.round(maxDt), head: +head.toFixed(3), ring: +ring.toFixed(4), face: +face.toFixed(4) }; };
+    // The eases' peak speeds, with room: the light's head crosses the header and its tail (~1.6 headers) in 1200ms, the ring fades in 340ms, the face in 300ms — each at most ~3.5× its average.
+    const calm = (sp, min) => sp.n >= min && sp.head <= 3.2 && sp.ring <= 0.011 && sp.face <= 0.012;
+    const oneWay = (arr, sign) => arr.every((v, i) => i === 0 || sign * (v - arr[i - 1]) >= -0.5);
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await startChat(page);
     const tr = await record();
-    const seen = { behind: null, alone: null, growing: null, full: null };
+    const seen = { fading: null, lighting: null, half: null, full: null };
     for (const st of dense(tr)) {
-      // The short line: flat, about 1.57 faces wide, centred on the face.
-      const short = st.ringH <= 3 && st.ringW >= 94 && st.ringW <= 112 && Math.abs(st.ringMid - st.heroMid) <= 2;
-      if (!seen.behind && short && st.photoOp >= 0.9 && st.photoW >= 60 && Math.abs(st.ringMid - st.faceMid) <= 2) seen.behind = st;
-      if (!seen.alone && st.ringH <= 1 && st.ringW <= 130 && st.photoOp <= 0.15) seen.alone = st;
-      if (!seen.growing && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.photoOp <= 0.02) seen.growing = st;
-      if (st.chatting && st.ringW >= st.W - 4 && st.gone) { seen.full = st; break; }
+      if (!seen.fading && st.ringOp > 0.2 && st.ringOp < 0.8 && st.lit < 0.35) seen.fading = st;
+      if (!seen.lighting && st.lit > 0.05 && st.lit < 0.5 && st.head > 0 && st.head < st.W * 0.6 && st.tail >= st.W * 0.4) seen.lighting = st;
+      if (!seen.half && st.lit >= 0.45 && st.lit <= 0.8 && st.ringOp <= 0.05 && st.photoOp <= 0.05) seen.half = st;
+      if (st.chatting && st.lit >= 0.999 && st.gone) { seen.full = st; break; }
     }
-    check("morph 1: the ring folds flat into a short line behind the face — wider than the face, centred on it — while the face is still there", !!seen.behind, JSON.stringify(seen.behind));
-    check("morph 2: the face eases away while the line is still short", !!seen.alone, JSON.stringify(seen.alone));
-    check("morph 3: the short line reaches across the header once the face has gone", !!seen.growing, JSON.stringify(seen.growing));
+    check("light 1: the ring fades out with the face as the line's light sets off from the left", !!seen.fading && seen.fading.head <= seen.fading.W * 0.5, JSON.stringify(seen.fading));
+    check("light 2: the light travels across with a long soft tail (about half the header long), its head moving one way only", !!seen.lighting && oneWay(tr.map((s) => s.head), 1), JSON.stringify(seen.lighting));
+    check("light 3: the ring and the face are gone while the light is still on its way", !!seen.half, JSON.stringify(seen.half));
     const sp = speeds(tr);
-    check("morph: one continuous motion — frame to frame the line's size and the face's opacity move no faster than the eases allow (no leap, no pop)", calm(sp, 30), JSON.stringify(sp));
+    check("light: one continuous motion — the head's speed, the ring's and the face's fades within the eases (no leap, no pop)", calm(sp, 30), JSON.stringify(sp));
     await waitUntil(() => chatBodies.length > n);
     const fin = await look();
-    check("morph 4: it ends as the header's line, edge to edge — the same shape all along, nothing swapped underneath", !!seen.full && fin.shapes === 1 && fin.ringH === 0 && fin.ringLeft <= 0 && fin.ringRight <= 0 && fin.chatting && fin.gone, JSON.stringify({ full: seen.full, fin }));
+    check("light 4: it ends lit edge to edge — the mask past the line's end, the line itself edge to edge, the ring out — in chat, the face gone", !!seen.full && fin.lit >= 0.999 && fin.lineH === 0 && fin.lineLeft <= 0 && fin.lineRight <= 0 && fin.ringOp === 0 && fin.chatting && fin.gone && fin.masked, JSON.stringify({ full: seen.full, fin }));
     const done = await state(page);
-    check("morph: ends in chat — the line on, the face gone, no welcome", done.chatting && done.heroGone && !done.home && !done.focusHome, JSON.stringify(done));
+    check("light: ends in chat — the line on, the face gone, no welcome", done.chatting && done.heroGone && !done.home && !done.focusHome, JSON.stringify(done));
     const g0 = (await look()).grad; await page.waitForTimeout(350); const g1 = (await look()).grad;
-    check("morph: once settled, the line's colours keep sliding", g0 !== g1, JSON.stringify({ g0, g1 }));
+    check("light: once settled, the line's colours keep sliding", g0 !== g1, JSON.stringify({ g0, g1 }));
     // Back home.
     await page.waitForTimeout(600);
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
     await page.click('.ai-chat-menu-item[data-action="clear"]');
     const btr = await record();
-    const back = { drawingIn: null, faceComing: null, faceBack: null, opening: null };
+    const back = { withdrawing: null, faceComing: null, ringUp: null };
     for (const st of dense(btr)) {
-      const nearFace = Math.abs(st.ringMid - st.heroMid) <= 3 && st.ringW <= 132;
-      if (!back.drawingIn && st.ringH <= 1 && st.ringW > 140 && st.ringW < st.W - 40 && st.gone && !st.chatting) back.drawingIn = st;
-      if (!back.faceComing && st.ringH <= 2 && nearFace && !st.gone && st.photoOp > 0.2 && st.photoOp < 0.9) back.faceComing = st;
-      if (!back.faceBack && st.ringH <= 12 && nearFace && st.photoOp >= 0.95) back.faceBack = st;
-      if (!back.opening && back.faceBack && st.ringH > 12 && st.ringH < 50 && st.photoOp >= 0.95) back.opening = st;
-      if (st.ringH >= 60 && st.photoOp >= 0.98 && back.faceBack) break;
+      if (!back.withdrawing && st.lit < 0.9 && st.lit > 0.3 && !st.chatting) back.withdrawing = st;
+      if (!back.faceComing && !st.gone && st.photoOp > 0.2 && st.photoOp < 0.9 && st.lit < 0.7) back.faceComing = st;
+      if (!back.ringUp && st.ringOp > 0.2 && st.ringOp < 0.9 && st.lit < 0.5) back.ringUp = st;
+      if (st.ringOp >= 0.999 && st.lit <= 0.001 && st.photoOp >= 0.98) break;
     }
-    check("morph back 1: the line draws in from both sides toward the face's place, the face still away", !!back.drawingIn, JSON.stringify(back.drawingIn));
-    check("morph back 2: as the line nears the face's place, the face eases in in front of it", !!back.faceComing, JSON.stringify(back.faceComing));
-    check("morph back 3: the face is there before the short line starts to open", !!back.faceBack, JSON.stringify(back.faceBack));
-    check("morph back 4: the short line opens into the ring around the face", !!back.opening, JSON.stringify(back.opening));
+    check("light back 1: the light withdraws toward the left the same way, the name back to the greeting", !!back.withdrawing && oneWay(btr.map((s) => s.head), -1), JSON.stringify(back.withdrawing));
+    check("light back 2: as it goes, the face eases in and its ring fades up around it", !!back.faceComing && !!back.ringUp, JSON.stringify(back));
     const bsp = speeds(btr);
-    check("morph back: one continuous motion — nothing leaps, nothing pops, frame to frame", calm(bsp, 30), JSON.stringify(bsp));
+    check("light back: one continuous motion — nothing leaps, nothing pops, frame to frame", calm(bsp, 30), JSON.stringify(bsp));
     const b2 = await state(page);
     const end = await look();
-    check("morph back: ends at home — the face in its round ring, one shape, no line left over", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.shapes === 1 && Math.abs(end.ringMid - end.faceMid) <= 2, JSON.stringify({ b2, end }));
-    check("morph: no JS errors", errors.length === 0, errors.join(" | "));
+    check("light back: ends at home — the face in its round ring, the line dark", b2.home && !b2.chatting && b2.hero && end.ringH >= 60 && end.ringW >= 60 && end.ringOp === 1 && end.lit <= 0.001, JSON.stringify({ b2, end }));
+    check("light: no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // The theme's banner right under the greeting (as the classic home shows
@@ -3507,7 +3621,7 @@ for (const coop of ["1", "2"]) {
     check("home layout focus: a right-to-left greeting stays anchored under the name (reads right to left, starts at the left)", Math.abs(rtl.textLeft - rtl.nameLeft) <= 1 && rtl.textRight < rtl.boxRight - 40 && rtl.align === "left" && rtl.dir === "rtl", JSON.stringify(rtl));
     // Once a chat starts the greeting leaves with the home; the header keeps its one row.
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await startChat(page);
     await waitUntil(() => chatBodies.length > n);
     await page.waitForTimeout(2200);
     const gone = await page.evaluate(() => { const sub = document.querySelector(".ai-chat-header__sub"); return { greet: !document.querySelector(".ai-chat-focus__greet"), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", hdrH: Math.round(document.querySelector(".ai-chat-header").getBoundingClientRect().height) }; });
@@ -3548,12 +3662,12 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus", { reducedMotion: "reduce" });
     const n = chatBodies.length;
-    await page.click('.ai-chat-focus__pain[data-message]');
+    await startChat(page);
     await page.waitForTimeout(80);
     const at = await state(page);
     await waitUntil(() => chatBodies.length > n);
-    const anim = await page.evaluate(() => { const ring = document.querySelector(".ai-chat-band__ring"), bb = ring.getBBox(), W = document.querySelector(".ai-chat-header").clientWidth; return { running: [...document.querySelectorAll(".ai-chat-hero__photo, .ai-chat-band__ring")].reduce((a, el) => a + el.getAnimations().length, 0), fullLine: bb.height <= 1 && bb.width >= W - 2 }; });
-    check("home layout focus (reduced motion): the line is there at once, edge to edge, the face gone, nothing animates", at.chatting && at.heroGone && !at.home && anim.running === 0 && anim.fullLine, JSON.stringify({ at, anim }));
+    const anim = await page.evaluate(() => { const line = document.querySelector(".ai-chat-band__line"), bb = line.getBBox(), W = document.querySelector(".ai-chat-header").clientWidth, sweep = document.querySelector("#ai-chat-band-s"); return { running: [...document.querySelectorAll(".ai-chat-hero__photo, .ai-chat-band__ring, .ai-chat-band__line")].reduce((a, el) => a + el.getAnimations().length, 0), fullLine: bb.height <= 1 && bb.width >= W - 2 && parseFloat(sweep.getAttribute("x1")) >= W, ringOut: getComputedStyle(document.querySelector(".ai-chat-band__ring")).opacity === "0" }; });
+    check("home layout focus (reduced motion): the line is there at once, edge to edge, the face gone, nothing animates", at.chatting && at.heroGone && !at.home && anim.running === 0 && anim.fullLine && anim.ringOut, JSON.stringify({ at, anim }));
     check("home layout focus (reduced motion): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }

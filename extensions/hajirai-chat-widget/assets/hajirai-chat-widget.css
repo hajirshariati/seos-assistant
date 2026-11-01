@@ -7193,12 +7193,12 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus { --ai-hero: 68px; }
 /* The header: one row — the name, the controls centred beside it — and the
    face on its bottom line (--ai-focus-line, measured by the widget). The
-   name's second line stays out; the greeting stands in for it on the home.
-   The words sit on the row's middle, level with the controls, whether they
-   run one line or two — never down against the line. */
+   name's second line stays out; the greeting stands in for it on the home,
+   sitting just above the line as it always did. In a chat the name alone
+   lifts to the row's middle, level with the controls. */
 .ai-chat-panel.is-focus .ai-chat-header { position: relative; z-index: 5; overflow: visible; align-items: stretch; gap: 0 12px; padding: 0 14px 0 20px; transition: border-color 0.45s ease; }
-.ai-chat-panel.is-focus .ai-chat-header__info { display: flex; flex-direction: column; justify-content: center; min-height: 50px; transition: padding-left 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
-.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: center; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: hidden; text-overflow: clip; }
+.ai-chat-panel.is-focus .ai-chat-header__info { display: flex; flex-direction: column; justify-content: flex-end; min-height: 46px; padding-bottom: 4px; transition: padding-left 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
+.ai-chat-panel.is-focus .ai-chat-header__name { display: grid; align-items: end; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 22px; white-space: normal; overflow: hidden; text-overflow: clip; }
 /* The header's words: at home the store's greeting (its signed-in one for
    a known shopper), in a chat the assistant's name. Both share the name's
    box — so the header keeps its height — and trade places with the name's
@@ -7206,7 +7206,10 @@ button.ai-chat-launcher__text {
    rises in from below, one motion with the band. */
 .ai-chat-panel.is-focus .ai-chat-header__title { grid-area: 1 / 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.4s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .ai-chat-panel.is-focus .ai-chat-header__title--home { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow-wrap: anywhere; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 19px; }
-.ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__title--chat { opacity: 0; transform: translateY(7px); pointer-events: none; }
+/* The name rests 10px up from the box's bottom — the row's middle for a
+   22px line in the 50px row — and rises those 7px into place as it fades in. */
+.ai-chat-panel.is-focus.is-chatting .ai-chat-header__title--chat { transform: translateY(-10px); }
+.ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__title--chat { opacity: 0; transform: translateY(-3px); pointer-events: none; }
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header__title--home { opacity: 0; transform: translateY(-7px); pointer-events: none; }
 .ai-chat-panel.is-focus .ai-chat-header__actions { align-self: center; }
 .ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__info { padding-left: 80px; }
@@ -7222,31 +7225,40 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-below { transform: translateY(100%); opacity: 0; }
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-in { transform: none; opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-above { transform: translateY(-100%); opacity: 0; }
-/* The face on the line, and the band: one SVG shape that is the colour
-   ring around the face at home, the header's line in a chat, and every
-   frame in between (the widget draws it — focusDraw). The photo sits on
-   top of it; a blurred copy of the band is its glow. */
+/* The face on the line, and the band: one SVG with the colour ring around
+   the face at home and the header's line in a chat, the line lit through a
+   travelling mask (the widget draws it — focusDraw). The photo sits on top;
+   a blurred copy of the line is its glow. */
 .ai-chat-panel.is-focus .ai-chat-hero { position: absolute; left: 20px; top: calc(var(--ai-focus-line, 100%) - var(--ai-hero) / 2); width: var(--ai-hero); height: var(--ai-hero); z-index: 4; pointer-events: none; }
 .ai-chat-panel.is-focus .ai-chat-hero.is-gone { display: none; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-hero__mono { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; font: 700 24px/1 var(--seos-font); }
 .ai-chat-panel.is-focus .ai-chat-band { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
-.ai-chat-panel.is-focus .ai-chat-band__ring { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; transition: opacity 0.45s ease; }
-.ai-chat-panel.is-focus .ai-chat-band__glow { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; filter: blur(7px); opacity: 0.45; transition: opacity 0.45s ease; }
+.ai-chat-panel.is-focus .ai-chat-band__ring,
+.ai-chat-panel.is-focus .ai-chat-band__line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ai-chat-panel.is-focus .ai-chat-band__line { opacity: 0.8; transition: opacity 0.45s ease; }
+.ai-chat-panel.is-focus .ai-chat-band__glow { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; filter: blur(7px); opacity: 0.35; transition: opacity 0.45s ease; }
 /* In a chat the line sits a little quieter, and brightens while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
-.ai-chat-panel.is-focus.is-chatting .ai-chat-band__ring { opacity: 0.8; }
-.ai-chat-panel.is-focus.is-chatting .ai-chat-band__glow { opacity: 0.35; }
-.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__ring { opacity: 1; }
+.ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__line { opacity: 1; }
 .ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__glow { animation: aiChatLinePulse 1.5s ease-in-out infinite; }
 @keyframes aiChatLinePulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
+/* On phones and other touch screens the blurred glow goes: Safari draws a
+   blurred SVG stroke as a banded smear under the line. The line and the
+   ring stay crisp on their own, and while Ava writes the line itself
+   breathes instead. */
+@media (max-width: 480px), (hover: none) and (pointer: coarse) {
+  .ai-chat-panel.is-focus .ai-chat-band__glow { display: none; }
+  .ai-chat-panel.is-focus .ai-chat-band__line { opacity: 0.9; }
+  .ai-chat-panel.is-focus.is-chatting.is-streaming .ai-chat-band__line { animation: aiChatLineBreath 1.5s ease-in-out infinite; }
+}
+@keyframes aiChatLineBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 /* Small avatars beside replies: plain — the header line carries the light. */
 .ai-chat-panel.is-focus .ai-chat-msg-avatar { box-shadow: 0 0 0 1px var(--seos-line) !important; }
 
-/* The home: the greeting, the banner (as the classic home shows it), the two
-   shop cards, then Where does it hurt as one row of chips — each place's
-   picture in a coin, and its name. */
+/* The home: the greeting, the banner (as the classic home shows it), then
+   three cards — Foot pain, Footwear, Orthotics. */
 .ai-chat-panel.is-focus .ai-chat-welcome--focus { display: flex; flex-direction: column; gap: 0; padding: 0 4px 0; min-height: 100%; box-sizing: border-box; container-type: inline-size; }
 /* The banner keeps its height here (the page scrolls instead): the home
    below it is taller than the classic one. */
@@ -7262,21 +7274,13 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__card-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .ai-chat-panel.is-focus .ai-chat-focus__card-eyebrow { font: 500 11.5px/14px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus__card-title { font: 700 16px/20px var(--seos-font); letter-spacing: -0.01em; }
-.ai-chat-panel.is-focus .ai-chat-focus__ask { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 22px 0 10px; }
-.ai-chat-panel.is-focus .ai-chat-focus__title { margin: 0; font: 600 15px/20px var(--seos-font); letter-spacing: -0.01em; color: var(--seos-text); }
-.ai-chat-panel.is-focus .ai-chat-focus__hint { margin: 0; font: 400 12.5px/18px var(--seos-font); color: var(--seos-text-2); }
-.ai-chat-panel.is-focus .ai-chat-focus__pains { display: flex; flex-wrap: wrap; gap: 8px; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain { display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px 0 4px; border: 1px solid transparent; border-radius: 999px; background: var(--seos-surface); color: var(--seos-text); font: 600 13.5px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain:hover { background: var(--seos-line); }
-.ai-chat-panel.is-focus .ai-chat-focus__pain:active { transform: scale(0.97); }
-.ai-chat-panel.is-focus .ai-chat-focus__pain-title { font: inherit; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain.is-plain { padding-left: 16px; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain.ai-chat-focus__else { padding: 0 10px; background: transparent; color: var(--seos-text-2); font-weight: 500; }
-.ai-chat-panel.is-focus .ai-chat-focus__pain.ai-chat-focus__else:hover { background: transparent; color: var(--seos-text); }
 .ai-chat-panel.is-focus .ai-chat-focus__coin { width: 38px; height: 38px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--seos-line); }
 .ai-chat-panel.is-focus .ai-chat-focus__coin img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-focus__links { margin-top: auto; padding: 18px 0 6px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
-/* Three compact outlined pills above the text box. */
+/* The text box's hint (Settings → Chat text) keeps to one line — long
+   words end in an ellipsis rather than a second line. */
+.ai-chat-panel.is-focus .ai-chat-input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Three compact outlined pills above the text box — each sends its question. */
 .ai-chat-panel.is-focus .ai-chat-focus__links button { height: 32px; padding: 0 12px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 999px; background: transparent; color: var(--seos-text-2); font: 500 13px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__links button:hover { color: var(--seos-text); border-color: var(--seos-text-2); }
 /* (The ⋮ menu's feedback line opens the store's Typeform survey in the chat's form sheet.) */
@@ -7324,6 +7328,63 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .ai-chat-panel.is-focus .ai-chat-focus__chips button { height: 38px; padding: 0 15px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 999px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); font: 500 13.5px/1 var(--seos-font); cursor: pointer; }
 
+/* ── The Foot pain flow: one question a step ──
+   Progress as short dashes, the question, tiles in two columns (a picture
+   or a line drawing, the answer, what it usually means), a quiet
+   "Something else" under the first, and a bar with Back, the picks so far
+   and Continue. Steps slide: forward the old one slips left as the new one
+   comes in from the right; back, the other way. */
+.ai-chat-panel.is-focus .ai-chat-focus__quiz { display: flex; flex-direction: column; gap: 14px; transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
+.ai-chat-panel.is-focus .ai-chat-focus__quiz.is-leaving,
+.ai-chat-panel.is-focus .ai-chat-focus__quiz.is-entering { opacity: 0; transform: translateX(var(--q-dir, 0px)); }
+.ai-chat-panel.is-focus .ai-chat-focus__quiz.is-leaving { transition-duration: 0.12s, 0.13s; }
+.ai-chat-panel.is-focus .ai-chat-focus__dots { display: flex; gap: 5px; }
+.ai-chat-panel.is-focus .ai-chat-focus__dots i { width: 18px; height: 4px; border-radius: 2px; background: var(--seos-line-strong, rgba(0, 0, 0, 0.14)); transition: background 0.25s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__dots i.is-done { background: var(--seos-ink, #0d0d12); }
+.ai-chat-panel.is-focus .ai-chat-focus__q-head { display: flex; flex-direction: column; gap: 3px; margin-top: -4px; }
+.ai-chat-panel.is-focus .ai-chat-focus__q-title { margin: 0; font: 700 18px/23px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); outline: none; }
+.ai-chat-panel.is-focus .ai-chat-focus__q-hint { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt { position: relative; display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 8px 34px 8px 8px; border: 1.5px solid transparent; border-radius: 14px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt:hover { background: var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus__opt:active { transform: scale(0.98); }
+.ai-chat-panel.is-focus .ai-chat-focus__opt:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt.is-on { border-color: var(--seos-ink, #0d0d12); background: var(--seos-bg-raised, #fff); }
+.ai-chat-panel.is-focus .ai-chat-focus__opt.is-plain { padding-left: 14px; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-ico { width: 38px; height: 38px; flex: none; border-radius: 50%; background: var(--seos-bg-raised, #fff); box-shadow: 0 0 0 1px var(--seos-line); display: inline-flex; align-items: center; justify-content: center; color: var(--seos-text); }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-ico svg { width: 20px; height: 20px; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-title { font: 600 14px/18px var(--seos-font); letter-spacing: -0.01em; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-sub { font: 400 12px/15px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__opt-check { position: absolute; top: 50%; right: 10px; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; display: inline-flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.6); transition: opacity 0.15s ease, transform 0.18s cubic-bezier(0.32, 0.72, 0, 1); }
+.ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__opt-check { color: #0d0d12; }
+.ai-chat-panel.is-focus .ai-chat-focus__opt.is-on .ai-chat-focus__opt-check { opacity: 1; transform: none; }
+.ai-chat-panel.is-focus .ai-chat-focus__quiz .ai-chat-focus__else { align-self: flex-start; margin: -4px 0 0; padding: 4px 6px; border: 0; background: transparent; color: var(--seos-text-2); font: 500 13.5px/1 var(--seos-font); cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus__quiz .ai-chat-focus__else:hover { color: var(--seos-text); }
+.ai-chat-panel.is-focus .ai-chat-focus__bar { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 2px; }
+.ai-chat-panel.is-focus .ai-chat-focus__back { width: 40px; height: 40px; flex: none; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 50%; background: transparent; color: var(--seos-text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus__back svg { transform: rotate(180deg); }
+.ai-chat-panel.is-focus .ai-chat-focus__picks { flex: 1 1 auto; min-width: 0; font: 500 12.5px/16px var(--seos-font); color: var(--seos-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-chat-panel.is-focus .ai-chat-focus__next { height: 44px; flex: none; padding: 0 20px; border: 0; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff; font: 600 14px/1 var(--seos-font); letter-spacing: -0.01em; cursor: pointer; transition: opacity 0.18s ease, transform 0.15s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__next:disabled { opacity: 0.35; cursor: default; }
+.ai-chat-panel.is-focus .ai-chat-focus__next:not(:disabled):active { transform: scale(0.97); }
+/* The summary: each line a row that opens its step again, and the button
+   that sends it all. */
+.ai-chat-panel.is-focus .ai-chat-focus__sum { display: flex; flex-direction: column; border-radius: 14px; background: var(--seos-surface); overflow: hidden; }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 12px 6px 14px; border: 0; border-top: 1px solid var(--seos-line); background: transparent; color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-row:first-child { border-top: 0; }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-row:disabled { cursor: default; }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-row:not(:disabled):hover { background: var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-k { flex: 0 0 104px; font: 500 12.5px/16px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-v { flex: 1 1 auto; min-width: 0; font: 600 14px/18px var(--seos-font); letter-spacing: -0.01em; }
+.ai-chat-panel.is-focus .ai-chat-focus__sum-go { flex: none; color: var(--seos-text-2); display: inline-flex; }
+.ai-chat-panel.is-focus .ai-chat-focus__ask-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 50px; border: 0; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff; font: 600 15px/1 var(--seos-font); letter-spacing: -0.01em; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.18s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__ask-btn:hover { box-shadow: 0 8px 22px rgba(13, 13, 18, 0.18); }
+.ai-chat-panel.is-focus .ai-chat-focus__ask-btn:active { transform: scale(0.98); }
+.ai-chat-panel.is-focus .ai-chat-focus__ask-btn svg { width: 18px; height: 18px; }
+.ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__next,
+.ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__ask-btn { color: #0d0d12; }
+
 /* Narrow chats (the default 500px panel, and phones): two columns of tiles,
    the two line cards stacked — measured on the home itself, not the page. */
 @container (max-width: 479px) {
@@ -7346,14 +7407,22 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__helpers { grid-template-columns: 1fr; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { order: 5; flex-basis: 100%; width: auto; margin: 2px 0 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 36px; font-size: 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__opt { min-height: 56px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__sum-k { flex-basis: 92px; }
+}
+@media (max-width: 340px) {
+  .ai-chat-panel.is-focus .ai-chat-focus__opts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel.is-focus .ai-chat-band__glow { animation: none !important; }
+  .ai-chat-panel.is-focus .ai-chat-band__glow,
+  .ai-chat-panel.is-focus .ai-chat-band__line { animation: none !important; }
   .ai-chat-panel.is-focus .ai-chat-band__ring,
+  .ai-chat-panel.is-focus .ai-chat-band__line,
   .ai-chat-panel.is-focus .ai-chat-band__glow,
   .ai-chat-panel.is-focus .ai-chat-header,
   .ai-chat-panel.is-focus .ai-chat-header__info,
   .ai-chat-panel.is-focus .ai-chat-header__title,
   .ai-chat-panel.is-focus .ai-chat-focus__seg-thumb,
+  .ai-chat-panel.is-focus .ai-chat-focus__quiz,
   .ai-chat-panel.is-focus .ai-chat-focus__swap { transition: none !important; }
 }
