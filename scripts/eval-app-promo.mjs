@@ -93,6 +93,10 @@ await test("focus pictures: a link per card that has a picture, with its fingerp
   const both = focusImagesConfig({ focusFootwearImage: PNG, focusOrthoticsImage: PNG });
   assert.ok(both.orthotics.startsWith(`${FOCUS_IMAGE_PATH}?kind=orthotics&v=`));
   assert.equal(focusImagesConfig({ focusFootwearImage: "https://evil.example/x.png" }).footwear, undefined, "only a stored picture, never a link");
+  const three = focusImagesConfig({ focusPainImage: PNG, focusFootwearImage: PNG, focusOrthoticsImage: PNG });
+  assert.deepEqual(Object.keys(three), ["pain", "footwear", "orthotics"], "the Foot pain card too");
+  assert.match(three.pain, /^\/apps\/hajirai\/focus-image\?kind=pain&v=[a-z0-9]+$/);
+  assert.equal(focusImageKey("pain"), "focusPainImage");
   assert.equal(focusImageKey("footwear"), "focusFootwearImage");
   assert.equal(focusImageKey("orthotics"), "focusOrthoticsImage");
   assert.equal(focusImageKey("shoes"), "", "unknown cards have no key");

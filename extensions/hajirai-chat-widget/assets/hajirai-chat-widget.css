@@ -7326,6 +7326,16 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__helpers .ai-chat-helper { min-width: 0; }
 .ai-chat-panel.is-focus .ai-chat-focus__helpers .ai-chat-helper__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-chat-panel.is-focus .ai-chat-focus__helpers:has(> :nth-child(2)) .ai-chat-helper__go { display: none; }
+/* The seasonal row: the season's icon on the same soft tint as the classic home's tile. */
+.ai-chat-panel .ai-chat-helper--season .ai-chat-helper__icon { background: var(--seos-surface); box-shadow: inset 0 0 0 1px transparent; }
+.ai-chat-panel .ai-chat-helper--season.sea-fall .ai-chat-helper__icon { background: linear-gradient(115deg, #FFF4E9, #FDEADB); box-shadow: inset 0 0 0 1px rgba(201, 83, 26, 0.12); }
+.ai-chat-panel .ai-chat-helper--season.sea-winter .ai-chat-helper__icon { background: linear-gradient(115deg, #F0F7FE, #E5EFFB); box-shadow: inset 0 0 0 1px rgba(43, 120, 194, 0.12); }
+.ai-chat-panel .ai-chat-helper--season.sea-spring .ai-chat-helper__icon { background: linear-gradient(115deg, #FEF0F5, #EEF8EE); box-shadow: inset 0 0 0 1px rgba(208, 67, 122, 0.12); }
+.ai-chat-panel .ai-chat-helper--season.sea-summer .ai-chat-helper__icon { background: linear-gradient(115deg, #FFF8E1, #FFEDD9); box-shadow: inset 0 0 0 1px rgba(224, 122, 11, 0.14); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-fall .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(255, 140, 60, 0.17), rgba(230, 90, 40, 0.09)); box-shadow: inset 0 0 0 1px rgba(255, 140, 60, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-winter .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(80, 160, 240, 0.17), rgba(43, 120, 194, 0.09)); box-shadow: inset 0 0 0 1px rgba(80, 160, 240, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-spring .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(240, 110, 160, 0.17), rgba(90, 190, 110, 0.09)); box-shadow: inset 0 0 0 1px rgba(240, 110, 160, 0.18); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-helper--season.sea-summer .ai-chat-helper__icon { background: linear-gradient(115deg, rgba(255, 190, 60, 0.17), rgba(224, 122, 11, 0.09)); box-shadow: inset 0 0 0 1px rgba(255, 190, 60, 0.18); }
 /* Women's / Men's: a switch in the head, beside the close button with a
    little room from it (its thumb slides); on a phone it takes its own
    line under the title. Browse by and the button at the end follow it. */

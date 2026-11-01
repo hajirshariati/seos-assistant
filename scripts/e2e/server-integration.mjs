@@ -556,9 +556,11 @@ await test("Focus home pictures: widget-config links each card that has one; the
   assert.deepEqual(cfg0.focusImages, {}, "no pictures → nothing to link");
   assert.equal((await fetch(signed("/focus-image", { kind: "footwear", v: "x" }))).status, 404, "no picture → nothing served");
   const pngBytes = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13];
-  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: `data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}` } });
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: `data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}`, focusPainImage: `data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}` } });
   await configCacheExpiry();
   const links = (await (await fetch(signed("/widget-config"))).json()).focusImages;
+  assert.match(links.pain, /^\/apps\/hajirai\/focus-image\?kind=pain&v=[a-z0-9]+$/, "the Foot pain card's picture too");
+  assert.equal((await fetch(signed("/focus-image", { kind: "pain", v: links.pain.split("v=")[1] }))).status, 200, "served for the Foot pain card");
   assert.match(links.footwear, /^\/apps\/hajirai\/focus-image\?kind=footwear&v=[a-z0-9]+$/, "the picture's link, with its fingerprint");
   assert.equal(links.orthotics, undefined, "the other card has none");
   const pic = await fetch(signed("/focus-image", { kind: "footwear", v: links.footwear.split("v=")[1] }));
@@ -569,7 +571,7 @@ await test("Focus home pictures: widget-config links each card that has one; the
   assert.equal((await fetch(signed("/focus-image", { kind: "shoes", v: "x" }))).status, 404, "an unknown card → nothing served");
   const unsignedPic = await fetch(`http://localhost:${APP_PORT}/focus-image?shop=${SHOP}&kind=footwear&v=x`);
   assert.ok(unsignedPic.status >= 400 && unsignedPic.status < 500, `unsigned → ${unsignedPic.status}`);
-  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: "" } });
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { focusFootwearImage: "", focusPainImage: "" } });
   await configCacheExpiry();
   assert.deepEqual((await (await fetch(signed("/widget-config"))).json()).focusImages, {}, "removed → no link");
 });

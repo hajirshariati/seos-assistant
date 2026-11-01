@@ -224,6 +224,7 @@ model ShopConfig {
   // /apps/hajirai/focus-image?kind=footwear|orthotics. "" → a line drawing.
   focusFootwearImage   String   @default("")
   focusOrthoticsImage  String   @default("")
+  focusPainImage       String   @default("")
   // The chat's own words (Settings → Look & feel → Chat text): its name,
   // welcome greetings, the Start here / Popular headings, the chat button and
   // message box text. JSON; a blank one falls back to the theme editor's.

@@ -139,7 +139,8 @@ export const loader = async ({ request }) => {
     appPromoButton: config.appPromoButton || "",
     appPromoDefaultText: defaultAppText(shopName),
     appPromoImage: config.appPromoImage || "",
-    // Focus home (Theme editor → Home layout → Focus): the line cards' pictures.
+    // Focus home (Theme editor → Home layout → Focus): the cards' pictures.
+    focusPainImage: config.focusPainImage || "",
     focusFootwearImage: config.focusFootwearImage || "",
     focusOrthoticsImage: config.focusOrthoticsImage || "",
     buyNowEnabled: config.buyNowEnabled === true,
@@ -223,7 +224,7 @@ export const action = async ({ request }) => {
     return { appImageSaved: true, appImage: image };
   }
 
-  // Focus home → the Footwear / Orthotics card pictures (resized in the browser).
+  // Focus home → the Foot pain / Footwear / Orthotics card pictures (resized in the browser).
   if (intent === "save_focus_image") {
     const key = focusImageKey(String(formData.get("kind") || ""));
     if (!key) return { focusImageError: "Unknown card." };
@@ -947,8 +948,9 @@ function LookSection({ d, values, set }) {
         </Row>
       </Group>
       <Group title="Focus home">
-        <Row stack help="The chat's second home layout — the foot-pain question first, then Footwear and Orthotics as two cards. Switch layouts in the theme editor (AVA → Home layout); try it on a draft theme first. The pictures below go on those two cards.">
+        <Row stack help="The chat's second home layout — Foot pain, Footwear and Orthotics as three cards, each with a picture filling its right side. Switch layouts in the theme editor (AVA → Home layout); try it on a draft theme first. The pictures below go on those cards">
           <BlockStack gap="300">
+            <FocusPicture kind="pain" initial={d.focusPainImage} />
             <FocusPicture kind="footwear" initial={d.focusFootwearImage} />
             <FocusPicture kind="orthotics" initial={d.focusOrthoticsImage} />
           </BlockStack>
@@ -1100,9 +1102,9 @@ function AppPicture({ initial, disabled }) {
   );
 }
 
-// Focus home (Theme editor → Home layout → Focus): a picture for the
-// Footwear card and one for the Orthotics card. Without one, the card shows
-// a line drawing.
+// Focus home (Theme editor → Home layout → Focus): a picture for each of
+// the three cards. Without one, Foot pain shows the heel picture built in
+// and the line cards a line drawing.
 function FocusPicture({ kind, initial }) {
   const fetcher = useFetcher();
   const inputRef = useRef(null);
@@ -1112,7 +1114,8 @@ function FocusPicture({ kind, initial }) {
   const image = picked ?? saved ?? initial ?? "";
   const error = localError || fetcher.data?.focusImageError || "";
   const busy = fetcher.state !== "idle";
-  const title = kind === "footwear" ? "Footwear card" : "Orthotics card";
+  const title = kind === "pain" ? "Foot pain card" : kind === "footwear" ? "Footwear card" : "Orthotics card";
+  const without = kind === "pain" ? "Without one, the card shows the heel picture built in." : "Without one, the card shows a line drawing.";
   const send = (value) => {
     const fd = new FormData();
     fd.set("intent", "save_focus_image");
@@ -1137,10 +1140,10 @@ function FocusPicture({ kind, initial }) {
   const remove = () => { setPicked(""); send(""); };
   return (
     <div className="set-app-pic">
-      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`}>{image ? <img src={image} alt="" /> : <span aria-hidden="true">{kind === "footwear" ? "👟" : "🦶"}</span>}</div>
+      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`}>{image ? <img src={image} alt="" /> : kind === "pain" ? <img src="/focus-pain-heel.png" alt="" /> : <span aria-hidden="true">{kind === "footwear" ? "👟" : "🦶"}</span>}</div>
       <div className="set-app-pic__body">
         <Text as="p" variant="bodyMd" fontWeight="semibold">{title}</Text>
-        <Text as="p" variant="bodySm" tone="subdued">A square picture looks best — it fills the card's rounded box. Without one, the card shows a line drawing.</Text>
+        <Text as="p" variant="bodySm" tone="subdued">A square picture looks best — it fills the card's right side. {without}</Text>
         <InlineStack gap="200" blockAlign="center">
           <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
           <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked}>{image ? "Replace picture" : "Upload picture"}</Button>

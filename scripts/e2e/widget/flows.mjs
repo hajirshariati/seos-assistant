@@ -3349,6 +3349,29 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (one-line greeting): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
+  // The seasonal button (Settings → Seasonal button) sits in the Footwear sheet too, beside Find my shoe size, in the classic tile's words and tint; a tap sends its words marked as the seasonal button.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/apps/hajirai/widget-config**", async (r) => { const res = await r.fetch(); const j = await res.json(); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...j, seasonalCta: { on: true, label: "Fall favorites", icon: "fall", color: "fall" } }) }); });
+    await page.goto("http://localhost:4789/full?home=focus&qp=1");
+    await page.click(".ai-chat-launcher");
+    await page.waitForTimeout(900);
+    await page.click('[data-focus-sheet="footwear"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(400);
+    const sea = await page.evaluate(() => { const rows = [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-focus__helpers .ai-chat-helper")]; const s = document.querySelector(".ai-chat-focus-sheet .ai-chat-helper--season"); const tf = document.querySelector('.ai-chat-focus-sheet [data-helper="truefit"]'); const r = (el) => el.getBoundingClientRect(); return { rows: rows.map((b) => b.querySelector(".ai-chat-helper__title").textContent), last: rows[rows.length - 1] === s, title: s?.querySelector(".ai-chat-helper__title").textContent, sub: s?.querySelector(".ai-chat-helper__sub").textContent, icon: !!s?.querySelector(".ai-chat-helper__icon .ai-sea-ic--fall"), tinted: s ? getComputedStyle(s.querySelector(".ai-chat-helper__icon")).backgroundImage !== "none" : false, seasonal: s?.getAttribute("data-seasonal") === "1", message: s?.getAttribute("data-message"), beside: !!tf && !!s && Math.abs(r(tf).top - r(s).top) < 1 && r(s).left > r(tf).right, noArrow: s ? getComputedStyle(s.querySelector(".ai-chat-helper__go")).display === "none" : false }; });
+    check("footwear sheet (seasonal button on): its row beside Find my shoe size — the button's words, the season's icon on its tint, no arrow when two rows share the line", sea.title === "Fall favorites" && sea.sub === "This season’s picks" && sea.icon && sea.tinted && sea.seasonal && sea.message === "Fall favorites" && sea.last && (!sea.rows.includes("Find my shoe size") || (sea.beside && sea.noArrow)), JSON.stringify(sea));
+    const n = chatBodies.length;
+    await page.click(".ai-chat-focus-sheet .ai-chat-helper--season");
+    await waitUntil(() => chatBodies.length > n);
+    const sent = chatBodies.at(-1);
+    check("footwear sheet (seasonal button on): a tap closes the sheet and sends its words, marked as the seasonal button (the chat shows its collection)", sent?.message === "Fall favorites" && sent?.seasonal === true && sent?.typed === false && !(await state(page)).sheet, JSON.stringify({ sent, s: await state(page) }));
+    check("footwear sheet (seasonal button on): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
   // The Foot pain sheet's other paths: footwear (the kind, the width), "show me both", Men's, and reopened.
   {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
@@ -3671,14 +3694,20 @@ for (const coop of ["1", "2"]) {
   }
   // Pictures on the two line cards (Settings → Focus home).
   {
-    const { ctx, page, errors } = await open("/full?home=focus&pics=1");
+    const { ctx, page, errors } = await open("/full?home=focus&pics=1&qp=1");
     await page.waitForTimeout(600);
     const pics = await page.evaluate(() => ({ cards: [...document.querySelectorAll(".ai-chat-focus__card-ico")].map((b) => ({ pic: b.classList.contains("has-pic"), src: b.querySelector("img")?.getAttribute("src") || "" })) }));
-    check("home layout focus: the cards show the store's pictures when set (the heel first)", pics.cards.length === 3 && pics.cards.every((c) => c.pic) && pics.cards[0].src === "/focus-pain-heel.png" && pics.cards[1].src === "/pic-footwear.svg" && pics.cards[2].src === "/pic-orthotics.svg", JSON.stringify(pics));
+    check("home layout focus: the cards show the store's pictures when set — the Foot pain card's own picture in place of the heel", pics.cards.length === 3 && pics.cards.every((c) => c.pic) && pics.cards[0].src === "/pic-pain.svg" && pics.cards[1].src === "/pic-footwear.svg" && pics.cards[2].src === "/pic-orthotics.svg", JSON.stringify(pics));
     await page.click('[data-focus-sheet="orthotics"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
     const head = await page.evaluate(() => document.querySelector(".ai-chat-focus-sheet__head .ai-chat-focus__card-ico img")?.getAttribute("src") || "");
     check("home layout focus: the sheet's head shows the same picture", head === "/pic-orthotics.svg", head);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    await page.click('[data-focus-sheet="pain"]');
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const painHead = await page.evaluate(() => ({ head: document.querySelector(".ai-chat-focus-sheet__head .ai-chat-focus__card-ico img")?.getAttribute("src") || "", tile: document.querySelector('[data-pain-opt="heel"] .ai-chat-focus__coin img')?.getAttribute("src") || "" }));
+    check("home layout focus: the Foot pain sheet's head shows the store's picture while the heel tile inside keeps the heel", painHead.head === "/pic-pain.svg" && /focus-pain-heel/.test(painHead.tile), JSON.stringify(painHead));
     check("home layout focus (pictures): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }

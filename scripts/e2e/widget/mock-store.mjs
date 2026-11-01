@@ -290,6 +290,7 @@ export function start(port) {
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
         if (/^\/focus-pain-(heel|arch|ball|toes)\.png$/.test(u.pathname)) return send(200, "image/png", fs.readFileSync(W + u.pathname.slice(1)));
+        if (u.pathname === "/pic-pain.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#ffe3e3"/><circle cx="80" cy="80" r="46" fill="#ff5a5a"/></svg>`);
         if (u.pathname === "/pic-footwear.svg" || u.pathname === "/pic-orthotics.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${u.pathname.includes("foot") ? "#c7d7ff" : "#ffd9c2"}"/><circle cx="80" cy="80" r="44" fill="#fff"/></svg>`);
         if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {
           let a = null;
@@ -357,7 +358,7 @@ export function start(port) {
           chatRating: (() => { const r = (String(req.headers.referer || "").match(/[?&]rate=(\d)/) || [])[1]; return r ? { on: true, after: Number(r) } : { on: false, after: 3 }; })(),
           // The app message: on (links from the footer) only on ?app= pages; ?app=set: Settings links (QR from /app-qr); ?app=txt: its own text and button.
           // ?pics=1: the Focus home's card pictures (Settings → Focus home).
-          focusImages: /[?&]pics=1/.test(String(req.headers.referer || "")) ? { footwear: "/pic-footwear.svg", orthotics: "/pic-orthotics.svg" } : {},
+          focusImages: /[?&]pics=1/.test(String(req.headers.referer || "")) ? { pain: "/pic-pain.svg", footwear: "/pic-footwear.svg", orthotics: "/pic-orthotics.svg" } : {},
           ...(/[?&]gct=1/.test(String(req.headers.referer || "")) ? { rotateGreetingCta: true, greetingCtaTranslations: [{ text: "¿En qué puedo ayudarte hoy?", dir: "ltr", code: "es" }, { text: "كيف يمكنني مساعدتك اليوم؟", dir: "rtl", code: "ar" }] } : {}),
           appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=img/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "", image: /[?&]app=imgbad/.test(String(req.headers.referer || "")) ? "/apps/hajirai/app-image?v=missing" : "/apps/hajirai/app-image?v=test1" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           whichOrthotic: /[?&]wo=1/.test(String(req.headers.referer || "")) ? { form: "ojyWbTvZ", label: "Identify my orthotic" } : null,

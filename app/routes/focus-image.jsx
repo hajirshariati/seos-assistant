@@ -1,5 +1,5 @@
-// A picture of the Focus home's line cards (Settings → Focus home):
-// /apps/hajirai/focus-image?kind=footwear|orthotics&v=<fingerprint>. The
+// A picture of the Focus home's cards (Settings → Focus home):
+// /apps/hajirai/focus-image?kind=pain|footwear|orthotics&v=<fingerprint>. The
 // link changes with the picture, so it's kept for a long time.
 import { authenticate } from "../shopify.server";
 import { getShopConfigCached } from "../models/ShopConfig.server";

@@ -114,7 +114,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
      picks them up on its next tick. */
   FOCUS_ROTATE=d.rotateGreetingCta!==false;
   /* Settings → Focus home: pictures for the Footwear and Orthotics cards. */
-  if(d.focusImages&&typeof d.focusImages==='object'){FOCUS_PICS={footwear:safeUrl(d.focusImages.footwear),orthotics:safeUrl(d.focusImages.orthotics)};try{localStorage.setItem(FOCUS_PICS_KEY,JSON.stringify(FOCUS_PICS))}catch(e){}if(FOCUS)focusRefreshPics()}
+  if(d.focusImages&&typeof d.focusImages==='object'){FOCUS_PICS={pain:safeUrl(d.focusImages.pain),footwear:safeUrl(d.focusImages.footwear),orthotics:safeUrl(d.focusImages.orthotics)};try{localStorage.setItem(FOCUS_PICS_KEY,JSON.stringify(FOCUS_PICS))}catch(e){}if(FOCUS)focusRefreshPics()}
   if(GREET_CTA_ROTATE && d.rotateGreetingCta!==false && Array.isArray(d.greetingCtaTranslations) && d.greetingCtaTranslations.length>0){
     GREET_CTA_FRAMES=[{text:GREETCTA,dir:'ltr',code:'en'}].concat(d.greetingCtaTranslations);
   }
@@ -1706,9 +1706,10 @@ function focusZone(kind){
 }
 /* The cards' pictures: the two lines' from Settings → Focus home, Foot
    pain's the heel picture above; line drawings without. */
-var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={footwear:'',orthotics:''};
-try{var _fpics=JSON.parse(localStorage.getItem(FOCUS_PICS_KEY)||'null');if(_fpics&&typeof _fpics==='object')FOCUS_PICS={footwear:safeUrl(_fpics.footwear),orthotics:safeUrl(_fpics.orthotics)}}catch(e){}
-function focusPicOf(kind){return kind==='pain'?safeUrl(FOCUS_PAIN_IMG.heel||''):(FOCUS_PICS[kind]||'')}
+var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={pain:'',footwear:'',orthotics:''};
+try{var _fpics=JSON.parse(localStorage.getItem(FOCUS_PICS_KEY)||'null');if(_fpics&&typeof _fpics==='object')FOCUS_PICS={pain:safeUrl(_fpics.pain),footwear:safeUrl(_fpics.footwear),orthotics:safeUrl(_fpics.orthotics)}}catch(e){}
+/* The store's picture for the card (Settings → Focus home); Foot pain falls back to the heel picture built in. */
+function focusPicOf(kind){return FOCUS_PICS[kind]||(kind==='pain'?safeUrl(FOCUS_PAIN_IMG.heel||''):'')}
 function focusLineIcon(kind,size){
   var pic=focusPicOf(kind);
   return pic?'<img src="'+pic+'" alt="" decoding="async">':(kind==='footwear'?WI.shoe:kind==='pain'?WI.foot:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"');
@@ -1824,7 +1825,7 @@ function fbOrthotic(){return FB_ICON==='orthotic'||/orthotic|insole|\bfit\b/i.te
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
 var focusSheetEl=null,focusSheetOpener=null,focusSheetShut=0,focusBrowseIdx={footwear:0,orthotics:0};
-function focusHelperRow(attrs,icon,title,sub){return '<button type="button" class="ai-chat-helper" '+attrs+'><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'}
+function focusHelperRow(attrs,icon,title,sub,cls){return '<button type="button" class="ai-chat-helper'+(cls?' '+cls:'')+'" '+attrs+'><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'}
 function focusSheetRows(kind){
   var rows='';
   if(kind==='footwear'&&tfPayload()){
@@ -1834,6 +1835,11 @@ function focusSheetRows(kind){
     else if(onShoe)rows+=focusHelperRow('data-helper="truefit"',tfLogo(24),'Find my size','True Fit · for this shoe');
     else rows+=focusHelperRow('data-helper="truefit"',tfLogo(24),'Find my shoe size','True Fit · pick a shoe, get its size');
   }
+  /* The seasonal button (Settings → Seasonal button), as a row like the
+     classic home's tile: its words, the season's icon on its tint; a tap
+     sends its words marked as the seasonal button, so the chat shows its
+     collection. */
+  if(kind==='footwear'&&SEA_ON)rows+=focusHelperRow('data-message="'+esc(SEA_LABEL)+'" data-seasonal="1"',SEASON_ICONS[SEA_ICON]||SEASON_ICONS.fall,SEA_LABEL,'This season\u2019s picks','ai-chat-helper--season'+(SEA_COLOR!=='plain'?' sea-'+SEA_COLOR:''));
   if(kind==='orthotics'){
     if(ff){
       var mine=savedFit();
@@ -2142,7 +2148,7 @@ if(FOCUS){
     var pd=e.target.closest('[data-pain-edit]');
     if(pd){e.preventDefault();focusPainEdit(sh,pd.getAttribute('data-pain-edit'));return}
     var m=e.target.closest('[data-message]');
-    if(m){e.preventDefault();var t=m.getAttribute('data-message');closeFocusSheet(true);focusSend(t)}
+    if(m){e.preventDefault();var t=m.getAttribute('data-message');SEA_TAP=m.hasAttribute('data-seasonal')?t:'';closeFocusSheet(true);focusSend(t)}
   });
   panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&focusSheetEl){e.preventDefault();e.stopPropagation();closeFocusSheet()}},true);
   /* Anywhere outside the sheet — the dimmed chat or the page itself — closes
