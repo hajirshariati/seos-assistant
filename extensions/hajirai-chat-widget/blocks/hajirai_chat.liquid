@@ -4,41 +4,49 @@
   Chat routing goes through the app proxy at /apps/hajirai/chat.
 {% endcomment %}
 
+{%- comment -%}
+  The chat's words are no longer theme settings. Its name, greetings,
+  message box and note come from the app (Settings → Look & feel → Chat
+  text), with these as the built-in fallback; the Classic home's Start here
+  and Popular buttons are built in. Aetrex keeps the words its theme had.
+{%- endcomment -%}
+{%- assign ava_words = false -%}
+{%- if shop.permanent_domain == 'f031fc-3.myshopify.com' -%}{%- assign ava_words = true -%}{%- endif -%}
 <script>
   window.__AI_CHAT_CONFIG = {
     shopDomain: {{ shop.permanent_domain | json }},
     shopName: {{ shop.name | json }},
-    greeting: {{ block.settings.greeting | json }},
-    greetingLoggedIn: {{ block.settings.greeting_logged_in | json }},
-    greetingCta: {{ block.settings.greeting_cta | json }},
+    greeting: {% if ava_words %}"Hi! I'm Ava, your personal shopping assistant."{% else %}"Hi! I'm your personal shopping assistant."{% endif %},
+    greetingLoggedIn: {% if ava_words %}"Welcome back, {name}!"{% else %}"Welcome back, {name}! How can I help you today?"{% endif %},
+    greetingCta: {% if ava_words %}"How can I help you today?"{% else %}"What can I help you find today?"{% endif %},
     avatarUrl: {% if block.settings.avatar != blank %}{{ block.settings.avatar | image_url: width: 200 | json }}{% else %}""{% endif %},
     bannerUrl: {% if block.settings.banner != blank %}{{ block.settings.banner | image_url: width: 800 | json }}{% else %}""{% endif %},
-    assistantName: {{ block.settings.assistant_name | json }},
-    launcherPlaceholder: {{ block.settings.launcher_placeholder | json }},
-    inputPlaceholder: {{ block.settings.input_placeholder | json }},
+    assistantName: {% if ava_words %}"Aetrex Virtual Assistant"{% else %}"AI Shopping Assistant"{% endif %},
+    launcherPlaceholder: {% if ava_words %}"What can I help you find today?"{% else %}"How can I help you today?"{% endif %},
+    inputPlaceholder: {% if ava_words %}"Chat with Aetrex virtual assistant"{% else %}"How can I help you today?"{% endif %},
     widgetPosition: {{ block.settings.position | json }},
-    cta1Label: {{ block.settings.cta1_label | json }},
-    cta1Message: {{ block.settings.cta1_message | json }},
-    cta1Icon: {{ block.settings.cta1_icon | json }},
-    cta2Label: {{ block.settings.cta2_label | json }},
-    cta2Message: {{ block.settings.cta2_message | json }},
-    cta2Icon: {{ block.settings.cta2_icon | json }},
-    cta3Label: {{ block.settings.cta3_label | json }},
-    cta3Message: {{ block.settings.cta3_message | json }},
-    cta3Icon: {{ block.settings.cta3_icon | json }},
-    cta4Label: {{ block.settings.cta4_label | json }},
-    cta4Message: {{ block.settings.cta4_message | json }},
-    cta4Icon: {{ block.settings.cta4_icon | json }},
-    ctaHint: {{ block.settings.cta_hint | json }},
-    ctaHintLoggedIn: {{ block.settings.cta_hint_logged_in | json }},
-    quickPick1Label: {{ block.settings.qp1_label | json }},
-    quickPick1Message: {{ block.settings.qp1_message | json }},
-    quickPick2Label: {{ block.settings.qp2_label | json }},
-    quickPick2Message: {{ block.settings.qp2_message | json }},
-    quickPick3Label: {{ block.settings.qp3_label | json }},
-    quickPick3Message: {{ block.settings.qp3_message | json }},
-    quickPick4Label: {{ block.settings.qp4_label | json }},
-    quickPick4Message: {{ block.settings.qp4_message | json }},
+    cta1Label: {% if ava_words %}"Shop Footwear"{% else %}"Shop Shoes"{% endif %},
+    cta1Message: {% if ava_words %}"Help me find a comfort footwear"{% else %}"Help me choose Aetrex shoes based on my style, comfort needs, and activities."{% endif %},
+    cta1Icon: {% if ava_words %}"auto"{% else %}"auto"{% endif %},
+    cta2Label: {% if ava_words %}"Manage my order"{% else %}"Shop Orthotics"{% endif %},
+    cta2Message: {% if ava_words %}"Show me my recent orders"{% else %}"Help me choose the right Aetrex orthotics based on my arch support needs, footwear, and daily activities."{% endif %},
+    cta2Icon: {% if ava_words %}"auto"{% else %}"auto"{% endif %},
+    cta3Label: {% if ava_words %}"Shop Orthotics"{% else %}"Size & Fit Help"{% endif %},
+    cta3Message: {% if ava_words %}"Help me find an orthotic"{% else %}"Help me find the right Aetrex shoe size and fit."{% endif %},
+    cta3Icon: {% if ava_words %}"auto"{% else %}"auto"{% endif %},
+    cta4Label: {% if ava_words %}"About Aetrex"{% else %}"Track Order"{% endif %},
+    cta4Message: {% if ava_words %}"Tell me about Aetrex"{% else %}"Help me check the status of my order."{% endif %},
+    cta4Icon: {% if ava_words %}"auto"{% else %}"auto"{% endif %},
+    ctaHint: {% if ava_words %}""{% else %}""{% endif %},
+    ctaHintLoggedIn: {% if ava_words %}""{% else %}""{% endif %},
+    quickPick1Label: {% if ava_words %}"Share feedback"{% else %}"Best Sellers"{% endif %},
+    quickPick1Message: {% if ava_words %}"https://irle3andv1z.typeform.com/to/jdXBrXMa"{% else %}"Show me the most popular Aetrex products."{% endif %},
+    quickPick2Label: {% if ava_words %}"New Arrivals"{% else %}"New Arrivals"{% endif %},
+    quickPick2Message: {% if ava_words %}"Show me what's new"{% else %}"Show me the latest Aetrex shoes and orthotics."{% endif %},
+    quickPick3Label: {% if ava_words %}"Return policy"{% else %}"Sale Items"{% endif %},
+    quickPick3Message: {% if ava_words %}"What is your return and refund policy?"{% else %}"Show me Aetrex products currently on sale."{% endif %},
+    quickPick4Label: {% if ava_words %}"Browse deals"{% else %}"Returns"{% endif %},
+    quickPick4Message: {% if ava_words %}"Show me current sales and promotions"{% else %}"Help me understand Aetrex's return and exchange policy."{% endif %},
     showBanner: {{ block.settings.show_banner | json }},
     launcherWidth: {{ block.settings.launcher_width | json }},
     chatWidth: {{ block.settings.chat_width | json }},
@@ -52,7 +60,7 @@
     customerLoginUrl: {{ routes.account_login_url | json }},
     customerLogoutUrl: {{ routes.account_logout_url | json }},
     customerId: {% if customer %}{{ customer.id | json }}{% else %}null{% endif %},
-    disclaimerText: {{ block.settings.disclaimer | json }},
+    disclaimerText: {% if ava_words %}"Virtual assistant responses may be inaccurate and are not medical advice. Chats may be recorded and shared with third-party providers. Do not share sensitive personal, payment, or health information. See our"{% else %}"Powered by AI"{% endif %},
     privacyUrl: {{ block.settings.privacy_url | json }},
     supportUrl: {{ block.settings.support_url | json }}
   };
@@ -109,28 +117,12 @@
   "target": "body",
   "settings": [
     {
+      "type": "paragraph",
+      "content": "The chat's words (its name, greetings, message box, note, and the Focus home's cards and links) are set in the AVA app → Settings → Look & feel."
+    },
+    {
       "type": "header",
       "content": "Assistant Identity"
-    },
-    {
-      "type": "text",
-      "id": "assistant_name",
-      "label": "Assistant Name",
-      "default": "AI Shopping Assistant"
-    },
-    {
-      "type": "textarea",
-      "id": "greeting",
-      "label": "Greeting",
-      "info": "The chat's first words. On the Focus home it stands at the top of the chat in place of the name, which takes over once a chat starts; on the Classic home it is the welcome title.",
-      "default": "Hi! I'm your personal shopping assistant."
-    },
-    {
-      "type": "textarea",
-      "id": "greeting_logged_in",
-      "label": "Greeting (logged in)",
-      "info": "The same, for logged-in customers. Use {name} for their first name. Leave blank to use the greeting above.",
-      "default": "Welcome back, {name}! How can I help you today?"
     },
     {
       "type": "image_picker",
@@ -147,28 +139,6 @@
       "id": "show_banner",
       "label": "Show banner on welcome screen",
       "default": true
-    },
-    {
-      "type": "header",
-      "content": "Messages"
-    },
-    {
-      "type": "text",
-      "id": "greeting_cta",
-      "label": "Greeting CTA",
-      "default": "What can I help you find today?"
-    },
-    {
-      "type": "text",
-      "id": "launcher_placeholder",
-      "label": "Launcher Placeholder",
-      "default": "How can I help you today?"
-    },
-    {
-      "type": "text",
-      "id": "input_placeholder",
-      "label": "Chat Input Placeholder",
-      "default": "How can I help you today?"
     },
     {
       "type": "header",
@@ -221,8 +191,14 @@
       "label": "Home layout",
       "info": "Classic is the current welcome screen. Focus opens on the foot-pain question with six places it can hurt, then Footwear and Orthotics as two cards whose tools open in a sheet. Try it on a draft theme first. (Rotating the welcome line through languages is set in the app's Settings.)",
       "options": [
-        { "value": "classic", "label": "Classic" },
-        { "value": "focus", "label": "Focus — foot pain specialist first" }
+        {
+          "value": "classic",
+          "label": "Classic"
+        },
+        {
+          "value": "focus",
+          "label": "Focus — foot pain specialist first"
+        }
       ],
       "default": "classic"
     },
@@ -234,390 +210,6 @@
       "type": "header",
       "content": "Welcome CTAs & Quick Picks",
       "info": "Up to 4 starting questions, plus shorter quick-pick prompts."
-    },
-    {
-      "type": "text",
-      "id": "cta1_label",
-      "label": "CTA 1 Label",
-      "default": "Shop Shoes"
-    },
-    {
-      "type": "text",
-      "id": "cta1_message",
-      "label": "CTA 1 Message",
-      "default": "Help me choose Aetrex shoes based on my style, comfort needs, and activities."
-    },
-    {
-      "type": "select",
-      "id": "cta1_icon",
-      "label": "CTA 1 Icon",
-      "default": "auto",
-      "options": [
-        {
-          "value": "auto",
-          "label": "Automatic (from the label)"
-        },
-        {
-          "value": "search",
-          "label": "Search"
-        },
-        {
-          "value": "sizing",
-          "label": "Ruler (sizing)"
-        },
-        {
-          "value": "shoe",
-          "label": "Shoe"
-        },
-        {
-          "value": "orthotic",
-          "label": "Insoles (orthotics)"
-        },
-        {
-          "value": "order",
-          "label": "Box (orders)"
-        },
-        {
-          "value": "shipping",
-          "label": "Truck (shipping)"
-        },
-        {
-          "value": "returns",
-          "label": "Return arrow"
-        },
-        {
-          "value": "deals",
-          "label": "Tag (deals)"
-        },
-        {
-          "value": "gift",
-          "label": "Gift"
-        },
-        {
-          "value": "heart",
-          "label": "Heart"
-        },
-        {
-          "value": "star",
-          "label": "Star"
-        },
-        {
-          "value": "support",
-          "label": "Chat bubble (support)"
-        },
-        {
-          "value": "store",
-          "label": "Map pin (stores)"
-        },
-        {
-          "value": "sparkle",
-          "label": "Sparkle"
-        }
-      ]
-    },
-    {
-      "type": "text",
-      "id": "cta2_label",
-      "label": "CTA 2 Label",
-      "default": "Shop Orthotics"
-    },
-    {
-      "type": "text",
-      "id": "cta2_message",
-      "label": "CTA 2 Message",
-      "default": "Help me choose the right Aetrex orthotics based on my arch support needs, footwear, and daily activities."
-    },
-    {
-      "type": "select",
-      "id": "cta2_icon",
-      "label": "CTA 2 Icon",
-      "default": "auto",
-      "options": [
-        {
-          "value": "auto",
-          "label": "Automatic (from the label)"
-        },
-        {
-          "value": "search",
-          "label": "Search"
-        },
-        {
-          "value": "sizing",
-          "label": "Ruler (sizing)"
-        },
-        {
-          "value": "shoe",
-          "label": "Shoe"
-        },
-        {
-          "value": "orthotic",
-          "label": "Insoles (orthotics)"
-        },
-        {
-          "value": "order",
-          "label": "Box (orders)"
-        },
-        {
-          "value": "shipping",
-          "label": "Truck (shipping)"
-        },
-        {
-          "value": "returns",
-          "label": "Return arrow"
-        },
-        {
-          "value": "deals",
-          "label": "Tag (deals)"
-        },
-        {
-          "value": "gift",
-          "label": "Gift"
-        },
-        {
-          "value": "heart",
-          "label": "Heart"
-        },
-        {
-          "value": "star",
-          "label": "Star"
-        },
-        {
-          "value": "support",
-          "label": "Chat bubble (support)"
-        },
-        {
-          "value": "store",
-          "label": "Map pin (stores)"
-        },
-        {
-          "value": "sparkle",
-          "label": "Sparkle"
-        }
-      ]
-    },
-    {
-      "type": "text",
-      "id": "cta3_label",
-      "label": "CTA 3 Label",
-      "default": "Size & Fit Help"
-    },
-    {
-      "type": "text",
-      "id": "cta3_message",
-      "label": "CTA 3 Message",
-      "default": "Help me find the right Aetrex shoe size and fit."
-    },
-    {
-      "type": "select",
-      "id": "cta3_icon",
-      "label": "CTA 3 Icon",
-      "default": "auto",
-      "options": [
-        {
-          "value": "auto",
-          "label": "Automatic (from the label)"
-        },
-        {
-          "value": "search",
-          "label": "Search"
-        },
-        {
-          "value": "sizing",
-          "label": "Ruler (sizing)"
-        },
-        {
-          "value": "shoe",
-          "label": "Shoe"
-        },
-        {
-          "value": "orthotic",
-          "label": "Insoles (orthotics)"
-        },
-        {
-          "value": "order",
-          "label": "Box (orders)"
-        },
-        {
-          "value": "shipping",
-          "label": "Truck (shipping)"
-        },
-        {
-          "value": "returns",
-          "label": "Return arrow"
-        },
-        {
-          "value": "deals",
-          "label": "Tag (deals)"
-        },
-        {
-          "value": "gift",
-          "label": "Gift"
-        },
-        {
-          "value": "heart",
-          "label": "Heart"
-        },
-        {
-          "value": "star",
-          "label": "Star"
-        },
-        {
-          "value": "support",
-          "label": "Chat bubble (support)"
-        },
-        {
-          "value": "store",
-          "label": "Map pin (stores)"
-        },
-        {
-          "value": "sparkle",
-          "label": "Sparkle"
-        }
-      ]
-    },
-    {
-      "type": "text",
-      "id": "cta4_label",
-      "label": "CTA 4 Label",
-      "default": "Track Order"
-    },
-    {
-      "type": "text",
-      "id": "cta4_message",
-      "label": "CTA 4 Message",
-      "default": "Help me check the status of my order."
-    },
-    {
-      "type": "select",
-      "id": "cta4_icon",
-      "label": "CTA 4 Icon",
-      "default": "auto",
-      "options": [
-        {
-          "value": "auto",
-          "label": "Automatic (from the label)"
-        },
-        {
-          "value": "search",
-          "label": "Search"
-        },
-        {
-          "value": "sizing",
-          "label": "Ruler (sizing)"
-        },
-        {
-          "value": "shoe",
-          "label": "Shoe"
-        },
-        {
-          "value": "orthotic",
-          "label": "Insoles (orthotics)"
-        },
-        {
-          "value": "order",
-          "label": "Box (orders)"
-        },
-        {
-          "value": "shipping",
-          "label": "Truck (shipping)"
-        },
-        {
-          "value": "returns",
-          "label": "Return arrow"
-        },
-        {
-          "value": "deals",
-          "label": "Tag (deals)"
-        },
-        {
-          "value": "gift",
-          "label": "Gift"
-        },
-        {
-          "value": "heart",
-          "label": "Heart"
-        },
-        {
-          "value": "star",
-          "label": "Star"
-        },
-        {
-          "value": "support",
-          "label": "Chat bubble (support)"
-        },
-        {
-          "value": "store",
-          "label": "Map pin (stores)"
-        },
-        {
-          "value": "sparkle",
-          "label": "Sparkle"
-        }
-      ]
-    },
-    {
-      "type": "text",
-      "id": "cta_hint",
-      "label": "CTA Hint Text",
-      "info": "Shown under the welcome CTAs when the customer is NOT logged in. Becomes a clickable login link automatically."
-    },
-    {
-      "type": "text",
-      "id": "cta_hint_logged_in",
-      "label": "CTA Hint Text (logged in)",
-      "info": "Shown when the customer IS logged in. Use {name} for their first name. Leave blank to hide."
-    },
-    {
-      "type": "text",
-      "id": "qp1_label",
-      "label": "Quick Pick 1 Label",
-      "default": "Best Sellers"
-    },
-    {
-      "type": "text",
-      "id": "qp1_message",
-      "label": "Quick Pick 1 Message",
-      "default": "Show me the most popular Aetrex products.",
-      "info": "Or paste a Typeform link (form.typeform.com/to/…): the button then opens that form inside the chat, with an icon."
-    },
-    {
-      "type": "text",
-      "id": "qp2_label",
-      "label": "Quick Pick 2 Label",
-      "default": "New Arrivals"
-    },
-    {
-      "type": "text",
-      "id": "qp2_message",
-      "label": "Quick Pick 2 Message",
-      "default": "Show me the latest Aetrex shoes and orthotics.",
-      "info": "Or paste a Typeform link (form.typeform.com/to/…): the button then opens that form inside the chat, with an icon."
-    },
-    {
-      "type": "text",
-      "id": "qp3_label",
-      "label": "Quick Pick 3 Label",
-      "default": "Sale Items"
-    },
-    {
-      "type": "text",
-      "id": "qp3_message",
-      "label": "Quick Pick 3 Message",
-      "default": "Show me Aetrex products currently on sale.",
-      "info": "Or paste a Typeform link (form.typeform.com/to/…): the button then opens that form inside the chat, with an icon."
-    },
-    {
-      "type": "text",
-      "id": "qp4_label",
-      "label": "Quick Pick 4 Label",
-      "default": "Returns"
-    },
-    {
-      "type": "text",
-      "id": "qp4_message",
-      "label": "Quick Pick 4 Message",
-      "default": "Help me understand Aetrex's return and exchange policy.",
-      "info": "Or paste a Typeform link (form.typeform.com/to/…): the button then opens that form inside the chat, with an icon."
     },
     {
       "type": "checkbox",
@@ -636,12 +228,6 @@
       "id": "support_url",
       "label": "Support URL (help center, contact page, live chat link)",
       "info": "Used when the app's Settings → Support link URL is blank. The button's text is set there too."
-    },
-    {
-      "type": "text",
-      "id": "disclaimer",
-      "label": "Footer Disclaimer Text",
-      "default": "Powered by AI"
     },
     {
       "type": "url",

@@ -82,7 +82,9 @@ export const loader = async ({ request }) => {
     let greetingCtaTranslations = [];
     if (config.rotateGreetingCta !== false) {
       try {
-        const phrase = new URL(request.url).searchParams.get("cta") || "";
+        // Settings → Chat text's line under the greeting wins over the
+        // theme's (?cta=, which may be the built-in one).
+        const phrase = parseChatTexts(config.chatTexts).greetingCta || new URL(request.url).searchParams.get("cta") || "";
         greetingCtaTranslations = getGreetingCtaTranslations(config, phrase);
       } catch (err) {
         console.error("[widget-config] greeting translation skipped:", err?.message || err);

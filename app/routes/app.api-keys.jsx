@@ -3,7 +3,7 @@ import { chatRatingConfig } from "../lib/chat-rating.js";
 import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
 import { focusImageError, focusImageKey } from "../lib/focus-home.js";
 import { getShopName, getShopHosts } from "../lib/shop-name.server.js";
-import { CHAT_TEXT_FIELDS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
+import { CHAT_TEXT_FIELDS, AVA_TEXT_DEFAULTS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
 import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator, useRouteLoaderData } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
@@ -319,7 +319,9 @@ export const action = async ({ request }) => {
 
   // Chat text: saved together, only when the form sent them.
   if (CHAT_TEXT_FIELDS.some(([, field]) => formData.get(field) !== null)) {
-    data.chatTexts = chatTextsFromForm((field) => formData.get(field));
+    // The Classic home's old headings stay as they were saved.
+    const prevTexts = (await getShopConfig(session.shop))?.chatTexts || "{}";
+    data.chatTexts = chatTextsFromForm((field) => formData.get(field), prevTexts);
   }
 
   // Customer care
@@ -911,7 +913,13 @@ function AssistantSection({ d, values, set }) {
 const TEXT_DEFAULT = Object.fromEntries(CHAT_TEXT_FIELDS.map(([key, , , def]) => [key, def]));
 const TEXT_MAX = Object.fromEntries(CHAT_TEXT_FIELDS.map(([key, , max]) => [key, max]));
 
+const HOME_CARDS = [["Pain", "Foot pain"], ["Footwear", "Footwear"], ["Orthotics", "Orthotics"]];
+
 function LookSection({ d, values, set }) {
+  // The gray text: what the chat shows when a field is blank (the AVA app's
+  // own words where it had them).
+  const ava = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME) === "AVA";
+  const tp = (key) => (ava && AVA_TEXT_DEFAULTS[key]) || TEXT_DEFAULT[key];
   return (
     <BlockStack gap="400">
       <SectionHead title="Look & feel">How AVA looks and moves on your store.</SectionHead>
@@ -925,30 +933,57 @@ function LookSection({ d, values, set }) {
         <Row title="Talk button" help="A mic in the message box: shoppers speak and their words appear as they talk. Shown where the browser supports it." toggle checked={values.voiceInput} onChange={set("voiceInput")} />
       </Group>
       <Group title="Chat text">
-        <Row stack help="The words shoppers see in the chat. Left blank, the chat uses what's set in the theme editor (or the default shown).">
+        <Row stack help="The words shoppers see in the chat. Left blank, the chat uses the text shown in gray.">
           <BlockStack gap="300">
             <div className="set-grid">
-              <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={TEXT_DEFAULT.name} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat. In its replies, AVA always introduces itself as Ava, the Aetrex Virtual Assistant." />
+              <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={tp("name")} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat. In its replies, AVA always introduces itself as Ava, the Aetrex Virtual Assistant." />
               <TextField label="Under the chat name" value={values.textNameSub} onChange={set("textNameSub")} placeholder="Optional, e.g. Aetrex Virtual Assistant" maxLength={TEXT_MAX.nameSub} autoComplete="off" helpText="A smaller gray line under the name. Left blank, the header shows just the name." />
             </div>
             <div className="set-grid">
-              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={TEXT_DEFAULT.greeting} maxLength={TEXT_MAX.greeting} autoComplete="off" helpText="The chat's first words. On the Focus home, the header's words in place of the chat name until a chat starts; on the Classic home, the welcome title." />
-              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={TEXT_DEFAULT.greetingLoggedIn} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="The same, for signed-in shoppers; {name} becomes their first name. Left blank, the greeting above is used." />
-            </div>
-            <div className="set-grid set-grid--3">
-              <TextField label="“Start here” heading" value={values.textStartHeading} onChange={set("textStartHeading")} placeholder={TEXT_DEFAULT.startHeading} maxLength={TEXT_MAX.startHeading} autoComplete="off" />
-              <TextField label="“Popular” heading" value={values.textPopularHeading} onChange={set("textPopularHeading")} placeholder={TEXT_DEFAULT.popularHeading} maxLength={TEXT_MAX.popularHeading} autoComplete="off" />
-              <TextField label="Message box" value={values.textInput} onChange={set("textInput")} placeholder={TEXT_DEFAULT.input} maxLength={TEXT_MAX.input} autoComplete="off" />
+              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={tp("greeting")} maxLength={TEXT_MAX.greeting} autoComplete="off" helpText="The header's words at home, beside Ava's face, until a chat starts." />
+              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={tp("greetingLoggedIn")} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="The same, for signed-in shoppers; {name} becomes their first name." />
             </div>
             <div className="set-grid">
-              <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={TEXT_DEFAULT.launcher} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
-              <TextField label="Fit & size button" value={values.textFitButton} onChange={set("textFitButton")} placeholder={TEXT_DEFAULT.fitButton} maxLength={TEXT_MAX.fitButton} autoComplete="off" helpText="On product cards, under Add to cart, with Fit confidence on (Recommenders). It opens the Fit score and the size finder." />
+              <TextField label="Line under the greeting" value={values.textGreetingCta} onChange={set("textGreetingCta")} placeholder={tp("greetingCta")} maxLength={TEXT_MAX.greetingCta} autoComplete="off" helpText="The gray line under the greeting; it slides through other languages when that's on." />
+              <TextField label="Message box" value={values.textInput} onChange={set("textInput")} placeholder={tp("input")} maxLength={TEXT_MAX.input} autoComplete="off" />
             </div>
+            <div className="set-grid">
+              <TextField label="Chat button" value={values.textLauncher} onChange={set("textLauncher")} placeholder={tp("launcher")} maxLength={TEXT_MAX.launcher} autoComplete="off" helpText="The bar shoppers tap to open the chat." />
+              <TextField label="Fit & size button" value={values.textFitButton} onChange={set("textFitButton")} placeholder={tp("fitButton")} maxLength={TEXT_MAX.fitButton} autoComplete="off" helpText="On product cards, under Add to cart, with Fit confidence on (Recommenders). It opens the Fit score and the size finder." />
+            </div>
+            <TextField label="Note under the message box" value={values.textDisclaimer} onChange={set("textDisclaimer")} placeholder={tp("disclaimer")} maxLength={TEXT_MAX.disclaimer} autoComplete="off" multiline={2} helpText="The small print at the bottom of the chat; a Privacy Policy link follows it." />
           </BlockStack>
         </Row>
       </Group>
       <Group title="Focus home">
-        <Row stack help="The chat's second home layout — Foot pain, Footwear and Orthotics as three cards, each with a picture filling its right side. Switch layouts in the theme editor (AVA → Home layout); try it on a draft theme first. The pictures below go on those cards">
+        <Row stack help="The three cards — Foot pain, Footwear and Orthotics — each with its small line on top, its name, the line under it and its button. On a computer the Foot pain card is the wide one in the middle and shows its wide title; phones show the short one.">
+          <BlockStack gap="400">
+            {HOME_CARDS.map(([kind, label]) => (
+              <BlockStack gap="200" key={kind}>
+                <Text as="h3" variant="headingSm">{label} card</Text>
+                <div className="set-grid set-grid--3">
+                  <TextField label="Small line on top" value={values[`textHome${kind}Eyebrow`]} onChange={set(`textHome${kind}Eyebrow`)} placeholder={tp(`home${kind}Eyebrow`)} maxLength={TEXT_MAX[`home${kind}Eyebrow`]} autoComplete="off" />
+                  <TextField label="Name" value={values[`textHome${kind}Title`]} onChange={set(`textHome${kind}Title`)} placeholder={tp(`home${kind}Title`)} maxLength={TEXT_MAX[`home${kind}Title`]} autoComplete="off" />
+                  <TextField label="Button" value={values[`textHome${kind}Cta`]} onChange={set(`textHome${kind}Cta`)} placeholder={tp(`home${kind}Cta`)} maxLength={TEXT_MAX[`home${kind}Cta`]} autoComplete="off" />
+                </div>
+                {kind === "Pain" && (
+                  <TextField label="Name on a computer (the wide card)" value={values.textHomePainTitleWide} onChange={set("textHomePainTitleWide")} placeholder={tp("homePainTitleWide")} maxLength={TEXT_MAX.homePainTitleWide} autoComplete="off" />
+                )}
+                <TextField label="Line under the name" value={values[`textHome${kind}Sub`]} onChange={set(`textHome${kind}Sub`)} placeholder={tp(`home${kind}Sub`)} maxLength={TEXT_MAX[`home${kind}Sub`]} autoComplete="off" helpText={kind === "Pain" ? undefined : "Shown on computers; phones show just the name and button."} />
+              </BlockStack>
+            ))}
+            <BlockStack gap="200">
+              <Text as="h3" variant="headingSm">Links above the message box</Text>
+              {[1, 2, 3].map((n) => (
+                <div className="set-grid" key={n}>
+                  <TextField label={`Link ${n}`} value={values[`textHomeLink${n}Label`]} onChange={set(`textHomeLink${n}Label`)} placeholder={tp(`homeLink${n}Label`)} maxLength={TEXT_MAX[`homeLink${n}Label`]} autoComplete="off" />
+                  <TextField label={`Link ${n} asks`} value={values[`textHomeLink${n}Message`]} onChange={set(`textHomeLink${n}Message`)} placeholder={tp(`homeLink${n}Message`)} maxLength={TEXT_MAX[`homeLink${n}Message`]} autoComplete="off" />
+                </div>
+              ))}
+            </BlockStack>
+          </BlockStack>
+        </Row>
+        <Row stack help="The cards' pictures, filling each card's picture side. Switch layouts in the theme editor (AVA → Home layout).">
           <BlockStack gap="300">
             <FocusPicture kind="pain" initial={d.focusPainImage} />
             <FocusPicture kind="footwear" initial={d.focusFootwearImage} />

@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const { CHAT_TEXT_FIELDS, ASSISTANT_NAME, ASSISTANT_TITLE, parseChatTexts, chatTextsFromForm, chatTextsForForm, cleanChatText } = await import("../app/lib/chat-texts.js");
+const { CHAT_TEXT_FIELDS, AVA_TEXT_DEFAULTS, ASSISTANT_NAME, ASSISTANT_TITLE, parseChatTexts, chatTextsFromForm, chatTextsForForm, cleanChatText } = await import("../app/lib/chat-texts.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 
 let passed = 0;
@@ -38,12 +38,13 @@ await test("each text is capped at its length; markup characters can't get in", 
   assert.equal(cleanChatText("<script>Hi</script>", 60), "scriptHi/script");
 });
 await test("the Settings form round trip: what's typed is what's shown back; blank stays blank", () => {
-  const typed = { textName: " Aetrex Shopping Assistant ", textStartHeading: "Get started", textPopularHeading: "", textInput: "Ask me anything" };
+  const typed = { textName: " Aetrex Shopping Assistant ", textHomePainTitle: "Foot pain help", textHomeLink1Label: "", textInput: "Ask me anything" };
   const json = chatTextsFromForm((f) => typed[f] ?? null);
-  assert.deepEqual(JSON.parse(json), { name: "Aetrex Shopping Assistant", startHeading: "Get started", input: "Ask me anything" });
+  assert.deepEqual(JSON.parse(json), { name: "Aetrex Shopping Assistant", homePainTitle: "Foot pain help", input: "Ask me anything" });
   const back = chatTextsForForm(json);
   assert.equal(back.textName, "Aetrex Shopping Assistant");
-  assert.equal(back.textPopularHeading, "");
+  assert.equal(back.textHomeLink1Label, "");
+  assert.equal(back.textStartHeading, undefined, "the Classic headings are no longer on the form");
   assert.equal(Object.keys(back).length, CHAT_TEXT_FIELDS.length, "every field");
   assert.equal(chatTextsFromForm(() => ""), "{}", "all blank → nothing set");
 });
@@ -63,5 +64,16 @@ await test("the assistant is Ava, the Aetrex Virtual Assistant — whatever name
   }
 });
 
+await test("the Classic home's old headings: kept from an older save through a new save, never on the form", () => {
+  const prev = JSON.stringify({ startHeading: "Get started", popularHeading: "Trending", name: "Old" });
+  const json = chatTextsFromForm((f) => ({ textName: "New" })[f] ?? null, prev);
+  assert.deepEqual(JSON.parse(json), { startHeading: "Get started", popularHeading: "Trending", name: "New" });
+  assert.deepEqual(parseChatTexts(prev), { startHeading: "Get started", popularHeading: "Trending", name: "Old" });
+});
+await test("the AVA app's gray text is the words its theme editor held", () => {
+  assert.equal(AVA_TEXT_DEFAULTS.input, "Chat with Aetrex virtual assistant");
+  assert.equal(AVA_TEXT_DEFAULTS.launcher, "What can I help you find today?");
+  for (const k of Object.keys(AVA_TEXT_DEFAULTS)) assert.ok(CHAT_TEXT_FIELDS.some(([key]) => key === k), k);
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
