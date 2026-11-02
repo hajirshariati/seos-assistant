@@ -7220,7 +7220,7 @@ button.ai-chat-launcher__text {
    clipped line; a right-to-left one reads its own way but stays anchored
    under the name. */
 .ai-chat-panel.is-focus .ai-chat-messages.is-welcome { padding-top: 0; }
-.ai-chat-panel.is-focus .ai-chat-focus__greet { flex: none; margin: 0 0 22px; padding: 6px 0 0 80px; font-size: 13px; font-weight: 500; line-height: 17px; color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__greet { flex: none; margin: 0 0 20px; padding: 6px 0 0 80px; font-size: 13px; font-weight: 500; line-height: 17px; color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-greet { position: relative; display: block; height: 17px; overflow: hidden; }
 .ai-chat-panel.is-focus .ai-chat-greet__item { position: absolute; left: 0; right: 0; top: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.42s ease; }
 .ai-chat-panel.is-focus .ai-chat-greet__item.is-below { transform: translateY(100%); opacity: 0; }
@@ -7334,7 +7334,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__eyebrow { font: 600 11px/14px var(--seos-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__close { order: 4; width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: var(--seos-bg-raised, #fff); box-shadow: 0 0 0 1px var(--seos-line); color: var(--seos-text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__close:hover { background: color-mix(in srgb, var(--seos-bg-raised, #fff) 94%, var(--seos-text)); }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__body { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 22px; overflow: auto; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__body { display: flex; flex-direction: column; gap: 20px; padding: 20px; overflow: auto; }
 /* The helper rows share a line where two fit (a column needs 220px), else
    stack. Side by side, the chevron steps out and the line under the title
    may take two lines; the title itself stays on one. */
@@ -7365,12 +7365,14 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__swap { transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.32, 0.72, 0, 1); }
 .ai-chat-panel.is-focus .ai-chat-focus__swap.is-swapping { opacity: 0; transform: translateY(5px); transition-duration: 0.13s; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__body .ai-chat-helper__icon svg { width: 20px; height: 20px; }
-.ai-chat-panel.is-focus .ai-chat-focus__label { margin: 8px 0 0; font: 600 11px/1 var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__label { margin: 20px 0 0; font: 600 11px/1 var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__label:first-child { margin-top: 0; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg { position: relative; display: flex; padding: 3px; margin-top: 10px; border-radius: 12px; background: var(--seos-surface); }
 .ai-chat-panel.is-focus .ai-chat-focus__seg-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--seg-n, 3)); border-radius: 9px; background: var(--seos-bg-raised, #fff); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04); transform: translateX(calc(var(--seg-i, 0) * 100%)); transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg button { position: relative; z-index: 1; flex: 1 1 0; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--seos-text-2); font: 600 13.5px/1 var(--seos-font); cursor: pointer; transition: color 0.2s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__seg button.is-on { color: var(--seos-text); }
 .ai-chat-panel.is-focus .ai-chat-focus__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-chat-panel.is-focus .ai-chat-focus__browse { display: flex; flex-direction: column; }
 .ai-chat-panel.is-focus .ai-chat-focus__chips button { height: 32px; padding: 0 12px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 999px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); font: 500 13px/1 var(--seos-font); cursor: pointer; transition: border-color 0.15s ease, transform 0.12s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__chips button:hover { border-color: var(--seos-ink, #0d0d12); }
 .ai-chat-panel.is-focus .ai-chat-focus__chips button:active { transform: scale(0.96); }
@@ -7380,12 +7382,12 @@ button.ai-chat-launcher__text {
    those picks make, written as the message it will be, with the Ask button:
    one tap on that row sends it. Section chips below are one tap each and
    carry an arrow to say so; picker chips carry a check instead. ── */
-.ai-chat-panel.is-focus .ai-chat-focus__pick { margin-top: 8px; padding: 6px 12px 10px; border-radius: 18px; background: var(--seos-surface); box-shadow: inset 0 0 0 1px var(--seos-line); }
-.ai-chat-panel.is-focus .ai-chat-focus__pick-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
-.ai-chat-panel.is-focus .ai-chat-focus__pick-row + .ai-chat-focus__pick-row { border-top: 1px solid var(--seos-line); }
-.ai-chat-panel.is-focus .ai-chat-focus__pick-key { flex: none; width: 52px; padding-top: 9px; font: 700 10.5px/1 var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__pick { margin-top: 8px; padding: 12px; border-radius: 16px; background: var(--seos-surface); box-shadow: inset 0 0 0 1px var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus__pick-row { display: flex; align-items: flex-start; gap: 8px; }
+.ai-chat-panel.is-focus .ai-chat-focus__pick-row + .ai-chat-focus__pick-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus__pick-key { flex: none; width: 52px; padding-top: 10px; font: 600 11px/1 var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus__pick-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 auto; }
-.ai-chat-panel.is-focus .ai-chat-focus__pick-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px 0 7px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 10px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); font: 500 13px/1 var(--seos-font); cursor: pointer; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__pick-chip { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 8px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 10px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); font: 500 13px/1 var(--seos-font); cursor: pointer; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__pick-chip:hover { border-color: var(--seos-ink, #0d0d12); }
 .ai-chat-panel.is-focus .ai-chat-focus__pick-chip:active { transform: scale(0.96); }
 .ai-chat-panel.is-focus .ai-chat-focus__pick-chip:focus-visible { outline: 2px solid var(--seos-ink, #0d0d12); outline-offset: 2px; }
@@ -7396,7 +7398,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__pick-chip[aria-pressed="true"] .ai-chat-focus__pick-dot svg { opacity: 1; transform: none; }
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__pick-chip[aria-pressed="true"] { color: #0d0d12; }
 /* The question row: the message as it will be sent, the Ask button at its end. */
-.ai-chat-panel.is-focus .ai-chat-focus__ask { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; margin-top: 6px; padding: 7px 7px 7px 12px; box-sizing: border-box; border: 0; border-radius: 14px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); text-align: left; cursor: pointer; box-shadow: 0 0 0 1px var(--seos-line-strong, rgba(0, 0, 0, 0.14)); transition: box-shadow 0.18s ease, transform 0.15s ease; }
+.ai-chat-panel.is-focus .ai-chat-focus__ask { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; margin-top: 12px; padding: 7px 7px 7px 12px; box-sizing: border-box; border: 0; border-radius: 14px; background: var(--seos-bg-raised, #fff); color: var(--seos-text); text-align: left; cursor: pointer; box-shadow: 0 0 0 1px var(--seos-line-strong, rgba(0, 0, 0, 0.14)); transition: box-shadow 0.18s ease, transform 0.15s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-q { flex: 1 1 auto; min-width: 0; font: 500 13.5px/1.3 var(--seos-font); letter-spacing: -0.01em; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-cta { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 32px; padding: 0 10px 0 13px; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff; font: 600 13px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; transition: background 0.2s ease, color 0.2s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-cta svg { width: 14px; height: 14px; }
@@ -7409,7 +7411,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__ask[disabled] .ai-chat-focus__ask-cta { background: var(--seos-surface); color: var(--seos-text-2); }
 /* On a phone the key sits above its chips, so the chips get the full width. */
 @media (max-width: 480px) {
-  .ai-chat-panel.is-focus .ai-chat-focus__pick-row { flex-direction: column; gap: 6px; padding: 8px 0; }
+  .ai-chat-panel.is-focus .ai-chat-focus__pick-row { flex-direction: column; gap: 8px; }
   .ai-chat-panel.is-focus .ai-chat-focus__pick-key { width: auto; padding-top: 0; }
 }
 /* Section chips: one tap sends — a small arrow at the end says so. */
@@ -7424,7 +7426,7 @@ button.ai-chat-launcher__text {
    "Something else" under the first, and a bar with Back, the picks so far
    and Continue. Steps slide: forward the old one slips left as the new one
    comes in from the right; back, the other way. */
-.ai-chat-panel.is-focus .ai-chat-focus__quiz { display: flex; flex-direction: column; gap: 14px; transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
+.ai-chat-panel.is-focus .ai-chat-focus__quiz { display: flex; flex-direction: column; gap: 16px; transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
 .ai-chat-panel.is-focus .ai-chat-focus__quiz.is-leaving,
 .ai-chat-panel.is-focus .ai-chat-focus__quiz.is-entering { opacity: 0; transform: translateX(var(--q-dir, 0px)); }
 .ai-chat-panel.is-focus .ai-chat-focus__quiz.is-leaving { transition-duration: 0.12s, 0.13s; }
@@ -7453,7 +7455,7 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__opt.is-on .ai-chat-focus__opt-check { opacity: 1; transform: none; }
 .ai-chat-panel.is-focus .ai-chat-focus__quiz .ai-chat-focus__else { align-self: flex-start; margin: -4px 0 0; padding: 4px 6px; border: 0; background: transparent; color: var(--seos-text-2); font: 500 13.5px/1 var(--seos-font); cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus__quiz .ai-chat-focus__else:hover { color: var(--seos-text); }
-.ai-chat-panel.is-focus .ai-chat-focus__bar { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 2px; }
+.ai-chat-panel.is-focus .ai-chat-focus__bar { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 0; }
 .ai-chat-panel.is-focus .ai-chat-focus__back { width: 40px; height: 40px; flex: none; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 50%; background: transparent; color: var(--seos-text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .ai-chat-panel.is-focus .ai-chat-focus__back svg { transform: rotate(180deg); }
 .ai-chat-panel.is-focus .ai-chat-focus__picks { flex: 1 1 auto; min-width: 0; font: 500 12.5px/16px var(--seos-font); color: var(--seos-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -7480,7 +7482,7 @@ button.ai-chat-launcher__text {
 /* Narrow chats (the default 500px panel, and phones): the two small cards a
    little tighter — measured on the home itself, not the page. */
 @container (max-width: 479px) {
-  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { padding: 12px 8px 12px 12px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { padding: 14px 8px 14px 16px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-title { font-size: 15px; line-height: 19px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { font-size: 11.5px; line-height: 15px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { flex-basis: 38%; }
@@ -7508,7 +7510,7 @@ button.ai-chat-launcher__text {
      and the bar with Continue stays in view while they scroll. */
   .ai-chat-panel.is-focus .ai-chat-focus__opts:has(.ai-chat-focus__coin) { grid-template-columns: 1fr; }
   .ai-chat-panel.is-focus .ai-chat-focus__opt:has(> .ai-chat-focus__coin) { min-height: 62px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__bar { position: sticky; bottom: -22px; z-index: 2; margin: 2px -20px -22px; padding: 10px 20px 22px; background: var(--seos-bg-raised, #fff); }
+  .ai-chat-panel.is-focus .ai-chat-focus__bar { position: sticky; bottom: -20px; z-index: 2; margin: 0 -20px -20px; padding: 10px 20px 20px; background: var(--seos-bg-raised, #fff); }
   .ai-chat-panel.is-focus .ai-chat-focus__sum-k { flex-basis: 92px; }
 }
 @media (max-width: 340px) {
