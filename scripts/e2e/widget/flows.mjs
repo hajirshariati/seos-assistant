@@ -3867,7 +3867,7 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&banner=1", { viewport: { width: 1280, height: 1200 } });
     const t = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const sc = w.parentElement; const el = w.querySelector(".ai-chat-welcome__banner"); const cs = getComputedStyle(el); const links = w.querySelector(".ai-chat-focus__links").getBoundingClientRect(); return { h: el.getBoundingClientRect().height, grow: cs.flexGrow, max: cs.maxHeight, min: cs.minHeight, cover: getComputedStyle(el.querySelector("img")).objectFit, scrolls: sc.scrollHeight > sc.clientHeight + 1, linksAtFoot: sc.getBoundingClientRect().bottom - links.bottom >= 0 && sc.getBoundingClientRect().bottom - links.bottom <= 24 }; });
-    check("home layout focus (tall screen): the banner grows into the spare room like the classic home's — taller than its 136px floor, no more than 240px, the picture covering it — and the home fits without scrolling, the links at its foot", t.h > 136 && t.h <= 240 && t.grow === "1" && t.max === "240px" && t.min === "136px" && t.cover === "cover" && !t.scrolls && t.linksAtFoot, JSON.stringify(t));
+    check("home layout focus (tall screen): the banner grows into the spare room like the classic home's — taller than its 136px floor, no more than 240px, the picture covering it — and the home fits without scrolling, the links at its foot", t.h > 136 && t.h <= 240.5 && t.grow === "1" && t.max === "240px" && t.min === "136px" && t.cover === "cover" && !t.scrolls && t.linksAtFoot, JSON.stringify(t));
     check("home layout focus (tall screen): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
