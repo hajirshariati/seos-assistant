@@ -3396,6 +3396,7 @@ function sheetCloseAll(){
 function closeSheetNow(quiet){
   if(!fbSheet||fbSheet.hidden)return;
   var sh=fbSheet;
+  clearTimeout(sh.__ffsT);sh.style.height='';
   sh.classList.remove('is-open');fbBehind(false);
   /* Added to the cart from View all: asked once the sheet's away. */
   if(isOpen&&ratePending())maybeAskRating();
@@ -6109,13 +6110,39 @@ function openFitFinder(opener,mode){
   sh.setAttribute('data-kind','fitfinder');
   sh.classList.remove('is-failed');sh.classList.add('is-ready');
   menu.style.display='none';
+  /* Painted before it rises, so it opens at its own height. */
+  clearTimeout(sh.__ffsT);sh.style.height='';ffsPaint(sh);
   sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
   fbBehind(true);
-  ffsRender(sh);
   setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
   return true;
 }
-function ffsRender(sh){
+/* The sheet is only as tall as what it shows: a change in content eases
+   its height from the old to the new (no motion for those who prefer
+   less). Taller than the chat, it stops at the top and scrolls inside. */
+function ffsResize(sh,change){
+  if(!sh||sh.getAttribute('data-kind')!=='fitfinder'||!sh.classList.contains('is-open')||!focusMotionOk()){change();if(sh)sh.style.height='';return}
+  var from=sh.getBoundingClientRect().height;
+  sh.style.transition='none';sh.style.height='';
+  change();
+  var to=sh.getBoundingClientRect().height;
+  if(Math.abs(to-from)<1){sh.style.transition='';return}
+  sh.style.height=from+'px';void sh.offsetHeight;
+  sh.style.transition='';sh.style.height=to+'px';
+  clearTimeout(sh.__ffsT);
+  sh.__ffsT=setTimeout(function(){sh.style.height=''},380);
+}
+function ffsRender(sh){ffsResize(sh,function(){ffsPaint(sh)})}
+/* The chat above the FITFinder sheet is dimmed and out of reach (inert):
+   a tap there lands on the panel itself, and closes the sheet. */
+panel.addEventListener('click',function(e){
+  if(!fbSheet||fbSheet.hidden||sheetKind!=='fitfinder'||!fbSheet.classList.contains('is-open'))return;
+  if(fbSheet.contains(e.target))return;
+  /* (Only the panel itself: the tap that opened the sheet bubbles here
+     too, from a button that's now under it.) */
+  if(e.target===panel){e.preventDefault();closeFeedback()}
+});
+function ffsPaint(sh){
   var box=$('.ai-chat-fbsheet__ff',sh);if(!box)return;
   if(ff.accent)box.style.setProperty('--ffs-accent',ff.accent);
   var title=ffs.view==='scan'?'Scanned in one of our stores?':(ff.words.cta||'Help me find my Fit');
@@ -6130,7 +6157,7 @@ function ffsQuizHtml(){
   var h='';
   for(var i=0;i<ff.questions.length;i++){
     var q=ff.questions[i],on=ffs.a[q.id]||'';
-    h+='<div class="ai-ffs__q"><div class="ai-ffs__qrow"><span class="ai-ffs__qtext">'+esc(q.text)+'</span>'+(q.helpText?'<button type="button" class="ai-ffs__help" data-ffs="help" aria-expanded="false" aria-controls="ai-ffs-help-'+i+'">'+esc(q.helpTitle||'How do I know?')+FFS_CHEV+'</button>':'')+'</div>';
+    h+='<div class="ai-ffs__q" role="group" aria-labelledby="ai-ffs-q-'+i+'"><div class="ai-ffs__qrow"><span class="ai-ffs__qtext" id="ai-ffs-q-'+i+'">'+esc(q.text)+'</span>'+(q.helpText?'<button type="button" class="ai-ffs__help" data-ffs="help" aria-expanded="false" aria-controls="ai-ffs-help-'+i+'">'+esc(q.helpTitle||'How do I know?')+FFS_CHEV+'</button>':'')+'</div>';
     if(q.helpText)h+='<div class="ai-ffs__helpbox" id="ai-ffs-help-'+i+'" hidden>'+esc(q.helpText)+'</div>';
     h+='<div class="ai-ffs__opts">';
     for(var j=0;j<q.options.length;j++){var o=q.options[j];h+='<button type="button" class="ai-ffs__opt" data-ffs="opt" data-q="'+esc(q.id)+'" data-o="'+esc(o.id)+'" aria-pressed="'+(on===o.id?'true':'false')+'"><b>'+esc(o.label)+'</b>'+(o.sublabel?'<small>'+esc(o.sublabel)+'</small>':'')+'</button>'}
@@ -6208,7 +6235,7 @@ function ffsScanStart(sh){
 /* Fold / unfold a note (How do I know?, Learn more). */
 function ffsFold(b){
   var box=document.getElementById(b.getAttribute('aria-controls')||'');if(!box)return;
-  var open=box.hidden;box.hidden=!open;b.setAttribute('aria-expanded',open?'true':'false');b.classList.toggle('is-open',open);
+  ffsResize(fbSheet,function(){var open=box.hidden;box.hidden=!open;b.setAttribute('aria-expanded',open?'true':'false');b.classList.toggle('is-open',open)});
 }
 /* The card follows the answers: it comes when they all have one, changes
    with them, goes when one is cleared — the questions themselves stay put
@@ -6217,7 +6244,7 @@ function ffsRecUpdate(sh){
   var tail=$('.ai-ffs__tail',sh);if(!tail)return;
   var f=ffsFit(),key=f?f.key:f===false?'!':'';
   if(key===(tail.getAttribute('data-fit')||''))return;
-  tail.setAttribute('data-fit',key);tail.innerHTML=ffsTailHtml(f);
+  tail.setAttribute('data-fit',key);ffsResize(sh,function(){tail.innerHTML=ffsTailHtml(f)});
   var rec=$('.ai-ffs__rec',tail);
   if(rec&&rec.scrollIntoView)try{rec.scrollIntoView({block:'nearest',behavior:focusMotionOk()?'smooth':'auto'})}catch(e){}
 }

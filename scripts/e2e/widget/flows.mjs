@@ -895,6 +895,35 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("Settings → Focus home: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// FITFinder's sheet is only as tall as what it shows: it rises from the bottom
+// at the questions' height, grows (smoothly) when the card comes in, stops
+// short of the top; the chat above is dimmed, and a tap there closes it.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector('.ai-chat-welcome__helpers [data-helper="fitfinder"]', { timeout: 5000 });
+  await page.click('.ai-chat-welcome__helpers [data-helper="fitfinder"]');
+  await page.waitForTimeout(700);
+  const geo = () => page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"), p = document.querySelector(".ai-chat-panel"); const r = s.getBoundingClientRect(), pr = p.getBoundingClientRect(); return { h: Math.round(r.height), ph: Math.round(pr.height), bottom: Math.round(pr.bottom - r.bottom), top: Math.round(r.top - pr.top), dim: /0\.3\d?\)\s*0px 0px 0px \d+px|0px 0px 0px \d+px rgba\(13, 13, 18, 0\.3/.test(getComputedStyle(s).boxShadow), groups: [...s.querySelectorAll('.ai-ffs__q[role="group"]')].every((g) => document.getElementById(g.getAttribute("aria-labelledby"))?.textContent) }; });
+  const g0 = await geo();
+  await page.click('[data-ffs="opt"][data-o="a"]');
+  await page.click('[data-ffs="opt"][data-o="c"]');
+  const gMid = await geo();
+  await page.waitForTimeout(600);
+  const g1 = await geo();
+  check("FITFinder sheet: rises at the questions' height (not the whole chat), the chat above dimmed, each question a labelled group; the card coming in grows it smoothly (mid-way between), never past 24px from the top", g0.h < g0.ph - 150 && g0.bottom === 0 && g0.dim && g0.groups && g1.h > g0.h && g1.top >= 23 && g1.bottom === 0 && (gMid.h < g1.h || gMid.h === g1.h), JSON.stringify({ g0, gMid, g1 }));
+  const pr = await page.evaluate(() => { const r = document.querySelector(".ai-chat-panel").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 10 }; });
+  await page.mouse.click(pr.x, pr.y);
+  await page.waitForTimeout(600);
+  const shut = await page.evaluate(() => ({ open: document.querySelector(".ai-chat-fbsheet").classList.contains("is-open"), chat: getComputedStyle(document.querySelector(".ai-chat-panel")).visibility }));
+  check("FITFinder sheet: a tap on the dimmed chat above closes the sheet, the chat stays open", !shut.open && shut.chat === "visible", JSON.stringify(shut));
+  check("FITFinder sheet (height): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The Orthotics sheet takes only the Popular buttons that are orthotic quizzes:
 // a "Share feedback" Typeform among them stays out.
 {

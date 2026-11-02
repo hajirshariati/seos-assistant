@@ -5069,6 +5069,17 @@ button.ai-chat-launcher__text {
    pill and two tiles, the FIT as a card in the app's accent (letter and
    name, the line, Learn more folded, the save choices), Start over, and a
    foot with the in-store scan link and Aetrex's mark. ── */
+/* FITFinder rises as a sheet from the bottom, only as tall as what it
+   shows (its height eases as answers bring the card in), the chat above it
+   dimmed; taller than the chat, it stops short of the top and scrolls. */
+.ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"] { top: auto; max-height: calc(100% - 24px); border-radius: 22px 22px 0 0; overflow: hidden; box-shadow: 0 -12px 40px rgba(13, 13, 18, 0.18), 0 0 0 100vmax rgba(13, 13, 18, 0); transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.42s, height 0.34s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.3s ease; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"].is-open { box-shadow: 0 -12px 40px rgba(13, 13, 18, 0.18), 0 0 0 100vmax rgba(13, 13, 18, 0.32); transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s, height 0.34s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.3s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"],
+  .ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"].is-open { transform: none; transition: opacity 0.15s ease, visibility 0s; }
+}
+.ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"] .ai-chat-fbsheet__body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"] .ai-chat-fbsheet__ff { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
 .ai-chat-panel .ai-chat-fbsheet__ff { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 16px 18px calc(22px + env(safe-area-inset-bottom, 0px)); visibility: hidden; pointer-events: none; --ffs-accent: #2563EB; }
 .ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"] .ai-chat-fbsheet__ff { visibility: visible; pointer-events: auto; }
 .ai-chat-panel .ai-chat-fbsheet[data-kind="fitfinder"] .ai-chat-fbsheet__form,
