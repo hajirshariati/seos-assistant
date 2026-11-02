@@ -7236,22 +7236,23 @@ button.ai-chat-launcher__text {
    slowly — a box with a blur (a blurred SVG stroke smears in Safari; a
    blurred box does not), masked to a soft ring just outside the band's
    ring. It fades with the ring (--ro) when a chat starts. */
-.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -12px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #a35cff, #ff4fa3); -webkit-mask: radial-gradient(circle closest-side, transparent 70%, #000 79%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 70%, #000 79%, #000 86%, transparent 100%); filter: blur(9px); opacity: calc(var(--ro, 1) * 0.28); animation: aiChatHaloSpin 18s linear infinite; }
+.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -9px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #a35cff, #ff4fa3); -webkit-mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); filter: blur(10px); opacity: calc(var(--ro, 1) * 0.08); animation: aiChatHaloSpin 18s linear infinite; }
 @keyframes aiChatHaloSpin { to { transform: rotate(360deg); } }
 .ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-hero__mono { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; font: 700 24px/1 var(--seos-font); }
 .ai-chat-panel.is-focus .ai-chat-band { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
-/* The band is a soft glow, not a line: four strokes of the same path, from
-   wide and faint to narrow and dim, so there is no hard edge anywhere. Drawn
-   without blur, which Safari smears into bands; the ring and the line alike,
-   on phones too. */
+/* The band is a hairline with a breath of glow: one solid, very thin stroke
+   of the colour (the ring around the face, the line in the chat), and three
+   wider, faint strokes of the same path behind it that fade out within a
+   few pixels. Drawn without blur, which Safari smears into bands; the ring
+   and the line alike, on phones too. */
 .ai-chat-panel.is-focus .ai-chat-band__linel,
 .ai-chat-panel.is-focus .ai-chat-band__ringl { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--4, .ai-chat-panel.is-focus .ai-chat-band__ringl--4 { stroke-width: 16; opacity: 0.045; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--3, .ai-chat-panel.is-focus .ai-chat-band__ringl--3 { stroke-width: 10; opacity: 0.08; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: 6; opacity: 0.15; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: 3; opacity: 0.3; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--4, .ai-chat-panel.is-focus .ai-chat-band__ringl--4 { stroke-width: 10; opacity: 0.02; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--3, .ai-chat-panel.is-focus .ai-chat-band__ringl--3 { stroke-width: 6; opacity: 0.045; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: 3; opacity: 0.09; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: 1.2; opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-band__lit { transition: opacity 0.45s ease; }
 /* In a chat the gray header line goes; the glow breathes while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
