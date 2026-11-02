@@ -7296,10 +7296,27 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__card .ai-chat-focus__card-ico.has-pic { background: transparent; }
 .ai-chat-panel.is-focus .ai-chat-focus__card .ai-chat-focus__card-ico img { position: absolute; inset: 0; }
 .ai-chat-panel.is-focus .ai-chat-focus__card .ai-chat-focus__card-ico svg { width: 30px; height: 30px; }
-/* Wide chats: three alike in a row. */
-@container (min-width: 640px) {
-  .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { grid-column: auto; }
+/* The Foot pain card's two titles: the short one by default (phones, and
+   the sheet's own head), the long one on a computer. */
+.ai-chat-panel.is-focus .ai-chat-focus__card-title .is-long { display: none; }
+/* On a computer (the 500px panel, whose home is 460 wide, and anything wider): one row, 25 · 50 · 25
+   — Footwear, Foot pain, Orthotics. The two line cards carry their picture
+   on top with the words under it; the Foot pain card keeps its picture
+   filling the right side and takes the longer title. Phones keep the Foot
+   pain card across the top with the two line cards under it. */
+@container (min-width: 440px) {
+  .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--footwear { order: 1; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { order: 2; grid-column: auto; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--orthotics { order: 3; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { flex-direction: column; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { order: -1; flex: 0 0 88px; width: 100%; align-self: auto; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { padding: 12px 10px 12px 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-title { font-size: 15px; line-height: 19px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { font-size: 11.5px; line-height: 15px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title { font-size: 17px; line-height: 21px; text-wrap: balance; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title .is-short { display: none; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title .is-long { display: inline; }
 }
 /* A tile's picture (where it hurts): the whole left side of the tile, edge
    to edge and full height, so more of it shows — no coin. */
@@ -7479,9 +7496,10 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__next,
 .ai-chat-panel.is-focus[data-theme="dark"] .ai-chat-focus__ask-btn { color: #0d0d12; }
 
-/* Narrow chats (the default 500px panel, and phones): the two small cards a
-   little tighter — measured on the home itself, not the page. */
-@container (max-width: 479px) {
+/* Phones (the home narrower than 440px — the 500px panel's home is 460):
+   the two small cards a little tighter — measured on the home itself, not
+   the page. */
+@container (max-width: 439px) {
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { padding: 14px 8px 14px 16px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-title { font-size: 15px; line-height: 19px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { font-size: 11.5px; line-height: 15px; }
@@ -7499,6 +7517,11 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__info { padding-left: 72px; }
   /* At home the greeting needs the room: the Log in pill steps out (the ⋮ menu has Log in) and comes back in a chat. */
   .ai-chat-panel.is-focus:not(.is-chatting) .ai-chat-header__login-pill { display: none; }
+  /* The greeting whole, never cut to "…": a size down, and a third line when a long one needs it. */
+  .ai-chat-panel.is-focus .ai-chat-header__title--home { font-size: 14px; line-height: 18px; -webkit-line-clamp: 3; }
+  /* The two line cards: their name and button only — the grey line under the name is for computers — and a little shorter for it. */
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { display: none; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { min-height: 124px; }
   .ai-chat-panel.is-focus .ai-chat-welcome--focus { padding: 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__greet { padding-left: 76px; }
   .ai-chat-panel.is-focus .ai-chat-focus__helpers { grid-template-columns: 1fr; }

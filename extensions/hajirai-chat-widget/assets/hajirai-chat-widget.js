@@ -1731,9 +1731,12 @@ function focusCardSub(kind){
 function focusCardCta(kind){return kind==='pain'?'Start':'Browse'}
 var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
 /* Words on the left, the picture filling the right side, the call to action under the words. */
+/* The Foot pain card's title on a computer, where the card is the wide one
+   in the middle of the row (the short one on phones, and in its sheet). */
+var FOCUS_PAIN_TITLE_WIDE='Let\u2019s talk about your foot pain.';
 function focusCardHtml(kind){
-  var w=focusCardWords(kind);
-  return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
+  var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+FOCUS_PAIN_TITLE_WIDE+'</span>':w[1];
+  return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
