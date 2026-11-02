@@ -7498,6 +7498,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__ask-box:focus-within { box-shadow: 0 0 0 1.5px var(--seos-ink, #0d0d12); }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-q { flex: 1 1 auto; min-width: 0; width: 0; height: 32px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--seos-text); font: 500 13.5px/32px var(--seos-font); letter-spacing: -0.01em; outline: none; box-shadow: none; text-overflow: ellipsis; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-q::placeholder { color: var(--seos-text-2); opacity: 1; }
+/* Touch screens: 16px, or iOS zooms the page in when the box is tapped. */
+@media (pointer: coarse), (max-width: 480px) { .ai-chat-panel.is-focus .ai-chat-focus__ask-q { font-size: 16px; } }
 /* The pill shows the focus (above); the box itself draws none. */
 .ai-chat-panel.is-focus .ai-chat-focus__ask-q:focus, .ai-chat-panel.is-focus .ai-chat-focus__ask-q:focus-visible { outline: none !important; box-shadow: none !important; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-cta { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 32px; padding: 0 10px 0 13px; border: 0; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff; font: 600 13px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; cursor: pointer; transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease; }
