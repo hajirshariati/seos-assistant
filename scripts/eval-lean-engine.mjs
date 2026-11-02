@@ -21,12 +21,12 @@ register("data:text/javascript," + encodeURIComponent(HOOK));
 const noop = new Proxy(async () => [], { get: (t, k) => (k === "then" ? undefined : noop), apply: async () => [] });
 global.prismaGlobal = new Proxy({}, { get: () => noop });
 
-const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes } = await import("../app/lib/lean/catalog.js");
+const { buildLeanCatalog, productCodes, codesInText, oneEditApart, closeCodes, stylesInText } = await import("../app/lib/lean/catalog.js");
 const { leanSearch, productDetails, similarProducts, styleColorways, feetForWidth, helpsWithFeet, resultHandles } = await import("../app/lib/lean/search.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
 const { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } = await import("../app/lib/lean/verify.js");
-const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, asksAboutProgram, programUnchecked, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
+const { runLeanTurn, extractPriorShownTitles, normalizeConversation, echoesFollowUps, leftOrthoticChat, pointsToSupport, asksAboutOffers, asksAboutProgram, programUnchecked, stylesNote, offersAlreadyListed, offersQuestion, orthoticAnswerQuestion, mentionsOffer, hasRunningOffers, joinContinuation, codesNote, joinClosingQuestion, onlyAsksBack } = await import("../app/lib/lean/engine.js");
 const { viewAllWords, VIEW_ALL_PAGE, cleanViewAllSearch, pageOf } = await import("../app/lib/lean/shop-all.js");
 const { allMatches } = await import("../app/lib/lean/search.js");
 const { merchScore, ratingOf, fewSizesLeft } = await import("../app/lib/lean/merch.js");
@@ -2242,6 +2242,64 @@ await test("searched and nothing came back: \"I don't see one\" stands — no re
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, lookupStoreInfo: async () => ({ found: false }), log: quiet });
   assert.equal(r.retried, false);
   assert.match(r.text, /don't see a student discount/);
+});
+
+
+console.log("\nstyle names: a shoe's first name is the shoe, not a typo");
+const sizes8 = ["5 US", "6 US", "7 US", "8 US", "9 US", "10 US", "11 US", "12 US"];
+const blakeRows = [
+  row("Blake Comfort Sneaker - Black", { cat: "Sneakers", sizes: sizes8, price: "139.95" }),
+  row("Blake Comfort Sneaker - Leopard", { cat: "Sneakers", sizes: ["5 US"], price: "55.98", compareAt: "139.95" }),
+  row("Blake Comfort Sneaker - White", { cat: "Sneakers", sizes: sizes8, price: "139.95" }),
+  row("Tess Arch Support Sneaker - Leopard", { cat: "Sneakers", sizes: sizes8, price: "129.95", description: "Leopard print arch support all day." }),
+  row("Sloane Arch Support Sneaker - Leopard", { cat: "Sneakers", sizes: sizes8, price: "129.95" }),
+  row("Nova Arch Support Sneaker - Coral", { cat: "Sneakers", sizes: sizes8, price: "129.95" }),
+  row("Classic Clog - Navy", { cat: "Clogs", sizes: sizes8 }),
+  row("Women's Speed Orthotics", { type: "Orthotics", cat: "Orthotics", price: "69.95" }),
+];
+const soldOutZoe = row("Zoe Slip-On - Taupe", { cat: "Slip-Ons", sizes: sizes8 });
+soldOutZoe.variants = soldOutZoe.variants.map((v) => ({ ...v, inventoryQty: 0 }));
+const blakeCatalog = buildLeanCatalog([...blakeRows, soldOutZoe], { shop: "s.myshopify.com" });
+await test("stylesInText: the styles a message names, with their colorways in stock; generic first words, orthotic lines and sold-out styles never", () => {
+  const found = stylesInText(blakeCatalog, "Blake leproad");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].name, "Blake");
+  assert.deepEqual(found[0].styles.map((s) => [s.style, s.colors]), [["Blake Comfort Sneaker", ["Black", "Leopard", "White"]]]);
+  assert.deepEqual(stylesInText(blakeCatalog, "Do you have the blake's in wide?").map((f) => f.name), ["Blake"], "possessive and lower case");
+  assert.deepEqual(stylesInText(blakeCatalog, "sneakers for flat feet"), []);
+  assert.deepEqual(stylesInText(blakeCatalog, "classic clogs please"), [], "a generic first word isn't a name");
+  assert.deepEqual(stylesInText(blakeCatalog, "speed orthotics"), [], "orthotic lines have their own handling");
+  assert.deepEqual(stylesInText(blakeCatalog, "the Zoe slip-on"), [], "a style with nothing in stock isn't offered");
+  assert.deepEqual(stylesInText(blakeCatalog, "nova or tess?").map((f) => f.name), ["Nova", "Tess"]);
+  assert.deepEqual(stylesInText(blakeCatalog, "blakeleopard"), [], "whole words only");
+});
+await test("the note names the style and its colorways and says to search it by name", () => {
+  const note = stylesNote(stylesInText(blakeCatalog, "Blake leproad"));
+  assert.match(note, /"Blake" is one of this store's styles — Blake Comfort Sneaker \(in stock in Black, Leopard and White\)\./);
+  assert.match(note, /A style name, not a typo/);
+  assert.match(note, /query "Blake" plus any color or size they named/);
+  assert.equal(stylesNote([]), "");
+});
+await test("search: \"Blake leopard shoes\" puts the Blake Leopard first even down to its last size — a name match outranks what sells", () => {
+  const r = leanSearch(blakeCatalog, { query: "Blake leopard shoes" });
+  assert.equal(r.products[0].title, "Blake Comfort Sneaker - Leopard", JSON.stringify(r.products.map((p) => p.title)));
+  const leopard = leanSearch(blakeCatalog, { query: "leopard" });
+  assert.ok(leopard.products.some((p) => p.title === "Blake Comfort Sneaker - Leopard"), "still among the leopard styles");
+});
+await test("\"Blake leproad\" on a shoe page: the model is told Blake is a style before it answers — no \"did you mean black?\"", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "Blake leopard" })] },
+    { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: ["blake-comfort-sneaker-leopard"] })] },
+    { stop_reason: "end_turn", content: [txt("Here's the Blake Comfort Sneaker in Leopard — did you mean this one? It's down to its last size, 5 US.")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog: blakeCatalog, model: "m", messages: [{ role: "user", content: "Blake leproad" }], latestUserMessage: "Blake leproad", callModel: s.callModel, log: (l) => logs.push(l) });
+  const first = JSON.stringify(s.requests[0].messages.at(-1));
+  assert.match(first, /is one of this store's styles — Blake Comfort Sneaker \(in stock in Black, Leopard and White\)/);
+  assert.ok(logs.some((l) => /style names typed: Blake/.test(l)), logs.join("\n"));
+  const result = JSON.parse(s.requests[1].messages.at(-1).content.find((b) => b.type === "tool_result").content);
+  assert.equal(result.products[0].title, "Blake Comfort Sneaker - Leopard", JSON.stringify(result.products.map((p) => p.title)));
+  assert.match(r.text, /Blake Comfort Sneaker in Leopard/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

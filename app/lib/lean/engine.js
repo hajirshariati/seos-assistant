@@ -18,7 +18,7 @@ import { storeLocatorConfig } from "../feedback-survey.js";
 import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { RESTOCK_TOOL, restockCheck, restockIssues } from "./restock.js";
-import { productKind, codesInText } from "./catalog.js";
+import { productKind, codesInText, stylesInText } from "./catalog.js";
 import { containsColorWord } from "../color-match.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown, footConditionQuestion } from "../medical-disclaimer.js";
 
@@ -262,6 +262,18 @@ export function hasRunningOffers(extraSystem) {
 const OFFER_WORDS = /\bfree\b|\d+\s*%\s*off|\$\d+(?:\.\d+)?\s+off|\b(codes?|referr\w*|refer a friend|price match\w*|gifts?|flash sale|bogo|buy one|rewards?|points)\b/i;
 export function mentionsOffer(text) {
   return OFFER_WORDS.test(String(text || ""));
+}
+// Style names the customer typed ("Blake", "the Savannah"), with each style's
+// colorways in stock — so a name the model doesn't know is searched as the
+// shoe it is, not read as a typo ("Blake" → "did you mean black?").
+const listWords = (xs) => xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
+export function stylesNote(found) {
+  if (!found.length) return "";
+  const lines = found.slice(0, 3).map(({ name, styles }) => {
+    const parts = styles.slice(0, 3).map((s) => `${s.style}${s.colors.length ? ` (in stock in ${listWords(s.colors.slice(0, 6))})` : ""}`);
+    return `"${name}" is one of this store's styles — ${parts.join("; ")}.`;
+  });
+  return `(${lines.join(" ")} A style name, not a typo: if they mean it, search it by name (search_products, query "${found[0].name}" plus any color or size they named) and show it.)`;
 }
 // Product codes the customer typed ("L820"), with the products they name — so
 // a code is searched as the product it is, never taken for an order number.
@@ -565,6 +577,13 @@ export async function runLeanTurn({
     const note = { type: "text", text: codesNote(typedCodes) };
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
     log(`[lean] product codes typed: ${typedCodes.map((c) => c.code).join(",")}`);
+  }
+  const typedStyles = stylesInText(catalog, latestUserMessage);
+  if (typedStyles.length) {
+    const last = conv[conv.length - 1];
+    const note = { type: "text", text: stylesNote(typedStyles) };
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+    log(`[lean] style names typed: ${typedStyles.map((c) => c.name).join(",")}`);
   }
   const priorTitles = extractPriorShownTitles(messages);
   const priorProducts = priorTitles

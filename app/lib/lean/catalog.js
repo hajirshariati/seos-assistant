@@ -353,3 +353,59 @@ export function codesInText(catalog, text, { close = true } = {}) {
   }
   return out;
 }
+
+// ── Style names the customer typed ────────────────────────────────
+// Shoppers call a shoe by its first name — "Blake", "the Savannah" — and a
+// name the model doesn't know reads like a typo ("Blake" → "did you mean
+// black?"). Each footwear style's first word (four letters or more, not a
+// generic word) is a name; a message that carries one is told so, with the
+// style's colorways in stock, the way a typed product code is.
+const GENERIC_STYLE_WORDS = new Set([
+  "women's", "womens", "men's", "mens", "unisex", "kids", "kid's", "boy's", "boys", "girl's", "girls", "children's", "childrens",
+  "the", "new", "classic", "aetrex", "cozy", "comfort", "sport", "sports", "casual", "active", "original", "premium", "essential",
+  "essentials", "basic", "core", "ultra", "lite", "light", "soft", "easy", "free", "true", "pure", "fresh", "modern", "urban", "street",
+  "trail", "travel", "walk", "walking", "running", "work", "train", "training", "flex", "wave", "speed", "power", "quick", "daily",
+  "everyday", "wide", "narrow", "extra", "plus", "slip", "lace", "high", "low", "mid", "flat", "heel", "wedge", "boot", "sandal", "shoe",
+]);
+const styleIndexCache = new WeakMap();
+function styleIndex(catalog) {
+  if (!catalog || typeof catalog !== "object") return new Map();
+  if (styleIndexCache.has(catalog)) return styleIndexCache.get(catalog);
+  const vocab = new Set();
+  for (const list of Object.values(catalog.vocab || {})) {
+    for (const v of Array.isArray(list) ? list : []) vocab.add(String(v?.value ?? v ?? "").toLowerCase().trim());
+  }
+  const idx = new Map();
+  for (const p of catalog.products || []) {
+    if (!p?.inStock || productKind(p) !== "footwear") continue;
+    const first = String(p.style || "").trim().split(/\s+/)[0] || "";
+    const name = first.replace(/[^A-Za-z'’-]/g, "");
+    const key = name.toLowerCase();
+    if (name.length < 4 || GENERIC_STYLE_WORDS.has(key) || vocab.has(key)) continue;
+    if (!idx.has(key)) idx.set(key, { name, styles: new Map() });
+    const styles = idx.get(key).styles;
+    if (!styles.has(p.style)) styles.set(p.style, { style: p.style, colors: [], handles: [] });
+    const s = styles.get(p.style);
+    const color = String(p.title || "").slice(String(p.style || "").length).replace(/^\s*[-–—]\s*/, "").trim() || p.colors?.[0] || "";
+    if (color && !s.colors.includes(color)) s.colors.push(color);
+    s.handles.push(p.handle);
+  }
+  styleIndexCache.set(catalog, idx);
+  return idx;
+}
+// The style names in a message, each with its styles and their colorways in
+// stock: [{ name: "Blake", styles: [{ style, colors, handles }] }].
+export function stylesInText(catalog, text) {
+  const idx = styleIndex(catalog);
+  if (!idx.size) return [];
+  const words = String(text || "").toLowerCase().replace(/[’']s\b/g, "").split(/[^a-z'’-]+/).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const w of words) {
+    const hit = idx.get(w);
+    if (!hit || seen.has(w)) continue;
+    seen.add(w);
+    out.push({ name: hit.name, styles: [...hit.styles.values()] });
+  }
+  return out;
+}
