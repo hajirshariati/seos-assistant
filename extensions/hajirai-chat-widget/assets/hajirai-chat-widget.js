@@ -2051,7 +2051,9 @@ function focusPainStepHtml(){
 function focusPainRender(sh,dir){
   var box=$('.ai-chat-focus__quiz',sh),body=$('.ai-chat-focus-sheet__body',sh);if(!box)return;
   var fill=function(){box.innerHTML=focusPainStepHtml();if(body)body.scrollTop=0;if(dir){var t=$('.ai-chat-focus__q-title',box);if(t)t.focus({preventScroll:true})}};
-  if(!focusMotionOk()){fill();focusPainBusy=false;return}
+  /* The first question is there the moment the sheet opens: nothing to
+     leave yet, so no beat before it. */
+  if(!focusMotionOk()||!box.innerHTML){fill();focusPainBusy=false;return}
   focusPainBusy=true;
   box.style.setProperty('--q-dir',(dir>0?-10:dir<0?10:0)+'px');box.classList.add('is-leaving');
   setTimeout(function(){

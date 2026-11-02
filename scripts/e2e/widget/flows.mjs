@@ -3716,6 +3716,8 @@ for (const coop of ["1", "2"]) {
     await page.waitForTimeout(400);
     await page.click('[data-focus-sheet="pain"]');
     await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    const tilesAtOnce = await page.evaluate(() => document.querySelectorAll("[data-pain-opt]").length);
+    check("home layout focus: the Foot pain sheet opens with its tiles already there — no blank beat before the first question", tilesAtOnce === 6, String(tilesAtOnce));
     const painHead = await page.evaluate(() => ({ pic: !!document.querySelector(".ai-chat-focus-sheet__head img"), tile: document.querySelector('[data-pain-opt="heel"] .ai-chat-focus__coin img')?.getAttribute("src") || "" }));
     check("home layout focus: the Foot pain sheet's head carries no picture while the heel tile inside keeps the heel", !painHead.pic && /focus-pain-heel/.test(painHead.tile), JSON.stringify(painHead));
     check("home layout focus (pictures): no JS errors", errors.length === 0, errors.join(" | "));
