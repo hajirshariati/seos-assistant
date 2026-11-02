@@ -1828,7 +1828,8 @@ function focusChatClass(on){panel.classList.toggle('is-chatting',!!on);focusTitl
 function fbOrthotic(){return FB_ICON==='orthotic'||/orthotic|insole|\bfit\b/i.test(FB_LABEL)}
 /* The sheet for one product line. Its helper rows are the chat's own
    (the same True Fit and FITFinder rows as the classic home). */
-var focusSheetEl=null,focusSheetOpener=null,focusSheetShut=0,focusPick={footwear:[-1,-1],orthotics:[-1,-1]};
+var focusSheetEl=null,focusSheetOpener=null,focusSheetShut=0,focusPick={footwear:{a:-1,b:[]},orthotics:{a:-1,b:[]}};
+function focusPickClear(kind){focusPick[kind]={a:-1,b:[]}}
 function focusHelperRow(attrs,icon,title,sub,cls){return '<button type="button" class="ai-chat-helper'+(cls?' '+cls:'')+'" '+attrs+'><span class="ai-chat-helper__icon">'+icon+'</span><span class="ai-chat-helper__text"><span class="ai-chat-helper__title">'+esc(title)+'</span><span class="ai-chat-helper__sub">'+esc(sub)+'</span></span><span class="ai-chat-helper__go">'+WI.arrow+'</span></button>'}
 function focusSheetRows(kind){
   var rows='';
@@ -1885,44 +1886,84 @@ function focusPickParts(kind,g){
   for(var i=0;i<groups.length;i++){if(names.indexOf(groups[i][0])<0)rest.push(groups[i]);else by[groups[i][0]]=groups[i][1]}
   return {a:by[names[0]]||[],b:by[names[1]]||[],keys:kind==='orthotics'?['Activity','For']:['Shoe','For'],rest:rest};
 }
-/* The sentence the picks make — what the Go button says, and sends. Each
-   chip's own words give the part it adds ("Show me women\u2019s sneakers" →
-   sneakers; "Women\u2019s shoes in wide widths" → in wide widths). */
-function focusPickSentence(kind,g,a,b){
-  var p=focusPickParts(kind,g),ca=a>=0?p.a[a]:null,cb=b>=0?p.b[b]:null,G=focusGenderWord(g);
-  if(!ca&&!cb)return '';
+/* The sentence the picks make — what the Ask box says, and sends. Each
+   chip's own words give the part it adds ("Show me women’s sneakers" →
+   sneakers; "Women’s shoes for bunions" → bunions; "Women’s shoes in
+   wide widths" → in wide widths). The second row may hold several: they
+   read as a list ("for plantar fasciitis and bunions"), anything that isn't
+   a "for" after it. */
+function focusListJoin(a){return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1]}
+function focusPickSentence(kind,g,a,bs){
+  var p=focusPickParts(kind,g),ca=a>=0?p.a[a]:null,G=focusGenderWord(g),cbs=[],i;
+  for(i=0;i<(bs||[]).length;i++)if(p.b[bs[i]])cbs.push(p.b[bs[i]]);
+  if(!ca&&!cbs.length)return '';
   if(kind==='orthotics'){
-    var act=ca?ca[1].replace(/^\S+\s+orthotics\s+/,''):'',cond=cb?cb[1].replace(/^\S+\s+orthotics\s+for\s+/,''):'';
-    return 'Show me '+G+' orthotics '+(ca&&cb?act+' with '+cond:ca?act:'for '+cond);
+    var act=ca?ca[1].replace(/^\S+\s+orthotics\s+/,''):'',conds=[];
+    for(i=0;i<cbs.length;i++)conds.push(cbs[i][1].replace(/^\S+\s+orthotics\s+for\s+/,''));
+    var cond=focusListJoin(conds);
+    return 'Show me '+G+' orthotics '+(ca&&cond?act+' with '+cond:ca?act:'for '+cond);
   }
-  var noun=ca?ca[1].replace(/^Show me \S+\s+/,''):'shoes',phr=cb?cb[1].replace(/^\S+\s+shoes\s+/,''):'';
-  return 'Show me '+G+' '+noun+(phr?' '+phr:'');
+  var noun=ca?ca[1].replace(/^Show me \S+\s+/,''):'shoes',fors=[],more=[];
+  for(i=0;i<cbs.length;i++){var ph=cbs[i][1].replace(/^\S+\s+shoes\s+/,'');if(/^for\s/.test(ph))fors.push(ph.replace(/^for\s+/,''));else more.push(ph)}
+  return 'Show me '+G+' '+noun+(fors.length?' for '+focusListJoin(fors):'')+(more.length?' '+more.join(' '):'');
 }
-function focusPickHint(kind){return kind==='orthotics'?'Pick an activity, a condition, or both':'Pick a shoe, a condition, or both'}
+/* The Ask box's placeholder, until the picks (or the shopper) fill it. */
+function focusPickHint(){return 'Pick above, or type here'}
 /* "Ask Ava" — the assistant's first name when it has one. */
 var ASK_WORDS=/^\S+$/.test(NAME)?'Ask '+NAME:'Ask';
-function focusPickRow(key,chips,which,on){
-  var h='<div class="ai-chat-focus__pick-row" role="group" aria-label="'+esc(key)+'"><span class="ai-chat-focus__pick-key" aria-hidden="true">'+esc(key)+'</span><div class="ai-chat-focus__pick-chips">';
-  for(var j=0;j<chips.length;j++)h+='<button type="button" class="ai-chat-focus__pick-chip" data-pick-'+which+'="'+j+'" aria-pressed="'+(j===on?'true':'false')+'"><i class="ai-chat-focus__pick-dot" aria-hidden="true">'+WI.check+'</i><span>'+esc(chips[j][0])+'</span></button>';
+/* A row of the card: its key, with how many to pick under it in small
+   type, and its chips (one pressed in the first row; any number in the
+   second). */
+function focusPickRow(key,hint,chips,which,on){
+  var h='<div class="ai-chat-focus__pick-row" role="group" aria-label="'+esc(key+' — '+hint)+'"><span class="ai-chat-focus__pick-key" aria-hidden="true"><b>'+esc(key)+'</b><small>'+esc(hint)+'</small></span><div class="ai-chat-focus__pick-chips">';
+  for(var j=0;j<chips.length;j++){var pressed=Array.isArray(on)?on.indexOf(j)>=0:j===on;h+='<button type="button" class="ai-chat-focus__pick-chip" data-pick-'+which+'="'+j+'" aria-pressed="'+(pressed?'true':'false')+'"><i class="ai-chat-focus__pick-dot" aria-hidden="true">'+WI.check+'</i><span>'+esc(chips[j][0])+'</span></button>'}
   return h+'</div></div>';
 }
 function focusBrowseHtml(kind){
-  var g=focusGender,p=focusPickParts(kind,g),st=focusPick[kind]||[-1,-1],t=focusPickSentence(kind,g,st[0],st[1]);
-  var h='<div class="ai-chat-focus__label">Pick &amp; go</div><div class="ai-chat-focus__pick">'+focusPickRow(p.keys[0],p.a,'a',st[0])+focusPickRow(p.keys[1],p.b,'b',st[1]);
-  /* The question the picks make, as the message it will be, with the Ask
-     button on its end: one tap anywhere on the row sends it. */
-  h+='<button type="button" class="ai-chat-focus__ask" data-pick-go'+(t?'':' disabled')+'><span class="ai-chat-focus__ask-q">'+esc(t||focusPickHint(kind))+'</span><span class="ai-chat-focus__ask-cta">'+esc(ASK_WORDS)+WI.arrow+'</span></button></div>';
+  var g=focusGender,p=focusPickParts(kind,g),st=focusPick[kind]||{a:-1,b:[]},t=focusPickSentence(kind,g,st.a,st.b);
+  var h='<div class="ai-chat-focus__label">Pick &amp; go</div><div class="ai-chat-focus__pick">'+focusPickRow(p.keys[0],'choose one',p.a,'a',st.a)+focusPickRow(p.keys[1],'one or more',p.b,'b',st.b)+'</div>';
   for(var i=0;i<p.rest.length;i++)h+='<div class="ai-chat-focus__label">'+esc(p.rest[i][0])+'</div><div class="ai-chat-focus__chips">'+focusChipsHtml(p.rest[i][1])+'</div>';
+  /* The Ask box, at the sheet's foot wherever it's scrolled: the question
+     the picks make, as the message it will be — the shopper can edit it,
+     or type their own (their own words let the picks go) — and the Ask
+     button. Enter sends too. */
+  h+='<div class="ai-chat-focus__ask"><div class="ai-chat-focus__ask-box"><input type="text" class="ai-chat-focus__ask-q" data-pick-q value="'+esc(t)+'" placeholder="'+esc(focusPickHint(kind))+'" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" aria-label="Your question"><button type="button" class="ai-chat-focus__ask-cta" data-pick-go'+(t?'':' disabled')+'>'+esc(ASK_WORDS)+WI.arrow+'</button></div></div>';
   return h;
 }
-/* A tap on a chip picks it (a second tap clears it); the Go button follows. */
+/* A tap on a chip picks it (a second tap clears it): one in the first row,
+   any number in the second. The Ask box follows; then the next thing to do
+   comes into view — after a pick in the first row, the second row (scrolled
+   to, clear of the bar) — and the Ask button gives a small nudge whenever
+   the question changes, so it's seen. */
 function focusPickTap(sh,kind,which,j){
-  var st=focusPick[kind]||(focusPick[kind]=[-1,-1]),k=which==='a'?0:1;
-  st[k]=st[k]===j?-1:j;
-  var chips=sh.querySelectorAll('[data-pick-'+which+']');
-  for(var i=0;i<chips.length;i++)chips[i].setAttribute('aria-pressed',i===st[k]?'true':'false');
-  var t=focusPickSentence(kind,focusGender,st[0],st[1]),go=$('[data-pick-go]',sh);
-  if(go){go.disabled=!t;var q=$('.ai-chat-focus__ask-q',go);if(q)q.textContent=t||focusPickHint(kind)}
+  var st=focusPick[kind]||(focusPick[kind]={a:-1,b:[]}),chips=sh.querySelectorAll('[data-pick-'+which+']'),i;
+  if(which==='a'){st.a=st.a===j?-1:j;for(i=0;i<chips.length;i++)chips[i].setAttribute('aria-pressed',i===st.a?'true':'false')}
+  else{var at=st.b.indexOf(j);if(at>=0)st.b.splice(at,1);else{st.b.push(j);st.b.sort(function(x,y){return x-y})}for(i=0;i<chips.length;i++)chips[i].setAttribute('aria-pressed',st.b.indexOf(i)>=0?'true':'false')}
+  focusPickSay(sh,kind);
+  if(which==='a'&&st.a>=0&&chips[0]){var row=chips[0].closest('.ai-chat-focus__pick-row'),next=row&&row.nextElementSibling;if(next&&next.scrollIntoView)next.scrollIntoView({block:'nearest',behavior:focusMotionOk()?'smooth':'auto'})}
+}
+/* Writes the picks' sentence into the Ask box and sets its button by it. */
+function focusPickSay(sh,kind){
+  var st=focusPick[kind]||{a:-1,b:[]},t=focusPickSentence(kind,focusGender,st.a,st.b),q=$('[data-pick-q]',sh),go=$('[data-pick-go]',sh);
+  if(q)q.value=t;
+  if(go)go.disabled=!t;
+  if(t)focusPickNudge(sh);
+}
+function focusPickNudge(sh){var bar=$('.ai-chat-focus__ask',sh);if(!bar||!focusMotionOk())return;bar.classList.remove('is-nudge');void bar.offsetWidth;bar.classList.add('is-nudge')}
+/* The shopper's own words in the box: the picks let go, since the box no
+   longer says what they say. The button follows the box. */
+function focusPickTyped(sh,q){
+  var kind=sh.getAttribute('data-kind')||'footwear',st=focusPick[kind]||{a:-1,b:[]};
+  if((st.a>=0||st.b.length)&&q.value!==focusPickSentence(kind,focusGender,st.a,st.b)){
+    focusPickClear(kind);
+    var ch=sh.querySelectorAll('[data-pick-a],[data-pick-b]');for(var i=0;i<ch.length;i++)ch[i].setAttribute('aria-pressed','false');
+  }
+  var go=$('[data-pick-go]',sh);if(go)go.disabled=!q.value.trim();
+}
+/* Sends what the box says. */
+function focusPickGo(sh){
+  var q=$('[data-pick-q]',sh),t=q?q.value.trim():'';if(!t)return;
+  SEA_TAP='';closeFocusSheet(true);focusSend(t);
 }
 /* Moves a tab strip's thumb and its pressed tab. */
 function focusSegPick(seg,i){
@@ -1945,7 +1986,7 @@ function focusSetGender(sh,g){
   focusSegPick($('.ai-chat-focus__gender',sh),g==='men'?1:0);
   if(kind==='pain'){focusPainGenderChanged();focusPainRender(sh,0);return}
   var box=$('.ai-chat-focus__browse',sh);
-  focusPick[kind]=[-1,-1];
+  focusPickClear(kind);
   focusSwap(box,function(){box.innerHTML=focusBrowseHtml(kind)});
 }
 /* ── The Foot pain flow ──
@@ -2127,10 +2168,11 @@ function openFocusSheet(kind,opener){
   closeFocusSheet(true);
   focusSheetOpener=opener||null;
   var pain=kind==='pain',w=focusCardWords(kind);
-  if(!pain)focusPick[kind]=[-1,-1];
+  if(!pain)focusPickClear(kind);
   var sh=el('div','ai-chat-focus-sheet');sh.setAttribute('data-kind',kind);
   sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+w[1]+'"><div class="ai-chat-focus-sheet__top"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head"><div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">'+w[0]+'</div><div class="ai-chat-focus-sheet__title">'+w[1]+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div></div><div class="ai-chat-focus-sheet__body">'+(pain?'<div class="ai-chat-focus__quiz"></div>':focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div>')+'</div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
+  sh.addEventListener('animationend',function(e){var bar=e.target&&e.target.closest&&e.target.closest('.ai-chat-focus__ask');if(bar)bar.classList.remove('is-nudge')});
   if(pain){focusPainStep=0;focusPainTrail=[];focusPainRender(sh,0)}
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
   focusSheetSwipe(sh);
@@ -2190,7 +2232,7 @@ if(FOCUS){
     var pk=e.target.closest('[data-pick-a],[data-pick-b]');
     if(pk){e.preventDefault();var pw=pk.hasAttribute('data-pick-a')?'a':'b';focusPickTap(sh,sh.getAttribute('data-kind')||'footwear',pw,parseInt(pk.getAttribute('data-pick-'+pw),10)||0);return}
     var go=e.target.closest('[data-pick-go]');
-    if(go){e.preventDefault();if(go.disabled)return;var gk=sh.getAttribute('data-kind')||'footwear',gs=focusPick[gk]||[-1,-1],gt=focusPickSentence(gk,focusGender,gs[0],gs[1]);if(!gt)return;SEA_TAP='';closeFocusSheet(true);focusSend(gt);return}
+    if(go){e.preventDefault();if(go.disabled)return;focusPickGo(sh);return}
     var hp=e.target.closest('[data-helper]');
     if(hp){e.preventDefault();closeFocusSheet(true);if(!isStreaming)startHelper(hp.getAttribute('data-helper'));return}
     var fb=e.target.closest('[data-form]');
@@ -2208,7 +2250,13 @@ if(FOCUS){
     var m=e.target.closest('[data-message]');
     if(m){e.preventDefault();var t=m.getAttribute('data-message');SEA_TAP=m.hasAttribute('data-seasonal')?t:'';closeFocusSheet(true);focusSend(t)}
   });
-  panel.addEventListener('keydown',function(e){if(e.key==='Escape'&&focusSheetEl){e.preventDefault();e.stopPropagation();closeFocusSheet()}},true);
+  panel.addEventListener('keydown',function(e){
+    if(!focusSheetEl)return;
+    if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeFocusSheet();return}
+    /* Enter in the Ask box sends, as in the chat's own. */
+    if(e.key==='Enter'&&e.target&&e.target.hasAttribute&&e.target.hasAttribute('data-pick-q')){e.preventDefault();e.stopPropagation();focusPickGo(focusSheetEl)}
+  },true);
+  panel.addEventListener('input',function(e){var q=e.target;if(!focusSheetEl||!q||!q.hasAttribute||!q.hasAttribute('data-pick-q')||!focusSheetEl.contains(q))return;focusPickTyped(focusSheetEl,q)});
   /* Anywhere outside the sheet — the dimmed chat or the page itself — closes
      it, and only it: that press does not go on to close the chat as well. */
   document.addEventListener('pointerdown',function(e){var sh=focusSheetEl;if(!sh)return;var p=$('.ai-chat-focus-sheet__panel',sh);if(p&&!p.contains(e.target)){focusSheetShut=Date.now();closeFocusSheet()}},true);
