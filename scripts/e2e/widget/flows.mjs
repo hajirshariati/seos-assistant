@@ -924,6 +924,33 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("FITFinder sheet (height): no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The home's three sheets dim the chat behind them even on a theme that hides
+// empty divs (div:empty { display: none }, as the live store does), and a tap
+// on the dimmed chat above closes them.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full?home=focus");
+  await page.addStyleTag({ content: "div:empty{display:none!important}" });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(700);
+  const seen = [];
+  for (const k of ["pain", "footwear", "orthotics"]) {
+    await page.click(`[data-focus-sheet="${k}"]`);
+    await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+    await page.waitForTimeout(350);
+    const dim = await page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); const m = getComputedStyle(s).backgroundColor.match(/[\d.]+/g) || []; return { a: parseFloat(m[3] || "0"), panelCursor: getComputedStyle(document.querySelector(".ai-chat-focus-sheet__body")).cursor }; });
+    const h = await page.evaluate(() => { const r = document.querySelector(".ai-chat-header").getBoundingClientRect(); return [r.left + 60, r.top + r.height / 2]; });
+    await page.mouse.click(h[0], h[1]);
+    await page.waitForTimeout(450);
+    seen.push({ k, ...dim, closed: !(await page.$(".ai-chat-focus-sheet")) });
+  }
+  check("home sheets (Foot pain, Footwear, Orthotics): the chat behind dims even when the theme hides empty divs, a tap on it closes the sheet, the sheet itself keeps a normal cursor", seen.length === 3 && seen.every((s) => s.a >= 0.3 && s.closed && s.panelCursor === "auto"), JSON.stringify(seen));
+  check("home sheets (dim): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The Orthotics sheet takes only the Popular buttons that are orthotic quizzes:
 // a "Share feedback" Typeform among them stays out.
 {

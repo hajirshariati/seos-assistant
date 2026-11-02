@@ -7417,10 +7417,14 @@ button.ai-chat-launcher__text {
 /* (The ⋮ menu's feedback line opens the store's Typeform survey in the chat's form sheet.) */
 
 /* The product line's sheet */
-.ai-chat-panel.is-focus .ai-chat-focus-sheet { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__back { position: absolute; inset: 0; background: rgba(13, 13, 18, 0.32); opacity: 0; transition: opacity 0.22s ease; cursor: pointer; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet__panel { position: relative; display: flex; flex-direction: column; max-height: 84%; background: var(--seos-bg-raised, #fff); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(13, 13, 18, 0.18); transform: translateY(48px); opacity: 0; transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s ease; }
-.ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__back { opacity: 1; }
+/* The dim behind the sheet lives on the sheet's own box, not on the empty
+   backdrop div: store themes hide empty divs (div:empty { display: none }),
+   which took the dim away on the live store. The backdrop stays as the tap
+   target where a theme lets it show; a tap on the box itself closes too. */
+.ai-chat-panel.is-focus .ai-chat-focus-sheet { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; background-color: rgba(13, 13, 18, 0); transition: background-color 0.22s ease; cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open { background-color: rgba(13, 13, 18, 0.32); }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__back { display: block; position: absolute; inset: 0; background: transparent; cursor: pointer; }
+.ai-chat-panel.is-focus .ai-chat-focus-sheet__panel { position: relative; display: flex; flex-direction: column; max-height: 84%; cursor: auto; background: var(--seos-bg-raised, #fff); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(13, 13, 18, 0.18); transform: translateY(48px); opacity: 0; transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet.is-open .ai-chat-focus-sheet__panel { transform: none; opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-focus-sheet__grip { width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--seos-line-strong, #d1d1d6); }
 /* The top of the sheet reads as a window's own title bar: a tinted band

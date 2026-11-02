@@ -2196,6 +2196,7 @@ function openFocusSheet(kind,opener){
   sh.addEventListener('animationend',function(e){var bar=e.target&&e.target.closest&&e.target.closest('.ai-chat-focus__ask');if(bar)bar.classList.remove('is-nudge')});
   if(pain){focusPainStep=0;focusPainTrail=[];focusPainRender(sh,0)}
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
+  sh.addEventListener('click',function(e){if(e.target===sh&&focusSheetEl===sh)closeFocusSheet()});
   focusSheetSwipe(sh);
   requestAnimationFrame(function(){requestAnimationFrame(function(){sh.classList.add('is-open')})});
   var c=$('.ai-chat-focus-sheet__close',sh);if(c)c.focus({preventScroll:true});
