@@ -3213,8 +3213,8 @@ function fbSheetEl(){
     /* The filters' panel and anything in it. */
     if(vfClick(e))return;
     /* FITFinder's own buttons. */
-    var fx=e.target.closest('[data-ffs]');
-    if(fx&&sheetKind==='fitfinder'){e.preventDefault();ffsAct(fx);return}
+    var ffb=e.target.closest('[data-ffs]');
+    if(ffb&&sheetKind==='fitfinder'){e.preventDefault();ffsAct(ffb);return}
     /* The "View all" list: its cards work like the ones in the chat. */
     var vaBox=e.target.closest('.ai-chat-fbsheet__list');
     if(!vaBox)return;
