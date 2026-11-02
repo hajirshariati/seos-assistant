@@ -1866,9 +1866,9 @@ function focusSegHtml(cls,items,on,attr){
   for(var i=0;i<items.length;i++)h+='<button type="button" role="tab" aria-selected="'+(i===on?'true':'false')+'" '+attr(i)+(i===on?' class="is-on"':'')+'>'+esc(items[i])+'</button>';
   return h+'</div>';
 }
-/* The chips of a section (a tap sends the chip's words). */
+/* The chips of a section: a tap sends the chip's words — the arrow says so. */
 function focusChipsHtml(chips){
-  var h='';for(var j=0;j<chips.length;j++)h+='<button type="button" data-message="'+esc(chips[j][1])+'">'+esc(chips[j][0])+'</button>';
+  var h='';for(var j=0;j<chips.length;j++)h+='<button type="button" data-message="'+esc(chips[j][1])+'"><span>'+esc(chips[j][0])+'</span><span class="ai-chat-focus__chip-go" aria-hidden="true">'+WI.arrow+'</span></button>';
   return h;
 }
 /* ── Pick & go ──
@@ -1896,15 +1896,19 @@ function focusPickSentence(kind,g,a,b){
   return 'Show me '+G+' '+noun+(phr?' '+phr:'');
 }
 function focusPickHint(kind){return kind==='orthotics'?'Pick an activity, a condition, or both':'Pick a shoe, a condition, or both'}
+/* "Ask Ava" — the assistant's first name when it has one. */
+var ASK_WORDS=/^\S+$/.test(NAME)?'Ask '+NAME:'Ask';
 function focusPickRow(key,chips,which,on){
-  var h='<div class="ai-chat-focus__pick-row" role="group" aria-label="'+esc(key)+'"><span class="ai-chat-focus__pick-key" aria-hidden="true">'+esc(key)+'</span>';
-  for(var j=0;j<chips.length;j++)h+='<button type="button" class="ai-chat-focus__pick-chip" data-pick-'+which+'="'+j+'" aria-pressed="'+(j===on?'true':'false')+'">'+esc(chips[j][0])+'</button>';
-  return h+'</div>';
+  var h='<div class="ai-chat-focus__pick-row" role="group" aria-label="'+esc(key)+'"><span class="ai-chat-focus__pick-key" aria-hidden="true">'+esc(key)+'</span><div class="ai-chat-focus__pick-chips">';
+  for(var j=0;j<chips.length;j++)h+='<button type="button" class="ai-chat-focus__pick-chip" data-pick-'+which+'="'+j+'" aria-pressed="'+(j===on?'true':'false')+'"><i class="ai-chat-focus__pick-dot" aria-hidden="true">'+WI.check+'</i><span>'+esc(chips[j][0])+'</span></button>';
+  return h+'</div></div>';
 }
 function focusBrowseHtml(kind){
   var g=focusGender,p=focusPickParts(kind,g),st=focusPick[kind]||[-1,-1],t=focusPickSentence(kind,g,st[0],st[1]);
-  var h='<div class="ai-chat-focus__pick"><div class="ai-chat-focus__label">Pick &amp; go</div>'+focusPickRow(p.keys[0],p.a,'a',st[0])+focusPickRow(p.keys[1],p.b,'b',st[1]);
-  h+='<button type="button" class="ai-chat-focus__go" data-pick-go'+(t?'':' disabled')+'><span>'+esc(t||focusPickHint(kind))+'</span>'+WI.arrow+'</button></div>';
+  var h='<div class="ai-chat-focus__label">Pick &amp; go</div><div class="ai-chat-focus__pick">'+focusPickRow(p.keys[0],p.a,'a',st[0])+focusPickRow(p.keys[1],p.b,'b',st[1]);
+  /* The question the picks make, as the message it will be, with the Ask
+     button on its end: one tap anywhere on the row sends it. */
+  h+='<button type="button" class="ai-chat-focus__ask" data-pick-go'+(t?'':' disabled')+'><span class="ai-chat-focus__ask-q">'+esc(t||focusPickHint(kind))+'</span><span class="ai-chat-focus__ask-cta">'+esc(ASK_WORDS)+WI.arrow+'</span></button></div>';
   for(var i=0;i<p.rest.length;i++)h+='<div class="ai-chat-focus__label">'+esc(p.rest[i][0])+'</div><div class="ai-chat-focus__chips">'+focusChipsHtml(p.rest[i][1])+'</div>';
   return h;
 }
@@ -1915,7 +1919,7 @@ function focusPickTap(sh,kind,which,j){
   var chips=sh.querySelectorAll('[data-pick-'+which+']');
   for(var i=0;i<chips.length;i++)chips[i].setAttribute('aria-pressed',i===st[k]?'true':'false');
   var t=focusPickSentence(kind,focusGender,st[0],st[1]),go=$('[data-pick-go]',sh);
-  if(go){go.disabled=!t;var sp=$('span',go);if(sp)sp.textContent=t||focusPickHint(kind)}
+  if(go){go.disabled=!t;var q=$('.ai-chat-focus__ask-q',go);if(q)q.textContent=t||focusPickHint(kind)}
 }
 /* Moves a tab strip's thumb and its pressed tab. */
 function focusSegPick(seg,i){
