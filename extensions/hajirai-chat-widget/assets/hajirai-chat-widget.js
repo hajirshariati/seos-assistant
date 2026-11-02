@@ -2367,6 +2367,9 @@ setInterval(function(){
 },1500);
 var ffRetake=false;
 function startHelper(kind){
+  /* FITFinder: the app's own flow in the chat's sheet — no turn with the
+     assistant to find a FIT. (The assistant still answers a typed question.) */
+  if((kind==='fitfinder'||kind==='fitfinder-retake'||kind==='refit')&&ffNative()){openFitFinder(null,kind==='fitfinder'?'':'retake');return}
   inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false;
   var mine=savedFit(),size=tfHere()&&pageHandle()?tfSizeHere():'';
   if(kind==='truefit-update'){runTrueFit(pageTitle());return}
@@ -3185,13 +3188,16 @@ function fbSheetEl(){
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
   fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end"><button type="button" class="ai-chat-fbsheet__x" data-sheet-x="1" aria-label="Close the chat" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></span></div>'+
-    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div></div>';
+    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div><div class="ai-chat-fbsheet__ff"></div></div>';
   fbSheet.addEventListener('click',function(e){
     if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback();return}
     /* × closes the whole chat. */
     if(e.target.closest('[data-sheet-x]')){e.preventDefault();sheetCloseAll();return}
     /* The filters' panel and anything in it. */
     if(vfClick(e))return;
+    /* FITFinder's own buttons. */
+    var fx=e.target.closest('[data-ffs]');
+    if(fx&&sheetKind==='fitfinder'){e.preventDefault();ffsAct(fx);return}
     /* The "View all" list: its cards work like the ones in the chat. */
     var vaBox=e.target.closest('.ai-chat-fbsheet__list');
     if(!vaBox)return;
@@ -5483,6 +5489,21 @@ function resumeAfterSignIn(){
   CUST_LOGGED_IN=true;
   if(FOCUS)focusTitleBuild();
   var pill=panel.querySelector('.ai-chat-header__login-pill');if(pill)pill.remove();
+  /* Back from signing in for FITFinder: the FIT they chose goes to their
+     profile now, and the sheet shows it saved — or runs the scan lookup
+     they asked for. No message to the assistant. */
+  if(r.intent==='fitfinder'||r.intent==='fitfinder-scan'){
+    if(ff)ff.loggedIn=true;
+    var pk='';try{pk=sessionStorage.getItem(FFS_PENDING)||'';sessionStorage.removeItem(FFS_PENDING)}catch(e){}
+    if(pk&&ff)ffSave(pk);
+    if(!isOpen)toggle(true);
+    setTimeout(function(){
+      if(!ffNative())return;
+      if(r.intent==='fitfinder-scan'){ffs.from=savedFit()?'done':'quiz';ffs.view='scan';if(openFitFinder(null,'keep'))ffsScanStart(fbSheet)}
+      else{ffs.view='done';ffs.done='account';openFitFinder(null,'keep')}
+    },isOpen?150:700);
+    return;
+  }
   /* The sign-in cards above have done their job. */
   var done=panel.querySelectorAll('[data-ord-login]');
   for(var i=0;i<done.length;i++){var sp=document.createElement('span');sp.className='ai-ord__signedin';sp.innerHTML=ORD_ICON.check+'Signed in';done[i].replaceWith(sp)}
@@ -5958,8 +5979,14 @@ function loadFitfinder(){
     .then(function(d){
       if(!d||d.enabled!==true||!Array.isArray(d.fits)||!d.fits.length)return null;
       ff={
-        fits:d.fits.map(function(f){return{key:f.key,label:f.label,code:f.code,name:f.name,description:f.description}}),
-        questions:((d.quiz&&d.quiz.questions)||[]).map(function(q){return{text:q.text,helpText:q.helpText,options:(q.options||[]).map(function(o){return{label:o.label,sublabel:o.sublabel}})}}),
+        fits:d.fits.map(function(f){return{key:f.key,label:f.label,code:f.code,name:f.name,description:f.description,details:f.details||'',image:safeUrl(f.image||'')}}),
+        questions:((d.quiz&&d.quiz.questions)||[]).map(function(q){return{id:String(q.id||''),text:q.text,helpTitle:q.helpTitle||'',helpText:q.helpText,options:(q.options||[]).map(function(o){return{id:String(o.id||''),label:o.label,sublabel:o.sublabel}})}}),
+        /* The answers' combinations → the FIT (the app's own table), the
+           app's words, its accent, and whether the in-store scan lookup is on. */
+        mappings:(d.quiz&&d.quiz.mappings&&typeof d.quiz.mappings==='object')?d.quiz.mappings:{},
+        words:{cta:String((d.content&&d.content.cta)||''),learnMore:String((d.content&&d.content.learnMore)||''),savePrompt:String((d.content&&d.content.savePromptLabel)||''),skipSave:String((d.content&&d.content.skipSaveLabel)||''),prefix:String((d.content&&d.content.fitPrefix)||'FIT')},
+        accent:/^#[0-9a-f]{3,8}$/i.test(String((d.content&&d.content.accent)||''))?d.content.accent:'',
+        scanCta:!!(d.behavior&&d.behavior.scanCta===true),
         saved:d.savedFit&&d.savedFit.key?String(d.savedFit.key):null,
         loggedIn:d.loggedIn===true
       };
@@ -5974,13 +6001,18 @@ function ffStored(){
   if(raw==null){try{raw=localStorage.getItem(FF_KEY)}catch(e){}}
   try{var v=JSON.parse(raw||'null');return v&&v.key&&v.hint!==true?v:null}catch(e){return null}
 }
+/* What the assistant gets with each message: the FITs and the questions
+   as before (no ids, no table — it asks in its own words when a shopper
+   types rather than taps). */
+function ffFitsForAi(){return ff.fits.map(function(f){return{key:f.key,label:f.label,code:f.code,name:f.name,description:f.description}})}
+function ffQuestionsForAi(){return ff.questions.map(function(q){return{text:q.text,helpText:q.helpText,options:q.options.map(function(o){return{label:o.label,sublabel:o.sublabel}})}})}
 function ffPayload(){
   if(!ff)return null;
   var local=ffStored();/* a save on this device is the newest choice */
   /* "Retake my FIT": this one message goes without the saved FIT, so the
      questions are asked again; the new answer is saved as usual. */
-  if(ffRetake){ffRetake=false;return{fits:ff.fits,questions:ff.questions,saved:{key:''},retake:true}}
-  return{fits:ff.fits,questions:ff.questions,saved:{key:(local&&local.key)||ff.saved||''}};
+  if(ffRetake){ffRetake=false;return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:''},retake:true}}
+  return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:(local&&local.key)||ff.saved||''}};
 }
 /* The same consent rule FITFinder follows: remember across visits only when
    preference cookies are allowed (OneTrust group C0003 or Shopify's banner). */
@@ -6005,6 +6037,208 @@ function ffSave(key){
   /* They have a FIT now: earlier cards stop offering to find one. */
   var stale=msgsEl.querySelectorAll('.ai-chat-product-card [data-helper="fitfinder"]');
   for(var si=0;si<stale.length;si++){var row=stale[si].parentNode;row.removeChild(stale[si]);if(row.classList.contains('ai-tools'))toolsRelayout(row)}
+}
+
+/* ── FITFinder, in the chat's own sheet ──
+   The FitFinder app's flow, without the assistant: its questions with their
+   "How do I know?" notes, the FIT they map to (the app's own table) as a
+   card — its name, what it's for, Learn more — saved to the account or
+   carried on with as a guest, the in-store scan lookup, Start over. Nothing
+   here costs a turn with the assistant; the saved FIT reaches the chat as
+   it always has (ffSave). */
+var FFS_PENDING='hajirai_ff_pending';
+var FFS_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+var FFS_RESTART='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+var ffs={view:'quiz',a:{},scan:null,done:'',from:'quiz'};
+/* The app's flow can run here: questions with ids, options with ids, a table. */
+function ffNative(){
+  if(!ff||!ff.questions.length||!ff.mappings)return false;
+  var any=false;for(var k in ff.mappings){if(Object.prototype.hasOwnProperty.call(ff.mappings,k)){any=true;break}}
+  if(!any)return false;
+  for(var i=0;i<ff.questions.length;i++){var q=ff.questions[i];if(!q.id||!q.options.length)return false;for(var j=0;j<q.options.length;j++)if(!q.options[j].id)return false}
+  return true;
+}
+function ffFitByKey(key){for(var i=0;i<ff.fits.length;i++)if(ff.fits[i].key===key)return ff.fits[i];return null}
+/* The FIT the answers map to: null until every question is answered,
+   false when the table has nothing for that combination. */
+function ffsFit(){
+  var ids=[];
+  for(var i=0;i<ff.questions.length;i++){var v=ffs.a[ff.questions[i].id];if(!v)return null;ids.push(v)}
+  var key=ff.mappings[ids.join('|')];
+  return key?(ffFitByKey(String(key))||false):false;
+}
+function ffsLogged(){return !!((ff&&ff.loggedIn)||CUST_LOGGED_IN)}
+function ffsKeyLabel(f){return f.label||((ff.words.prefix||'FIT')+' '+f.key)}
+/* mode: '' — a saved FIT opens as itself (Your FIT), else the questions;
+   'retake' — the questions, cleared; 'keep' — as it was left. */
+function openFitFinder(opener,mode){
+  if(!ffNative())return false;
+  fbOpener=opener||null;
+  var sh=fbSheetEl();
+  if(mode==='retake'){ffs.view='quiz';ffs.a={};ffs.done='';ffs.scan=null}
+  else if(mode!=='keep'){
+    var mine=savedFit(),answered=false;for(var k in ffs.a){if(ffs.a[k]){answered=true;break}}
+    if(ffs.view!=='done'&&mine&&!answered){ffs.view='done';ffs.done=ffs.done||'known'}
+    if(ffs.view==='scan')ffs.view=mine?'done':'quiz';
+  }
+  if(ffs.view==='done'&&!savedFit()){ffs.view='quiz';ffs.done=''}
+  sheetKind='fitfinder';sheetTitle='FITFinder';
+  $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
+  sh.setAttribute('aria-label',sheetTitle);
+  sh.setAttribute('data-kind','fitfinder');
+  sh.classList.remove('is-failed');sh.classList.add('is-ready');
+  menu.style.display='none';
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fbBehind(true);
+  ffsRender(sh);
+  setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
+  return true;
+}
+function ffsRender(sh){
+  var box=$('.ai-chat-fbsheet__ff',sh);if(!box)return;
+  if(ff.accent)box.style.setProperty('--ffs-accent',ff.accent);
+  var title=ffs.view==='scan'?'Scanned in one of our stores?':(ff.words.cta||'Help me find my Fit');
+  var h='<div class="ai-ffs__head"><span class="ai-ffs__brand" aria-hidden="true"><b>FIT</b>FINDER</span><div class="ai-ffs__title">'+esc(title)+'</div></div>';
+  if(ffs.view==='scan')h+=ffsScanHtml();
+  else if(ffs.view==='done')h+=ffsDoneHtml();
+  else h+=ffsQuizHtml();
+  h+='<div class="ai-ffs__foot">'+(ffs.view==='scan'?'<button type="button" class="ai-ffs__scan" data-ffs="quiz">'+(ffs.from==='done'?'Back to my FIT':'Back to the questions')+'</button>':ff.scanCta?'<button type="button" class="ai-ffs__scan" data-ffs="scan">Scanned in one of our stores?</button>':'<span></span>')+'<span class="ai-ffs__powered">Powered by Aetrex Technology</span></div>';
+  box.innerHTML=h;
+}
+function ffsQuizHtml(){
+  var h='';
+  for(var i=0;i<ff.questions.length;i++){
+    var q=ff.questions[i],on=ffs.a[q.id]||'';
+    h+='<div class="ai-ffs__q"><div class="ai-ffs__qrow"><span class="ai-ffs__qtext">'+esc(q.text)+'</span>'+(q.helpText?'<button type="button" class="ai-ffs__help" data-ffs="help" aria-expanded="false" aria-controls="ai-ffs-help-'+i+'">'+esc(q.helpTitle||'How do I know?')+FFS_CHEV+'</button>':'')+'</div>';
+    if(q.helpText)h+='<div class="ai-ffs__helpbox" id="ai-ffs-help-'+i+'" hidden>'+esc(q.helpText)+'</div>';
+    h+='<div class="ai-ffs__opts">';
+    for(var j=0;j<q.options.length;j++){var o=q.options[j];h+='<button type="button" class="ai-ffs__opt" data-ffs="opt" data-q="'+esc(q.id)+'" data-o="'+esc(o.id)+'" aria-pressed="'+(on===o.id?'true':'false')+'"><b>'+esc(o.label)+'</b>'+(o.sublabel?'<small>'+esc(o.sublabel)+'</small>':'')+'</button>'}
+    h+='</div></div>';
+  }
+  var f=ffsFit();
+  return h+'<div class="ai-ffs__tail" data-fit="'+(f?esc(f.key):f===false?'!':'')+'">'+ffsTailHtml(f)+'</div>';
+}
+/* What follows the questions: the card and Start over once there's a FIT;
+   a word when the table has none for that combination; nothing before. */
+function ffsTailHtml(f){
+  if(f)return ffsRecHtml(f,false)+ffsClearHtml();
+  if(f===false)return '<p class="ai-ffs__note is-warn">No matching FIT for that combination — try adjusting an answer.</p>';
+  return '';
+}
+function ffsClearHtml(){return '<div class="ai-ffs__clear"><button type="button" class="ai-ffs__clearbtn" data-ffs="clear">'+FFS_RESTART+'<span>Start over</span></button></div>'}
+function ffsDoneHtml(){
+  var f=savedFit();
+  return f?ffsRecHtml(f,true)+ffsClearHtml():ffsQuizHtml();
+}
+/* The FIT as a card: Recommended fit (or Your FIT once it's theirs), the
+   letter and name, the line, Learn more folded; then the save choices — a
+   guest is asked to sign in or carry on; a signed-in shopper's saves on its
+   own; a saved one offers the orthotics in it. */
+function ffsRecHtml(f,done){
+  var h='<div class="ai-ffs__rec" role="status"><div class="ai-ffs__rec-label">'+(done?'Your FIT':'Recommended fit')+'</div><div class="ai-ffs__rec-line"><span class="ai-ffs__rec-key">'+esc(ffsKeyLabel(f))+'</span>'+(f.name?'<span class="ai-ffs__rec-name">'+esc(f.name)+'</span>':'')+'</div>';
+  var more=!!(f.details||f.image);
+  if(f.description||more){
+    h+='<div class="ai-ffs__rec-descrow">'+(f.description?'<p class="ai-ffs__rec-desc">'+esc(f.description)+'</p>':'')+(more?'<button type="button" class="ai-ffs__more" data-ffs="more" aria-expanded="false" aria-controls="ai-ffs-more">'+esc(ff.words.learnMore||'Learn more')+FFS_CHEV+'</button>':'')+'</div>';
+    if(more)h+='<div class="ai-ffs__drawer" id="ai-ffs-more" hidden>'+(f.image?'<img class="ai-ffs__img" src="'+esc(f.image)+'" alt="" loading="lazy">':'')+(f.details?'<p>'+esc(f.details)+'</p>':'')+'</div>';
+  }
+  h+='<div class="ai-ffs__save">';
+  var shop='<button type="button" class="ai-ffs__btn is-primary" data-ffs="shop">Show orthotics in my '+esc(ffsKeyLabel(f))+'</button>',close='<button type="button" class="ai-ffs__btn" data-ffs="close">Done</button>';
+  if(done){
+    h+='<p class="ai-ffs__note">'+(ffs.done==='account'?'Saved to your profile — orthotic pages open on your FIT.':ffs.done==='guest'?'We’ll use this fit while you shop today.':'Your saved FIT — orthotic pages open on it.')+'</p><div class="ai-ffs__ctas">'+shop+close+'</div>';
+  }else if(ffsLogged()){
+    h+='<div class="ai-ffs__ctas">'+shop+close+'</div><p class="ai-ffs__note">You’re signed in — this fit saves to your profile automatically.</p>';
+  }else{
+    h+='<p class="ai-ffs__savetitle">'+esc(ff.words.savePrompt||'Save this fit to your account for next time?')+'</p><div class="ai-ffs__ctas"><button type="button" class="ai-ffs__btn is-primary" data-ffs="save-account">Yes (sign in required)</button><button type="button" class="ai-ffs__btn" data-ffs="save-guest">'+esc(ff.words.skipSave||'Continue as guest')+'</button></div><p class="ai-ffs__note">Either way, we’ll use this fit while you shop today.</p>';
+  }
+  return h+'</div></div>';
+}
+/* The in-store scan: sign in first (the lookup needs the account's email,
+   read by the app, never typed here), then the scan's FIT with its date
+   and report, or a word when there's none / it couldn't be checked. */
+function ffsScanHtml(){
+  var s=ffs.scan||{state:'finding'},h='<div class="ai-ffs__scanbox">';
+  if(s.state==='login')h+='<p class="ai-ffs__note">Sign in with the email from your scan.</p><div class="ai-ffs__ctas is-one"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-login">Sign in</button></div>';
+  else if(s.state==='found'){var f=s.fit;h+='<div class="ai-ffs__rec" role="status"><div class="ai-ffs__rec-label">Your scanned fit</div><div class="ai-ffs__rec-line"><span class="ai-ffs__rec-key">'+esc(f.label||((ff.words.prefix||'FIT')+' '+f.key))+'</span>'+(f.name?'<span class="ai-ffs__rec-name">'+esc(f.name)+'</span>':'')+'</div>'+(s.date?'<div class="ai-ffs__scandate">Scanned '+esc(s.date)+'</div>':'')+'<p class="ai-ffs__note">From your foot scan at our store.</p><div class="ai-ffs__save"><div class="ai-ffs__ctas'+(s.url?'':' is-one')+'"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-use">Use my scanned fit</button>'+(s.url?'<a class="ai-ffs__btn" href="'+esc(s.url)+'" target="_blank" rel="noopener">View my scan report</a>':'')+'</div></div></div>'}
+  else if(s.state==='none')h+='<p class="ai-ffs__note">We couldn’t find a foot scan for your account. If you were scanned in one of our stores, sign in with the email you gave there.</p>';
+  else if(s.state==='error')h+='<p class="ai-ffs__note">Sorry — that didn’t work. Please try again.</p><div class="ai-ffs__ctas is-one"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-retry">Try again</button></div>';
+  else h+='<div class="ai-ffs__progress" role="status"><span class="ai-ffs__spin" aria-hidden="true"></span>Finding your fit…</div>';
+  return h+'</div>';
+}
+function ffsScanStart(sh){
+  if(!ffsLogged()){ffs.scan={state:'login'};ffsRender(sh);return}
+  var mine={state:'finding'};ffs.scan=mine;ffsRender(sh);
+  fetch(SHOP_ROOT+'apps/fitfinder/scan-fit?visitor='+encodeURIComponent(getSess())+'&origin='+encodeURIComponent(location.origin),{credentials:'same-origin',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json().then(function(d){return{s:r.status,d:d}},function(){return{s:r.status,d:null}})})
+    .then(function(x){
+      if(ffs.scan!==mine)return;
+      var d=x.d||{};
+      if(d.found&&d.fit&&d.fit.key){
+        var date='';
+        if(d.scannedAt){var dd=new Date(d.scannedAt);if(!isNaN(dd.getTime())){try{date=dd.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}catch(e){date=dd.toDateString()}}}
+        ffs.scan={state:'found',fit:{key:String(d.fit.key),label:d.fit.label||'',name:d.fit.name||''},date:date,url:safeUrl(d.scanUrl||'')};
+      }
+      else if(d.needLogin||x.s===401)ffs.scan={state:'login'};
+      else if(d.retry||d.error==='unavailable'||d.error==='rate_limited'||x.s>=500||!x.d)ffs.scan={state:'error'};
+      else ffs.scan={state:'none'};
+      ffsRender(fbSheet);
+    })
+    .catch(function(){if(ffs.scan===mine){ffs.scan={state:'error'};ffsRender(fbSheet)}});
+}
+/* Fold / unfold a note (How do I know?, Learn more). */
+function ffsFold(b){
+  var box=document.getElementById(b.getAttribute('aria-controls')||'');if(!box)return;
+  var open=box.hidden;box.hidden=!open;b.setAttribute('aria-expanded',open?'true':'false');b.classList.toggle('is-open',open);
+}
+/* The card follows the answers: it comes when they all have one, changes
+   with them, goes when one is cleared — the questions themselves stay put
+   (an open note stays open). */
+function ffsRecUpdate(sh){
+  var tail=$('.ai-ffs__tail',sh);if(!tail)return;
+  var f=ffsFit(),key=f?f.key:f===false?'!':'';
+  if(key===(tail.getAttribute('data-fit')||''))return;
+  tail.setAttribute('data-fit',key);tail.innerHTML=ffsTailHtml(f);
+  var rec=$('.ai-ffs__rec',tail);
+  if(rec&&rec.scrollIntoView)try{rec.scrollIntoView({block:'nearest',behavior:focusMotionOk()?'smooth':'auto'})}catch(e){}
+}
+function ffsSaved(how){ffs.view='done';ffs.done=how;ffs.a={};ffsRender(fbSheet)}
+function ffsAct(b){
+  var sh=fbSheet,a=b.getAttribute('data-ffs'),f;
+  if(a==='opt'){
+    var q=b.getAttribute('data-q'),o=b.getAttribute('data-o');
+    ffs.a[q]=o;
+    var sib=b.parentNode.querySelectorAll('.ai-ffs__opt');for(var i=0;i<sib.length;i++)sib[i].setAttribute('aria-pressed',sib[i]===b?'true':'false');
+    ffsRecUpdate(sh);return;
+  }
+  if(a==='help'||a==='more'){ffsFold(b);return}
+  if(a==='clear'){ffs.a={};ffs.view='quiz';ffsRender(sh);return}
+  if(a==='save-guest'){f=ffsFit();if(!f)return;ffSave(f.key);ffsSaved('guest');return}
+  if(a==='save-account'){
+    f=ffsFit();if(!f)return;
+    if(ffsLogged()){ffSave(f.key);ffsSaved('account');return}
+    /* Today's visit has it already; the profile gets it once they're back. */
+    ffSave(f.key);try{sessionStorage.setItem(FFS_PENDING,f.key)}catch(e){}
+    startSignIn('fitfinder');return;
+  }
+  if(a==='shop'){
+    f=ffs.view==='done'?savedFit():ffsFit();if(!f)return;
+    if(ffs.view!=='done'){ffSave(f.key);ffs.view='done';ffs.done=ffsLogged()?'account':'guest';ffs.a={}}
+    closeFeedback();focusSend('Show me orthotics in my '+fitTitle(f)+'.');return;
+  }
+  if(a==='close'){
+    f=ffs.view==='done'?null:ffsFit();
+    if(f){ffSave(f.key);ffs.view='done';ffs.done=ffsLogged()?'account':'guest';ffs.a={}}
+    closeFeedback();return;
+  }
+  /* The scan leaves from the questions or from a saved FIT; its Back goes to the same. */
+  if(a==='scan'){ffs.from=ffs.view==='done'?'done':'quiz';ffs.view='scan';ffsScanStart(sh);return}
+  if(a==='quiz'){ffs.view=ffs.from==='done'&&savedFit()?'done':'quiz';ffs.scan=null;ffsRender(sh);return}
+  if(a==='scan-login'){startSignIn('fitfinder-scan');return}
+  if(a==='scan-retry'){ffsScanStart(sh);return}
+  if(a==='scan-use'){
+    var s=ffs.scan;if(!s||s.state!=='found')return;
+    if(!ffFitByKey(s.fit.key)){ffs.scan={state:'error'};ffsRender(sh);return}
+    ffSave(s.fit.key);ffs.scan=null;ffsSaved(ffsLogged()?'account':'guest');return;
+  }
 }
 
 var streamWatchdog=null;

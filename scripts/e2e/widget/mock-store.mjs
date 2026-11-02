@@ -18,7 +18,7 @@ export const returnBodies = [];
 export const startedReturns = {};
 // Test switches: drop the connection after the next return is created (the
 // shopper never hears back), or make the next request slow.
-export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150, cartCount: null, cartFail: false };
+export const mockCtl = { dropNextPost: false, slowPostMs: 0, compareFail: false, viewAllFail: 0, viewAllDelayMs: 150, cartCount: null, cartFail: false, ffGuest: false, ffScan: null };
 export const compareLog = [];
 // "View all" pages the widget asked for ({ page, search }), its filter
 // index requests and the cards it asked for by handle.
@@ -54,14 +54,25 @@ const ORDERS = [
 ];
 const FF_CONFIG = {
   enabled: true, loggedIn: true, savedFit: null,
-  quiz: { title: "Find my fit", questions: [{ id: "q_arch", text: "Do you have flat feet?", helpText: "Look at a wet footprint.", options: [{ id: "a", label: "Yes", sublabel: "Flat feet" }, { id: "b", label: "No / Unsure" }] }] },
+  content: { cta: "Help me find my Fit", learnMore: "Learn more", fitPrefix: "FIT", savePromptLabel: "", skipSaveLabel: "", accent: "#2563EB" },
+  behavior: { scanCta: true },
+  quiz: {
+    title: "Find my fit",
+    questions: [
+      { id: "q_arch", text: "Do you have flat feet?", helpTitle: "How do I know?", helpText: "Look at a wet footprint on a dry floor: if you can see almost your entire sole, you likely have flat feet.", options: [{ id: "a", label: "Yes", sublabel: "Flat feet" }, { id: "b", label: "No / Unsure" }] },
+      { id: "q_met", text: "Do you have pain beneath the ball of your foot?", helpTitle: "How do I know?", helpText: "Ball-of-foot pain feels like aching or burning under the pads just behind your toes.", options: [{ id: "c", label: "Yes", sublabel: "I have pain" }, { id: "d", label: "No / Unsure", sublabel: "No pain" }] },
+    ],
+    mappings: { "a|c": "D", "a|d": "A", "b|c": "C", "b|d": "B" },
+  },
   fits: [
-    { key: "A", label: "FIT A", code: "20", name: "Posted Support", description: "Angled heel for flat feet.", details: "long" },
-    { key: "B", label: "FIT B", code: "00", name: "Cushioned Support", description: "Neutral cushioned support." },
-    { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support", description: "With a metatarsal pad." },
-    { key: "D", label: "FIT D", code: "25", name: "Maximum Support", description: "Posted plus metatarsal pad." },
+    { key: "A", label: "FIT A", code: "20", name: "Posted Support", description: "Angled heel for flat feet.", details: "Designed for flat or low arches and feet that roll inward." },
+    { key: "B", label: "FIT B", code: "00", name: "Cushioned Support", description: "Neutral cushioned support.", details: "Our most versatile fit — neutral or medium arches without any specific pain." },
+    { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support", description: "With a metatarsal pad.", details: "Best for neutral or higher arches with tenderness under the ball of the foot." },
+    { key: "D", label: "FIT D", code: "25", name: "Maximum Support", description: "Posted plus metatarsal pad.", details: "Our most supportive fit — for flat or low arches with pain under the ball of the foot." },
   ],
 };
+// The in-store scan the mock finds for a signed-in shopper (tests may swap it).
+const FF_SCAN = { found: true, fit: { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support" }, scannedAt: "2026-09-12T15:00:00Z", scanUrl: "https://scan.example/report/1" };
 const sizes = ["7 US", "7.5 US", "8 US", "8.5 US", "9 US", "10 US"];
 const widths = ["Medium", "Wide"];
 let vid = 1000;
@@ -363,7 +374,8 @@ export function start(port) {
           appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=img/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "", image: /[?&]app=imgbad/.test(String(req.headers.referer || "")) ? "/apps/hajirai/app-image?v=missing" : "/apps/hajirai/app-image?v=test1" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           whichOrthotic: /[?&]wo=1/.test(String(req.headers.referer || "")) ? { form: "ojyWbTvZ", label: "Identify my orthotic" } : null,
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
-        if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify(FF_CONFIG));
+        if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));
+        if (u.pathname === "/apps/fitfinder/scan-fit") return send(200, "application/json", JSON.stringify(mockCtl.ffScan || FF_SCAN));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
         if (u.pathname === "/apps/hajirai/chat") {
           const parsed = JSON.parse(body || "{}");

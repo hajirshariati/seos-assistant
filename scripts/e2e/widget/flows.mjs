@@ -843,12 +843,92 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   }));
   check("tools: shoes offer True Fit only, orthotics FITFinder only", perCard.join("|") === "savannah-red:truefit|jillian-black:truefit|orthotic-one:fitfinder", perCard.join("|"));
   await page.click('.ai-chat-product-card[data-handle="orthotic-one"] [data-helper="fitfinder"]');
-  await page.waitForFunction(() => document.querySelector(".ai-chat-fit-result"), null, { timeout: 5000 }).catch(() => {});
-  check("tools: Find my FIT starts the FIT questions", /orthotic FIT/i.test(chatBodies.at(-1)?.message || ""), chatBodies.at(-1)?.message);
-  check("tools: the FIT found is shown as a FIT card", /FIT D/.test(await page.textContent(".ai-chat-fit-result").catch(() => "")));
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  await page.waitForTimeout(300);
+  const ffOpen = await page.evaluate(() => { const s = document.querySelector(".ai-chat-fbsheet"); const f = s.querySelector(".ai-chat-fbsheet__ff"); return { title: s.querySelector(".ai-chat-fbsheet__title").textContent, brand: f.querySelector(".ai-ffs__brand")?.textContent, head: f.querySelector(".ai-ffs__title")?.textContent, qs: [...f.querySelectorAll(".ai-ffs__qtext")].map((q) => q.textContent), helps: [...f.querySelectorAll(".ai-ffs__help")].map((b) => b.textContent), opts: [...f.querySelectorAll(".ai-ffs__opt")].map((o) => o.querySelector("b").textContent + "/" + (o.querySelector("small")?.textContent || "")), rec: !!f.querySelector(".ai-ffs__rec"), scan: f.querySelector(".ai-ffs__scan")?.textContent, powered: f.querySelector(".ai-ffs__powered")?.textContent, formHidden: getComputedStyle(s.querySelector(".ai-chat-fbsheet__form")).visibility === "hidden", shown: getComputedStyle(f).visibility === "visible" }; });
+  check("tools: Find my FIT opens FITFinder in the chat's own sheet — the FITFINDER mark, Help me find my Fit, the two questions each with How do I know?, Yes / No tiles, no recommendation yet, the in-store scan link and Aetrex's mark; nothing sent to the assistant", ffOpen.title === "FITFinder" && ffOpen.brand === "FITFINDER" && ffOpen.head === "Help me find my Fit" && ffOpen.qs.join("|") === "Do you have flat feet?|Do you have pain beneath the ball of your foot?" && ffOpen.helps.join("|") === "How do I know?|How do I know?" && ffOpen.opts.join("|") === "Yes/Flat feet|No / Unsure/|Yes/I have pain|No / Unsure/No pain" && !ffOpen.rec && ffOpen.scan === "Scanned in one of our stores?" && ffOpen.powered === "Powered by Aetrex Technology" && ffOpen.formHidden && ffOpen.shown && !/orthotic FIT/i.test(chatBodies.at(-1)?.message || ""), JSON.stringify(ffOpen));
+  // How do I know? opens its note; the first answer alone shows no FIT; both answers show the card (the open note stays open).
+  await page.click(".ai-chat-fbsheet .ai-ffs__help");
+  const helpOpen = await page.evaluate(() => { const b = document.querySelector(".ai-chat-fbsheet .ai-ffs__help"); const box = document.getElementById(b.getAttribute("aria-controls")); return { expanded: b.getAttribute("aria-expanded"), shown: !!box && !box.hidden && /wet footprint/.test(box.textContent) }; });
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="a"]');
+  const one = await page.evaluate(() => ({ pressed: [...document.querySelectorAll('.ai-chat-fbsheet [data-ffs="opt"][aria-pressed="true"]')].map((b) => b.dataset.o).join(","), rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec") }));
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="c"]');
+  await page.waitForTimeout(150);
+  const rec = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"); return r ? { label: r.querySelector(".ai-ffs__rec-label")?.textContent, key: r.querySelector(".ai-ffs__rec-key")?.textContent, name: r.querySelector(".ai-ffs__rec-name")?.textContent, desc: r.querySelector(".ai-ffs__rec-desc")?.textContent, more: r.querySelector(".ai-ffs__more")?.textContent, drawerHidden: r.querySelector(".ai-ffs__drawer")?.hidden, ctas: [...r.querySelectorAll(".ai-ffs__btn")].map((b) => b.textContent), note: r.querySelector(".ai-ffs__note")?.textContent, clear: document.querySelector(".ai-chat-fbsheet .ai-ffs__clearbtn")?.textContent, helpStill: !document.querySelector(".ai-chat-fbsheet .ai-ffs__helpbox").hidden, pressed: [...document.querySelectorAll('.ai-chat-fbsheet [data-ffs="opt"][aria-pressed="true"]')].map((b) => b.dataset.o).join(",") } : null; });
+  check("tools: How do I know? opens the note under the question; Yes alone shows no FIT; Yes + Yes shows the card — Recommended fit · FIT D Maximum Support, its line, Learn more folded; signed in: Show orthotics in my FIT D / Done with the auto-save note; Start over; the open note stays open", helpOpen.expanded === "true" && helpOpen.shown && one.pressed === "a" && !one.rec && !!rec && rec.label === "Recommended fit" && rec.key === "FIT D" && rec.name === "Maximum Support" && /Posted plus/.test(rec.desc) && rec.more === "Learn more" && rec.drawerHidden === true && rec.ctas.join("|") === "Show orthotics in my FIT D|Done" && /signed in/.test(rec.note) && rec.clear === "Start over" && rec.helpStill && rec.pressed === "a,c", JSON.stringify({ helpOpen, one, rec }));
+  // A changed answer changes the card in place; Learn more opens the details; Show orthotics saves the FIT (here and to the signed-in profile), closes the sheet and asks the assistant for them.
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="d"]');
+  await page.waitForTimeout(100);
+  const swapped = await page.evaluate(() => document.querySelector(".ai-chat-fbsheet .ai-ffs__rec-key")?.textContent);
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="c"]');
+  await page.waitForTimeout(100);
+  await page.click(".ai-chat-fbsheet .ai-ffs__more");
+  const more = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__drawer"); return { hidden: r.hidden, text: r.textContent }; });
+  const nFit = chatBodies.length;
+  await page.click('.ai-chat-fbsheet [data-ffs="shop"]');
+  await waitUntil(() => chatBodies.length > nFit);
+  await page.waitForTimeout(500);
+  const stored = await page.evaluate(() => JSON.parse(sessionStorage.getItem("fitfinder_fit") || "{}"));
+  check("tools: No under the second question makes it FIT A in place; Learn more opens the details; Show orthotics in my FIT D saves it (here and to the signed-in profile), closes the sheet and asks the assistant for orthotics in it", swapped === "FIT A" && !more.hidden && /most supportive/.test(more.text) && stored.key === "D" && fitSaves.at(-1)?.fitKey === "D" && chatBodies.at(-1)?.message === "Show me orthotics in my FIT D." && !(await page.evaluate(() => document.querySelector(".ai-chat-fbsheet").classList.contains("is-open"))), JSON.stringify({ swapped, more: more.hidden, stored, save: fitSaves.at(-1), msg: chatBodies.at(-1)?.message }));
   check("tools: once a FIT is saved, cards stop offering to find one", (await page.$$('[data-helper="fitfinder"].ai-chat-card-fit')).length === 0);
   check("tools: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
+}
+// FITFinder in the sheet, signed out: the card asks to save (sign in) or carry
+// on as a guest; the in-store scan asks to sign in first. Signed in: the scan
+// comes back and can be used. Phone and desktop.
+{
+  mockCtl.ffGuest = true;
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForSelector('.ai-chat-welcome__helpers [data-helper="fitfinder"]', { timeout: 5000 });
+  await page.click('.ai-chat-welcome__helpers [data-helper="fitfinder"]');
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  await page.waitForTimeout(300);
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="b"]');
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="d"]');
+  await page.waitForTimeout(150);
+  const guest = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"); const vw = document.documentElement.clientWidth; return { key: r?.querySelector(".ai-ffs__rec-key")?.textContent, title: r?.querySelector(".ai-ffs__savetitle")?.textContent, ctas: [...(r?.querySelectorAll(".ai-ffs__btn") || [])].map((b) => b.textContent), note: r?.querySelector(".ai-ffs__note")?.textContent, fits: [...document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__opt, .ai-chat-fbsheet .ai-ffs__btn, .ai-chat-fbsheet .ai-ffs__help")].every((b) => { const x = b.getBoundingClientRect(); return x.right <= vw + 1 && x.left >= -1; }), tileH: Math.min(...[...document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__opt")].map((b) => b.getBoundingClientRect().height)) }; });
+  const nSaves = fitSaves.length;
+  await page.click('.ai-chat-fbsheet [data-ffs="save-guest"]');
+  await page.waitForTimeout(150);
+  const done = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"); return { label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, note: r?.querySelector(".ai-ffs__note")?.textContent, ctas: [...(r?.querySelectorAll(".ai-ffs__btn") || [])].map((b) => b.textContent), stored: JSON.parse(sessionStorage.getItem("fitfinder_fit") || "{}").key, clear: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__clearbtn"), qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length }; });
+  check("FITFinder (guest, phone): No + No → FIT B Cushioned Support asking 'Save this fit to your account for next time?' — Yes (sign in required) / Continue as guest, 'Either way…'; everything fits the phone, tiles tall enough to tap; Continue as guest keeps it on this device (no profile write) — Your FIT B, 'we'll use this fit while you shop today', Show orthotics / Done, Start over", guest.key === "FIT B" && guest.title === "Save this fit to your account for next time?" && guest.ctas.join("|") === "Yes (sign in required)|Continue as guest" && /Either way/.test(guest.note || "") && guest.fits && guest.tileH >= 44 && done.label === "Your FIT" && done.key === "FIT B" && /shop today/.test(done.note || "") && done.ctas.join("|") === "Show orthotics in my FIT B|Done" && done.stored === "B" && fitSaves.length === nSaves && done.clear && done.qs === 0, JSON.stringify({ guest, done }));
+  // Start over: the questions again, nothing picked; the in-store scan, signed out, asks to sign in; Back to the questions returns.
+  await page.click('.ai-chat-fbsheet [data-ffs="clear"]');
+  const again = await page.evaluate(() => ({ qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length, pressed: document.querySelectorAll('.ai-chat-fbsheet [aria-pressed="true"]').length, rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec") }));
+  await page.click('.ai-chat-fbsheet [data-ffs="scan"]');
+  const scanOut = await page.evaluate(() => ({ title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent, note: document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__note")?.textContent, btn: document.querySelector('.ai-chat-fbsheet [data-ffs="scan-login"]')?.textContent, back: document.querySelector('.ai-chat-fbsheet [data-ffs="quiz"]')?.textContent }));
+  await page.click('.ai-chat-fbsheet [data-ffs="quiz"]');
+  const backQ = await page.evaluate(() => document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length);
+  check("FITFinder (guest): Start over clears the picks; Scanned in one of our stores? asks to sign in with the scan's email; Back to the questions returns", again.qs === 2 && again.pressed === 0 && !again.rec && scanOut.title === "Scanned in one of our stores?" && scanOut.note === "Sign in with the email from your scan." && scanOut.btn === "Sign in" && scanOut.back === "Back to the questions" && backQ === 2, JSON.stringify({ again, scanOut, backQ }));
+  check("FITFinder (guest): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+  mockCtl.ffGuest = false;
+  // Signed in: the scan lookup finds the store's scan; Use my scanned fit saves it here and to the profile.
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page2 = await ctx2.newPage();
+  const errors2 = [];
+  page2.on("pageerror", (e) => errors2.push(e.message));
+  await page2.goto("http://localhost:4789/full");
+  await page2.click(".ai-chat-launcher");
+  await page2.waitForSelector('.ai-chat-welcome__helpers [data-helper="fitfinder"]', { timeout: 5000 });
+  await page2.click('.ai-chat-welcome__helpers [data-helper="fitfinder"]');
+  await page2.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  await page2.click('.ai-chat-fbsheet [data-ffs="scan"]');
+  await page2.waitForSelector('.ai-chat-fbsheet [data-ffs="scan-use"]', { timeout: 3000 });
+  const found = await page2.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, name: r?.querySelector(".ai-ffs__rec-name")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, note: r?.querySelector(".ai-ffs__note")?.textContent, report: r?.querySelector('a[href="https://scan.example/report/1"]')?.textContent }; });
+  const nS = fitSaves.length;
+  await page2.click('.ai-chat-fbsheet [data-ffs="scan-use"]');
+  await page2.waitForTimeout(250);
+  const used = await page2.evaluate(() => ({ label: document.querySelector(".ai-chat-fbsheet .ai-ffs__rec-label")?.textContent, key: document.querySelector(".ai-chat-fbsheet .ai-ffs__rec-key")?.textContent, stored: JSON.parse(sessionStorage.getItem("fitfinder_fit") || "{}").key }));
+  check("FITFinder (signed in): the in-store scan comes back — Your scanned fit · FIT C, its date, the report link — and Use my scanned fit saves it here and to the profile", found.label === "Your scanned fit" && found.key === "FIT C" && found.name === "Cushioned + Metatarsal Support" && /^Scanned September 12, 2026$/.test(found.date || "") && found.note === "From your foot scan at our store." && found.report === "View my scan report" && used.label === "Your FIT" && used.key === "FIT C" && used.stored === "C" && fitSaves.length === nS + 1 && fitSaves.at(-1)?.fitKey === "C", JSON.stringify({ found, used, save: fitSaves.at(-1) }));
+  check("FITFinder (signed in): no JS errors", errors2.length === 0, errors2.join(" | "));
+  await ctx2.close();
 }
 // When the fit tools already know the shopper: the cards say so, and tapping
 // them uses what's known instead of asking again.
@@ -877,8 +957,18 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("known: the saved FIT shows on its card", fitCards.includes("Cushioned Support / Your FIT B"), fitCards.join(" | "));
   check("known: True Fit off a shoe page says what it does: pick a shoe, get its size", fitCards.includes("Find my shoe size / True Fit \u00b7 pick a shoe, get its size"), fitCards.join(" | "));
   await page.click('.ai-chat-helper__alt[data-helper="fitfinder-retake"]');
-  await page.waitForTimeout(600);
-  check("known: Retake asks the FIT questions again", /retake my orthotic FIT/.test(chatBodies.at(-1)?.message || "") && chatBodies.at(-1)?.fitfinder?.saved?.key === "", JSON.stringify(chatBodies.at(-1)?.fitfinder?.saved));
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  const retake = await page.evaluate(() => ({ pressed: document.querySelectorAll('.ai-chat-fbsheet [data-ffs="opt"][aria-pressed="true"]').length, qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length, rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"), kept: JSON.parse(sessionStorage.getItem("fitfinder_fit") || "{}").key }));
+  check("known: Retake opens FITFinder's questions again in the sheet, nothing picked, the saved FIT kept until a new one is — no message to the assistant", retake.pressed === 0 && retake.qs === 2 && !retake.rec && retake.kept === "B" && !/retake my orthotic FIT/.test(chatBodies.at(-1)?.message || ""), JSON.stringify(retake));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(500);
+  // The card itself, with a FIT saved: the sheet opens on it — Your FIT B — with the orthotics in it one tap away.
+  await page.click(".ai-chat-helper--fitfinder");
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  const mine = await page.evaluate(() => ({ label: document.querySelector(".ai-chat-fbsheet .ai-ffs__rec-label")?.textContent, key: document.querySelector(".ai-chat-fbsheet .ai-ffs__rec-key")?.textContent, ctas: [...document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__btn")].map((b) => b.textContent), qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length }));
+  check("known: the FIT card opens the sheet on the saved FIT — Your FIT B, Show orthotics in my FIT B / Done, no questions", mine.label === "Your FIT" && mine.key === "FIT B" && mine.ctas.join("|") === "Show orthotics in my FIT B|Done" && mine.qs === 0, JSON.stringify(mine));
+  await page.click(".ai-chat-fbsheet__back");
+  await page.waitForTimeout(500);
 
   // Menu, signed out: new chat + log in (back to this page).
   await page.click(".ai-chat-menu-btn");
@@ -2587,8 +2677,12 @@ for (const coop of ["1", "2"]) {
     await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="orthotic-one"] [data-fitq]');
     await page.waitForTimeout(400);
     await page.click('.ai-chat-messages .ai-chat-product-card[data-handle="orthotic-one"] [data-helper="fitfinder"]');
-    await page.waitForFunction(() => document.querySelector(".ai-chat-fit-result"), null, { timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+    await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="a"]');
+    await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="c"]');
+    await page.waitForTimeout(150);
+    await page.click('.ai-chat-fbsheet [data-ffs="close"]');
+    await page.waitForTimeout(600);
     const after = await page.$$eval(".ai-chat-messages .ai-chat-product-card", (cs) => cs.slice(0, 3).map((c) => [c.dataset.handle, !!c.querySelector("[data-fitq]"), !!c.querySelector(".ai-fitp"), c.querySelector(".ai-chat-view-link")?.textContent || "-"]));
     const pinned = await page.$$eval(".ai-chat-messages .ai-chat-products", (rs) => rs.some((r) => r.classList.contains("is-fitq-open") || [...r.children].some((c) => c.style.minHeight)));
     check("fold: a FIT found — the orthotic's fold goes, View product comes back; the shoes keep theirs", JSON.stringify(after) === JSON.stringify([["savannah-red", true, true, "-"], ["jillian-black", true, true, "-"], ["orthotic-one", false, false, "View product"]]) && !pinned, JSON.stringify({ after, pinned }));
