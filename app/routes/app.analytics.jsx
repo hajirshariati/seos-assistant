@@ -216,15 +216,6 @@ const ANALYTICS_CSS = `
   .an-callout { margin: 10px 16px 0; padding: 10px 12px; border-radius: 10px; background: rgba(185,137,0,0.09); font-size: 12.5px; line-height: 18px; color: #4a3b00; }
   .an-callout strong { color: #1a1a1a; }
   .an-empty { padding: 18px 16px 20px; font-size: 13px; color: #616161; }
-  .an-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 12px; }
-  .an-chip { all: unset; box-sizing: border-box; padding: 4px 11px; border-radius: 999px; font-size: 12px; line-height: 18px; font-weight: 600; color: #4a4a4a; cursor: pointer;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); transition: background .15s ease, color .15s ease; }
-  .an-chip small { margin-left: 3px; font-weight: 650; opacity: .7; font-variant-numeric: tabular-nums; }
-  .an-chip:hover { box-shadow: inset 0 0 0 1px rgba(45,107,79,0.45); }
-  .an-chip[aria-pressed="true"] { background: #2D6B4F; color: #fff; box-shadow: none; }
-  .an-chip:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; }
-  .an-convo { padding: 11px 16px; border-top: 1px solid rgba(30,27,51,0.07); }
-  .an-convo.is-flagged { background: rgba(197,40,12,0.035); }
   .an-convo__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; color: #8a8a8a; min-height: 18px; }
   .an-pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #616161; background: rgba(26,46,38,0.06); white-space: nowrap; }
   .an-pill.is-up { color: #2D6B4F; background: rgba(45,107,79,0.10); }
@@ -236,13 +227,6 @@ const ANALYTICS_CSS = `
   .an-lesson__past { display: grid; gap: 5px; padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); font-size: 12.5px; line-height: 18px; color: #616161; }
   .an-lesson__done { display: flex; align-items: flex-start; gap: 8px; }
   .an-lesson__done span:last-child { overflow-wrap: anywhere; }
-  .an-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 16px 12px; padding: 9px 12px; border-radius: 10px; background: rgba(185,90,90,0.07); }
-  .an-flags__label { font-size: 12px; line-height: 16px; font-weight: 650; color: #8a3a3a; margin-right: 2px; }
-  .an-flags__none { font-size: 12px; line-height: 16px; color: #7a5a5a; }
-  .an-chip.is-down { color: #a33d3d; background: #fff; box-shadow: inset 0 0 0 1px rgba(163,61,61,0.35); }
-  .an-chip.is-down:hover { box-shadow: inset 0 0 0 1px rgba(163,61,61,0.7); }
-  .an-chip.is-down[aria-pressed="true"] { background: #a33d3d; color: #fff; box-shadow: none; }
-  .an-convo__q { font-size: 13.5px; line-height: 19px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .an-convo__line { margin-top: 2px; font-size: 12.5px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
   .an-convo__line b { font-weight: 600; color: #616161; }
   .an-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -254,11 +238,25 @@ const ANALYTICS_CSS = `
   .an-msg.is-user { align-self: flex-end; background: rgba(45,107,79,0.12); border-bottom-right-radius: 4px; }
   .an-msg.is-ai { align-self: flex-start; background: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); border-bottom-left-radius: 4px; }
   .an-more { padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .an-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding: 12px 16px 16px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .an-rank--down .an-rank__n { color: #a33d3d; }
+  .an-rank--down .an-rank__bar span { background: linear-gradient(90deg, #a33d3d, #c46a6a); }
+  .an-vote { padding: 12px 16px 13px; border-top: 1px solid rgba(30,27,51,0.07); }
+  .an-vote__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; margin-bottom: 7px; font-size: 12px; line-height: 18px; color: #8a8a8a; }
+  .an-vote__meta > span + span:not(.an-vote__reason)::before { content: "·"; margin: 0 7px; color: #c4c4c4; }
+  .an-vote__reason { margin-left: auto; }
+  .an-vote__grid { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 4px 10px; margin: 0; }
+  .an-vote__grid dt { margin: 0; padding-top: 1px; font-size: 10.5px; line-height: 17px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9a9a9a; }
+  .an-vote__grid dd { margin: 0; min-width: 0; font-size: 13px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
+  .an-vote__grid dd.is-q { font-size: 13.5px; line-height: 19px; font-weight: 600; color: #1a1a1a; }
+  .an-vote__grid dd.is-c { justify-self: start; padding: 4px 9px; border-radius: 8px; background: rgba(185,137,0,0.10); color: #3d3000; white-space: pre-wrap; }
+  .an-vote .an-convo__toggle, .an-vote .an-chat { margin-left: 72px; }
   .an-foot { padding: 4px 8px 8px; text-align: center; font-size: 12px; line-height: 18px; color: #8a8a8a; }
-  @media (prefers-reduced-motion: reduce) { .an-chip { transition: none; } }
   @media (max-width: 900px) { .an-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 760px) {
-    .an-cols { grid-template-columns: minmax(0, 1fr); }
+    .an-cols, .an-why { grid-template-columns: minmax(0, 1fr); }
+    .an-vote__grid { grid-template-columns: 54px minmax(0, 1fr); }
+    .an-vote .an-convo__toggle, .an-vote .an-chat { margin-left: 0; }
     .an-kpi__value { font-size: 21px; line-height: 27px; }
   }
 `;
@@ -345,10 +343,10 @@ function LineChart({ data, height = 170 }) {
 
 // Ranked list with proportional bars — the bar tells you "how much more"
 // at a glance.
-function RankList({ rows }) {
+function RankList({ rows, tone }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <ol className="an-rank">
+    <ol className={`an-rank${tone === "down" ? " an-rank--down" : ""}`}>
       {rows.map((r, i) => (
         <li key={`${r.title}-${i}`}>
           <div className="an-rank__top">
@@ -428,32 +426,53 @@ function ProductsCard({ searched, viewed }) {
   );
 }
 
-// One conversation: the question, what went wrong (if flagged), and the
-// full chat on demand.
-function ConversationRow({ row, mounted }) {
+// What AVA said when the vote landed: the reply that was rated, else the
+// last reply in the saved transcript.
+function avaSaid(row) {
+  if (row.flaggedAiResponse) return row.flaggedAiResponse;
+  if (row.aiResponse) return row.aiResponse;
+  const t = Array.isArray(row.transcript) ? row.transcript : [];
+  for (let i = t.length - 1; i >= 0; i--) if (t[i].role === "assistant" && t[i].content) return t[i].content;
+  return null;
+}
+
+// One vote, readable at a glance: when it was and what it was about on one
+// line (a thumbs-down carries the reason the shopper picked, at the right,
+// so the reasons line up down the list), then what the shopper asked, what
+// AVA said, and the shopper's own words when they left any. The whole chat
+// opens under it.
+function VoteRow({ row, mounted, tone }) {
   const [open, setOpen] = useState(false);
   const chat = row.kind === "chat";
   const transcript = Array.isArray(row.transcript) ? row.transcript : [];
   const products = row.products || [];
+  const asked = row.lastUserQuestion || row.question;
+  const said = avaSaid(row);
+  const when = chat
+    ? (row.moment && FEEDBACK_MOMENTS[row.moment] ? `Whole chat · ${FEEDBACK_MOMENTS[row.moment].toLowerCase()}` : "Whole chat")
+    : (row.moment === "order" ? "An order answer" : "One reply");
+  const reason = row.reason && FEEDBACK_REASONS[row.reason] ? FEEDBACK_REASONS[row.reason] : null;
   return (
-    <div className={`an-convo${row.vote === "down" ? " is-flagged" : ""}`}>
-      <div className="an-convo__meta">
+    <div className="an-vote">
+      <div className="an-vote__meta">
         {mounted && <span>{new Date(row.date).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
-        {row.vote === "up" && <span className="an-pill is-up">{chat ? "Chat went well" : "Helpful"}</span>}
-        {row.vote === "down" && <span className="an-pill is-down">{chat ? "Chat not great" : "Not helpful"}</span>}
-        {row.reason && FEEDBACK_REASONS[row.reason] && <span className="an-pill is-down">{FEEDBACK_REASONS[row.reason]}</span>}
-        {chat && <span className="an-pill">{row.moment && FEEDBACK_MOMENTS[row.moment] ? `Whole chat · ${FEEDBACK_MOMENTS[row.moment].toLowerCase()}` : "Rated the whole chat"}</span>}
-        {!chat && row.moment === "order" && <span className="an-pill">{FEEDBACK_MOMENTS.order}</span>}
-        {row.vote === "down" && row.subject && FEEDBACK_SUBJECTS[row.subject] && <span className="an-pill">{FEEDBACK_SUBJECTS[row.subject]}</span>}
-        {products.length > 0 && <span className="an-pill">{`${products.length} product${products.length > 1 ? "s" : ""}`}</span>}
+        {row.subject && FEEDBACK_SUBJECTS[row.subject] && <span>{FEEDBACK_SUBJECTS[row.subject]}</span>}
+        <span>{when}</span>
+        {products.length > 0 && <span>{`${products.length} product${products.length > 1 ? "s" : ""} shown`}</span>}
+        {tone === "down" && (reason
+          ? <span className="an-pill is-down an-vote__reason">{reason}</span>
+          : <span className="an-pill an-vote__reason">No reason picked</span>)}
       </div>
-      {(row.lastUserQuestion || row.question) && <div className="an-convo__q an-clamp">{row.lastUserQuestion || row.question}</div>}
-      {row.comment && <div className="an-convo__line"><b>Comment:</b> {row.comment}</div>}
-      {row.flaggedAiResponse && <div className="an-convo__line an-clamp"><b>AVA said:</b> {row.flaggedAiResponse}</div>}
-      {!row.flaggedAiResponse && !row.lastUserQuestion && !row.question && row.aiResponse && <div className="an-convo__line an-clamp"><b>AVA said:</b> {row.aiResponse}</div>}
+      {(asked || said || row.comment) && (
+        <dl className="an-vote__grid">
+          {asked && <><dt>Shopper</dt><dd className="is-q">{asked}</dd></>}
+          {said && <><dt>AVA</dt><dd className={open ? "" : "an-clamp"}>{said}</dd></>}
+          {row.comment && <><dt>Comment</dt><dd className="is-c">{row.comment}</dd></>}
+        </dl>
+      )}
       {transcript.length > 0 && (
         <button type="button" className="an-convo__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide conversation" : `Read the conversation (${transcript.length} message${transcript.length > 1 ? "s" : ""})`}
+          {open ? "Hide the conversation" : `Read the conversation (${transcript.length} message${transcript.length > 1 ? "s" : ""})`}
         </button>
       )}
       {open && transcript.length > 0 && (
@@ -539,97 +558,95 @@ function LessonsCard({ lessons, mounted }) {
   );
 }
 
-// Every rating in the range — the same votes behind the Satisfaction
-// number — newest first: thumbs under a reply, and the check-in on the
-// whole chat. What came up more than once among the thumbs-down (a
-// subject raised, a reason picked) is flagged on top; each flag filters
-// the list. Export downloads the vote filter you pick.
-function RatingsCard({ rows, onExport, exporting, mounted }) {
-  const [vote, setVote] = useState("all");
-  const [flag, setFlag] = useState(null);
+const VOTES_FIRST = 8;
+
+// Every thumbs down from the range in one place, newest first — what went
+// wrong, readable without a click: on top, why the shoppers said so and
+// what they were asking about (counted); then each vote with the question,
+// AVA's reply and the reason. Export downloads these rows.
+function NotHelpfulCard({ rows, onExport, exporting, mounted }) {
   const [showAll, setShowAll] = useState(false);
-  // Counts derive from the loaded rows so each chip matches what it shows.
-  const counts = useMemo(() => {
-    let up = 0, down = 0, comments = 0;
+  const why = useMemo(() => {
+    const reasons = {}, subjects = {};
+    let noReason = 0;
     for (const r of rows) {
-      if (r.vote === "up") up++;
-      else if (r.vote === "down") down++;
-      if (r.comment) comments++;
-    }
-    return { up, down, comments };
-  }, [rows]);
-  // Flagged: among the thumbs-down, subjects and reasons seen more than once.
-  const flags = useMemo(() => {
-    const subjects = {}, reasons = {};
-    for (const r of rows) {
-      if (r.vote !== "down") continue;
-      if (r.subject && FEEDBACK_SUBJECTS[r.subject]) subjects[r.subject] = (subjects[r.subject] || 0) + 1;
       if (r.reason && FEEDBACK_REASONS[r.reason]) reasons[r.reason] = (reasons[r.reason] || 0) + 1;
+      else noReason++;
+      const key = r.subject && FEEDBACK_SUBJECTS[r.subject] ? r.subject : "other";
+      subjects[key] = (subjects[key] || 0) + 1;
     }
-    const pick = (o, kind, labels) => Object.entries(o).filter(([, n]) => n > 1).sort((x, y) => y[1] - x[1]).map(([key, n]) => ({ kind, key, n, label: labels[key] }));
-    return [...pick(subjects, "subject", FEEDBACK_SUBJECTS), ...pick(reasons, "reason", FEEDBACK_REASONS)];
+    const list = (o, labels) => Object.entries(o).sort((x, y) => y[1] - x[1]).map(([key, n]) => ({ title: labels[key], count: n }));
+    const reasonRows = list(reasons, FEEDBACK_REASONS);
+    if (noReason > 0) reasonRows.push({ title: "No reason picked", count: noReason });
+    return { reasons: reasonRows, subjects: list(subjects, FEEDBACK_SUBJECTS) };
   }, [rows]);
-  const filtered = useMemo(() => rows.filter((r) => {
-    if (vote === "down" && r.vote !== "down") return false;
-    if (vote === "up" && r.vote !== "up") return false;
-    if (vote === "comments" && !r.comment) return false;
-    if (flag) {
-      if (r.vote !== "down") return false;
-      if (flag.kind === "subject" && r.subject !== flag.key) return false;
-      if (flag.kind === "reason" && r.reason !== flag.key) return false;
-    }
-    return true;
-  }), [rows, vote, flag]);
-  const FIRST = 5;
-  const shown = showAll ? filtered : filtered.slice(0, FIRST);
-
-  const chips = [
-    { value: "all", label: "All votes", n: rows.length },
-    { value: "down", label: "Not helpful", n: counts.down },
-    { value: "up", label: "Helpful", n: counts.up },
-    { value: "comments", label: "With comments", n: counts.comments },
-  ].filter((c) => c.value === "all" || c.n > 0);
-  const isOn = (f) => Boolean(flag && flag.kind === f.kind && flag.key === f.key);
-
+  const shown = showAll ? rows : rows.slice(0, VOTES_FIRST);
   return (
     <Card padding="0">
       <Row
-        title={<InlineStack gap="200" blockAlign="center"><span>Ratings</span><Badge>{String(rows.length)}</Badge></InlineStack>}
-        help={`Every thumbs up or down from this range, newest first — the same ${rows.length} vote${rows.length === 1 ? "" : "s"} behind the Satisfaction number (${counts.up} helpful · ${counts.down} not). Some rate one reply, some the whole chat at the check-in. Export downloads the vote filter you pick.`}
+        title={<InlineStack gap="200" blockAlign="center"><span>Not helpful</span>{rows.length > 0 && <Badge tone="critical">{String(rows.length)}</Badge>}</InlineStack>}
+        help="Every thumbs down from this range, newest first — on one reply, or on the whole chat at its check-in. Each one shows what the shopper asked, what AVA said, and the reason they picked."
         control={
-          <Button size="slim" onClick={() => onExport("conversations", vote === "all" ? {} : { vote })} loading={exporting === "conversations"} disabled={Boolean(exporting) && exporting !== "conversations"}>
+          <Button size="slim" onClick={() => onExport("conversations", { vote: "down" })} loading={exporting === "conversations"} disabled={(Boolean(exporting) && exporting !== "conversations") || rows.length === 0}>
             Export
           </Button>
         }
       />
-      <div className="an-chips" role="group" aria-label="Show">
-        {chips.map((c) => (
-          <button key={c.value} type="button" className="an-chip" aria-pressed={vote === c.value} onClick={() => { setVote(c.value); setShowAll(false); }}>
-            {c.label}<small>{c.n}</small>
-          </button>
-        ))}
-      </div>
-      {counts.down > 0 && (
-        <div className="an-flags" role="group" aria-label="Flagged for review">
-          <span className="an-flags__label">Flagged — more than one thumbs down</span>
-          {flags.length === 0
-            ? <span className="an-flags__none">Nothing repeated yet: no subject or reason has more than one thumbs down in this range.</span>
-            : flags.map((f) => (
-              <button key={`${f.kind}:${f.key}`} type="button" className="an-chip is-down" aria-pressed={isOn(f)} title={f.kind === "subject" ? "What the customer was asking about" : "The reason the customer picked"} onClick={() => { setFlag(isOn(f) ? null : { kind: f.kind, key: f.key }); setShowAll(false); }}>
-                {f.kind === "reason" ? `Reason: ${f.label}` : f.label}<small>{f.n}</small>
-              </button>
-            ))}
-        </div>
-      )}
-      {shown.length === 0 ? (
-        <div className="an-empty" style={{ borderTop: "1px solid rgba(30,27,51,0.07)" }}>No ratings match this filter.</div>
+      {rows.length === 0 ? (
+        <div className="an-empty">Nothing rated not helpful in this range.</div>
       ) : (
-        shown.map((r) => <ConversationRow key={r.id} row={r} mounted={mounted} />)
+        <>
+          {rows.length > 1 && (
+            <div className="an-why">
+              <div>
+                <div className="an-col__title">Why they said so</div>
+                <RankList rows={why.reasons} tone="down" />
+              </div>
+              <div>
+                <div className="an-col__title">What they were asking about</div>
+                <RankList rows={why.subjects} tone="down" />
+              </div>
+            </div>
+          )}
+          {shown.map((r) => <VoteRow key={r.id} row={r} mounted={mounted} tone="down" />)}
+          {rows.length > VOTES_FIRST && (
+            <div className="an-more">
+              <Button variant="plain" disclosure={showAll ? "up" : "down"} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show fewer" : `Show ${rows.length - VOTES_FIRST} more`}
+              </Button>
+            </div>
+          )}
+        </>
       )}
-      {filtered.length > FIRST && (
+    </Card>
+  );
+}
+
+// The thumbs up, in their own card and folded by default: the number is
+// what matters day to day; the rows are there to read when wanted.
+function HelpfulCard({ rows, onExport, exporting, mounted }) {
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? rows : rows.slice(0, VOTES_FIRST);
+  return (
+    <Card padding="0">
+      <Row
+        title={<InlineStack gap="200" blockAlign="center"><span>Helpful</span><Badge tone="success">{String(rows.length)}</Badge></InlineStack>}
+        help="Every thumbs up from this range, newest first — on one reply, or on the whole chat at its check-in."
+        control={
+          <InlineStack gap="200">
+            <Button size="slim" disclosure={open ? "up" : "down"} onClick={() => setOpen((v) => !v)} ariaExpanded={open}>{open ? "Hide" : "Show"}</Button>
+            <Button size="slim" onClick={() => onExport("conversations", { vote: "up" })} loading={exporting === "conversations"} disabled={Boolean(exporting) && exporting !== "conversations"}>
+              Export
+            </Button>
+          </InlineStack>
+        }
+      />
+      {open && shown.map((r) => <VoteRow key={r.id} row={r} mounted={mounted} tone="up" />)}
+      {open && rows.length > VOTES_FIRST && (
         <div className="an-more">
           <Button variant="plain" disclosure={showAll ? "up" : "down"} onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "Show fewer" : `Show ${filtered.length - FIRST} more`}
+            {showAll ? "Show fewer" : `Show ${rows.length - VOTES_FIRST} more`}
           </Button>
         </div>
       )}
@@ -734,6 +751,8 @@ export default function Analytics() {
   const [exporting, setExporting] = useState(null);
   const [showEstimator, setShowEstimator] = useState(false);
   const hasData = usage.totalMessages > 0;
+  // The votes, split: the thumbs down get their own card, the thumbs up another.
+  const votes = useMemo(() => ({ down: recentQuestions.filter((r) => r.vote === "down"), up: recentQuestions.filter((r) => r.vote === "up") }), [recentQuestions]);
 
   // CSV download has to run from inside the embedded iframe so the App Bridge
   // session token is available. Opening ?export=… in a new tab (the old
@@ -859,7 +878,10 @@ export default function Analytics() {
             <LessonsCard lessons={lessons} mounted={mounted} />
           )}
           {recentQuestions.length > 0 && (
-            <RatingsCard rows={recentQuestions} onExport={handleExport} exporting={exporting} mounted={mounted} />
+            <NotHelpfulCard rows={votes.down} onExport={handleExport} exporting={exporting} mounted={mounted} />
+          )}
+          {votes.up.length > 0 && (
+            <HelpfulCard rows={votes.up} onExport={handleExport} exporting={exporting} mounted={mounted} />
           )}
 
           <div>
