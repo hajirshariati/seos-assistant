@@ -1938,13 +1938,17 @@ function focusPickRow(key,hint,chips,which,on){
 }
 function focusBrowseHtml(kind){
   var g=focusGender,p=focusPickParts(kind,g),st=focusPick[kind]||{a:-1,b:[]},t=focusPickSentence(kind,g,st.a,st.b);
-  var h='<div class="ai-chat-focus__label">Pick &amp; go</div><div class="ai-chat-focus__pick">'+focusPickRow(p.keys[0],'choose one',p.a,'a',st.a)+focusPickRow(p.keys[1],'one or more',p.b,'b',st.b)+'</div>';
+  /* The one-tap sections (Collections; men's Occasion) first, by the
+     helper rows — then Pick & go last, so it never reads as a step after
+     them. */
+  var h='';
   for(var i=0;i<p.rest.length;i++)h+='<div class="ai-chat-focus__label">'+esc(p.rest[i][0])+'</div><div class="ai-chat-focus__chips">'+focusChipsHtml(p.rest[i][1])+'</div>';
-  /* The Ask box, at the sheet's foot wherever it's scrolled: the question
-     the picks make, as the message it will be — the shopper can edit it,
-     or type their own (their own words let the picks go) — and the Ask
-     button. Enter sends too. */
-  h+='<div class="ai-chat-focus__ask"><div class="ai-chat-focus__ask-box"><input type="text" class="ai-chat-focus__ask-q" data-pick-q value="'+esc(t)+'" placeholder="'+esc(focusPickHint(kind))+'" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" aria-label="Your question"><button type="button" class="ai-chat-focus__ask-cta" data-pick-go'+(t?'':' disabled')+'>'+esc(ASK_WORDS)+WI.arrow+'</button></div></div>';
+  h+='<div class="ai-chat-focus__label">Pick &amp; go</div><div class="ai-chat-focus__pick">'+focusPickRow(p.keys[0],'choose one',p.a,'a',st.a)+focusPickRow(p.keys[1],'one or more',p.b,'b',st.b);
+  /* The Ask box closes the Pick & go card — it belongs to those picks
+     only — and stays in view while the card is: the question the picks
+     make, as the message it will be (edit it, or type your own; their
+     own words let the picks go), and the Ask button. Enter sends too. */
+  h+='<div class="ai-chat-focus__ask"><div class="ai-chat-focus__ask-box"><input type="text" class="ai-chat-focus__ask-q" data-pick-q value="'+esc(t)+'" placeholder="'+esc(focusPickHint(kind))+'" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send" aria-label="Your question"><button type="button" class="ai-chat-focus__ask-cta" data-pick-go'+(t?'':' disabled')+'>'+esc(ASK_WORDS)+WI.arrow+'</button></div></div></div>';
   return h;
 }
 /* A tap on a chip picks it (a second tap clears it): one in the first row,
