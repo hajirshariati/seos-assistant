@@ -874,6 +874,23 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("tools: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The Orthotics sheet takes only the Popular buttons that are orthotic quizzes:
+// a "Share feedback" Typeform among them stays out.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full?home=focus&qp=fb");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(700);
+  await page.click('[data-focus-sheet="orthotics"]');
+  await page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+  const rows = await page.$$eval(".ai-chat-focus-sheet .ai-chat-helper .ai-chat-helper__title", (t) => t.map((x) => x.textContent));
+  check("Orthotics sheet: the orthotic quiz is there, a Popular \"Share feedback\" Typeform is not", rows.includes("Identify my orthotic") && !rows.includes("Share feedback"), JSON.stringify(rows));
+  check("Orthotics sheet (feedback button): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // FITFinder in the sheet, signed out: the card asks to save (sign in) or carry
 // on as a guest; the in-store scan asks to sign in first. Signed in: the scan
 // comes back and can be used. Phone and desktop.

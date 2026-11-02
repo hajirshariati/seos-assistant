@@ -1697,6 +1697,7 @@ function focusBrowseGroups(kind,g){
     ['Collections',[['New arrivals','Show me the women\u2019s new arrivals'],['Best sellers','Show me the best-selling women\u2019s shoes'],['Jillian','Show me the Jillian collection'],['Heelium','Show me the women\u2019s Heelium collection'],['SkyTech','Show me the women\u2019s SkyTech collection'],['BioRocker','Show me the BioRocker collection'],['Water-friendly','Show me women\u2019s water-friendly shoes'],['Last chance','Show me women\u2019s shoes on sale']]]
   ];
 }
+var FOCUS_FIT_QUIZ=/orthotic|insole|\barch|\bfit\b/i;
 var FOCUS_QUIZ_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/><path d="M8.5 11h5M11 8.5v5"/></svg>';
 /* Each place's picture (the extension's own: a foot with the sore spot
    glowing red), in a small round coin on the chip. */
@@ -1858,7 +1859,9 @@ function focusSheetRows(kind){
     if(fbShown()&&fbOrthotic()){rows+=focusHelperRow('data-survey="1" aria-haspopup="dialog"',fbIcon(),FB_LABEL,'A quick visual quiz, right here');seen[FB_FORM]=1}
     if(WO_FORM&&!seen[WO_FORM]){rows+=focusHelperRow('data-form="'+esc(WO_FORM)+'" data-form-label="'+esc(WO_LABEL)+'" aria-haspopup="dialog"',WI.insole,WO_LABEL,'A quick visual quiz, right here');seen[WO_FORM]=1}
     var qps=[[QP1L,QP1M],[QP2L,QP2M],[QP3L,QP3M],[QP4L,QP4M]];
-    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f&&!seen[f]){seen[f]=1;rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}}
+    /* Only the Popular buttons that are about orthotics (an orthotic, insole,
+       arch or FIT quiz) — never the feedback survey or another form. */
+    for(var i=0;i<qps.length;i++){var f=formIdOf(qps[i][1]);if(qps[i][0]&&f&&!seen[f]&&f!==FB_FORM&&FOCUS_FIT_QUIZ.test(qps[i][0])){seen[f]=1;rows+=focusHelperRow('data-form="'+esc(f)+'" data-form-label="'+esc(qps[i][0])+'" aria-haspopup="dialog"',FOCUS_QUIZ_ICON,qps[i][0],'A quick visual quiz, right here')}}
   }
   return rows;
 }
