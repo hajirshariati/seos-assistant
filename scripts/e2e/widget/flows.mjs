@@ -3160,17 +3160,19 @@ for (const coop of ["1", "2"]) {
     check("home layout focus: the Footwear sheet — a Women's / Men's switch on Women's, then Pick & go as one tinted card: a Shoe row and a For row with their chips aligned, each chip a round check (empty), the question row at the card's end idle with its Ask button; the women's Collections as a section of round chips with an arrow each (one tap sends), no View all, no tabs; no True Fit row where the store has no True Fit", fw.title === "Footwear" && fw.eyebrow === "Help me find" && fw.gender.join("|") === "Women’s*|Men’s" && fw.thumb === "0" && fw.tabs === 0 && fw.pickLabel === "Pick & go" && fw.keys.join(",") === "Shoe,For" && fw.a.length === 10 && fw.a[0] === "Sneakers" && fw.a.includes("Wedges & heels") && fw.b.length === 8 && fw.b[0] === "Plantar fasciitis" && fw.b.at(-1) === "Wide width" && fw.keysAligned && fw.dots && fw.arrows && fw.card && fw.squarer && fw.pressed === 0 && fw.goOff && fw.go === "Pick a shoe, a condition, or both" && /^Ask\b/.test(fw.askCta) && fw.askLast && fw.goH <= 52 && fw.sections.join(",") === "Pick & go,Collections" && fw.collections.length === 8 && fw.collections[0] === "New arrivals" && !fw.collections.includes("View all") && fw.chipH <= 32 && fw.fits && fw.pickFirst && !fw.tf && fw.modal === "true" && fw.closeFocused, JSON.stringify(fw));
     // Picking: one shoe, one condition, either or both; a second tap on a chip clears it; the Go button says exactly what it will ask.
     const pickState = () => page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); const go = s.querySelector("[data-pick-go]"); return { go: go.querySelector(".ai-chat-focus__ask-q").textContent, off: go.disabled, on: [...s.querySelectorAll('[aria-pressed="true"]')].map((b) => b.textContent).join("|"), checks: [...s.querySelectorAll('[aria-pressed="true"] .ai-chat-focus__pick-dot svg')].every((i) => parseFloat(getComputedStyle(i).opacity) === 1), focused: document.activeElement?.getAttribute("aria-pressed") }; });
+    // The check fades in (150ms): read each state once it has.
+    const checked = () => page.waitForFunction(() => [...document.querySelectorAll('.ai-chat-focus-sheet [aria-pressed="true"] .ai-chat-focus__pick-dot svg')].every((i) => getComputedStyle(i).opacity === "1"), null, { timeout: 2000 }).catch(() => {});
     await page.click('.ai-chat-focus-sheet [data-pick-a="0"]');
-    await page.waitForTimeout(250); // the check fades in
+    await checked();
     const p1 = await pickState();
     await page.click('.ai-chat-focus-sheet [data-pick-b="0"]');
-    await page.waitForTimeout(250);
+    await checked();
     const p2 = await pickState();
     await page.click('.ai-chat-focus-sheet [data-pick-a="5"]');
-    await page.waitForTimeout(250);
+    await checked();
     const p3 = await pickState();
     await page.click('.ai-chat-focus-sheet [data-pick-a="5"]');
-    await page.waitForTimeout(250);
+    await checked();
     const p4 = await pickState();
     const pressedLook = await page.evaluate(() => { const b = document.querySelector('.ai-chat-focus-sheet [aria-pressed="true"]'), o = document.querySelector('.ai-chat-focus-sheet [aria-pressed="false"]'); const cb = getComputedStyle(b), co = getComputedStyle(o); return { filled: cb.backgroundColor !== co.backgroundColor && cb.color !== co.color, round: cb.borderRadius }; });
     check("home layout focus: Pick & go — Sneakers → \"Show me women’s sneakers\"; + Plantar fasciitis → \"…sneakers for plantar fasciitis\"; Boots swaps the shoe; Boots again clears it → \"…shoes for plantar fasciitis\"; the picked chip is filled with its check shown, the keyboard stays on it", p1.go === "Show me women’s sneakers" && !p1.off && p1.on === "Sneakers" && p2.go === "Show me women’s sneakers for plantar fasciitis" && p2.on === "Sneakers|Plantar fasciitis" && p3.go === "Show me women’s boots for plantar fasciitis" && p3.on === "Boots|Plantar fasciitis" && p4.go === "Show me women’s shoes for plantar fasciitis" && !p4.off && p4.on === "Plantar fasciitis" && p4.focused === "false" && p1.checks && p2.checks && pressedLook.filled && parseFloat(pressedLook.round) >= 8, JSON.stringify({ p1, p2, p3, p4, pressedLook }));
