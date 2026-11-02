@@ -874,6 +874,27 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("tools: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// Settings → Focus home: every word on the Focus home comes from the store's
+// Settings (blanks keep the built-in words); the line under the greeting and
+// the note under the message box too.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full?home=focus&texts=home");
+  await page.click(".ai-chat-launcher");
+  await page.waitForFunction(() => document.querySelector(".ai-chat-focus__card--pain .ai-chat-focus__card-sub")?.textContent === "PAIN-SUB", null, { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  const t = await page.evaluate(() => { const card = (k) => { const c = document.querySelector(`.ai-chat-focus__card--${k}`); return [c.querySelector(".ai-chat-focus__card-eyebrow").textContent, (c.querySelector(".ai-chat-focus__card-title .is-short") || c.querySelector(".ai-chat-focus__card-title")).textContent, c.querySelector(".ai-chat-focus__card-title .is-long")?.textContent || "", c.querySelector(".ai-chat-focus__card-sub").textContent, c.querySelector(".ai-chat-focus__card-cta").textContent.trim()].join("/"); }; return { pain: card("pain"), footwear: card("footwear"), orthotics: card("orthotics"), links: [...document.querySelectorAll(".ai-chat-focus__links [data-message]")].map((b) => b.textContent + "=" + b.getAttribute("data-message")).join("|"), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, note: document.querySelector(".ai-chat-footer")?.textContent }; });
+  check("Settings → Focus home: the cards, the links, the greeting line and the note take the store's words; blanks keep the built-in ones", t.pain === "Sore feet?/Pain help/Tell us where it hurts/PAIN-SUB/Go" && t.footwear === "Help me find/Shoes//Sneakers, sandals, boots and more — support built in./Browse" && t.orthotics === "Help me find/Orthotics//Inserts for the shoes you already own, matched to your arch./See all" && t.links === "My order=Where's my package?|Returns & exchanges=I’d like to return or exchange something.|Sale=Show me the sale" && t.greet === "What brings you in?" && /^NOTE-X\. Privacy Policy$/.test(t.note || ""), JSON.stringify(t));
+  const nT = chatBodies.length;
+  await page.click('.ai-chat-focus__links [data-message="Show me the sale"]');
+  await waitUntil(() => chatBodies.length > nT);
+  check("Settings → Focus home: a link sends what it's set to ask", chatBodies.at(-1)?.message === "Show me the sale", chatBodies.at(-1)?.message);
+  check("Settings → Focus home: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The Orthotics sheet takes only the Popular buttons that are orthotic quizzes:
 // a "Share feedback" Typeform among them stays out.
 {

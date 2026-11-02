@@ -83,7 +83,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   if(d.chatTexts&&typeof d.chatTexts==='object'){
-    var txtNow=function(){return [NAME,NAME_SUB,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL].join('|')},txtWas=txtNow(),inWas=IPLACE;
+    var txtNow=function(){return [NAME,NAME_SUB,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL,GREETCTA,DISCL,JSON.stringify(FT)].join('|')},txtWas=txtNow(),inWas=IPLACE;
     try{localStorage.setItem(TXT_KEY,JSON.stringify(d.chatTexts))}catch(e){}
     setTexts(d.chatTexts);
     if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
@@ -162,7 +162,14 @@ var SHOWBAN=C.showBanner!==false;
    theme editor's; a blank one keeps the theme editor's (or the default).
    Remembered, so the next page shows them from the start. */
 var TXT_KEY='hajirai_texts',START_LBL='Start here',POP_LBL='Popular',FIT_LBL='Check fit & size',NAME_SUB='';
-var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,launcher:LPLACE,input:IPLACE};
+var DISCL=C.disclaimerText||'';
+var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,greetingCta:GREETCTA,launcher:LPLACE,input:IPLACE,disclaimer:DISCL};
+/* The Focus home's words (Settings → Look & feel → Focus home); blank → built in. */
+var FT_DEF={homePainEyebrow:'Help me with',homePainTitle:'Foot pain',homePainTitleWide:'Let\u2019s talk about your foot pain.',homePainSub:'Say where it hurts and what you wear. A few taps, then Ava\u2019s best match.',homePainCta:'Start',
+  homeFootwearEyebrow:'Help me find',homeFootwearTitle:'Footwear',homeFootwearSub:'Sneakers, sandals, boots and more \u2014 support built in.',homeFootwearCta:'Browse',
+  homeOrthoticsEyebrow:'Help me find',homeOrthoticsTitle:'Orthotics',homeOrthoticsSub:'Inserts for the shoes you already own, matched to your arch.',homeOrthoticsCta:'Browse',
+  homeLink1Label:'Track my order',homeLink1Message:'Where is my order?',homeLink2Label:'Returns & exchanges',homeLink2Message:'I\u2019d like to return or exchange something.',homeLink3Label:'Deals',homeLink3Message:'What deals are running right now?'};
+var FT={};for(var _fk in FT_DEF)FT[_fk]=FT_DEF[_fk];
 function setTexts(t){
   t=t&&typeof t==='object'?t:{};
   var v=function(k,max){var x=t[k];return typeof x==='string'&&x.trim()?x.replace(/\s+/g,' ').trim().slice(0,max):''};
@@ -170,9 +177,11 @@ function setTexts(t){
   LPLACE=v('launcher',60)||TXT_BASE.launcher;IPLACE=v('input',60)||TXT_BASE.input;
   START_LBL=v('startHeading',30)||'Start here';POP_LBL=v('popularHeading',30)||'Popular';
   FIT_LBL=v('fitButton',24)||'Check fit & size';
+  GREETCTA=v('greetingCta',80)||TXT_BASE.greetingCta;DISCL=v('disclaimer',300)||TXT_BASE.disclaimer;
+  if(typeof GREET_CTA_FRAMES!=='undefined'&&GREET_CTA_FRAMES&&GREET_CTA_FRAMES[0]&&GREET_CTA_FRAMES[0].code==='en')GREET_CTA_FRAMES[0].text=GREETCTA;
+  for(var fk in FT_DEF)FT[fk]=v(fk,fk.indexOf('Message')>0?160:fk.indexOf('Sub')>0?120:60)||FT_DEF[fk];
 }
 try{setTexts(JSON.parse(localStorage.getItem(TXT_KEY)||'null'))}catch(e){}
-var DISCL=C.disclaimerText||'';
 var PRIVURL=C.privacyUrl||'/pages/privacy-policy';
 var LWIDTH=C.launcherWidth||'500';
 var CWIDTH=C.chatWidth||LWIDTH;
@@ -1612,6 +1621,13 @@ function refreshTexts(inWas){
   var lp=$('[data-wl="popular"]',panel);if(lp)lp.textContent=POP_LBL;
   var fq=panel.querySelectorAll('[data-fitq]');
   for(var i=0;i<fq.length;i++){var fc=fq[i].closest('.ai-chat-product-card');fq[i].innerHTML=fitqLabel();fq[i].setAttribute('aria-label',fitqName(fc?fc.getAttribute('data-title')||'':''))}
+  if(FOCUS){
+    var fcs=$('.ai-chat-focus__cards',panel);if(fcs)fcs.innerHTML=focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics');
+    var fls=$('.ai-chat-focus__links',panel);if(fls)fls.innerHTML=focusLinksHtml();
+  }
+  var ft=$('.ai-chat-footer',panel),fth=esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a>';
+  if(ft&&DISCL)ft.innerHTML=fth;
+  else if(!ft&&DISCL){var ia=$('.ai-chat-input-area',panel);if(ia)ia.insertAdjacentHTML('afterend','<div class="ai-chat-footer">'+fth+'</div>')}
 }
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
@@ -1721,31 +1737,29 @@ function focusRefreshPics(){
   for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!focusPicOf(k))}
 }
 function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(focusPicOf(kind)?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
-function focusCardWords(kind){return kind==='pain'?['Help me with','Foot pain']:['Help me find',kind==='footwear'?'Footwear':'Orthotics']}
+function focusFtKey(kind){return kind==='pain'?'homePain':kind==='footwear'?'homeFootwear':'homeOrthotics'}
+function focusCardWords(kind){var k=focusFtKey(kind);return [esc(FT[k+'Eyebrow']),esc(FT[k+'Title'])]}
 /* One line under each card's name on what it does. */
-function focusCardSub(kind){
-  return kind==='pain'?'Say where it hurts and what you wear. A few taps, then Ava\u2019s best match.'
-    :kind==='footwear'?'Sneakers, sandals, boots and more \u2014 support built in.'
-    :'Inserts for the shoes you already own, matched to your arch.';
-}
+function focusCardSub(kind){return esc(FT[focusFtKey(kind)+'Sub'])}
 /* The small call to action in each card's corner. */
-function focusCardCta(kind){return kind==='pain'?'Start':'Browse'}
+function focusCardCta(kind){return esc(FT[focusFtKey(kind)+'Cta'])}
 var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
 /* Words on the left, the picture filling the right side, the call to action under the words. */
 /* The Foot pain card's title on a computer, where the card is the wide one
    in the middle of the row (the short one on phones, and in its sheet). */
-var FOCUS_PAIN_TITLE_WIDE='Let\u2019s talk about your foot pain.';
 function focusCardHtml(kind){
-  var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+FOCUS_PAIN_TITLE_WIDE+'</span>':w[1];
+  var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+esc(FT.homePainTitleWide)+'</span>':w[1];
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
+/* The three links above the message box: what each says, what it sends. */
+function focusLinksHtml(){var h='';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m)h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
   h+='<div class="ai-chat-focus__greet"></div>';
   if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
   h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
-  h+='<div class="ai-chat-focus__links"><button type="button" data-message="Where is my order?">Track my order</button><button type="button" data-message="I’d like to return or exchange something.">Returns &amp; exchanges</button><button type="button" data-message="What deals are running right now?">Deals</button></div>';
+  h+='<div class="ai-chat-focus__links">'+focusLinksHtml()+'</div>';
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
