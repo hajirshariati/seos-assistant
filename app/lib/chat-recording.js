@@ -1,18 +1,23 @@
-// Conversation recording for testing (Settings → Test recordings). Pure rules
-// shared by the chat route, widget-config, the admin pages and the evals.
+// Conversation recording (Settings → Recording). Pure rules shared by the
+// chat route, widget-config, the admin pages and the evals.
 //
-// Recording is off unless the store turns it on, and then only for two weeks
-// at a time. By default only "testers" are recorded: people who opened the
-// store with the tester link (?hajirai_tester=Name), never ordinary shoppers.
-// Chats from the app's own Test chat are recorded too while it's on.
+// Recording is off unless the store turns it on, and stays on until the
+// store turns it off. By default only "testers" are recorded: people who
+// opened the store with the tester link (?hajirai_tester=Name), never
+// ordinary shoppers. Chats from the app's own Test chat are recorded too
+// while it's on. Chats are kept `keepDays` (the store's choice), except
+// flagged chats, which stay until deleted by hand.
 
-export const RECORD_DAYS = 14;
-export const KEEP_DAYS = 30;
+export const KEEP_DAYS_CHOICES = [30, 90, 180, 365];
+export const DEFAULT_KEEP_DAYS = 90;
 
-export function recordingState(config, now = new Date()) {
-  const until = config?.recordChatsUntil ? new Date(config.recordChatsUntil) : null;
-  const on = Boolean(until && !Number.isNaN(until.getTime()) && until > now);
-  return { on, until: on ? until : null, scope: config?.recordChatsScope === "everyone" ? "everyone" : "testers" };
+export function keepDays(config) {
+  const n = Number(config?.recordKeepDays);
+  return KEEP_DAYS_CHOICES.includes(n) ? n : DEFAULT_KEEP_DAYS;
+}
+
+export function recordingState(config) {
+  return { on: config?.recordChatsOn === true, scope: config?.recordChatsScope === "everyone" ? "everyone" : "testers", keepDays: keepDays(config) };
 }
 
 // The tester's name from the link: letters, digits, spaces and . _ - only.
@@ -20,8 +25,8 @@ export function cleanTester(value) {
   return String(value || "").normalize("NFKC").replace(/[^\p{L}\p{N} ._-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 40);
 }
 
-export function shouldRecord(config, { tester = "", internal = false, now = new Date() } = {}) {
-  const st = recordingState(config, now);
+export function shouldRecord(config, { tester = "", internal = false } = {}) {
+  const st = recordingState(config);
   if (!st.on) return false;
   if (internal) return true;
   return st.scope === "everyone" || Boolean(cleanTester(tester));
@@ -86,6 +91,27 @@ const utcFmt = (opts) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...
 function zoneFmt(timeZone, opts) {
   try { return new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "UTC", ...opts }); }
   catch { return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts }); }
+}
+
+// The UTC instants a store-local day ("2026-10-30", in the store's time
+// zone) starts and ends at — for "Delete day". Pure; DST-safe (the offset
+// is read at each end).
+export function dayBounds(key, timeZone = "") {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ""))) return null;
+  const fmt = zoneFmt(timeZone, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+  const offsetAt = (instant) => {
+    const p = Object.fromEntries(fmt.formatToParts(instant).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - instant.getTime();
+  };
+  const localMidnight = (k) => {
+    const guess = new Date(`${k}T00:00:00Z`);
+    let t = new Date(guess.getTime() - offsetAt(guess));
+    t = new Date(guess.getTime() - offsetAt(t));
+    return t;
+  };
+  const start = localMidnight(key);
+  const end = localMidnight(shiftKey(key, 1));
+  return Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start ? null : { start, end };
 }
 
 export function recordingLabels({ timeZone = "", now = new Date() } = {}) {

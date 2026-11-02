@@ -146,8 +146,8 @@ export const loader = async ({ request }) => {
         // minimized button's words.
         launcherMark: launcherMarkConfig(config),
         voiceInput: config.voiceInput !== false,
-        // Test recordings: the widget shows a "recording" note to the people
-        // being recorded (testers, or everyone if the store chose that).
+        // Recording: the widget sends the page it's on for the people being
+        // recorded (testers, or everyone if the store chose that).
         recording: (() => { const st = recordingState(config); return { on: st.on, scope: st.scope }; })(),
       },
       {

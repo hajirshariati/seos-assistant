@@ -145,7 +145,7 @@ await test("the reply's words say why: one shoe at a time, the shoe first; a sty
   assert.match(TRUE_FIT_PICK_NOTE, /tap the True Fit button on the shoe they like/);
   assert.match(TRUE_FIT_PICK_NOTE, /Don't guess a size/);
 });
-await test("test recordings name it, with the kinds of shoe offered", () => {
+await test("recordings name it, with the kinds of shoe offered", () => {
   assert.equal(describeExtras([intro]), "True Fit — pick a shoe: Sneakers, Sandals, Boots, Slippers");
 });
 

@@ -8,6 +8,7 @@ import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
 import { listRecordings } from "../models/ChatRecording.server";
+import { listFlags } from "../models/ChatFlag.server";
 import { getConversionSummary } from "../models/ChatConversion.server";
 import { getInterestBreakdown } from "../models/ChatProductMention.server";
 import { getTopicRows } from "../models/ChatTopic.server";
@@ -48,11 +49,13 @@ function clampToRetention(range, retentionDays) {
 
 async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
   if (section === "recordings") {
-    // Test recordings (kept 30 days): every recorded turn, oldest first.
-    const rows = (await listRecordings(shop)).reverse();
+    // Recordings: every kept turn, oldest first, with the chat's flag and
+    // what the chat guard made of the message.
+    const [rows, flags] = await Promise.all([listRecordings(shop, { days: 400, take: 200000 }), listFlags(shop)]);
+    const flagOf = new Map(flags.map((f) => [f.sessionId, f.kind === "manual" ? "flagged" : f.kind === "guard" ? "ended by guard" : "guard: would have ended"]));
     return toCsv(
-      ["Time", "Chat", "Tester", "Page", "Shopper", "Assistant", "Products shown", "Also shown", "OK"],
-      rows.map((r) => [new Date(r.createdAt).toISOString(), r.sessionId, r.tester, r.page, r.message, r.reply, (r.products || []).join(" | "), r.extras, r.ok ? "yes" : "no"]),
+      ["Time", "Chat", "Tester", "Page", "Shopper", "Assistant", "Products shown", "Also shown", "OK", "Flag", "Guard"],
+      rows.reverse().map((r) => [new Date(r.createdAt).toISOString(), r.sessionId, r.tester, r.page, r.message, r.reply, (r.products || []).join(" | "), r.extras, r.ok ? "yes" : "no", flagOf.get(r.sessionId) || "", r.guard || ""]),
     );
   }
   // Every number for the range in one file — what the page leaves off.

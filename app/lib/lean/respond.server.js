@@ -26,6 +26,7 @@ import { featuredCollection, collectionView } from "./collections.server.js";
 import { trueFitIntro, TRUE_FIT_INTRO_TEXT, TRUE_FIT_PICK_NOTE } from "./true-fit-intro.js";
 import { tokenGraphql, shopperPurchases, withShopperFit } from "../fit-confidence.server.js";
 import { avaProductsShown } from "../app-events.server.js";
+import { WARNING_LINE } from "../chat-guard.js";
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 
@@ -98,14 +99,16 @@ export function leanChatResponse({
   sizeIntroTap = false,
   // A style tile from that answer ("Show me women's sneakers").
   sizePickTap = false,
+  // The chat guard counted this message: { mark, warn } (chat-guard.js).
+  guard = null,
 }) {
   const encoder = new TextEncoder();
-  // Test recordings: each turn (and anything shown with it) is saved for
-  // review while the store has recording on — never blocks the reply.
+  // Recording: each turn (and anything shown with it) is saved for review
+  // while the store has recording on — never blocks the reply.
   const shown = [];
   const keep = ({ reply, products = [], ok = true }) => {
     if (!record) return;
-    saveRecording({ shop, sessionId: record.sessionId, tester: record.tester, page: record.page, typed: record.typed, message: latestUserMessage, reply, products, extras: describeExtras(shown), ok })
+    saveRecording({ shop, sessionId: record.sessionId, tester: record.tester, page: record.page, typed: record.typed, message: latestUserMessage, reply, products, extras: describeExtras(shown), ok, guard: guard?.mark || "" })
       .catch((err) => console.error("[recordings] save failed:", err?.message || err));
   };
   // When the shopper leaves (closes the tab, the widget gives up), the turn
@@ -230,6 +233,9 @@ export function leanChatResponse({
           },
         });
         const result = purchases ? { ...turn, cards: await withShopperFit(turn.cards, { shop, catalog, purchases }) } : turn;
+        // The guard's one warning, under the answer, the message before a
+        // chat would be ended.
+        if (guard?.warn) result.text = `${String(result.text || "").trim()}\n\n${WARNING_LINE}`;
         send({ type: "text", text: result.text });
         send({ type: "products", products: result.cards });
         for (const ev of result.events || []) send(ev);

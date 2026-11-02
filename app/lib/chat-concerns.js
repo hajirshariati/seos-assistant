@@ -1,4 +1,4 @@
-// Top shopper issues & questions — the card at the top of Test recordings.
+// Top shopper issues & questions — the card at the top of Recordings.
 // Pure rules shared by the server module, the admin page and the evals.
 //
 // The model reads recorded shopper chats (never testers' or the app's own

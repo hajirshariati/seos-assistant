@@ -160,7 +160,7 @@ await run(base, { width: 1280, height: 900 }, async (p) => {
   check("switch: back to dark", (await p.evaluate(() => document.querySelector(".ai-chat-panel").getAttribute("data-theme") + "," + localStorage.getItem("hajirai_theme_pick"))) === "dark,dark");
 });
 wcNow = {};
-// Test recordings: the tester link marks the browser (two weeks), testers'
+// Recording: the tester link marks the browser (two weeks), testers'
 // chats carry their name and page; ordinary shoppers send neither unless the
 // store records everyone; ?hajirai_tester=off clears it. No recording note is
 // shown in the header (the footer already says chats may be kept).

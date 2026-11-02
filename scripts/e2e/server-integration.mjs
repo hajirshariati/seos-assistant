@@ -624,12 +624,12 @@ await test("the store's app: widget-config says it's on; the QR code is made onl
   await prisma.shopConfig.update({ where: { shop: SHOP }, data: { appPromoOn: true, appIosUrl: "" } });
   await configCacheExpiry();
 });
-await test("test recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
+await test("recordings: off by default; testers only; everyone; failures kept; widget-config tells the widget", async () => {
   const rows = () => prisma.chatRecording.findMany({ where: { shop: SHOP }, orderBy: { createdAt: "asc" } });
   const settle = () => new Promise((r) => setTimeout(r, 250));
   await chat("sandals for plantar fasciitis", { ip: "198.51.100.41", extra: { tester: "Ann", session_id: "sess-a", page: "/" } }); await settle();
   assert.equal((await rows()).length, 0, "off: nothing recorded, even for a tester");
-  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: new Date(Date.now() + 864e5), recordChatsScope: "testers" } });
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsOn: true, recordChatsScope: "testers" } });
   await configCacheExpiry();
   const cfg = await (await fetch(signed("/widget-config", { cta: "x" }))).json();
   assert.deepEqual(cfg.recording, { on: true, scope: "testers" });
@@ -660,7 +660,7 @@ await test("test recordings: off by default; testers only; everyone; failures ke
   assert.equal((await rows()).at(-1).typed, true, "typed by the shopper");
   await chat("sandals", { ip: "198.51.100.48", extra: { session_id: "sess-c", typed: "yes" } }); await settle();
   assert.equal((await rows()).at(-1).typed, null, "anything but true/false is unknown");
-  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsUntil: null, recordChatsScope: "testers" } });
+  await prisma.shopConfig.update({ where: { shop: SHOP }, data: { recordChatsOn: false, recordChatsScope: "testers" } });
   await configCacheExpiry();
 });
 

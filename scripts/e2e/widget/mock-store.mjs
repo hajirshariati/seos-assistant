@@ -385,6 +385,7 @@ export function start(port) {
           if (errMatch) {
             const code = Number(errMatch[1]);
             const payload = code === 429 ? { error: "rate_limited", retryAfter: 5 }
+              : code === 423 ? { error: "chat_ended", message: "I've paused this chat for now — I'm only able to help with shopping, orders and product questions, and this conversation has gone another way. You can keep browsing the store, and the chat will be open again in about 30 minutes.", until: new Date(Date.now() + 30 * 60 * 1000).toISOString() }
               : code === 402 ? { error: "plan_limit_reached", message: "This store reached its conversations for the month." }
               : code === 503 ? { error: "AI engine API key not configured." }
               : { error: "action_failed", message: "I'm having trouble right now. Please try again in a moment." };

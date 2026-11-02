@@ -4,17 +4,20 @@
 // which themes each chat raises, a batch of chats per call, (3) the top
 // themes described from the chats behind them. Each chat is read once;
 // counts are the chats stored against a theme, so they last after the
-// recordings themselves are deleted. The page starts a read when it opens
-// (at most every 30 minutes) or on Refresh; the daily clean-up reads what's
-// left before recordings expire. Only what shoppers typed is read — never
-// the words a button sent (see shopperSessions in chat-concerns.js).
+// recordings themselves are deleted — deleting chats never changes them (a
+// chat deleted before it was read is trashed, read, then removed). The page
+// starts a read when it opens (at most every 30 minutes) or on Refresh; the
+// daily clean-up reads what's left before recordings expire. Only what
+// shoppers typed is read — never the words a button sent (see
+// shopperSessions in chat-concerns.js).
 import Anthropic from "@anthropic-ai/sdk";
 import prisma from "../db.server";
 import { DEFAULT_MODEL } from "./claude-models.js";
 import { withAnthropicRetry } from "./anthropic-resilience.server.js";
 import { createLimiter } from "./concurrency.js";
-import { groupSessions, KEEP_DAYS } from "./chat-recording.js";
+import { groupSessions } from "./chat-recording.js";
 import { redactContactDetails } from "../models/ChatFeedback.server";
+import { purgeReadTrash } from "../models/ChatRecording.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { parseThemeJson } from "./store-knowledge/extract.js";
 import {
@@ -25,7 +28,9 @@ import {
 const runs = new Map(); // shop → { startedAt, total, done, error, finishedAt, running }
 const generation = new Map(); // shop → n, bumped when the store's themes are reset
 const lastAuto = new Map(); // shop → ms of the last read the page started by itself
-const forgotten = new Map(); // shop → chats deleted while a read was running
+// How far back a read looks for chats not read yet: reads run daily and when
+// the page opens, so a month covers any gap (recordings may be kept longer).
+export const READ_WINDOW_DAYS = 30;
 
 const clean = (s) => redactContactDetails(String(s || ""));
 
@@ -34,9 +39,10 @@ export function concernRunState(shop) {
   return r ? { running: Boolean(r.running), total: r.total, done: r.done, error: r.error || "", finishedAt: r.finishedAt || null } : { running: false, total: 0, done: 0, error: "", finishedAt: null };
 }
 
-// Every kept turn of the store's recordings, oldest first.
+// The store's recorded turns of the read window, oldest first — trashed
+// chats included, so a chat deleted before it was read still counts.
 async function keptRows(shop) {
-  const since = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - READ_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return prisma.chatRecording.findMany({
     where: { shop, createdAt: { gte: since } },
     select: { id: true, sessionId: true, tester: true, typed: true, message: true, reply: true, extras: true, ok: true, createdAt: true },
@@ -106,10 +112,6 @@ export function readError(err) {
 export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL, buttons = buttonSet(), onProgress = () => {} } = {}) {
   const gen = generation.get(shop) || 0;
   const stale = () => (generation.get(shop) || 0) !== gen;
-  // Chats deleted from here on aren't written back, even if this read
-  // loaded them before they went.
-  const gone = new Set();
-  forgotten.set(shop, gone);
   const [rows, links, stored] = await Promise.all([keptRows(shop), getLinks(shop), getThemes(shop)]);
   // Shopper chats, with only what they typed.
   const chats = shopperSessions(groupSessions(rows), buttons);
@@ -164,7 +166,7 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
       if (stale()) return;
       const answer = themes.length ? await ask(assignPrompt(themes, batch), ASSIGN_TOOL, 6000) : { chats: batch.map((_, i) => ({ chat: i + 1, themes: [] })) };
       if (stale()) return;
-      const found = parseAssignments(answer, themes, batch).filter((f) => !gone.has(f.sessionId));
+      const found = parseAssignments(answer, themes, batch);
       await prisma.$transaction(found.map((f) => {
         const data = { concernIds: f.themes.map((t) => t.id), quoteIds: f.themes.map((t) => t.turnId), lastTurnAt: f.lastTurnAt };
         return prisma.chatConcernChat.upsert({ where: { shop_sessionId: { shop, sessionId: f.sessionId } }, create: { shop, sessionId: f.sessionId, ...data }, update: data });
@@ -197,6 +199,8 @@ export async function readConcerns(shop, { apiKey, client, model = DEFAULT_MODEL
     }
   }
   if (toRead.length) console.log(`[concerns] read shop=${shop} chats=${read}/${toRead.length} new=${pending.length} themes=${themes.length} added=${added}`);
+  // Chats the store deleted before this read counted them go now.
+  await purgeReadTrash(shop).catch((err) => console.error(`[concerns] purge failed shop=${shop}:`, err?.message || err));
   return { read, pending: pending.length, themes: themes.length, added, partial: Boolean(firstError) };
 }
 
@@ -269,14 +273,8 @@ export async function concernSummary(shop, sessions = [], buttons = buttonSet())
   };
 }
 
-// A deleted chat no longer counts.
-export async function forgetConcernChat(shop, sessionId) {
-  const id = String(sessionId || "").slice(0, 80);
-  if (!shop || !id) return 0;
-  forgotten.get(shop)?.add(id);
-  const { count } = await prisma.chatConcernChat.deleteMany({ where: { shop, sessionId: id } });
-  return count;
-}
+// Only the tests (and uninstall) start a store's themes over: deleting chats
+// never does.
 
 // "Delete all": the themes start over. A read in progress stops writing.
 export async function resetConcerns(shop) {
@@ -289,7 +287,7 @@ export async function resetConcerns(shop) {
 
 // Daily: every store's unread shopper chats, before recordings expire.
 export async function readAllPendingConcerns() {
-  const since = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - READ_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const shops = await prisma.chatRecording.findMany({ where: { tester: "", createdAt: { gte: since } }, distinct: ["shop"], select: { shop: true } });
   for (const { shop } of shops) {
     try {

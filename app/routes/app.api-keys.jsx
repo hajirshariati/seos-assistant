@@ -45,9 +45,10 @@ import { getShopPlan } from "../lib/billing.server";
 import BrandHeader from "../components/BrandHeader";
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { OrbColorsCard } from "../components/AssistantLookCards";
-import { TestRecordingCard } from "../components/TestRecordingCard";
+import { RecordingCard, ChatGuardCard } from "../components/RecordingCard";
 import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch } from "../components/SettingsUI";
-import { recordingState, RECORD_DAYS } from "../lib/chat-recording.js";
+import { recordingState, keepDays, KEEP_DAYS_CHOICES } from "../lib/chat-recording.js";
+import { guardMode } from "../lib/chat-guard.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
 import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launcher-mark.js";
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
@@ -104,7 +105,8 @@ export const loader = async ({ request }) => {
     // hasn't reported since this was added).
     avatarState: config.widgetAvatarUrl == null ? "unknown" : config.widgetAvatarUrl ? "photo" : "none",
     voiceInput: config.voiceInput !== false,
-    recording: (() => { const st = recordingState(config); return { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope }; })(),
+    recording: recordingState(config),
+    guardMode: guardMode(config),
     shopDomain: session.shop,
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
@@ -194,7 +196,7 @@ export const action = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  // Cards that save on their own (orb colors, test recordings, See It
+  // Cards that save on their own (orb colors, recording, See It
   // Styled) submit with an intent through useFetcher.
   const intent = formData.get("intent");
   if (intent === "save_orb_colors") {
@@ -238,10 +240,14 @@ export const action = async ({ request }) => {
   if (intent === "save_recording") {
     const on = formData.get("on") === "true";
     const scope = formData.get("scope") === "everyone" ? "everyone" : "testers";
-    const until = on ? new Date(Date.now() + RECORD_DAYS * 24 * 60 * 60 * 1000) : null;
-    const saved = await updateShopConfig(session.shop, { recordChatsUntil: until, recordChatsScope: scope });
-    const st = recordingState(saved);
-    return { recording: { on: st.on, until: st.until ? st.until.toISOString() : null, scope: st.scope } };
+    const days = Number(formData.get("keepDays"));
+    const saved = await updateShopConfig(session.shop, { recordChatsOn: on, recordChatsScope: scope, recordKeepDays: KEEP_DAYS_CHOICES.includes(days) ? days : keepDays(null) });
+    return { recording: recordingState(saved) };
+  }
+  if (intent === "save_guard") {
+    const mode = String(formData.get("mode") || "");
+    const saved = await updateShopConfig(session.shop, { chatGuardMode: guardMode({ chatGuardMode: mode }) });
+    return { guardMode: guardMode(saved) };
   }
 
   if (intent === "save_visualize_look") {
@@ -544,7 +550,7 @@ const SECTIONS = [
   { id: "tools", label: "Shopping tools", icon: CartIcon },
   { id: "integrations", label: "Integrations", icon: ConnectIcon },
   { id: "peak", label: "Peak Mode", icon: GaugeIcon },
-  { id: "testing", label: "Testing", icon: PlayCircleIcon },
+  { id: "testing", label: "Recording", icon: PlayCircleIcon },
 ];
 
 // Every field the Save button sends, the section it lives in, and its kind
@@ -842,8 +848,11 @@ export default function Settings() {
                 <PeakSection d={d} values={values} set={set} draftPeak={draftPeak} mounted={mounted} onRefresh={() => revalidator.revalidate()} refreshing={revalidator.state !== "idle"} />
               </div>
               <div hidden={section !== "testing"}>
-                <SectionHead title="Testing">Record conversations while your team tests AVA, then review them under Test recordings.</SectionHead>
-                <TestRecordingCard initial={d.recording} shopDomain={d.shopDomain} />
+                <SectionHead title="Recording">Save conversations to review AVA's answers under Recordings, and end chats that keep trying to work AVA rather than shop.</SectionHead>
+                <BlockStack gap="400">
+                  <RecordingCard initial={d.recording} shopDomain={d.shopDomain} />
+                  <ChatGuardCard initial={d.guardMode} />
+                </BlockStack>
               </div>
               {section !== "testing" && isDirty && (
                 <div className="set-save">

@@ -1,4 +1,4 @@
-// "Top shopper issues & questions" — the card at the top of Test recordings:
+// "Top shopper issues & questions" — the card at the top of Recordings:
 // the three issues, needs or questions the most shopper chats raised (all
 // time; everyday browsing isn't counted), each with its count, a shopper's
 // own words and what to look at; the next few below.
@@ -132,7 +132,7 @@ export default function ShopperConcerns({ concerns, activeId, onView, onRefresh,
   } else if (read > 0) {
     body = <div className="sc-note"><b>No issue or question has come up twice yet</b>{`One shows once two or more chats raise it (${plural(read, "chat", "chats")} read so far; everyday browsing isn't counted).`}</div>;
   } else {
-    body = <div className="sc-note"><b>No shopper chats yet</b>With recording on for every shopper (Settings → Testing), the three issues and questions shoppers raise most show here.</div>;
+    body = <div className="sc-note"><b>No shopper chats yet</b>With recording on for every shopper (Settings → Recording), the three issues and questions shoppers raise most show here.</div>;
   }
 
   const showFoot = hasKey && (read > 0 || pending > 0 || running || run?.error);

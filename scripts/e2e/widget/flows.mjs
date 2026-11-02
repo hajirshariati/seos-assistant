@@ -124,7 +124,7 @@ for (const [path, vp, n, name] of [["/showcase", { width: 390, height: 844 }, 1,
   await ctx.close();
 }
 // 3b) Each message says whether the shopper typed it or a button sent it
-// (Test recordings' issues card reads only what shoppers type).
+// (Recordings' issues card reads only what shoppers type).
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const page = await ctx.newPage();
@@ -949,6 +949,48 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   }
   check("home sheets (Foot pain, Footwear, Orthotics): the chat behind dims even when the theme hides empty divs, a tap on it closes the sheet, the sheet itself keeps a normal cursor", seen.length === 3 && seen.every((s) => s.a >= 0.3 && s.closed && s.panelCursor === "auto"), JSON.stringify(seen));
   check("home sheets (dim): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// The chat guard ended the chat (the server answers 423 chat_ended): the
+// shopper reads the server's words as a reply, the box is paused, and a
+// reload or "Start a new chat" keeps it paused until the time the server
+// gave; nothing is sent meanwhile. Once the time passes, it's open again.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  const sent = chatBodies.length;
+  await page.fill(".ai-chat-input-area textarea", "err423");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => /paused this chat/.test(document.querySelector(".ai-chat-msg--assistant:last-of-type .ai-chat-msg-bubble")?.textContent || ""), null, { timeout: 5000 });
+  const state = () => page.evaluate(() => ({ disabled: document.querySelector(".ai-chat-input-area textarea").disabled, placeholder: document.querySelector(".ai-chat-input-area textarea").placeholder, send: document.querySelector(".ai-chat-send").disabled, paused: Number(localStorage.getItem("hajirai_chat_paused") || 0) > Date.now(), bubbles: document.querySelectorAll(".ai-chat-msg--assistant").length, retry: !!document.querySelector(".ai-chat-retry-btn, .ai-chat-dead-end") }));
+  let st = await state();
+  check("chat ended: the server's words show as a reply, no retry buttons, the box paused", st.disabled && st.send && st.paused && st.placeholder === "Chat paused for now" && !st.retry, JSON.stringify(st));
+  await page.reload();
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  st = await state();
+  check("chat ended: still paused after a reload, the reply kept", st.disabled && st.paused && st.bubbles >= 1, JSON.stringify(st));
+  // "Start a new chat" (the menu) resets the box; a send is still refused here.
+  await page.evaluate(() => { document.querySelector(".ai-chat-input-area textarea").disabled = false; });
+  await page.focus(".ai-chat-input-area textarea");
+  await page.keyboard.type("hello again");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(500);
+  st = await state();
+  check("chat ended: nothing is sent while paused, and the box pauses again", chatBodies.length === sent + 1 && st.disabled, JSON.stringify({ sent: chatBodies.length - sent, st }));
+  // Time's up: the box opens again by itself.
+  await page.evaluate(() => localStorage.setItem("hajirai_chat_paused", String(Date.now() + 700)));
+  await page.reload();
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(1600);
+  st = await state();
+  check("chat ended: open again once the time passes", !st.disabled && !st.send && !st.paused, JSON.stringify(st));
+  check("chat ended: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // The Orthotics sheet takes only the Popular buttons that are orthotic quizzes:

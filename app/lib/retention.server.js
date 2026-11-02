@@ -5,6 +5,7 @@ import { cleanupOldUsage } from "../models/ChatUsage.server";
 import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
+import { cleanupOldGuards } from "../models/ChatGuard.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
 import { draftAllLessons } from "./feedback-lessons.server";
 import { refreshAllFitData } from "./fit-confidence.server";
@@ -57,6 +58,11 @@ async function runOnce() {
     console.error("[retention] cleanupOldReturns failed:", err?.message || err);
   }
   await cleanupOldHealth();
+  try {
+    await cleanupOldGuards();
+  } catch (err) {
+    console.error("[retention] cleanupOldGuards failed:", err?.message || err);
+  }
   // Fit confidence on product cards: each store's scores read again (a store
   // read in the last 20 hours is skipped). Last — it can take a few minutes.
   try {

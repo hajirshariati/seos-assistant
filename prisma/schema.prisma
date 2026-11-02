@@ -150,12 +150,16 @@ model ShopConfig {
   widgetAvatarUrl        String?
   // The talk (voice input) button beside Send in the chat.
   voiceInput             Boolean  @default(true)
-  // Conversation recording for testing (Settings → Test recordings): on
-  // until this time (null = off; turning it on sets two weeks out), and who is
+  // Recording (Settings → Recording): whether chats are saved, who is
   // recorded — "testers" (only chats opened from the tester link) or
-  // "everyone".
-  recordChatsUntil       DateTime?
+  // "everyone" — and how many days they're kept (flagged chats are kept
+  // until deleted by hand).
+  recordChatsOn          Boolean  @default(false)
   recordChatsScope       String   @default("testers")
+  recordKeepDays         Int      @default(90)
+  // Chat guard (chat-guard.js): "off", "watch" (flags the chats it would
+  // have ended, changes nothing for the shopper) or "on" (ends them).
+  chatGuardMode          String   @default("watch")
   similarMatchAttributes String   @default("[]")
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)
@@ -545,9 +549,10 @@ model FeedbackLesson {
   @@index([shop, createdAt])
 }
 
-// Recorded chat turns, only while the store has recording on for testing
-// (see ShopConfig.recordChatsUntil): the shopper's message as typed (contact
-// details removed), the assistant's reply and what it showed. Kept 30 days.
+// Recorded chat turns, while the store has recording on (see
+// ShopConfig.recordChatsOn): the shopper's message as typed (contact details
+// removed), the assistant's reply and what it showed. Kept recordKeepDays.
+// Turns the chat guard struck are saved whatever the recording settings.
 model ChatRecording {
   id         String   @id @default(cuid())
   shop       String
@@ -562,6 +567,12 @@ model ChatRecording {
   products   String[]
   extras     String   @default("")
   ok         Boolean  @default(true)
+  // What the chat guard made of this message: "" or strike|warn|end|watch
+  // + ":" + the kind of message (chat-guard.js).
+  guard      String   @default("")
+  // Deleted by the store before "Top shopper issues & questions" read it:
+  // hidden everywhere, and removed once that read has counted it.
+  trashed    Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   @@index([shop, createdAt])
@@ -569,11 +580,43 @@ model ChatRecording {
   @@index([createdAt])
 }
 
-// What shoppers keep asking about (the top of Test recordings): themes the
+// A flagged recorded chat: by the store team ("manual"), by the chat guard
+// when it ended the chat ("guard") or would have in watch mode ("watch").
+// Flagged chats are never deleted by Delete all, Delete day or the daily
+// clean-up — only by that chat's own Delete.
+model ChatFlag {
+  shop      String
+  sessionId String
+  kind      String   @default("manual")
+  note      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([shop, sessionId])
+  @@index([shop, createdAt])
+}
+
+// Chat guard state per chat ("session:<id>") and per address ("ip:<ip>"):
+// strikes so far, the kind of the last one and when, and until when the
+// chat is ended. Rows are dropped a day after their last change.
+model ChatGuard {
+  shop         String
+  key          String
+  strikes      Int       @default(0)
+  lastCategory String    @default("")
+  lastStrikeAt DateTime?
+  lockedUntil  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@id([shop, key])
+  @@index([updatedAt])
+}
+
+// What shoppers keep asking about (the top of Recordings): themes the
 // model found in recorded shopper chats — labels written for the team, never
 // a shopper's words — and, in ChatConcernChat, which chats raised each. Those
-// links outlive the 30-day recordings, so the counts cover all time. "Delete
-// all" on Test recordings clears both.
+// links outlive the recordings, so the counts cover all time: deleting chats
+// never changes them.
 model ChatConcern {
   id          String   @id @default(cuid())
   shop        String

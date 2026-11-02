@@ -155,7 +155,7 @@ export default function App() {
           <Link to="/app/catalog">Catalog</Link>
           <Link to="/app/recommenders">Smart Recommenders</Link>
           <Link to="/app/analytics">Analytics</Link>
-          <Link to="/app/recordings">Test recordings</Link>
+          <Link to="/app/recordings">Recordings</Link>
           <Link to="/app/api-keys">Settings</Link>
         </NavMenu>
         <Outlet />

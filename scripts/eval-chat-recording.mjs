@@ -1,11 +1,12 @@
-// Test recordings: who is recorded, for how long, and how transcripts read.
-// Recording is off unless the store turns it on; it lapses after two weeks;
-// by default only testers (the tester link) are recorded — never ordinary
-// shoppers — and the app's own Test chat is recorded while it's on.
+// Recording: who is recorded, how long chats are kept, and how transcripts
+// read. Recording is off unless the store turns it on, and stays on until
+// it's turned off; by default only testers (the tester link) are recorded —
+// never ordinary shoppers — and the app's own Test chat is recorded while
+// it's on. Chats are kept 30, 90, 180 or 365 days (90 by default).
 //
 // Run: node scripts/eval-chat-recording.mjs
 import assert from "node:assert/strict";
-import { recordingState, shouldRecord, cleanTester, describeExtras, groupSessions, recordingLabels, RECORD_DAYS, KEEP_DAYS } from "../app/lib/chat-recording.js";
+import { recordingState, shouldRecord, cleanTester, describeExtras, groupSessions, recordingLabels, dayBounds, keepDays, KEEP_DAYS_CHOICES, DEFAULT_KEEP_DAYS } from "../app/lib/chat-recording.js";
 
 let passed = 0;
 let failed = 0;
@@ -14,35 +15,38 @@ function test(name, fn) {
   catch (err) { failed++; console.log(`  ✗ ${name}\n      ${err.message}`); }
 }
 const now = new Date("2026-10-20T12:00:00Z");
-const later = new Date(now.getTime() + 3 * 864e5);
-const past = new Date(now.getTime() - 1000);
 
 console.log("\nwho is recorded");
-test("off by default, and off once the end date passes", () => {
-  assert.equal(shouldRecord({}, { tester: "Ann", now }), false);
-  assert.equal(shouldRecord({ recordChatsUntil: null }, { tester: "Ann", now }), false);
-  assert.equal(shouldRecord({ recordChatsUntil: past }, { tester: "Ann", now }), false);
-  assert.equal(recordingState({ recordChatsUntil: past }, now).on, false);
+test("off by default; on only while the store has it on (no end date)", () => {
+  assert.equal(shouldRecord({}, { tester: "Ann" }), false);
+  assert.equal(shouldRecord({ recordChatsOn: false }, { tester: "Ann" }), false);
+  assert.equal(recordingState({}).on, false);
+  assert.equal(recordingState({ recordChatsOn: true }).on, true);
+  assert.equal(recordingState({ recordChatsUntil: new Date("2099-01-01") }).on, false, "the old end date means nothing");
 });
 test("testers only (default): the tester link is recorded, ordinary shoppers aren't", () => {
-  const cfg = { recordChatsUntil: later };
-  assert.equal(recordingState(cfg, now).scope, "testers");
-  assert.equal(shouldRecord(cfg, { tester: "Ann", now }), true);
-  assert.equal(shouldRecord(cfg, { tester: "", now }), false);
-  assert.equal(shouldRecord(cfg, { tester: "<>!!", now }), false, "a name that cleans to nothing isn't a tester");
+  const cfg = { recordChatsOn: true };
+  assert.equal(recordingState(cfg).scope, "testers");
+  assert.equal(shouldRecord(cfg, { tester: "Ann" }), true);
+  assert.equal(shouldRecord(cfg, { tester: "" }), false);
+  assert.equal(shouldRecord(cfg, { tester: "   " }), false);
 });
 test("everyone: every chat is recorded while it's on", () => {
-  const cfg = { recordChatsUntil: later, recordChatsScope: "everyone" };
-  assert.equal(shouldRecord(cfg, { tester: "", now }), true);
-  assert.equal(shouldRecord({ ...cfg, recordChatsUntil: past }, { tester: "", now }), false);
+  const cfg = { recordChatsOn: true, recordChatsScope: "everyone" };
+  assert.equal(shouldRecord(cfg, { tester: "" }), true);
+  assert.equal(shouldRecord({ ...cfg, recordChatsOn: false }, { tester: "" }), false);
 });
 test("the app's own Test chat is recorded while it's on", () => {
-  assert.equal(shouldRecord({ recordChatsUntil: later }, { internal: true, now }), true);
-  assert.equal(shouldRecord({}, { internal: true, now }), false);
+  assert.equal(shouldRecord({ recordChatsOn: true }, { internal: true }), true);
+  assert.equal(shouldRecord({}, { internal: true }), false);
 });
-test("two weeks on, thirty days kept", () => {
-  assert.equal(RECORD_DAYS, 14);
-  assert.equal(KEEP_DAYS, 30);
+test("kept 90 days unless the store picks 30, 180 or a year; anything else is the default", () => {
+  assert.deepEqual(KEEP_DAYS_CHOICES, [30, 90, 180, 365]);
+  assert.equal(DEFAULT_KEEP_DAYS, 90);
+  assert.equal(keepDays({}), 90);
+  assert.equal(keepDays({ recordKeepDays: 365 }), 365);
+  assert.equal(keepDays({ recordKeepDays: 45 }), 90);
+  assert.equal(recordingState({ recordKeepDays: 30 }).keepDays, 30);
 });
 
 console.log("\ntranscripts");
@@ -86,6 +90,17 @@ test("times read in the store's zone; an unknown zone falls back to UTC", () => 
   const bad = recordingLabels({ timeZone: "Mars/Olympus", now: new Date("2026-10-20T13:00:00Z") });
   assert.equal(bad.time(new Date("2026-10-20T19:05:00Z")), "7:05 PM");
   assert.equal(bad.day(new Date("2026-10-20T01:00:00Z")).label, "Today");
+});
+
+console.log("\nDelete day: a store-local day's bounds");
+test("a day in the store's zone, DST-safe; a bad key is nothing", () => {
+  assert.deepEqual(dayBounds("2026-10-30", "America/New_York"), { start: new Date("2026-10-30T04:00:00Z"), end: new Date("2026-10-31T04:00:00Z") });
+  assert.deepEqual(dayBounds("2026-11-01", "America/New_York"), { start: new Date("2026-11-01T04:00:00Z"), end: new Date("2026-11-02T05:00:00Z") }, "clocks go back that night: a 25-hour day");
+  assert.deepEqual(dayBounds("2026-03-08", "America/New_York"), { start: new Date("2026-03-08T05:00:00Z"), end: new Date("2026-03-09T04:00:00Z") }, "clocks go forward: a 23-hour day");
+  assert.deepEqual(dayBounds("2026-10-30", ""), { start: new Date("2026-10-30T00:00:00Z"), end: new Date("2026-10-31T00:00:00Z") }, "no zone: UTC");
+  assert.deepEqual(dayBounds("2026-10-30", "Mars/Olympus"), { start: new Date("2026-10-30T00:00:00Z"), end: new Date("2026-10-31T00:00:00Z") }, "unknown zone: UTC");
+  assert.equal(dayBounds("yesterday", "America/New_York"), null);
+  assert.equal(dayBounds("", "America/New_York"), null);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

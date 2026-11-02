@@ -16,6 +16,8 @@ import { checkIpShopRate, checkStoreChatRate, clientIp } from "../lib/rate-limit
 import { recordHealth } from "../models/ChatHealth.server";
 import { storeChatLimits, dailyCapApplies, busyMessage } from "../lib/peak-mode.js";
 import { avaChatStarted } from "../lib/app-events.server.js";
+import { guardMessage } from "../lib/chat-guard.server.js";
+import { saveRecording } from "../models/ChatRecording.server";
 
 // Real questions are short; very long pastes would crowd out the context.
 const MAX_MESSAGE_CHARS = 2000;
@@ -126,18 +128,37 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
   // Storefront: signed by Shopify's app proxy, never taken from the body.
   // The admin test chat has no signed customer, so it never acts as one.
   const loggedInCustomerId = internal ? null : new URL(request.url).searchParams.get("logged_in_customer_id") || null;
+  const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 100) : "";
+  const tester = internal ? "Test chat" : cleanTester(body.tester);
+  // Typed by the shopper, or sent by a button (unknown from older widgets).
+  const typed = typeof body.typed === "boolean" ? body.typed : null;
+  const page = typeof body.page === "string" ? body.page : "";
+
+  // The chat guard (chat-guard.js): a chat that keeps trying to work the
+  // assistant rather than shop is ended — three strikes, each needing the
+  // phrase list and the model to agree. An ended chat gets no model call.
+  // Never the admin's Test chat or testers.
+  let guard = null;
+  if (!internal) {
+    guard = await guardMessage({ shop, config, message, sessionId, ip: clientIp(request), typed, tester, signedIn: Boolean(loggedInCustomerId), supportLabel: config.supportLabel || "" })
+      .catch((err) => { console.error("[guard] failed:", err?.message || err); return null; });
+    if (guard?.ended) {
+      // The message that ended it is kept for the team whatever the
+      // recording settings; later messages to an ended chat aren't.
+      if (guard.mark) {
+        saveRecording({ shop, sessionId, tester, page, typed, message, reply: guard.message, guard: guard.mark })
+          .catch((err) => console.error("[recordings] save failed:", err?.message || err));
+      }
+      return Response.json({ error: "chat_ended", message: guard.message, until: guard.until ? new Date(guard.until).toISOString() : null }, { status: 423 });
+    }
+  }
   // The library keeps the shop's offline token current on app proxy requests.
   const accessToken = sessionAccessToken || null;
 
   // Shopify Analytics: a shopper's first message is a chat started (the admin
   // test chat never counts). A note the chat showed first doesn't change that.
   if (!internal && !messages.slice(0, -1).some((m) => m.role === "user")) {
-    avaChatStarted(shop, {
-      sessionId: typeof body.session_id === "string" ? body.session_id.slice(0, 100) : "",
-      message,
-      typed: typeof body.typed === "boolean" ? body.typed : null,
-      signedIn: !!loggedInCustomerId,
-    });
+    avaChatStarted(shop, { sessionId, message, typed, signedIn: !!loggedInCustomerId });
   }
 
   return leanChatResponse({
@@ -160,16 +181,10 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
     sizeIntroTap: body.size_intro === true,
     // A style tile from that answer: they're choosing a shoe to get sized.
     sizePickTap: body.size_pick === true,
-    // Test recordings: only while the store has it on, and (by default) only
-    // for testers who opened the store with the tester link.
-    record: shouldRecord(config, { tester: body.tester, internal })
-      ? {
-        sessionId: typeof body.session_id === "string" ? body.session_id : "",
-        tester: internal ? "Test chat" : cleanTester(body.tester),
-        page: typeof body.page === "string" ? body.page : "",
-        // Typed by the shopper, or sent by a button (unknown from older widgets).
-        typed: typeof body.typed === "boolean" ? body.typed : null,
-      }
-      : null,
+    // Recording: only while the store has it on, and (by default) only for
+    // testers who opened the store with the tester link. A turn the guard
+    // struck is kept whatever the settings.
+    record: shouldRecord(config, { tester: body.tester, internal }) || guard?.mark ? { sessionId, tester, page, typed } : null,
+    guard: guard && guard.mark ? { mark: guard.mark, warn: Boolean(guard.warn) } : null,
   });
 }

@@ -295,7 +295,7 @@ var KLAVIYO_LIST_ID='';
    Tuning fields control thickness, halo extent, animation speed,
    and the three timing phases (fade-in / hold / fade-out). */
 var WELCOME_INTRO=true;
-/* Test recordings. Opening the store with ?hajirai_tester=Name marks this
+/* Recording. Opening the store with ?hajirai_tester=Name marks this
    browser as a tester for two weeks (?hajirai_tester=off clears it). While
    the store records, testers' chats are saved for review. Ordinary shoppers
    are only recorded if the store chose "everyone". (The chat's footer
@@ -1233,6 +1233,8 @@ panel.addEventListener('scroll',function(){if(panel.scrollTop||panel.scrollLeft)
 var typingEl=$('.ai-chat-typing',panel);
 var typingTextEl=$('.ai-chat-typing-text',panel);
 var inputEl=$('.ai-chat-input',panel);
+/* A chat the guard ended stays paused through a reload until its time. */
+if(chatPausedUntil())setTimeout(function(){var t=chatPausedUntil();if(t)pauseChat(t)},0);
 var sendBtn=$('.ai-chat-send',panel);
 /* The band: one SVG in the header. Two shapes — the colour ring around the
    face at home, and the line along the header's bottom in a chat — on one
@@ -2595,6 +2597,8 @@ if(isOpen){
   hideFloaters();
   inertPage(true);
   lockPage(true);
+  /* A chat the guard ended stays paused until its time, whatever reset the box. */
+  var pz=chatPausedUntil();if(pz)pauseChat(pz);
   setTimeout(function(){inputEl.focus()},400);
   setTimeout(function(){inputEl.focus()},800);
   playWelcomeIntro();
@@ -5861,6 +5865,7 @@ function sendMessage(){
 var text=inputEl.value.trim();
 var byButton=BTN_SEND;BTN_SEND=false;
 if(!text||isStreaming)return;
+var paused=chatPausedUntil();if(paused){pauseChat(paused);return}
 SENT_TYPED=!byButton;
 rateStepAside();
 fbRetire();
@@ -5982,6 +5987,25 @@ submitBtn.addEventListener('click',function(){
 scrollBottom();
 }
 
+/* The chat guard (server) ended this chat. The pause is kept here too, so a
+   reload or "Start a new chat" doesn't send again before the time is up —
+   the server would turn it away anyway. */
+var PAUSE_KEY='hajirai_chat_paused';
+function chatPausedUntil(){var t=0;try{t=parseInt(localStorage.getItem(PAUSE_KEY)||'0',10)||0}catch(e){}if(t>Date.now())return t;if(t){try{localStorage.removeItem(PAUSE_KEY)}catch(e){}}return 0}
+function pauseChat(until){
+try{localStorage.setItem(PAUSE_KEY,String(until))}catch(e){}
+inputEl.disabled=true;inputEl.placeholder='Chat paused for now';sendBtn.disabled=true;panel.classList.add('is-paused');
+var ms=until-Date.now();
+if(ms>0&&ms<36e5)setTimeout(function(){if(!chatPausedUntil())resumeChat()},ms+500);
+}
+function resumeChat(){if(chatPausedUntil())return;panel.classList.remove('is-paused');inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false}
+function showChatEnded(text,until){
+clearWatchdog();isStreaming=false;typingEl.classList.remove('visible');
+var t=Date.parse(until||'');if(!(t>Date.now()))t=Date.now()+30*60000;
+messages.push({role:'assistant',content:text});saveH(messages);
+appendMsg('assistant',text);scrollBottom();
+pauseChat(t);
+}
 function showHighTraffic(){
 showStreamError('I\'m experiencing high traffic right now. Please try again in a moment.');
 if(errorRetryCount>=3){later(function(){showKlaviyoForm('Stay Connected')},500)}
@@ -6317,7 +6341,7 @@ var tfData=tfPayload();
 if(tfData)body.size_finder=tfData;
 if(TESTER)body.tester=TESTER;
 /* Typed (or spoken) by the shopper, or sent by a button — the store's issues
-   card (Test recordings) reads only what shoppers type. */
+   card (Recordings) reads only what shoppers type. */
 body.typed=SENT_TYPED;
 /* Sent by tapping the seasonal button: the chat shows its collection. */
 if(SEA_TAP&&SEA_TAP===msg)body.seasonal=true;
@@ -6336,7 +6360,7 @@ fetch(CHAT_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept
 if(!r.ok){
   if(r.headers.get('content-type')&&r.headers.get('content-type').includes('text/event-stream'))return handleSSE(r);
   return r.json().catch(function(){return{}}).then(function(d){
-    var err=new Error(d.message||'');err.status=r.status;err.code=d.error||'';throw err;
+    var err=new Error(d.message||'');err.status=r.status;err.code=d.error||'';err.until=d.until||'';throw err;
   });
 }
 var ct=r.headers.get('content-type')||'';
@@ -6346,6 +6370,9 @@ return r.json().then(function(d){handleJSON(d)});
 clearWatchdog();
 if(e.name==='AbortError')return;
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
+/* The chat guard ended this chat: the server's words, and the chat stays
+   paused until the time it gave. */
+if(e.status===423||e.code==='chat_ended'){showChatEnded(e.message||'I\'ve paused this chat for now. You can keep browsing the store, and the chat will be open again in about 30 minutes.',e.until);return}
 /* The store's own limits and settings: say so plainly — retrying won't help. */
 if(e.status===429&&e.code==='rate_limited'){showStreamError('You\'re sending messages quickly — please wait a few seconds and try again.');return}
 if(e.status===402||e.status===503||(e.status===429&&(e.code==='daily_cap_reached'||e.code==='store_busy'))){showStreamError(e.message||'The assistant isn\'t available right now. Our customer service team will be glad to help.');return}

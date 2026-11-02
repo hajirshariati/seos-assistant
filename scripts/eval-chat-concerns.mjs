@@ -1,4 +1,4 @@
-// Top shopper issues & questions (top of Test recordings): which chats are
+// Top shopper issues & questions (top of Recordings): which chats are
 // read, what the model is shown, how its answers are checked, and how
 // themes are counted, ranked and quoted. With TEST_DATABASE_URL set, the
 // whole read also runs against a migrated Postgres with a stand-in model.
@@ -438,17 +438,43 @@ if (!process.env.TEST_DATABASE_URL) {
       assert.equal(late.quote, "");
       assert.deepEqual(late.sessionIds, []);
     });
-    await test("a deleted chat no longer counts — even one deleted while a read is running", async () => {
+    await test("a deleted chat still counts: one not read yet is trashed (hidden), read, then removed", async () => {
+      const { deleteRecordingSession, listRecordings } = await import("../app/models/ChatRecording.server.js");
       const wide = (await summary()).top.find((t) => t.kind === "request");
-      await C.forgetConcernChat(SHOP, "w1");
-      assert.equal((await summary()).top.find((t) => t.id === wide.id).count, wide.count - 1);
+      await deleteRecordingSession(SHOP, "w1");
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "w1" } }), 0, "a read chat goes at once");
+      assert.equal((await summary()).top.find((t) => t.id === wide.id).count, wide.count, "its count stays");
       await rec("d1", "wide 7 please", { minutesAgo: 2 });
-      C.startConcernRead(SHOP, { client: fake({ delayMs: 300 }) });
-      await new Promise((r) => setTimeout(r, 50));
-      await prisma.chatRecording.deleteMany({ where: { shop: SHOP, sessionId: "d1" } });
-      await C.forgetConcernChat(SHOP, "d1");
+      await deleteRecordingSession(SHOP, "d1");
+      const held = await prisma.chatRecording.findMany({ where: { shop: SHOP, sessionId: "d1" } });
+      assert.equal(held.length, 1, "an unread chat is kept, trashed");
+      assert.equal(held[0].trashed, true);
+      assert.equal((await listRecordings(SHOP, { days: 1 })).some((r) => r.sessionId === "d1"), false, "and hidden from the page");
+      C.startConcernRead(SHOP, { client: fake() });
       await C.settleConcernRead(SHOP);
-      assert.equal(await prisma.chatConcernChat.count({ where: { shop: SHOP, sessionId: "d1" } }), 0);
+      assert.equal(await prisma.chatConcernChat.count({ where: { shop: SHOP, sessionId: "d1" } }), 1, "the read counted it");
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "d1" } }), 0, "and then it went");
+      assert.equal((await summary()).top.find((t) => t.id === wide.id).count, wide.count + 1);
+    });
+    await test("Delete all and Delete day skip flagged chats and never touch the counts", async () => {
+      const { deleteAllRecordings, deleteDayRecordings } = await import("../app/models/ChatRecording.server.js");
+      const { setFlag } = await import("../app/models/ChatFlag.server.js");
+      const before = (await summary()).read;
+      await rec("f1", "wide boots please", { minutesAgo: 30 });
+      await rec("g1", "any wide clogs", { minutesAgo: 20 });
+      await setFlag(SHOP, "f1", { kind: "manual" });
+      const day = await deleteDayRecordings(SHOP, { start: new Date(Date.now() - 25 * 60_000), end: new Date() });
+      assert.equal(day.chats, 1, "only the unflagged chat of that window");
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "f1" } }), 1, "the flagged chat stays");
+      await deleteAllRecordings(SHOP);
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "f1", trashed: false } }), 1, "Delete all keeps it too");
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, trashed: false, sessionId: { not: "f1" } } }), 0, "everything else is gone or trashed");
+      assert.equal((await summary()).read, before, "the counts didn't move");
+      C.startConcernRead(SHOP, { client: fake() });
+      await C.settleConcernRead(SHOP);
+      assert.ok((await summary()).read >= before + 1, "the trashed chats were read before going");
+      assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, trashed: true } }), 0);
+      await prisma.chatFlag.deleteMany({ where: { shop: SHOP } });
     });
     await test("a chat that raised no theme is read again when a new theme comes up, so a need asked once a day still counts", async () => {
       await rec("p1", "Do you price match?", { minutesAgo: 2 });
@@ -508,7 +534,7 @@ if (!process.env.TEST_DATABASE_URL) {
       assert.ok(calls.length > 0 && calls.every((c) => c.tool === "describe_theme"), calls.map((c) => c.tool).join(","));
       assert.equal((await summary()).describe, 0);
     });
-    await test("Delete all starts over, and a read in progress writes nothing after it", async () => {
+    await test("resetConcerns (tests and uninstall only — Delete all never does this) starts over, and a read in progress writes nothing after it", async () => {
       await rec("z1", "wide again", { minutesAgo: 2 });
       C.startConcernRead(SHOP, { client: fake({ delayMs: 300 }) });
       await new Promise((r) => setTimeout(r, 50));
