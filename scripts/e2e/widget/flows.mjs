@@ -3660,7 +3660,7 @@ for (const coop of ["1", "2"]) {
   {
     const { ctx, page, errors } = await open("/full?home=focus&banner=1&gct=1", {}, { name: "Ask Ava!", nameSub: "Aetrex Virtual Assistant" });
     const b = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const banner = w.querySelector(".ai-chat-welcome__banner"); const img = banner?.querySelector("img"); const r = banner?.getBoundingClientRect(); const hero = document.querySelector(".ai-chat-hero").getBoundingClientRect(); return { hasBanner: w.classList.contains("has-banner"), afterGreet: banner === w.children[1] && banner?.previousElementSibling?.classList.contains("ai-chat-focus__greet"), src: img?.getAttribute("src"), h: r?.height, clearOfFace: r ? r.top > hero.bottom + 4 : false, nextIsCards: banner?.nextElementSibling?.classList.contains("ai-chat-focus__cards") }; });
-    check("home layout focus: the theme's banner sits right under the greeting, clear of the face, the shop cards under it", b.hasBanner && b.afterGreet && b.src === "/pic-footwear.svg" && b.h >= 100 && b.clearOfFace && b.nextIsCards, JSON.stringify(b));
+    check("home layout focus: the theme's banner sits right under the greeting, clear of the face, the shop cards under it — 136px at least", b.hasBanner && b.afterGreet && b.src === "/pic-footwear.svg" && b.h >= 136 && b.clearOfFace && b.nextIsCards, JSON.stringify(b));
     const greet0 = await page.evaluate(() => document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent);
     const greetSet = await page.evaluate(() => window.__AI_CHAT_CONFIG.greetingCta);
     await page.waitForTimeout(4600);
@@ -3690,6 +3690,16 @@ for (const coop of ["1", "2"]) {
     const gone = await page.evaluate(() => { const sub = document.querySelector(".ai-chat-header__sub"); return { greet: !document.querySelector(".ai-chat-focus__greet"), subShown: !!sub && !sub.hidden && getComputedStyle(sub).display !== "none", hdrH: Math.round(document.querySelector(".ai-chat-header").getBoundingClientRect().height) }; });
     check("home layout focus: once a chat starts the greeting leaves with the home and the header keeps its one row (no second line)", gone.greet && !gone.subShown && gone.hdrH <= 56, JSON.stringify(gone));
     check("home layout focus (banner, greeting): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  // A tall screen: the banner takes the spare room, as the classic home's
+  // does — more of the picture, never past 240px — and the home still
+  // fits without scrolling, the links at its foot.
+  {
+    const { ctx, page, errors } = await open("/full?home=focus&banner=1", { viewport: { width: 1280, height: 1200 } });
+    const t = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const sc = w.parentElement; const el = w.querySelector(".ai-chat-welcome__banner"); const cs = getComputedStyle(el); const links = w.querySelector(".ai-chat-focus__links").getBoundingClientRect(); return { h: el.getBoundingClientRect().height, grow: cs.flexGrow, max: cs.maxHeight, min: cs.minHeight, cover: getComputedStyle(el.querySelector("img")).objectFit, scrolls: sc.scrollHeight > sc.clientHeight + 1, linksAtFoot: sc.getBoundingClientRect().bottom - links.bottom >= 0 && sc.getBoundingClientRect().bottom - links.bottom <= 24 }; });
+    check("home layout focus (tall screen): the banner grows into the spare room like the classic home's — taller than its 136px floor, no more than 240px, the picture covering it — and the home fits without scrolling, the links at its foot", t.h > 136 && t.h <= 240 && t.grow === "1" && t.max === "240px" && t.min === "136px" && t.cover === "cover" && !t.scrolls && t.linksAtFoot, JSON.stringify(t));
+    check("home layout focus (tall screen): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
   // On a shoe page with True Fit, the Footwear sheet carries the chat's own True Fit row — same logo, same words.

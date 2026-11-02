@@ -7264,10 +7264,12 @@ button.ai-chat-launcher__text {
 /* The home: the greeting, the banner (as the classic home shows it), then
    three cards — Foot pain, Footwear, Orthotics. */
 .ai-chat-panel.is-focus .ai-chat-welcome--focus { display: flex; flex-direction: column; gap: 0; padding: 0 4px 0; min-height: 100%; box-sizing: border-box; container-type: inline-size; }
-/* The banner keeps its height here (the page scrolls instead): the home
-   below it is taller than the classic one. */
+/* The banner sizes as the classic home's does: 136px at least (the home
+   below it is taller than the classic one, so the page scrolls rather than
+   the banner giving way), and on a tall screen it takes the spare room —
+   more of the picture — up to 240px. */
 .ai-chat-panel.is-focus .ai-chat-welcome--focus .ai-chat-welcome__banner,
-.ai-chat-panel.is-focus .ai-chat-welcome--focus.has-banner .ai-chat-welcome__banner { flex: 0 0 136px; height: 136px; max-height: 136px; min-height: 136px; margin-bottom: 14px; }
+.ai-chat-panel.is-focus .ai-chat-welcome--focus.has-banner .ai-chat-welcome__banner { flex: 1 1 148px; height: auto; min-height: 136px; max-height: 240px; margin-bottom: 14px; }
 /* Three flat cards, the words on the left and the picture filling the whole
    right side, a small call to action under the words. Wide chats: three
    alike in a row. Narrower chats (the default 500px panel, phones): Foot
