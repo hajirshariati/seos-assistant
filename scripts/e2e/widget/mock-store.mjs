@@ -399,6 +399,8 @@ export function start(port) {
           // ?rw=1: the My rewards card (Settings → Shopping tools); ?hh=1: Talk to a person (Settings → Customer care).
           rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
+          // ?cl=0: Settings → Focus home → Collections off.
+          focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),
           // ?dl=1: the Deals card (Settings → Shopping tools).
           deals: /[?&]dl=1/.test(String(req.headers.referer || "")) ? { on: true, label: "Deals", url: "https://www.example.com/collections/sale" } : null,
           // ?rt=1: the Returns & exchanges card (Settings → Customer care).

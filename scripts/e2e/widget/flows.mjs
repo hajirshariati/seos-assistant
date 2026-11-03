@@ -3660,6 +3660,44 @@ for (const coop of ["1", "2"]) {
     s2 = await state(page);
     const again = await page.evaluate(() => document.querySelectorAll("[data-focus-sheet]").length);
     check("home layout focus: New chat brings the face and the home back", s2.home && !s2.chatting && s2.hero && !s2.heroGone && s2.focusHome && again === 3, JSON.stringify(s2));
+    // The Foot pain bar on a phone is a footer: in view while the tiles scroll under it, a hairline and a fade over them while more are below, nothing at the end; Continue outlined until a pick, solid after.
+    {
+      const ph = await open("/full?home=focus", { viewport: { width: 390, height: 760 } });
+      await ph.page.click('[data-focus-sheet="pain"]');
+      await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+      await ph.page.waitForTimeout(500);
+      const foot = () => ph.page.evaluate(() => { const sh = document.querySelector(".ai-chat-focus-sheet"); const body = sh.querySelector(".ai-chat-focus-sheet__body"); const bar = sh.querySelector(".ai-chat-focus__bar"); const next = sh.querySelector('[data-pain-nav="next"]'); const cs = getComputedStyle(bar), fade = getComputedStyle(bar, "::before"), ncs = getComputedStyle(next); const b = bar.getBoundingClientRect(), r = body.getBoundingClientRect(); return { scrolls: body.scrollHeight > body.clientHeight + 4, more: bar.classList.contains("is-more"), sticky: cs.position === "sticky", inView: b.top >= r.top && b.bottom <= r.bottom + 1, line: cs.borderTopColor !== "rgba(0, 0, 0, 0)", fade: parseFloat(fade.opacity) === 1 && /gradient/.test(fade.backgroundImage), nextOff: next.disabled, nextBg: ncs.backgroundColor, nextOpacity: parseFloat(ncs.opacity), nextOutline: ncs.boxShadow !== "none" }; });
+      const f1 = await foot();
+      check("foot pain sheet (phone): the bar is a footer — held in view while the tiles scroll under it, with a hairline and a fade over them while more are below; Continue waits as an outlined pill, not a greyed one", f1.scrolls && f1.more && f1.sticky && f1.inView && f1.line && f1.fade && f1.nextOff && f1.nextBg === "rgba(0, 0, 0, 0)" && f1.nextOpacity === 1 && f1.nextOutline, JSON.stringify(f1));
+      await ph.page.evaluate(() => { const b = document.querySelector(".ai-chat-focus-sheet__body"); b.scrollTop = b.scrollHeight; });
+      // The hairline and fade ease out (0.2s); give them their time.
+      await ph.page.waitForFunction(() => { const bar = document.querySelector(".ai-chat-focus__bar"); return !bar.classList.contains("is-more") && getComputedStyle(bar).borderTopColor === "rgba(0, 0, 0, 0)"; }, null, { timeout: 2000 }).catch(() => {});
+      const f2 = await foot();
+      // The last tile is the one in view down here (a click on the first would scroll back up).
+      await ph.page.click('[data-pain-opt="none"]');
+      await ph.page.waitForTimeout(300);
+      const f3 = await foot();
+      check("foot pain sheet (phone): at the end of the tiles the hairline and fade go; a pick turns Continue solid", !f2.more && !f2.line && !f2.fade && f2.inView && !f3.more && !f3.nextOff && f3.nextBg !== "rgba(0, 0, 0, 0)", JSON.stringify({ f2, f3 }));
+      check("foot pain sheet (phone): no JS errors", ph.errors.length === 0, ph.errors.join(" | "));
+      await ph.ctx.close();
+    }
+    // Settings → Focus home → Collections off: both sheets keep their helper rows and Pick & go, with no Collections section.
+    {
+      const off = await open("/full?home=focus&cl=0");
+      const sheetOff = async (kind) => {
+        await off.page.click(`[data-focus-sheet="${kind}"]`);
+        await off.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+        await off.page.waitForTimeout(400);
+        const got = await off.page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); return { sections: [...s.querySelectorAll(".ai-chat-focus__browse > .ai-chat-focus__label")].map((l) => l.textContent), chips: s.querySelectorAll(".ai-chat-focus__chips").length, pick: !!s.querySelector(".ai-chat-focus__pick"), rows: s.querySelectorAll(".ai-chat-focus__pick-row").length }; });
+        await off.page.click(".ai-chat-focus-sheet__close");
+        await off.page.waitForTimeout(400);
+        return got;
+      };
+      const fwOff = await sheetOff("footwear"), orOff = await sheetOff("orthotics");
+      check("Settings → Focus home → Collections off: the Footwear and Orthotics sheets keep Pick & go (both rows), with no Collections section and no one-tap chips", fwOff.sections.join(",") === "Pick & go" && fwOff.chips === 0 && fwOff.pick && fwOff.rows === 2 && orOff.sections.join(",") === "Pick & go" && orOff.chips === 0 && orOff.pick && orOff.rows === 2, JSON.stringify({ fwOff, orOff }));
+      check("Settings → Focus home → Collections off: no JS errors", off.errors.length === 0, off.errors.join(" | "));
+      await off.ctx.close();
+    }
     // The Foot pain flow: where it hurts, orthotics, the shoes, the arch, the ball of the foot — then one message with it all; after a reload the chat opens with the line, no face.
     n = chatBodies.length;
     await page.click('[data-focus-sheet="pain"]');

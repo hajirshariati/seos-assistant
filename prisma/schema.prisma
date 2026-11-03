@@ -296,6 +296,7 @@ model ShopConfig {
   returnsCardOn       Boolean  @default(true)
   // Deals card on the Focus home (no AI at tap time) and its "See all" link.
   dealsCardOn         Boolean  @default(true)
+  focusCollectionsOn  Boolean  @default(true)
   dealsUrl            String   @default("")
 
   vipModeEnabled      Boolean  @default(false)

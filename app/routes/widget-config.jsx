@@ -120,6 +120,8 @@ export const loader = async ({ request }) => {
         whichOrthotic: whichOrthoticConfig(config),
         // Settings → Seasonal button: the first Start here button.
         seasonalCta: seasonalCtaConfig(config),
+        // Settings → Focus home → Collections: the one-tap Collections section in the Footwear and Orthotics sheets.
+        focusCollections: config.focusCollectionsOn !== false,
         // Settings → Your app: its own message, once per visit.
         appPromo: appPromoConfig(config),
         // Settings → Shopping tools → My rewards: the instant rewards card (no AI).

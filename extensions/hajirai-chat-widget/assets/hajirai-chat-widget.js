@@ -74,6 +74,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   HUMAN=d.human&&typeof d.human==='object'?d.human:null;
   RETURNS=d.returns&&typeof d.returns==='object'?d.returns:null;
   DEALS=d.deals&&typeof d.deals==='object'?d.deals:null;
+  FOCUS_COLLECTIONS=d.focusCollections!==false;
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -1930,9 +1931,11 @@ function focusChipsHtml(chips){
    both, and a Go button that says the sentence the picks make and sends
    it. The groups left over (Collections; men's Occasion) stay as sections
    of chips that send on a tap. */
+/* Settings → Focus home → Collections: the one-tap section can be switched off. */
+var FOCUS_COLLECTIONS=C.focusCollections!==false;
 function focusPickParts(kind,g){
   var groups=focusBrowseGroups(kind,g),names=kind==='orthotics'?['Activity','Condition']:['Shoes','Condition'],by={},rest=[];
-  for(var i=0;i<groups.length;i++){if(names.indexOf(groups[i][0])<0)rest.push(groups[i]);else by[groups[i][0]]=groups[i][1]}
+  for(var i=0;i<groups.length;i++){if(names.indexOf(groups[i][0])>=0)by[groups[i][0]]=groups[i][1];else if(FOCUS_COLLECTIONS||groups[i][0]!=='Collections')rest.push(groups[i])}
   return {a:by[names[0]]||[],b:by[names[1]]||[],keys:kind==='orthotics'?['Activity','For']:['Shoe','For'],rest:rest};
 }
 /* The sentence the picks make — what the Ask box says, and sends. Each
@@ -2147,11 +2150,17 @@ function focusPainStepHtml(){
   h+='<div class="ai-chat-focus__bar">'+(i>0?'<button type="button" class="ai-chat-focus__back" data-pain-nav="back" aria-label="Back">'+WI.arrow+'</button>':'')+'<span class="ai-chat-focus__picks">'+esc(focusPainPicks(i))+'</span>'+(multi?'<button type="button" class="ai-chat-focus__next" data-pain-nav="next"'+(focusPain.where.length?'':' disabled')+'>Continue</button>':'')+'</div>';
   return h;
 }
+/* The bar is a footer: while tiles go on beneath it, it shows a hairline
+   and a fade over them (is-more); at the end of the list, nothing. */
+function focusPainMore(sh){
+  var body=$('.ai-chat-focus-sheet__body',sh),bar=$('.ai-chat-focus__bar',sh);if(!body||!bar)return;
+  bar.classList.toggle('is-more',body.scrollHeight-body.clientHeight-body.scrollTop>4);
+}
 /* Draws the current step: forward, the old one slips left and the new one
    comes in from the right; back, the other way; no direction, a plain fade. */
 function focusPainRender(sh,dir){
   var box=$('.ai-chat-focus__quiz',sh),body=$('.ai-chat-focus-sheet__body',sh);if(!box)return;
-  var fill=function(){box.innerHTML=focusPainStepHtml();if(body)body.scrollTop=0;if(dir){var t=$('.ai-chat-focus__q-title',box);if(t)t.focus({preventScroll:true})}};
+  var fill=function(){box.innerHTML=focusPainStepHtml();if(body)body.scrollTop=0;if(dir){var t=$('.ai-chat-focus__q-title',box);if(t)t.focus({preventScroll:true})}focusPainMore(sh);requestAnimationFrame(function(){focusPainMore(sh)})};
   /* The first question is there the moment the sheet opens: nothing to
      leave yet, so no beat before it. */
   if(!focusMotionOk()||!box.innerHTML){fill();focusPainBusy=false;return}
@@ -2226,7 +2235,7 @@ function openFocusSheet(kind,opener){
   sh.innerHTML='<div class="ai-chat-focus-sheet__back" data-focus-close></div><div class="ai-chat-focus-sheet__panel" role="dialog" aria-modal="true" aria-label="'+w[1]+'"><div class="ai-chat-focus-sheet__top"><span class="ai-chat-focus-sheet__grip" aria-hidden="true"></span><div class="ai-chat-focus-sheet__head"><div class="ai-chat-focus-sheet__titles"><div class="ai-chat-focus-sheet__eyebrow">'+w[0]+'</div><div class="ai-chat-focus-sheet__title">'+w[1]+'</div></div>'+focusSegHtml('ai-chat-focus__gender',['Women\u2019s','Men\u2019s'],focusGender==='men'?1:0,function(i){return 'data-gender="'+(i?'men':'women')+'"'})+'<button type="button" class="ai-chat-focus-sheet__close" data-focus-close aria-label="Close">'+CMP_X+'</button></div></div><div class="ai-chat-focus-sheet__body">'+(pain?'<div class="ai-chat-focus__quiz"></div>':focusHelpersHtml(kind)+'<div class="ai-chat-focus__browse ai-chat-focus__swap">'+focusBrowseHtml(kind)+'</div>')+'</div></div>';
   panel.appendChild(sh);focusSheetEl=sh;
   sh.addEventListener('animationend',function(e){var bar=e.target&&e.target.closest&&e.target.closest('.ai-chat-focus__ask');if(bar)bar.classList.remove('is-nudge')});
-  if(pain){focusPainStep=0;focusPainTrail=[];focusPainRender(sh,0)}
+  if(pain){focusPainStep=0;focusPainTrail=[];focusPainRender(sh,0);var pb=$('.ai-chat-focus-sheet__body',sh);if(pb){pb.addEventListener('scroll',function(){focusPainMore(sh)},{passive:true});window.addEventListener('resize',function(){if(focusSheetEl===sh)focusPainMore(sh)})}}
   var back=$('.ai-chat-focus-sheet__back',sh);if(back)back.addEventListener('click',function(){closeFocusSheet()});
   sh.addEventListener('click',function(e){if(e.target===sh&&focusSheetEl===sh)closeFocusSheet()});
   focusSheetSwipe(sh);

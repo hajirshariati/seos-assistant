@@ -177,6 +177,7 @@ export const loader = async ({ request }) => {
     promoMemoryDays: String(promoMemoryDays(config.promoMemoryDays)),
     styleMemoryDays: String(styleMemoryDays(config.styleMemoryDays)),
     returnsCardOn: config.returnsCardOn !== false,
+    focusCollectionsOn: config.focusCollectionsOn !== false,
     dealsCardOn: config.dealsCardOn !== false,
     dealsUrl: config.dealsUrl || "",
     returnRules: parseReturnRules(config.returnRules, { reasonKeys: RETURN_REASONS.map((r) => r.key) }),
@@ -377,6 +378,7 @@ export const action = async ({ request }) => {
   }
   bool("returnsDeliveredOnly");
   bool("returnsCardOn");
+  bool("focusCollectionsOn");
   // Return rules (mirrored from AfterShip): the lists as JSON, made safe.
   const rulesRaw = formData.get("returnRules");
   if (rulesRaw !== null) {
@@ -614,7 +616,7 @@ const FIELDS = {
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   rewardsCard: ["tools", "json"],
-  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], returnRules: ["care", "json"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], focusCollectionsOn: ["look", "bool"], returnRules: ["care", "json"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], dealsCardOn: ["tools", "bool"], dealsUrl: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
@@ -1044,6 +1046,13 @@ function LookSection({ d, values, set }) {
             </BlockStack>
           </BlockStack>
         </Row>
+        <Row
+          title="Collections in the Footwear and Orthotics sheets"
+          help={values.focusCollectionsOn ? "A Collections section of one-tap chips (New arrivals, Best sellers, the named collections…) above Pick & go in both sheets." : "No Collections section in the sheets — the helper rows and Pick & go only. Switch it back on once every collection answers."}
+          toggle
+          checked={values.focusCollectionsOn}
+          onChange={set("focusCollectionsOn")}
+        />
         <Row stack help="The cards' pictures, filling each card's picture side. Switch layouts in the theme editor (AVA → Home layout).">
           <BlockStack gap="300">
             <FocusPicture kind="pain" initial={d.focusPainImage} />
