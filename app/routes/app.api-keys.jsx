@@ -14,6 +14,7 @@ import {
   InlineStack,
   TextField,
   Select,
+  ChoiceList,
   Button,
   Banner,
   Text,
@@ -57,6 +58,7 @@ import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChat
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
 import { parseRewardsCard, REWARDS_MAX, REWARDS_ROWS, REWARDS_NOTES } from "../lib/rewards-card.js";
 import { promoMemoryDays, styleMemoryDays, PROMO_DAYS_CHOICES, STYLE_DAYS_CHOICES } from "../lib/memory.js";
+import { parseReturnRules, returnRulesDefaults, RETURN_REASONS } from "../lib/return-rules.js";
 import { HUMAN_MAX, humanHelpFields } from "../lib/human-help.js";
 import { shopFacts } from "../lib/shopify-facts.server.js";
 import { appName } from "../lib/app-brand.js";
@@ -175,6 +177,7 @@ export const loader = async ({ request }) => {
     promoMemoryDays: String(promoMemoryDays(config.promoMemoryDays)),
     styleMemoryDays: String(styleMemoryDays(config.styleMemoryDays)),
     returnsCardOn: config.returnsCardOn !== false,
+    returnRules: parseReturnRules(config.returnRules, { reasonKeys: RETURN_REASONS.map((r) => r.key) }),
     referralPageUrl: config.referralPageUrl || "",
     klaviyoCompanyId: config.klaviyoCompanyId || "",
     klaviyoListId: config.klaviyoListId || "",
@@ -372,6 +375,11 @@ export const action = async ({ request }) => {
   }
   bool("returnsDeliveredOnly");
   bool("returnsCardOn");
+  // Return rules (mirrored from AfterShip): the lists as JSON, made safe.
+  const rulesRaw = formData.get("returnRules");
+  if (rulesRaw !== null) {
+    try { data.returnRules = JSON.stringify(parseReturnRules(JSON.parse(rulesRaw), { reasonKeys: RETURN_REASONS.map((r) => r.key) })); } catch { /* ignore invalid JSON */ }
+  }
 
   // Shopping tools
   // Memory: how long ended offers and retired styles stay answerable.
@@ -597,7 +605,7 @@ const FIELDS = {
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   rewardsCard: ["tools", "json"],
-  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], returnRules: ["care", "json"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
@@ -1065,6 +1073,33 @@ function VisibilitySection({ values, set }) {
   );
 }
 
+// Return rules, the same ones AfterShip applies on the returns page (its
+// API can't be asked for them, so the chat keeps a copy).
+function ReturnRulesRow({ rules, onChange }) {
+  const r = rules && typeof rules === "object" ? rules : returnRulesDefaults();
+  const put = (patch) => onChange({ ...r, ...patch });
+  const list = (v) => (Array.isArray(v) ? v.join(", ") : String(v || ""));
+  const [typesText, setTypesText] = useState(list(r.types));
+  const [tagsText, setTagsText] = useState(list(r.tags));
+  const [wordsText, setWordsText] = useState(list(r.words));
+  const split = (t) => t.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+  return (
+    <Row title="Return rules" help="The same rules as your AfterShip returns page, so the chat never offers a return AfterShip would refuse. Items matching these show as not returnable (no return or exchange button); for the reasons ticked, the chat shows the return fee as waived. Keep these in step with AfterShip — it still has the last word when a return is created." stack>
+      <div className="set-grid">
+        <TextField label="Not returnable — product types" value={typesText} onChange={(v) => { setTypesText(v); put({ types: split(v) }); }} placeholder="Gift Card" autoComplete="off" helpText="Comma-separated. Matches the product type exactly." />
+        <TextField label="Not returnable — product tags" value={tagsText} onChange={(v) => { setTagsText(v); put({ tags: split(v) }); }} placeholder="final-sale, non-returnable" autoComplete="off" helpText="Comma-separated. Any of these tags on the product." />
+        <TextField label="Not returnable — words in the title" value={wordsText} onChange={(v) => { setWordsText(v); put({ words: split(v) }); }} placeholder="gift card" autoComplete="off" helpText="Comma-separated. Anywhere in the product's title or type." />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ChoiceList title="Discounted items" choices={[{ label: "Items bought with a discount can't be returned", value: "on" }]} selected={r.discounted ? ["on"] : []} onChange={(sel) => put({ discounted: sel.includes("on") })} allowMultiple />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <ChoiceList title="Reasons with no return fee" choices={RETURN_REASONS.map((x) => ({ label: x.label, value: x.key }))} selected={Array.isArray(r.freeReasons) ? r.freeReasons : []} onChange={(sel) => put({ freeReasons: sel })} allowMultiple />
+      </div>
+    </Row>
+  );
+}
+
 function CareSection({ values, set, d }) {
   return (
     <BlockStack gap="400">
@@ -1106,6 +1141,7 @@ function CareSection({ values, set, d }) {
           checked={values.returnsInChat}
           onChange={set("returnsInChat")}
         />
+        <ReturnRulesRow rules={values.returnRules} onChange={set("returnRules")} />
         <Row
           title="Return window"
           help="Older orders don't get a return button, and AVA explains why. 0 = no limit."

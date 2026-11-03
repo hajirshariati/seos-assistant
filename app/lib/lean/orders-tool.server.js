@@ -96,7 +96,9 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
         number: o.number, date: o.date, status: o.stageLabel, eta: o.eta || undefined, delivered: o.deliveredAt || undefined,
         return_status: o.returnStatus || undefined, can_return: o.canReturn,
         return_started_in_chat: o.returns?.length ? o.returns.map((r) => ({ rma: r.rma || undefined, on: r.date, how: r.method?.label || undefined, exchange: r.exchange || undefined })) : undefined,
-        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", not_shipped: "not shipped yet — returns open once it ships", window_closed: `past the ${policy.windowDays}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned" }[o.returnBlocked],
+        why_no_return: o.canReturn ? undefined : { not_delivered: "not delivered yet — returns open once it arrives", not_shipped: "not shipped yet — returns open once it ships", window_closed: `past the ${policy.windowDays}-day return window`, cancelled: "cancelled", nothing_left: "everything in it is already being returned", not_returnable: "nothing in it can be returned — gift cards and final-sale items aren't returnable" }[o.returnBlocked],
+        // Items the store's rules keep out of returns (gift cards, final sale), with the reason to give.
+        not_returnable_items: o.items?.some((i) => i.blocked) ? o.items.filter((i) => i.blocked).map((i) => `${i.title}: ${i.blockedWhy}`) : undefined,
         has_returns_page: returnsInChat ? undefined : Boolean(o.returnsUrl),
         // Each return the store's records hold: requested/approved/closed
         // days, where it stands, the return shipment's tracking.
@@ -122,7 +124,7 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
           : intent === "return"
           ? `The order cards are shown with a "Return an item" button on returnable orders (${rule}). Tell them to tap it on the order they want to return; if none can be returned, say why in one sentence (why_no_return).`
           : "The order cards are shown under your reply.",
-        _events: [{ type: "order_cards", intent, orders: cards, returnMethods: returnsInChat ? publicReturnMethods() : [] }],
+        _events: [{ type: "order_cards", intent, orders: cards, returnMethods: returnsInChat ? publicReturnMethods() : [], freeReasons: returnsInChat ? policy.rules?.freeReasons || [] : [] }],
       };
     },
   };

@@ -7,6 +7,7 @@
 // to belong to that customer before anything is shown or returned.
 
 import { ADMIN_API_VERSION } from "./admin-api-version.js";
+import { itemBlock, blockWords, parseReturnRules, returnRulesDefaults } from "./return-rules.js";
 import { findChatReturns } from "../models/ChatReturn.server.js";
 
 // The returns an order has (Shopify's own Return objects). Reading them needs
@@ -43,7 +44,8 @@ export const orderFields = ({ returns = true } = {}) => `
       quantity
       refundableQuantity
       image { url(transform: { maxWidth: 160 }) }
-      variant { selectedOptions { name value } product { handle } }
+      discountAllocations { allocatedAmountSet { shopMoney { amount } } }
+      variant { selectedOptions { name value } product { handle productType tags } }
     }
   }
   fulfillments(first: 5) {
@@ -147,13 +149,15 @@ export function returnPolicy(config = {}) {
   const set = Number.parseInt(config?.returnWindowDays, 10);
   const env = Number.parseInt(process.env.RETURN_WINDOW_DAYS, 10);
   const days = Number.isFinite(set) ? set : Number.isFinite(env) ? env : 30;
-  return { windowDays: Math.min(Math.max(days, 0), 365), deliveredOnly: config?.returnsDeliveredOnly !== false };
+  return { windowDays: Math.min(Math.max(days, 0), 365), deliveredOnly: config?.returnsDeliveredOnly !== false, rules: parseReturnRules(config?.returnRules) };
 }
 
 // Why the chat won't start a return ("" when it will).
 export function returnBlock(o, stage, items, now = Date.now(), policy = returnPolicy()) {
   if (o.cancelledAt) return "cancelled";
-  if (!items.some((i) => i.returnable > 0)) return "nothing_left";
+  // Every unit left is a gift card, final sale or the like: not "all being
+  // returned", but "nothing here can be".
+  if (!items.some((i) => i.returnable > 0)) return items.some((i) => i.blocked) ? "not_returnable" : "nothing_left";
   if (policy.deliveredOnly && stage !== "delivered") return "not_delivered";
   if (stage === "ordered") return "not_shipped";
   const placed = Date.parse(o.createdAt || "");
@@ -248,14 +252,22 @@ export function toOrderCard(o, { trackingBase = "", returnsBase = "", email = ""
   const items = (o.lineItems?.nodes || []).map((li) => {
     const opts = {};
     for (const so of li.variant?.selectedOptions || []) if (so?.name && so.value && so.value !== "Default Title") opts[so.name] = so.value;
+    const discounted = (li.discountAllocations || []).some((d) => parseFloat(d?.allocatedAmountSet?.shopMoney?.amount) > 0);
+    const facts = { title: String(li.title || "").slice(0, 120), productType: li.variant?.product?.productType || "", tags: li.variant?.product?.tags || [], discounted };
+    // The store's return rules (AfterShip's, mirrored): a blocked item has
+    // nothing returnable, and says why.
+    const blocked = itemBlock(facts, policy.rules || returnRulesDefaults());
     return {
       lineId: numericId(li.id),
-      title: String(li.title || "").slice(0, 120),
+      title: facts.title,
       options: opts,
       image: li.image?.url || "",
       quantity: li.quantity || 1,
-      returnable: Math.max(0, (li.refundableQuantity ?? 0) - (inChatReturn[numericId(li.id)] || 0)),
+      returnable: blocked ? 0 : Math.max(0, (li.refundableQuantity ?? 0) - (inChatReturn[numericId(li.id)] || 0)),
       handle: li.variant?.product?.handle || "",
+      // Sized items can be exchanged for the next size; a gift card can't.
+      sizeable: Object.keys(opts).some((n) => /size|width/i.test(n)),
+      ...(blocked ? { blocked, blockedWhy: blockWords(blocked) } : {}),
     };
   });
   const returnStatus = RETURN_LABEL[o.returnStatus] || "";

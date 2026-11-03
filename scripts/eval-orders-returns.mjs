@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 process.env.DATABASE_URL ||= "postgresql://x@localhost:1/none";
 const { toOrderCard, orderStage, getOwnedOrder, getOrderCards, returnPolicy, refundFacts, returnFacts, orderFields, ORDER_FIELDS, returnsDenied, forgetReturnsDenied } = await import("../app/lib/orders.server.js");
 const { nextOption, createAftershipReturn, reasonByKey, aftershipReasonName, returnMethods, priorReturn, blockedMessage } = await import("../app/lib/returns.server.js");
+const { parseReturnRules, returnRulesDefaults, itemBlock, feeWaived, aftershipRefused, blockWords, RETURN_REASONS } = await import("../app/lib/return-rules.js");
 const { ordersTool } = await import("../app/lib/lean/orders-tool.server.js");
 const { cleanLookup, guestSearch, matchGuestOrder, guestOrderCard, lookupGuestOrder, createLookupLimiter, GUEST_LIMITS } = await import("../app/lib/guest-order.server.js");
 
@@ -60,8 +61,9 @@ await test("return window: RETURN_WINDOW_DAYS changes it", () => {
   finally { delete process.env.RETURN_WINDOW_DAYS; }
 });
 await test("store settings: return window days and delivered-only", () => {
-  assert.deepEqual(returnPolicy({}), { windowDays: 30, deliveredOnly: true }, "defaults");
-  assert.deepEqual(returnPolicy({ returnWindowDays: 45, returnsDeliveredOnly: false }), { windowDays: 45, deliveredOnly: false });
+  const bare = (p) => ({ windowDays: p.windowDays, deliveredOnly: p.deliveredOnly });
+  assert.deepEqual(bare(returnPolicy({})), { windowDays: 30, deliveredOnly: true }, "defaults");
+  assert.deepEqual(bare(returnPolicy({ returnWindowDays: 45, returnsDeliveredOnly: false })), { windowDays: 45, deliveredOnly: false });
   assert.equal(returnPolicy({ returnWindowDays: 900 }).windowDays, 365, "capped");
   const late = Date.parse("2026-12-30T12:00:00Z");
   assert.equal(toOrderCard(delivered(), { now: late, policy: returnPolicy({ returnWindowDays: 30 }) }).returnBlocked, "window_closed");
@@ -570,6 +572,43 @@ await test("guest lookup without read_returns: same fallback", async () => {
     assert.match(queries[1], /email confirmationNumber/, "the guest fields stay");
     assert.equal(returnsDenied("g"), true);
   } finally { console.log = log; console.warn = warn; forgetReturnsDenied(); }
+});
+
+
+console.log("\nreturn rules (AfterShip's, mirrored)");
+await test("the rules: defaults keep gift cards and final-sale tags out and waive the fee for damaged / not as described; saved lists are cleaned; unknown reasons dropped", () => {
+  const d = returnRulesDefaults();
+  assert.deepEqual(d.types, ["Gift Card"]); assert.ok(d.tags.includes("final-sale")); assert.equal(d.discounted, false); assert.deepEqual(d.freeReasons, ["damaged", "not_as_described"]);
+  const r = parseReturnRules(JSON.stringify({ types: " Gift Card, gift card ,Bundle ", tags: ["final-sale"], words: "", discounted: true, freeReasons: ["damaged", "nonsense", "too_small"] }));
+  assert.deepEqual(r.types, ["Gift Card", "Bundle"]); assert.deepEqual(r.words, []); assert.equal(r.discounted, true); assert.deepEqual(r.freeReasons, ["damaged", "too_small"]);
+  assert.deepEqual(parseReturnRules("not json"), d);
+  assert.ok(RETURN_REASONS.some((x) => x.key === "damaged"));
+});
+await test("an item: a gift card (by type, by words in the title), a final-sale tag, a discounted item when the store says so — else returnable", () => {
+  const d = returnRulesDefaults();
+  assert.equal(itemBlock({ title: "Aetrex eGift Card", productType: "Gift Card" }, d), "gift_card");
+  assert.equal(itemBlock({ title: "Aetrex eGift Card $20", productType: "" }, d), "gift_card");
+  assert.equal(itemBlock({ title: "Savannah Sandal - Red", productType: "Footwear", tags: ["Final-Sale"] }, d), "final_sale");
+  assert.equal(itemBlock({ title: "Savannah Sandal - Red", productType: "Footwear", tags: [], discounted: true }, d), "", "discounts are fine unless the store says otherwise");
+  assert.equal(itemBlock({ title: "Savannah Sandal - Red", productType: "Footwear", discounted: true }, { ...d, discounted: true }), "discounted");
+  assert.equal(itemBlock({ title: "Savannah Sandal - Red", productType: "Footwear", tags: ["sale"] }, d), "");
+  assert.equal(blockWords("gift_card"), "Gift cards can't be returned"); assert.equal(blockWords("x"), "");
+  assert.equal(feeWaived("damaged", d), true); assert.equal(feeWaived("too_small", d), false);
+  assert.equal(aftershipRefused("Item is not eligible for return"), true); assert.equal(aftershipRefused("Order not found"), false); assert.equal(aftershipRefused("return already exists"), false);
+});
+await test("the card: a gift card line has nothing returnable and says why; sized items can be exchanged; a gift-card-only order is 'not returnable', not 'all being returned'", () => {
+  const gift = { id: "gid://shopify/LineItem/9004", title: "Aetrex eGift Card", quantity: 1, refundableQuantity: 1, image: null, variant: { selectedOptions: [], product: { handle: "egift", productType: "Gift Card", tags: [] } } };
+  const delivered = { fulfillments: [{ ...order().fulfillments[0], deliveredAt: "2026-10-17T10:00:00Z" }] };
+  const c = toOrderCard(order({ ...delivered, lineItems: { nodes: [...order().lineItems.nodes, gift] } }), { now: NOW });
+  assert.equal(c.items[0].sizeable, true); assert.equal(c.items[0].blocked, undefined); assert.equal(c.items[0].returnable, 1);
+  assert.equal(c.items[1].blocked, "gift_card"); assert.equal(c.items[1].blockedWhy, "Gift cards can't be returned"); assert.equal(c.items[1].returnable, 0); assert.equal(c.items[1].sizeable, false);
+  assert.equal(c.canReturn, true);
+  const only = toOrderCard(order({ ...delivered, lineItems: { nodes: [gift] } }), { now: NOW });
+  assert.equal(only.canReturn, false); assert.equal(only.returnBlocked, "not_returnable");
+  assert.match(blockedMessage("not_returnable"), /gift cards and final-sale items/);
+  const tagged = toOrderCard(order({ ...delivered, lineItems: { nodes: [{ ...order().lineItems.nodes[0], variant: { ...order().lineItems.nodes[0].variant, product: { handle: "x", productType: "Footwear", tags: ["final-sale"] } } }] } }), { now: NOW, policy: returnPolicy({ returnRules: JSON.stringify({ types: [], tags: ["final-sale"], words: [], freeReasons: [] }) }) });
+  assert.equal(tagged.items[0].blocked, "final_sale"); assert.equal(tagged.returnBlocked, "not_returnable");
+  assert.equal(returnPolicy({ returnRules: "" }).rules.freeReasons.length, 2);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

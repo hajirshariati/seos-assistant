@@ -497,6 +497,8 @@ const KNOWLEDGE_CSS = `
   .kn-inbanner { padding: 10px 16px 0; }
   .kn-chosen { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
   .kn-note { font-size: 12px; line-height: 17px; color: #616161; }
+  .kn-tools--top { padding: 14px 16px 12px; border-bottom: 1px solid #ebebeb; }
+  .kn-tools__note { margin-left: auto; }
   .kn-mem { list-style: none; margin: 0; padding: 4px 0; max-height: 420px; overflow: auto; }
   .kn-mem__row { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-top: 1px solid #ebebeb; }
   .kn-mem__row:first-child { border-top: 0; }
@@ -1010,7 +1012,7 @@ function MemoryCard({ memory }) {
   const months = (d) => (d >= 365 ? `${Math.round(d / 365)} year${d > 365 ? "s" : ""}` : d >= 60 ? `${Math.round(d / 30)} months` : `${d} days`);
   return (
     <Card padding="0">
-      <div className="kn-tools">
+      <div className="kn-tools kn-tools--top">
         <div className="kn-seg" role="group" aria-label="Show">
           {tabs.map((t, i) => (
             <button key={t.id} type="button" className="kn-seg__btn" aria-pressed={tab === i} onClick={() => setTab(i)}>
@@ -1018,7 +1020,7 @@ function MemoryCard({ memory }) {
             </button>
           ))}
         </div>
-        <span className="kn-note">
+        <span className="kn-note kn-tools__note">
           {tab === 0 ? `Kept ${months(memory?.promoDays || 90)} after an offer ends.` : `Kept ${months(memory?.styleDays || 730)} after a style leaves.`}
         </span>
       </div>

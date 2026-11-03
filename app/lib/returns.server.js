@@ -9,17 +9,8 @@ import { loadLeanCatalog } from "./lean/catalog.server.js";
 import { returnPolicy } from "./orders.server.js";
 import { AS_VERSION } from "./aftership.server.js";
 
-// Reasons the chat offers. `change` says how an exchange moves the size.
-export const RETURN_REASONS = [
-  { key: "too_small", label: "Too small", change: { option: "size", step: 1 } },
-  { key: "too_large", label: "Too large", change: { option: "size", step: -1 } },
-  { key: "too_narrow", label: "Too narrow", change: { option: "width", step: 1 } },
-  { key: "too_wide", label: "Too wide", change: { option: "width", step: -1 } },
-  { key: "changed_mind", label: "Changed my mind" },
-  { key: "damaged", label: "Damaged or defective" },
-  { key: "not_as_described", label: "Not as described" },
-  { key: "other", label: "Other" },
-];
+import { RETURN_REASONS } from "./return-rules.js";
+export { RETURN_REASONS };
 export const reasonByKey = (k) => RETURN_REASONS.find((r) => r.key === k) || null;
 
 // AfterShip only accepts a reason whose name matches one in the store's
@@ -190,6 +181,7 @@ export function blockedMessage(blocked, policy = returnPolicy()) {
   if (blocked === "not_delivered") return "You can start a return once the order has been delivered.";
   if (blocked === "not_shipped") return "You can start a return once the order has shipped.";
   if (blocked === "nothing_left") return "Everything in this order is already being returned.";
+  if (blocked === "not_returnable") return "The items in this order can't be returned (gift cards and final-sale items).";
   if (blocked === "cancelled") return "This order was cancelled, so there's nothing to return.";
   return "This order can't be returned.";
 }

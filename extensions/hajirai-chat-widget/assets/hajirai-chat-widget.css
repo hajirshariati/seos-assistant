@@ -4897,6 +4897,12 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-ret__check { margin-left: auto; flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--seos-line-strong); display: grid; place-items: center; color: transparent; }
 .ai-chat-panel .ai-ret__check svg { width: 13px; height: 13px; visibility: hidden; }
 .ai-chat-panel .ai-ret__item.is-on .ai-ret__check svg { visibility: visible; }
+/* Not returnable (gift cards, final sale): listed, greyed, with why. */
+.ai-chat-panel .ai-ret__item.is-blocked { cursor: default; opacity: 0.72; }
+.ai-chat-panel .ai-ret__item.is-blocked img, .ai-chat-panel .ai-ret__item.is-blocked .ai-ord__ph { filter: grayscale(1); }
+.ai-chat-panel .ai-ret__blocked { color: var(--seos-text-2); }
+.ai-chat-panel .ai-ret__mfee.is-free s { color: var(--seos-text-2); margin-right: 4px; }
+.ai-chat-panel .ai-ret__mfee.is-free { color: var(--seos-text); font-weight: 700; }
 .ai-chat-panel .ai-ret__item.is-on .ai-ret__check { background: var(--seos-ink); border-color: var(--seos-ink); color: #fff; }
 .ai-chat-panel[data-theme="dark"] .ai-ret__item.is-on .ai-ret__check { color: #0d0d12; }
 .ai-chat-panel .ai-ret__summary { font-size: 13.5px; line-height: 1.4; padding: 10px 12px; border-radius: 12px; background: var(--seos-surface); }
@@ -7388,13 +7394,23 @@ button.ai-chat-launcher__text {
    filling the right side and takes the longer title. Phones keep the Foot
    pain card across the top with the two line cards under it. */
 @container (min-width: 440px) {
-  .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); }
+  /* The three cards share one set of rows (a subgrid): the picture row,
+     then "Help me…", the title, the words and the button — so every line
+     sits level across the row, and Foot pain's words sit low, beside the
+     others', not up at the top. */
+  .ai-chat-panel.is-focus .ai-chat-focus__cards { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: 88px auto auto auto auto; row-gap: 0; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; grid-row: 1 / 6; }
   .ai-chat-panel.is-focus .ai-chat-focus__card--footwear { order: 1; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { order: 2; grid-column: auto; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain { order: 2; grid-column: auto; grid-template-columns: minmax(0, 1fr) 42%; }
   .ai-chat-panel.is-focus .ai-chat-focus__card--orthotics { order: 3; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { flex-direction: column; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { order: -1; flex: 0 0 88px; width: 100%; align-self: auto; }
-  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { padding: 12px 10px 12px 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-text { display: contents; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { grid-row: 1; grid-column: 1; flex: none; width: auto; height: auto; align-self: stretch; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-ico { grid-column: 2; grid-row: 1 / -1; flex: none; width: auto; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-eyebrow { grid-row: 2; grid-column: 1; padding: 12px 10px 0 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-title { grid-row: 3; grid-column: 1; padding: 1px 10px 0 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-sub { grid-row: 4; grid-column: 1; margin-top: 0; padding: 4px 10px 0 14px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card-cta { grid-row: 5; grid-column: 1; margin-top: 0; padding: 12px 10px 12px 14px; align-self: end; }
+  .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-eyebrow, .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title, .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-sub, .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-cta { padding-left: 16px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-title { font-size: 15px; line-height: 19px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { font-size: 11.5px; line-height: 15px; }
   .ai-chat-panel.is-focus .ai-chat-focus__card--pain .ai-chat-focus__card-title { font-size: 17px; line-height: 21px; text-wrap: balance; }
@@ -7498,7 +7514,7 @@ button.ai-chat-launcher__text {
 /* The card's hairline is drawn over its children (::after), so the sticky
    Ask bar sits inside it wherever it sticks: mid-card the lines run past
    the bar unbroken, and at the card's end its corners curve around it. */
-.ai-chat-panel.is-focus .ai-chat-focus__pick { position: relative; margin-top: 8px; padding: 12px; border-radius: 16px; background: var(--seos-surface); overflow: clip; }
+.ai-chat-panel.is-focus .ai-chat-focus__pick { position: relative; margin-top: 8px; padding: 12px; border-radius: 16px; background: var(--seos-surface); overflow: clip; clip-path: inset(0 round 16px); }
 .ai-chat-panel.is-focus .ai-chat-focus__pick::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--seos-line); pointer-events: none; }
 /* Scrolled to (after a pick in the row above), a row stops clear of the Ask bar. */
 .ai-chat-panel.is-focus .ai-chat-focus__pick-row { display: flex; align-items: flex-start; gap: 8px; scroll-margin: 12px 0 88px; }
@@ -7734,8 +7750,10 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-rt__more a, .ai-chat-panel .ai-rt__empty a { color: var(--seos-text) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong) !important; }
 /* Loading: three soft bars where the orders will be. */
 .ai-chat-panel .ai-rt__wait { display: grid; gap: 10px; }
-.ai-chat-panel .ai-rt__wait span { display: block; height: 76px; border-radius: 14px; background: linear-gradient(90deg, var(--seos-surface) 0%, var(--seos-bg-raised, #fff) 50%, var(--seos-surface) 100%); background-size: 200% 100%; animation: ai-rt-shimmer 1.4s ease-in-out infinite; }
-@keyframes ai-rt-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.ai-chat-panel .ai-rt__wait span { display: block; height: 76px; border-radius: 14px; background: var(--seos-surface); animation: ai-rt-pulse 1.4s ease-in-out infinite; }
+.ai-chat-panel .ai-rt__wait span:nth-child(2) { animation-delay: 0.2s; }
+.ai-chat-panel .ai-rt__wait span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ai-rt-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-rt__wait span { animation: none; } }
 /* Signed out: the sign-in / returns center / look-up rows, edge to edge. */
 .ai-chat-panel .ai-rt__opts { margin: 0 -14px; }

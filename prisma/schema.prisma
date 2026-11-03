@@ -216,6 +216,9 @@ model ShopConfig {
   // Which orders the chat offers a return on: placed within this many days
   // (0 = no limit), and only once delivered (off: once shipped).
   returnWindowDays     Int      @default(30)
+  // Return rules mirrored from AfterShip (gift cards, final sale, discounted
+  // items, reasons that waive the fee) — JSON, see app/lib/return-rules.js.
+  returnRules          String   @default("{}")
   returnsDeliveredOnly Boolean  @default(true)
   // Signed-out shoppers can check one order's status in the chat with its
   // order number (or confirmation code) and the email it was placed with.

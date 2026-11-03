@@ -40,6 +40,7 @@ export const loader = async ({ request }) => {
       orders: orders.map((o) => publicOrderCard(o, { returnMode: inChat ? "chat" : "page" })),
       numberOfOrders,
       returnMethods: inChat ? publicReturnMethods() : [],
+      freeReasons: inChat ? returnPolicy(config).rules.freeReasons : [],
     }, noStore);
   } catch (e) {
     if (e instanceof Response) throw e;

@@ -15,6 +15,7 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
 import { getOwnedOrder, toOrderCard, chatReturnView, returnPolicy } from "../lib/orders.server.js";
 import { reasonByKey, exchangeCard, createAftershipReturn, aftershipReasonName, returnMethods, publicReturnMethods, blockedMessage, priorReturn } from "../lib/returns.server.js";
+import { feeWaived, aftershipRefused } from "../lib/return-rules.js";
 import { findChatReturns, saveChatReturn } from "../models/ChatReturn.server";
 import { recordHealth } from "../models/ChatHealth.server";
 
@@ -61,14 +62,15 @@ async function signedIn(request, scope, limit) {
   return { session, shop: session.shop, customerId };
 }
 
-function startedPayload(record, fallbackUrl, extra = {}) {
+function startedPayload(record, fallbackUrl, extra = {}, policy = returnPolicy()) {
   const v = chatReturnView(record);
   return {
     ok: true,
     rma: v.rma,
     labelUrl: v.labelUrl,
     returnsUrl: fallbackUrl,
-    method: v.method,
+    // The store's rule: some reasons (damaged, not as described) carry no fee.
+    method: { ...v.method, feeWaived: feeWaived(record.reasonKey, policy.rules) },
     exchange: v.exchange,
     lineIds: v.lineIds,
     refundTo: "original_payment",
@@ -95,6 +97,7 @@ export const loader = async ({ request }) => {
       ok: true,
       order: card,
       methods: publicReturnMethods(),
+      freeReasons: policy.rules?.freeReasons || [],
       message: card.canReturn ? "" : blockedMessage(card.returnBlocked, policy),
       returnsUrl: returnsPage(config, card.number, order.email || ""),
     });
@@ -132,9 +135,12 @@ export const action = async ({ request }) => {
       // Already started (a retry after a lost connection, a second tap, the
       // same flow in another tab): the same answer, not a second return.
       const prior = priorReturn(started, picks.map((p) => String(p?.lineId || "")));
-      if (prior) return Response.json(startedPayload(prior, fallbackUrl, { already: true }));
+      if (prior) return Response.json(startedPayload(prior, fallbackUrl, { already: true }, policy));
 
       if (!card.canReturn) return Response.json({ error: "not_returnable", message: blockedMessage(card.returnBlocked, policy), order: card }, { status: 409 });
+      // A gift card or final-sale item slipped into the picks (an old card): the store's rule says no.
+      const blockedPick = picks.map((p) => card.items.find((i) => i.lineId === String(p?.lineId || ""))).find((i) => i?.blocked);
+      if (blockedPick) return Response.json({ error: "not_returnable", message: `${blockedPick.title}: ${blockedPick.blockedWhy.toLowerCase()}.`, order: card }, { status: 409 });
 
       // Only this order's items, never more than can still be returned.
       const items = [];
@@ -168,11 +174,17 @@ export const action = async ({ request }) => {
         recordHealth({ shop, route: "returns", ok: false, errorKind: config.aftershipApiKey ? "upstream" : "not_configured" });
         // Started somewhere else already (the returns page, customer service).
         const elsewhere = /already|duplicate|exist/i.test(created?.error || "");
+        // AfterShip's own rules said no (a blocklist, the window, final sale):
+        // the same answer the returns page would give, in plain words.
+        const refused = !elsewhere && Boolean(config.aftershipApiKey) && aftershipRefused(created?.error || "");
+        if (refused) console.log(`[returns] AfterShip refused shop=${shop} order=${card.number}: ${String(created?.error || "").slice(0, 160)}`);
         return Response.json({
           ok: false,
-          error: elsewhere ? "already_returned" : "return_not_created",
+          error: elsewhere ? "already_returned" : refused ? "not_returnable" : "return_not_created",
           message: elsewhere
             ? "A return has already been started for this item — your label and drop-off steps are in your email, or on our returns page."
+            : refused
+              ? "Our returns policy doesn't allow this item to be returned (it may be final sale or past its return window). If that seems wrong, our customer service team can take a look."
             : fallbackUrl
               ? "I couldn't start this return here — you can finish it in a minute on our returns page (your order is filled in)."
               : "I couldn't start this return here — our customer service team will be glad to help.",
@@ -195,7 +207,7 @@ export const action = async ({ request }) => {
       };
       const saved = await saveChatReturn(record);
       console.log(`[returns] created shop=${shop} order=${card.number} items=${items.length} reason=${reason.key} exchange=${exchange} method=${method.key} rma=${created.rma || "-"} saved=${saved ? "yes" : "no"}`);
-      return Response.json(startedPayload(saved || record, fallbackUrl));
+      return Response.json(startedPayload(saved || record, fallbackUrl, {}, policy));
     });
   } catch (e) {
     if (e instanceof Response) throw e;

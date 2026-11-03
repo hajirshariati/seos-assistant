@@ -1717,8 +1717,8 @@ var FOCUS_ARCH=[['flat_low','Flat or low','My feet roll inward'],['medium_high',
 var FOCUS_BALL=[['yes','Yes',''],['no','No','']];
 /* Browse by: the store's own menu (aetrex.com) for the line and the
    gender picked — one group per tab, each chip a question to ask. The
-   women's and men's footwear menus differ (men's has Occasion where
-   women's has Collections); orthotics share one menu, sized by gender. */
+   women's and men's footwear menus differ (women's has more shoe kinds);
+   orthotics share one menu, sized by gender. */
 var FOCUS_GENDER_KEY='hajirai_focus_gender',focusGender='women';
 try{if(localStorage.getItem(FOCUS_GENDER_KEY)==='men')focusGender='men'}catch(e){}
 function focusGenderWord(g){return g==='men'?'men\u2019s':'women\u2019s'}
@@ -1732,7 +1732,6 @@ function focusBrowseGroups(kind,g){
   if(g==='men')return [
     ['Shoes',[['Sneakers','Show me men\u2019s sneakers'],['Sandals','Show me men\u2019s sandals'],['Clogs','Show me men\u2019s clogs']]],
     ['Condition',[['Plantar fasciitis','Men\u2019s shoes for plantar fasciitis'],['Metatarsalgia','Men\u2019s shoes for metatarsalgia'],['Flat feet','Men\u2019s shoes for flat feet'],['High arch','Men\u2019s shoes for high arches'],['Bunions','Men\u2019s shoes for bunions']]],
-    ['Occasion',[['Vacation comfort','Men\u2019s shoes for vacation comfort'],['Beach getaway','Men\u2019s shoes for a beach getaway'],['Sports & active','Men\u2019s shoes for sports and active days'],['At home','Men\u2019s shoes for around the house']]],
     ['Collections',[['New arrivals','Show me the men\u2019s new arrivals'],['Last chance','Show me men\u2019s shoes on sale']]]
   ];
   return [
@@ -5343,6 +5342,9 @@ var RET_REASONS=[
 ];
 /* How it goes back (Happy Returns, mail…), as the store offers them. */
 var RET_METHODS=[];
+/* Reasons with no return fee (Settings → Customer care → Return rules). */
+var RET_FREE=[];
+function retFeeWaived(reason){return RET_FREE.indexOf(reason)>-1}
 var ORD_STEPS=['Ordered','Shipped','Out for delivery','Delivered'];
 function fmtDay(d){if(!d)return'';try{var p=String(d).split('-');var dt=new Date(+p[0],+p[1]-1,+p[2]);return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch(e){return d}}
 function optLine(o){var v=[];for(var k in (o||{}))if(Object.prototype.hasOwnProperty.call(o,k))v.push(o[k]);return v.join(' · ')}
@@ -5427,7 +5429,7 @@ function ordersHtml(list,max){
   return h+'</div>';
 }
 /* Why an order has no return button (the Returns & exchanges card). */
-var ORD_WHY={not_delivered:'Returns open once it\u2019s delivered.',not_shipped:'Returns open once it ships.',window_closed:'Past the return window.',nothing_left:'Everything in it is already being returned.'};
+var ORD_WHY={not_delivered:'Returns open once it\u2019s delivered.',not_shipped:'Returns open once it ships.',window_closed:'Past the return window.',nothing_left:'Everything in it is already being returned.',not_returnable:'Nothing in this order can be returned (gift cards, final sale).'};
 function loginCardHtml(p){
   if(typeof p==='string')p={intent:p};
   /* Points: sign in to see them (no order lookup for those). */
@@ -5628,7 +5630,7 @@ function doneHtml(d,o){
   return '<div class="ai-ret__done" role="status"><span class="ai-ret__doneicon">'+ORD_ICON.check+'</span><div>'+
     '<div class="ai-ret__title">Return started'+(d.rma?' · #'+esc(d.rma):'')+'</div>'+
     (titles.length?'<div class="ai-ret__why">'+esc(titles.join(', '))+'</div>':'')+
-    (m.label?'<div class="ai-ret__why">'+esc(m.label)+'</div>':'')+
+    (m.label?'<div class="ai-ret__why">'+esc(m.label)+(m.feeWaived?' · No return fee':'')+'</div>':'')+
     '<div class="ai-ret__note">'+how+' Refund to your original payment once it’s back with us.'+(d.exchange?' Your new size is in the chat above — add it to your cart whenever you’re ready.':'')+'</div>'+
     '<div class="ai-ret__choices">'+(label?'<a class="ai-ord__btn is-primary" href="'+label+'" target="_blank" rel="noopener">Get return label</a>':'')+
     (find?'<a class="ai-ord__btn'+(label?'':' is-primary')+'" href="'+find+'" target="_blank" rel="noopener">Find a drop-off location</a>':'')+
@@ -5651,6 +5653,13 @@ function renderReturn(card,step,info){
       h+='<button type="button" class="ai-ret__item'+(on?' is-on':'')+'" role="checkbox" aria-checked="'+on+'" data-ret-item="'+esc(it.lineId)+'">'+
         (safeUrl(it.image)?'<img src="'+safeUrl(it.image)+'" alt="">':'<span class="ai-ord__ph">'+ORD_ICON.bag+'</span>')+
         '<span class="ai-ret__itxt"><span class="ai-ord__ititle">'+esc(it.title)+'</span><span class="ai-ord__iopt">'+esc(optLine(it.options))+'</span></span><span class="ai-ret__check">'+ORD_ICON.check+'</span></button>';}
+    /* The store's return rules (AfterShip's, mirrored): a gift card or a
+       final-sale item is listed, greyed, with why — never pickable. */
+    var blockedItems=(o.items||[]).filter(function(i){return i.blocked});
+    for(var bi=0;bi<blockedItems.length;bi++){var bt=blockedItems[bi];
+      h+='<div class="ai-ret__item is-blocked" aria-disabled="true">'+
+        (safeUrl(bt.image)?'<img src="'+safeUrl(bt.image)+'" alt="">':'<span class="ai-ord__ph">'+ORD_ICON.bag+'</span>')+
+        '<span class="ai-ret__itxt"><span class="ai-ord__ititle">'+esc(bt.title)+'</span><span class="ai-ord__iopt ai-ret__blocked">'+esc(bt.blockedWhy||'Not returnable')+'</span></span></div>';}
     h+='</div><div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-cancel>Cancel</button><button type="button" class="ai-ord__btn is-primary" data-ret-next="reason"'+(Object.keys(st.items).length?'':' disabled')+'>Next</button></div>';
   }else if(step==='reason'){
     h+='<div class="ai-ret__title">Why are you returning it?</div><div class="ai-ret__reasons">';
@@ -5661,9 +5670,10 @@ function renderReturn(card,step,info){
     h+='<div class="ai-ret__title">How would you like to send it back?</div><div class="ai-ret__methods" role="radiogroup">';
     for(var m=0;m<RET_METHODS.length;m++){var rm=RET_METHODS[m],mon=st.method===rm.key;
       h+='<button type="button" class="ai-ret__method'+(mon?' is-on':'')+'" role="radio" aria-checked="'+mon+'" data-ret-method="'+esc(rm.key)+'">'+
-        '<span class="ai-ret__mtop"><span class="ai-ret__mlabel">'+esc(rm.label)+'</span>'+(rm.fee?'<span class="ai-ret__mfee">'+esc(rm.fee)+'</span>':'')+'</span>'+
+        '<span class="ai-ret__mtop"><span class="ai-ret__mlabel">'+esc(rm.label)+'</span>'+(rm.fee?(retFeeWaived(st.reason)?'<span class="ai-ret__mfee is-free"><s>'+esc(rm.fee)+'</s> Free</span>':'<span class="ai-ret__mfee">'+esc(rm.fee)+'</span>'):'')+'</span>'+
         (rm.detail?'<span class="ai-ret__mdetail">'+esc(rm.detail)+'</span>':'')+'</button>';}
     h+='</div>';
+    if(retFeeWaived(st.reason)&&RET_METHODS.some(function(x){return x.fee}))h+='<div class="ai-ret__note">No return fee for this reason.</div>';
     var cur=retMethodByKey(st.method);
     if(cur&&safeUrl(cur.findUrl))h+='<a class="ai-ret__find" href="'+safeUrl(cur.findUrl)+'" target="_blank" rel="noopener">Find a drop-off location near you</a>';
     h+='<div class="ai-ret__nav"><button type="button" class="ai-ret__link" data-ret-next="reason">Back</button><button type="button" class="ai-ord__btn is-primary" data-ret-next="confirm"'+(cur?'':' disabled')+'>Next</button></div>';
@@ -5673,9 +5683,11 @@ function renderReturn(card,step,info){
     var picked=o.items.filter(function(i){return st.items[i.lineId]});
     if(!picked.length){renderReturn(card,'items');return}
     var cm=RET_METHODS.length>1?retMethodByKey(st.method):null;
-    h+='<div class="ai-ret__title">'+(rs.change?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
-    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs.label)+'</div>'+(cm?'<div class="ai-ret__why">Send back: '+esc(cm.label)+(cm.fee?' · '+esc(cm.fee):'')+'</div>':'')+'</div>';
-    if(rs.change){
+    /* A swap for the next size is only for items that come in sizes. */
+    var swappable=!!rs.change&&picked.every(function(i){return i.sizeable!==false});
+    h+='<div class="ai-ret__title">'+(swappable?'Return it, or swap for '+esc(rs.change)+'?':'Ready to start your return')+'</div>';
+    h+='<div class="ai-ret__summary">'+picked.map(function(i){return esc(i.title)+(optLine(i.options)?' <span>('+esc(optLine(i.options))+')</span>':'')}).join('<br>')+'<div class="ai-ret__why">Reason: '+esc(rs.label)+'</div>'+(cm?'<div class="ai-ret__why">Send back: '+esc(cm.label)+(cm.fee?' · '+(retFeeWaived(st.reason)?'<s>'+esc(cm.fee)+'</s> Free':esc(cm.fee)):'')+'</div>':'')+'</div>';
+    if(swappable){
       h+='<div class="ai-ret__choices"><button type="button" class="ai-ord__btn is-primary" data-ret-submit="exchange">Exchange for '+esc(rs.change)+'</button>'+
         '<button type="button" class="ai-ord__btn" data-ret-submit="return">Return for a refund</button></div>'+
         '<div class="ai-ret__note">Exchange: we start the return, then show you the new size to add to your cart. Your refund for this pair is issued once it’s back with us.</div>';
@@ -5739,6 +5751,7 @@ function startReturn(card){
     if(d.error==='returns_off'){progClear(id);renderReturn(card,'blocked',{message:d.message,url:d.returnsUrl});return}
     if(!d.ok||!d.order){renderReturn(card,'items');return}
     if(Array.isArray(d.methods)&&d.methods.length)RET_METHODS=d.methods;
+    if(Array.isArray(d.freeReasons))RET_FREE=d.freeReasons.map(String);
     if(d.returnsUrl)d.order.returnsUrl=d.returnsUrl;
     card=refreshCards(d.order,card);
     if(!d.order.canReturn||!returnableItems(d.order).length){
@@ -6141,6 +6154,7 @@ function rtFill(card,m){
   fetch('/apps/hajirai/orders',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){
     if(!d||!d.signedIn||!Array.isArray(d.orders)){body.innerHTML='<p class="ai-rt__empty">We couldn\u2019t load your orders just now. '+(ordPages&&ordPages.returns?'<a href="'+esc(ordPages.returns)+'" target="_blank" rel="noopener">Use our returns center</a>, or try':'Try')+' again in a moment.</p>';return}
     if(Array.isArray(d.returnMethods)&&d.returnMethods.length){RET_METHODS=d.returnMethods;m.returnMethods=d.returnMethods}
+    if(Array.isArray(d.freeReasons))RET_FREE=d.freeReasons.map(String);
     m.orders=d.orders.slice(0,5);m.numberOfOrders=d.numberOfOrders||0;saveH(messages);
     body.innerHTML=rtOrdersHtml(m);
   }).catch(function(){body.innerHTML='<p class="ai-rt__empty">We couldn\u2019t load your orders just now. Try again in a moment.</p>'});
@@ -6591,7 +6605,7 @@ if(p.type==='fitfinder_fit'&&p.key){
   ffSave(String(p.key));
   fitResult=String(p.key);
 }
-if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods}
+if(p.type==='order_cards'&&Array.isArray(p.orders)&&p.orders.length){pendingOrders=p.orders;if(Array.isArray(p.returnMethods)&&p.returnMethods.length)RET_METHODS=p.returnMethods;if(Array.isArray(p.freeReasons))RET_FREE=p.freeReasons.map(String)}
 if(p.type==='login_prompt'){pendingLogin={intent:p.intent==='return'||p.intent==='rewards'?p.intent:'track',lookup:p.lookup===true,order:typeof p.order==='string'?p.order:'',pages:p.pages||null}}
 if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pendingCompare=p.comparison}
 if(p.type==='size_finder'&&p.handle){

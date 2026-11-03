@@ -52,16 +52,20 @@ export const METHODS = [
   { key: "usps", label: "USPS drop-off", detail: "Print the label, box it and drop it off.", fee: "$5.95", findUrl: "" },
 ];
 let rmaSeq = 1000;
+// Reasons with no return fee (Settings → Customer care → Return rules).
+export const FREE_REASONS = ["damaged", "not_as_described"];
 const { signedInPage } = await import("../../../app/lib/signed-in-page.js");
 // A signed-in shopper's orders, shaped like app/lib/orders.server.js cards.
 const ORDERS = [
   { id: "5001", number: "1171674", date: "2026-10-14", stage: "delivered", stageLabel: "Delivered", step: 3, shippedAt: "2026-10-15", deliveredAt: "2026-10-18", eta: "", carrier: "UPS", trackUrl: "https://track.example/1Z999", returnStatus: "", canReturn: true, returnsUrl: "https://www.example.com/apps/aftership-returns-center?order-number=1171674&email=ann%40example.com",
     items: [
-      { lineId: "9001", title: "Savannah Adjustable Quarter Strap Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: "", quantity: 1, returnable: 1, handle: "savannah-red" },
+      { lineId: "9001", title: "Savannah Adjustable Quarter Strap Sandal - Red", options: { Size: "8 US", Width: "Medium" }, image: "", quantity: 1, returnable: 1, handle: "savannah-red", sizeable: true },
       { lineId: "9002", title: "Women's Casual Orthotics", options: {}, image: "", quantity: 1, returnable: 1, handle: "orthotic-one" },
+      // The store's return rules (AfterShip's, mirrored): a gift card can't come back.
+      { lineId: "9004", title: "Aetrex eGift Card", options: {}, image: "", quantity: 1, returnable: 0, handle: "egift", blocked: "gift_card", blockedWhy: "Gift cards can't be returned" },
     ] },
   { id: "5002", number: "1172010", date: "2026-10-20", stage: "shipped", stageLabel: "On its way", step: 1, shippedAt: "2026-10-21", deliveredAt: "", eta: "2026-10-24", carrier: "USPS", trackUrl: "https://track.example/9400", returnStatus: "", canReturn: false,
-    items: [{ lineId: "9003", title: "Jillian Braided Quarter Strap Sandal - Black", options: { Size: "9 US", Width: "Wide" }, image: "", quantity: 1, returnable: 1, handle: "jillian-black" }] },
+    items: [{ lineId: "9003", title: "Jillian Braided Quarter Strap Sandal - Black", options: { Size: "9 US", Width: "Wide" }, image: "", quantity: 1, returnable: 1, handle: "jillian-black", sizeable: true }] },
 ];
 const FF_CONFIG = {
   enabled: true, loggedIn: true, savedFit: null,
@@ -282,7 +286,7 @@ export function start(port) {
           const o = ORDERS.find((x) => x.id === u.searchParams.get("orderId"));
           if (!o) return send(404, "application/json", JSON.stringify({ error: "order_not_found" }));
           const now = orderNow(o);
-          return send(200, "application/json", JSON.stringify({ ok: true, order: now, methods: METHODS, returnsUrl: "https://returns.example/?order-number=" + o.number, message: now.canReturn ? "" : now.returnBlocked === "nothing_left" ? "Everything in this order is already being returned." : "You can start a return once the order has been delivered." }));
+          return send(200, "application/json", JSON.stringify({ ok: true, order: now, methods: METHODS, freeReasons: FREE_REASONS, returnsUrl: "https://returns.example/?order-number=" + o.number, message: now.canReturn ? "" : now.returnBlocked === "nothing_left" ? "Everything in this order is already being returned." : "You can start a return once the order has been delivered." }));
         }
         if (u.pathname === "/apps/hajirai/returns" && req.method === "POST") {
           const b = JSON.parse(body || "{}");
@@ -292,7 +296,7 @@ export function start(port) {
           const o = ORDERS.find((x) => x.id === b.orderId);
           const lineIds = (b.items || []).map((i) => i.lineId);
           const rs = (startedReturns[b.orderId] ||= []);
-          const reply = (r, extra = {}) => ({ ok: true, rma: r.rma, labelUrl: r.labelUrl, returnsUrl: "https://returns.example/?order-number=" + (o?.number || ""), method: r.method, exchange: r.exchange, lineIds: r.lineIds, refundTo: "original_payment", exchangeCards: r.exchangeCards, ...extra });
+          const reply = (r, extra = {}) => ({ ok: true, rma: r.rma, labelUrl: r.labelUrl, returnsUrl: "https://returns.example/?order-number=" + (o?.number || ""), method: { ...r.method, feeWaived: FREE_REASONS.includes(b.reason) }, exchange: r.exchange, lineIds: r.lineIds, refundTo: "original_payment", exchangeCards: r.exchangeCards, ...extra });
           // Same as the real server: a return already started for these lines comes back as is.
           const prior = [...rs].reverse().find((r) => lineIds.every((l) => r.lineIds.includes(l)));
           if (prior) return send(200, "application/json", JSON.stringify(reply(prior, { already: true })));
@@ -392,7 +396,7 @@ export function start(port) {
           // ?rt=1: the Returns & exchanges card (Settings → Customer care).
           returns: /[?&]rt=1/.test(String(req.headers.referer || "")) ? { inChat: true, lookup: true, pages: { track: "https://track.example/", returns: "https://returns.example/" } } : null,
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
-        if (u.pathname === "/apps/hajirai/orders") { ordersLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, orders: ORDERS.map(orderNow), numberOfOrders: 7, returnMethods: METHODS } : { signedIn: false })); }
+        if (u.pathname === "/apps/hajirai/orders") { ordersLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, orders: ORDERS.map(orderNow), numberOfOrders: 7, returnMethods: METHODS, freeReasons: FREE_REASONS } : { signedIn: false })); }
         if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75" } : { signedIn: false })); }
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));
         if (u.pathname === "/apps/fitfinder/scan-fit") return send(200, "application/json", JSON.stringify(mockCtl.ffScan || FF_SCAN));
