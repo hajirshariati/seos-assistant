@@ -7746,9 +7746,10 @@ button.ai-chat-launcher__text {
 
 /* ── Deals card: quiet, typographic, no colour ── */
 .ai-chat-panel .ai-dl { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; overflow: clip; container-type: inline-size; container-name: aideal; }
-.ai-chat-panel .ai-dl__head { display: grid; gap: 2px; }
+/* The head: the name at the left, the state ("Running right now") small at the right on the same line. */
+.ai-chat-panel .ai-dl__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 12px; row-gap: 2px; }
 .ai-chat-panel .ai-dl__head strong { font: 700 17px/22px var(--seos-font); letter-spacing: -0.02em; }
-.ai-chat-panel .ai-dl__head span { font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-dl__head span { font: 500 12px/18px var(--seos-font); color: var(--seos-text-2); letter-spacing: 0.01em; text-align: right; }
 .ai-chat-panel .ai-dl__body { display: grid; gap: 12px; }
 .ai-chat-panel .ai-dl__offers { list-style: none; margin: 0; padding: 0; display: grid; }
 .ai-chat-panel .ai-dl__offer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--seos-line); }
@@ -7765,11 +7766,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-dl__code.is-copied .ai-dl__copy { background: var(--seos-surface); color: var(--seos-text); box-shadow: inset 0 0 0 1px var(--seos-line-strong); }
 @media (hover: hover) { .ai-chat-panel .ai-dl__code:hover { border-color: var(--seos-text-2); } }
 .ai-chat-panel .ai-dl__code:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
-.ai-chat-panel .ai-dl__sale { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid var(--seos-line); }
-.ai-chat-panel .ai-dl__offers:empty + .ai-dl__sale, .ai-chat-panel .ai-dl__sale:first-child { border-top: 0; padding-top: 0; }
-.ai-chat-panel .ai-dl__sale b { font: 600 13px/18px var(--seos-font); letter-spacing: 0.02em; text-transform: uppercase; font-size: 11.5px; }
-.ai-chat-panel .ai-dl__sale span { font: 400 12.5px/17px var(--seos-font); color: var(--seos-text-2); }
-.ai-chat-panel .ai-dl__sale a, .ai-chat-panel .ai-dl__empty a { color: var(--seos-text) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong) !important; }
+.ai-chat-panel .ai-dl__more { margin: 0; font: 400 12.5px/17px var(--seos-font); text-align: right; }
+.ai-chat-panel .ai-dl__more a, .ai-chat-panel .ai-dl__empty a { color: var(--seos-text) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong) !important; }
 .ai-chat-panel .ai-dl__empty { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel .ai-dl__wait { display: grid; gap: 10px; }
 .ai-chat-panel .ai-dl__wait span { display: block; height: 40px; border-radius: 12px; background: var(--seos-surface); animation: ai-rt-pulse 1.4s ease-in-out infinite; }
@@ -7778,7 +7776,6 @@ button.ai-chat-launcher__text {
 /* Narrow: the code pill under the words, the sale line stacked. */
 @container aideal (max-width: 300px) {
   .ai-chat-panel .ai-dl__offer { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .ai-chat-panel .ai-dl__sale { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
 
 /* ── Returns & exchanges card (the rewards card's language) ── */

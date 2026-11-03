@@ -6197,9 +6197,10 @@ function dlBodyHtml(m){
         (o.code?'<button type="button" class="ai-dl__code" data-dl-code="'+esc(o.code)+'" aria-label="Copy code '+esc(o.code)+'"><span class="ai-dl__codetxt">'+esc(o.code)+'</span><span class="ai-dl__copy">Copy</span></button>':'')+'</li>';}
     h+='</ol>';
   }
-  if(prods.length)h+='<div class="ai-dl__sale"><b>On sale now</b><span>Best savings first'+(url?' \u00b7 <a href="'+esc(url)+'" target="_blank" rel="noopener">See all</a>':'')+'</span></div>';
+  /* The sale cards follow the card on their own; here only the store's see-all link, when it has one. */
+  if(prods.length){if(url)h+='<p class="ai-dl__more"><a href="'+esc(url)+'" target="_blank" rel="noopener">See all deals</a></p>'}
   else if(!offers.length)h+='<p class="ai-dl__empty">Nothing is on sale right now'+(url?' \u2014 <a href="'+esc(url)+'" target="_blank" rel="noopener">see the sale page</a>':'')+'. Check back soon, or ask me about a style.</p>';
-  else if(url)h+='<p class="ai-dl__empty"><a href="'+esc(url)+'" target="_blank" rel="noopener">See all deals</a></p>';
+  else if(url)h+='<p class="ai-dl__more"><a href="'+esc(url)+'" target="_blank" rel="noopener">See all deals</a></p>';
   return h;
 }
 function dlCopy(btn){
