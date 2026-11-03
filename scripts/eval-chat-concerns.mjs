@@ -440,6 +440,11 @@ if (!process.env.TEST_DATABASE_URL) {
     });
     await test("a deleted chat still counts: one not read yet is trashed (hidden), read, then removed", async () => {
       const { deleteRecordingSession, listRecordings } = await import("../app/models/ChatRecording.server.js");
+      // The failed read above left a chat waiting: count it first, so the
+      // only new one below is the deleted chat.
+      C.startConcernRead(SHOP, { client: fake() });
+      await C.settleConcernRead(SHOP);
+      assert.equal((await summary()).pending, 0);
       const wide = (await summary()).top.find((t) => t.kind === "request");
       await deleteRecordingSession(SHOP, "w1");
       assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "w1" } }), 0, "a read chat goes at once");
@@ -460,10 +465,12 @@ if (!process.env.TEST_DATABASE_URL) {
       const { deleteAllRecordings, deleteDayRecordings } = await import("../app/models/ChatRecording.server.js");
       const { setFlag } = await import("../app/models/ChatFlag.server.js");
       const before = (await summary()).read;
+      // A window of its own (the chats above sit inside the last ten
+      // minutes or an hour back): the flagged chat and one other.
       await rec("f1", "wide boots please", { minutesAgo: 30 });
       await rec("g1", "any wide clogs", { minutesAgo: 20 });
       await setFlag(SHOP, "f1", { kind: "manual" });
-      const day = await deleteDayRecordings(SHOP, { start: new Date(Date.now() - 25 * 60_000), end: new Date() });
+      const day = await deleteDayRecordings(SHOP, { start: new Date(Date.now() - 35 * 60_000), end: new Date(Date.now() - 15 * 60_000) });
       assert.equal(day.chats, 1, "only the unflagged chat of that window");
       assert.equal(await prisma.chatRecording.count({ where: { shop: SHOP, sessionId: "f1" } }), 1, "the flagged chat stays");
       await deleteAllRecordings(SHOP);

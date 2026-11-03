@@ -69,9 +69,11 @@ export async function deleteAllRecordings(shop) {
 }
 
 // Every chat whose first turn falls in [start, end) — a store-local day.
+// Flagged chats stay, and aren't counted in `chats`.
 export async function deleteDayRecordings(shop, { start, end }) {
   const firsts = await prisma.chatRecording.groupBy({ by: ["sessionId"], where: { shop, trashed: false }, _min: { createdAt: true } });
-  const ids = firsts.filter((f) => f._min.createdAt >= start && f._min.createdAt < end).map((f) => f.sessionId);
+  const flagged = new Set((await prisma.chatFlag.findMany({ where: { shop }, select: { sessionId: true } })).map((f) => f.sessionId));
+  const ids = firsts.filter((f) => f._min.createdAt >= start && f._min.createdAt < end && !flagged.has(f.sessionId)).map((f) => f.sessionId);
   if (!ids.length) return { deleted: 0, trashed: 0, chats: 0 };
   const out = await removeOrTrash(shop, { sessionId: { in: ids } });
   return { ...out, chats: ids.length };
