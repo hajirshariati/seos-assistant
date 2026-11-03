@@ -7488,7 +7488,11 @@ button.ai-chat-launcher__text {
    written as the message it will be, to edit or replace, with the Ask
    button. Section chips below are one tap each and carry an arrow to say
    so; picker chips carry a check instead. ── */
-.ai-chat-panel.is-focus .ai-chat-focus__pick { margin-top: 8px; padding: 12px; border-radius: 16px; background: var(--seos-surface); box-shadow: inset 0 0 0 1px var(--seos-line); }
+/* The card's hairline is drawn over its children (::after), so the sticky
+   Ask bar sits inside it wherever it sticks: mid-card the lines run past
+   the bar unbroken, and at the card's end its corners curve around it. */
+.ai-chat-panel.is-focus .ai-chat-focus__pick { position: relative; margin-top: 8px; padding: 12px; border-radius: 16px; background: var(--seos-surface); overflow: clip; }
+.ai-chat-panel.is-focus .ai-chat-focus__pick::after { content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--seos-line); pointer-events: none; }
 /* Scrolled to (after a pick in the row above), a row stops clear of the Ask bar. */
 .ai-chat-panel.is-focus .ai-chat-focus__pick-row { display: flex; align-items: flex-start; gap: 8px; scroll-margin: 12px 0 88px; }
 .ai-chat-panel.is-focus .ai-chat-focus__pick-row + .ai-chat-focus__pick-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--seos-line); }
@@ -7513,7 +7517,7 @@ button.ai-chat-launcher__text {
    whenever the question changes. */
 /* The card's own last row: a hairline over it, the card's tint behind it,
    held at the foot of the sheet while the card is on screen. */
-.ai-chat-panel.is-focus .ai-chat-focus__pick .ai-chat-focus__ask { position: sticky; bottom: -20px; z-index: 2; margin: 12px -12px -12px; padding: 12px; border-radius: 0 0 16px 16px; background: color-mix(in srgb, var(--seos-surface) 92%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 0 0 1px var(--seos-line); }
+.ai-chat-panel.is-focus .ai-chat-focus__pick .ai-chat-focus__ask { position: sticky; bottom: -20px; z-index: 2; margin: 12px -12px -12px; padding: 12px; background: color-mix(in srgb, var(--seos-surface) 92%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 var(--seos-line); }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-box { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 6px 6px 14px; box-sizing: border-box; border-radius: 999px; background: var(--seos-bg-raised, #fff); box-shadow: 0 0 0 1px var(--seos-line-strong, rgba(0, 0, 0, 0.14)); transition: box-shadow 0.18s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-box:focus-within { box-shadow: 0 0 0 1.5px var(--seos-ink, #0d0d12); }
 .ai-chat-panel.is-focus .ai-chat-focus__ask-q { flex: 1 1 auto; min-width: 0; width: 0; height: 32px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--seos-text); font: 500 13.5px/32px var(--seos-font); letter-spacing: -0.01em; outline: none; box-shadow: none; text-overflow: ellipsis; }
@@ -7562,6 +7566,8 @@ button.ai-chat-launcher__text {
 .ai-chat-panel.is-focus .ai-chat-focus__q-title { margin: 0; font: 700 18px/23px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); outline: none; }
 .ai-chat-panel.is-focus .ai-chat-focus__q-hint { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel.is-focus .ai-chat-focus__opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* A tile alone on the last row takes the whole row. */
+.ai-chat-panel.is-focus .ai-chat-focus__opts > .ai-chat-focus__opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .ai-chat-panel.is-focus .ai-chat-focus__opt { position: relative; display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 8px 34px 8px 8px; border: 1.5px solid transparent; border-radius: 14px; background: var(--seos-surface); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease; }
 .ai-chat-panel.is-focus .ai-chat-focus__opt:hover { background: var(--seos-line); }
 .ai-chat-panel.is-focus .ai-chat-focus__opt:active { transform: scale(0.98); }
