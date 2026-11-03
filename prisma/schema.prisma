@@ -286,6 +286,11 @@ model ShopConfig {
   homeCountries       String   @default("US")
   promoPageUrl        String   @default("")
   promoPageStop       String   @default("")
+  // Memory: how long ended offers and retired styles stay answerable.
+  promoMemoryDays     Int      @default(90)
+  styleMemoryDays     Int      @default(730)
+  // Returns & exchanges card on the Focus home (no AI).
+  returnsCardOn       Boolean  @default(true)
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)
@@ -898,4 +903,47 @@ model ChatDisclosure {
   lastSeenAt  DateTime @default(now())
 
   @@unique([shop, text])
+}
+
+// Memory: offers the store showed, as the chat read them — one row per
+// offer line on the promotions page (first/last seen, and when a read no
+// longer had it) or per dated campaign. Ended offers stay answerable for
+// promoMemoryDays ("that ended on Sunday"); never a guessed date.
+model PromoMemory {
+  id          String    @id @default(cuid())
+  shop        String
+  source      String    @default("page") // page | campaign
+  text        String
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([shop, source, text])
+  @@index([shop, endedAt])
+  @@index([endedAt])
+}
+
+// Memory: products that left the store — archived, set to draft, or deleted
+// — copied from the last catalog row before it went, so the chat can say a
+// typed style was discontinued (and when) instead of "never heard of it".
+// Closed (returnedAt) when the product is active again.
+model RetiredProduct {
+  id          String    @id @default(cuid())
+  shop        String
+  shopifyId   String
+  handle      String
+  title       String
+  style       String    @default("")
+  productType String    @default("")
+  gender      String    @default("")
+  category    String    @default("")
+  imageUrl    String    @default("")
+  reason      String    @default("archived") // archived | draft | deleted
+  retiredAt   DateTime  @default(now())
+  returnedAt  DateTime?
+
+  @@unique([shop, shopifyId])
+  @@index([shop, returnedAt])
+  @@index([retiredAt])
 }

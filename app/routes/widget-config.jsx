@@ -19,6 +19,8 @@ import { humanHelpConfig } from "../lib/human-help.js";
 import { shopFacts } from "../lib/shopify-facts.server.js";
 import { appBrand, appName } from "../lib/app-brand.js";
 
+const httpsUrl = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(String(u || "").trim()) ? String(u).trim() : "");
+
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const lastSeenWrite = new Map(); // shop → ms of the last lastWidgetSeenAt write
 const avatarFirstWrite = new Set(); // shops whose first avatar report this server has saved
@@ -121,6 +123,14 @@ export const loader = async ({ request }) => {
         appPromo: appPromoConfig(config),
         // Settings → Shopping tools → My rewards: the instant rewards card (no AI).
         rewards: rewardsCardConfig(config, { brand }),
+        // Settings → Customer care → Returns & exchanges on the home: the
+        // instant returns card (no AI) — orders with Start a return when
+        // signed in; sign in or an order lookup when not.
+        returns: config.returnsCardOn === false ? null : {
+          inChat: config.returnsInChat !== false,
+          lookup: config.guestOrderLookup !== false,
+          pages: { ...(httpsUrl(config.trackingPageUrl) ? { track: httpsUrl(config.trackingPageUrl) } : {}), ...(httpsUrl(config.returnsPageUrl) ? { returns: httpsUrl(config.returnsPageUrl) } : {}) },
+        },
         // Settings → Customer care → Talk to a person: the ways to reach the
         // team, in the chat's menu at any point.
         human: humanHelpConfig(config, { brand, supportUrl: String(config.supportUrl || "").trim(), supportLabel: String(config.supportLabel || "").trim() }),

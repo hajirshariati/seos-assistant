@@ -72,6 +72,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers'}
   REWARDS=d.rewards&&typeof d.rewards==='object'&&d.rewards.title?d.rewards:null;
   HUMAN=d.human&&typeof d.human==='object'?d.human:null;
+  RETURNS=d.returns&&typeof d.returns==='object'?d.returns:null;
+  if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
   if(typeof msgsEl!=='undefined'&&msgsEl){
@@ -79,7 +81,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     var _ms=msgsEl.querySelectorAll('.ai-chat-msg--assistant');
     for(var _i=0;_i<_ms.length;_i++){var _mm=_ms[_i].__msg,_bb=_ms[_i].querySelector('.ai-chat-msg-bubble');if(!_mm||!_bb)continue;
       if(_mm.rewards&&REWARDS&&!_bb.querySelector('.ai-rw')){_bb.insertAdjacentHTML('beforeend',rewardsCardHtml(REWARDS));var _rc=_bb.querySelector('[data-rw]');if(_rc)rwFillBalance(_rc)}
-      if(_mm.human&&HUMAN&&!_bb.querySelector('.ai-hh'))_bb.insertAdjacentHTML('beforeend',humanCardHtml(HUMAN))}
+      if(_mm.human&&HUMAN&&!_bb.querySelector('.ai-hh'))_bb.insertAdjacentHTML('beforeend',humanCardHtml(HUMAN));
+      if(_mm.returns&&RETURNS&&!_bb.querySelector('.ai-rt')){_bb.insertAdjacentHTML('beforeend',returnsCardHtml(_mm));rtFill(_bb.querySelector('[data-rt]'),_mm)}}
   }
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
@@ -332,7 +335,7 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
 /* My rewards (Settings → Shopping tools) and Talk to a person (Settings →
    Customer care): instant cards, no AI. A random id names this browser in
    the customer service log — no name, no account, nothing to trace. */
-var REWARDS=null,HUMAN=null,VISITOR_KEY='hajirai_visitor',VISITOR='';
+var REWARDS=null,HUMAN=null,RETURNS=null,VISITOR_KEY='hajirai_visitor',VISITOR='';
 try{VISITOR=localStorage.getItem(VISITOR_KEY)||'';if(!/^v_[a-z0-9]{8,40}$/.test(VISITOR)){VISITOR='v_'+Date.now().toString(36)+Math.random().toString(36).slice(2,12);localStorage.setItem(VISITOR_KEY,VISITOR)}}catch(e){}
 /* The look the chat starts in: the shopper's own pick (sun/moon) if they've
    made one, else the store's choice (Settings → Showing the chat, remembered
@@ -1777,7 +1780,10 @@ function focusCardHtml(kind){
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 /* The three links above the message box: what each says, what it sends. */
-function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">'+RW_ICON+'<span>My rewards</span></button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m)h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
+/* The pills above the box, all alike: My rewards and Returns & exchanges
+   (instant cards, no AI), then the store's own links (Settings) — minus a
+   returns one when the card stands in for it. */
+function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
@@ -5394,29 +5400,34 @@ function orderCardHtml(o){
   if(items.length>3)h+='<li class="ai-ord__more">+'+(items.length-3)+' more</li>';
   h+='</ul>';
   /* Actions sit right under the items; returns started show below them. */
-  h+='<div class="ai-ord__actions">';
-  if(safeUrl(o.trackUrl)&&!cancelled)h+='<a class="ai-ord__btn is-primary" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>';
+  /* In the Returns & exchanges card the return button comes first and
+     leads; elsewhere tracking leads. */
+  var rf=o.focus==='return';
+  var track=safeUrl(o.trackUrl)&&!cancelled?'<a class="ai-ord__btn'+(rf?'':' is-primary')+'" href="'+safeUrl(o.trackUrl)+'" target="_blank" rel="noopener">Track package</a>':'';
   /* Looked up without signing in: returns need the shopper signed in. */
-  var alt='';
-  if(o.guest){if(!cancelled)h+='<button type="button" class="ai-ord__btn" data-ord-login="return">Sign in to return</button>';if(safeUrl(o.returnsPage))alt=safeUrl(o.returnsPage)}
+  var alt='',ret='';
+  if(o.guest){if(!cancelled)ret='<button type="button" class="ai-ord__btn'+(rf?' is-primary':'')+'" data-ord-login="return">Sign in to return</button>';if(safeUrl(o.returnsPage))alt=safeUrl(o.returnsPage)}
   else if(o.canReturn&&returnableItems(o).length){
     /* The store's returns center is always an option too. */
     if(o.returnMode!=='page'&&safeUrl(o.returnsUrl))alt=safeUrl(o.returnsUrl);
     /* The store runs returns on its own page: open it with the order filled in. */
-    if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))h+='<a class="ai-ord__btn" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
-    else h+='<button type="button" class="ai-ord__btn" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
+    if(o.returnMode==='page'){if(safeUrl(o.returnsUrl))ret='<a class="ai-ord__btn'+(rf?' is-primary':'')+'" href="'+safeUrl(o.returnsUrl)+'" target="_blank" rel="noopener">Start a return</a>'}
+    else ret='<button type="button" class="ai-ord__btn'+(rf?' is-primary':'')+'" data-ord-return="'+esc(o.id)+'">'+(started.length?'Return another item':'Return an item')+'</button>';
   }
-  h+='</div>';
+  else if(rf&&!cancelled&&ORD_WHY[o.returnBlocked])h+='<div class="ai-ord__why">'+ORD_WHY[o.returnBlocked]+'</div>';
+  h+='<div class="ai-ord__actions">'+(rf?ret+track:track+ret)+'</div>';
   if(alt)h+='<a class="ai-ord__alt" href="'+alt+'" target="_blank" rel="noopener">Or use our returns center'+ORD_ICON.ext+'</a>';
   for(var r=0;r<started.length;r++)h+='<div class="ai-ret ai-ret--started">'+doneHtml(started[r],o)+'</div>';
   h+='</div>';
   return h;
 }
-function ordersHtml(list){
+function ordersHtml(list,max){
   var h='<div class="ai-ords">';
-  for(var i=0;i<Math.min(list.length,3);i++)h+=orderCardHtml(list[i]);
+  for(var i=0;i<Math.min(list.length,max||3);i++)h+=orderCardHtml(list[i]);
   return h+'</div>';
 }
+/* Why an order has no return button (the Returns & exchanges card). */
+var ORD_WHY={not_delivered:'Returns open once it\u2019s delivered.',not_shipped:'Returns open once it ships.',window_closed:'Past the return window.',nothing_left:'Everything in it is already being returned.'};
 function loginCardHtml(p){
   if(typeof p==='string')p={intent:p};
   /* Points: sign in to see them (no order lookup for those). */
@@ -5439,13 +5450,14 @@ var ORDER_LOOKUP_URL='/apps/hajirai/order-lookup';
 var ordlSeq=0;
 function lookupCardHtml(intent,order,open,opt){
   opt=opt||{lookup:true,pages:ordPages};
-  var n=++ordlSeq,ret=intent==='return',f='ai-ordl-'+n,hint=/^[A-Za-z0-9-]{3,24}$/.test(order)?order:'',pg=opt.pages||{};
+  var n=++ordlSeq,ret=intent==='return'||intent==='returns-card',f='ai-ordl-'+n,hint=/^[A-Za-z0-9-]{3,24}$/.test(order)?order:'',pg=opt.pages||{};
+  var noHead=!!opt.noHead;
   var pageRow=function(url,icon,title,sub){return '<a class="ai-ordl__opt" href="'+esc(url)+'" target="_blank" rel="noopener"><span class="ai-ordl__oi">'+icon+'</span><span class="ai-ordl__ot"><b>'+title+'</b><span>'+esc(sub)+'</span></span>'+ORD_ICON.ext+'<span class="ai-sr"> (opens in a new tab)</span></a>'};
   var trackRow=pg.track&&!ret?pageRow(pg.track,ORD_ICON.truck,'Tracking page',hostOf(pg.track)||'Track your package'):'';
   var returnsRow=pg.returns&&ret?pageRow(pg.returns,ORD_ICON.back,'Returns center','Start your return there'):'';
   var lookupRow=opt.lookup?'<button type="button" class="ai-ordl__opt" data-ordl-open aria-expanded="'+(open?'true':'false')+'" aria-controls="'+f+'"><span class="ai-ordl__oi">'+ORD_ICON.search+'</span><span class="ai-ordl__ot"><b>'+(ret?'Order status':'Look up an order')+'</b><span>Order number and email</span></span>'+ORD_ICON.chev+'</button>':'';
   return '<div class="ai-ord ai-ordl" data-ordl>'+
-    '<div class="ai-ordl__head"><span class="ai-ordl__icon">'+(ret?ORD_ICON.back:ORD_ICON.box)+'</span><span class="ai-ordl__htxt"><span class="ai-ord__num">'+(ret?'Start a return':'Check on your order')+'</span><span class="ai-ord__date">'+(ret?(returnsRow?'Here in the chat, or on our returns center.':'Returns start here once you\u2019re signed in.'):'Its status, tracking and items.')+'</span></span></div>'+
+    (noHead?'':'<div class="ai-ordl__head"><span class="ai-ordl__icon">'+(ret?ORD_ICON.back:ORD_ICON.box)+'</span><span class="ai-ordl__htxt"><span class="ai-ord__num">'+(ret?'Start a return':'Check on your order')+'</span><span class="ai-ord__date">'+(ret?(returnsRow?'Here in the chat, or on our returns center.':'Returns start here once you\u2019re signed in.'):'Its status, tracking and items.')+'</span></span></div>')+
     '<div class="ai-ordl__opts">'+
       '<button type="button" class="ai-ordl__opt" data-ord-login="'+intent+'"><span class="ai-ordl__oi is-ink">'+ORD_ICON.user+'</span><span class="ai-ordl__ot"><b>Sign in</b><span>'+(ret?'Start a return right here':'Every order, plus returns')+'</span></span>'+ORD_ICON.chev+'</button>'+
       returnsRow+lookupRow+
@@ -5558,6 +5570,8 @@ function resumeAfterSignIn(){
   var done=panel.querySelectorAll('[data-ord-login]');
   for(var i=0;i<done.length;i++){var sp=document.createElement('span');sp.className='ai-ord__signedin';sp.innerHTML=ORD_ICON.check+'Signed in';done[i].replaceWith(sp)}
   if(!isOpen)toggle(true);
+  /* From the Returns & exchanges card: the card again, with their orders now. */
+  if(r.intent==='returns-card'){setTimeout(openReturns,isOpen?150:700);return}
   setTimeout(function(){inputEl.value=r.q||'Where’s my order?';BTN_SEND=true;sendMessage()},isOpen?150:700);
 }
 window.addEventListener('message',function(e){
@@ -6039,7 +6053,7 @@ function rwFillBalance(card){
   el.textContent='Checking your balance\u2026';el.classList.add('is-wait');
   fetch('/apps/hajirai/rewards',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){
     el.classList.remove('is-wait');
-    if(d&&d.balance)el.innerHTML='<b>'+esc(d.balance)+'</b>'+(d.tier?' \u00b7 <i>'+esc(d.tier)+'</i>':'');
+    if(d&&d.balance)el.innerHTML='<b>'+esc(d.balance)+'</b>';
     else if(d&&d.signedIn&&d.member===false)el.textContent='No rewards account yet \u2014 joining is free.';
     else el.textContent='';
   }).catch(function(){el.classList.remove('is-wait');el.textContent=''});
@@ -6048,11 +6062,14 @@ function rewardsPlainText(c){return c.brand?'Here\u2019s '+c.brand+' at a glance
 function openRewards(){
   if(!REWARDS||isStreaming)return;
   var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
-  messages.push({role:'user',content:'My rewards',local:true});appendMsg('user','My rewards');
+  messages.push({role:'user',content:'My rewards',local:true});var ud=appendMsg('user','My rewards');
   var text=rewardsPlainText(REWARDS),m={role:'assistant',content:text,rewards:true};
   messages.push(m);
   var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
-  saveH(messages);scrollBottom();
+  saveH(messages);
+  /* The card is tall on a phone: land on its top (the tap and the lockup),
+     not its bottom, so it reads from the beginning. */
+  scrollMsgTop(ud||md);
 }
 
 /* ── Talk to a person ──
@@ -6080,9 +6097,62 @@ function openHuman(){
   var text='Here\u2019s how to reach a person on our team.',m={role:'assistant',content:text,human:true};
   messages.push(m);
   var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
-  saveH(messages);scrollBottom();
+  saveH(messages);scrollMsgTop(md);
   /* One tap is the transfer: a live chat on the page opens straight away. */
   if(typeof window.zE==='function'||typeof window.Intercom==='function'||(window.GorgiasChat&&typeof window.GorgiasChat.open==='function')){humanUsed('live_chat');openSupportChat(SUPPORT_URL)}
+}
+
+/* ── Returns & exchanges ──
+   A pill on the home: one tap, no AI. Signed in: their recent orders, the
+   return button leading on each (the chat's own return flow, or the store's
+   returns page). Signed out: sign in — which brings them back to this card —
+   or look one order up with its number and email, with a note on where to
+   find those. The orders read here are kept with the message, so the card
+   comes back after a reload without another read. */
+var RT_CHEV='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
+var rtSeq=0;
+function returnsCardHtml(m){
+  var signed=CUST_LOGGED_IN,sub=signed?'Pick the order, then the item \u2014 it\u2019s set up right here.':(RETURNS&&RETURNS.lookup?'Sign in to start one here, or look an order up.':'Sign in to start one here.');
+  var h='<div class="ai-rt'+(signed?' is-signed':'')+'" data-rt role="group" aria-label="Returns & exchanges">';
+  h+='<div class="ai-rt__head"><strong>Returns &amp; exchanges</strong><span>'+sub+'</span></div>';
+  if(signed){
+    h+='<div class="ai-rt__body" data-rt-body>'+(Array.isArray(m&&m.orders)?rtOrdersHtml(m):'<div class="ai-rt__wait" aria-label="Loading your orders"><span></span><span></span><span></span></div>')+'</div>';
+  }else{
+    var n=++rtSeq,hid='ai-rt-help-'+n;
+    h+='<div class="ai-rt__opts">'+lookupCardHtml('returns-card','',false,{lookup:!!(RETURNS&&RETURNS.lookup),pages:ordPages,noHead:true})+'</div>';
+    h+='<button type="button" class="ai-rt__helpbtn" data-rt-help aria-expanded="false" aria-controls="'+hid+'"><span>Where do I find these?</span>'+RT_CHEV+'</button>';
+    h+='<ul class="ai-rt__help" id="'+hid+'" hidden>'+
+      '<li><b>Order number</b><span>In the subject line of your order confirmation email (\u201cOrder #1234567\u201d) and on the packing slip in the box.</span></li>'+
+      '<li><b>Confirmation number</b><span>The short code in that same email \u2014 it works here too.</span></li>'+
+      '<li><b>Email</b><span>The one you typed at checkout.</span></li></ul>';
+  }
+  h+='</div>';return h;
+}
+function rtOrdersHtml(m){
+  var list=(m.orders||[]).map(function(o){return Object.assign({},o,{focus:'return'})});
+  var pg=ordPages||{},more='';
+  if(!list.length)return '<p class="ai-rt__empty">No orders on this account yet.'+(pg.returns?' <a href="'+esc(pg.returns)+'" target="_blank" rel="noopener">Returns center</a>':'')+'</p>';
+  if(m.numberOfOrders>list.length)more='<p class="ai-rt__more">Your last '+list.length+' orders. For older ones, '+(pg.returns?'<a href="'+esc(pg.returns)+'" target="_blank" rel="noopener">use our returns center</a>':'<a href="/account">see your account</a>')+'.</p>';
+  return ordersHtml(list,5)+more;
+}
+function rtFill(card,m){
+  if(!card||!CUST_LOGGED_IN||!m||Array.isArray(m.orders))return;
+  var body=$('[data-rt-body]',card);if(!body)return;
+  fetch('/apps/hajirai/orders',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){
+    if(!d||!d.signedIn||!Array.isArray(d.orders)){body.innerHTML='<p class="ai-rt__empty">We couldn\u2019t load your orders just now. '+(ordPages&&ordPages.returns?'<a href="'+esc(ordPages.returns)+'" target="_blank" rel="noopener">Use our returns center</a>, or try':'Try')+' again in a moment.</p>';return}
+    if(Array.isArray(d.returnMethods)&&d.returnMethods.length){RET_METHODS=d.returnMethods;m.returnMethods=d.returnMethods}
+    m.orders=d.orders.slice(0,5);m.numberOfOrders=d.numberOfOrders||0;saveH(messages);
+    body.innerHTML=rtOrdersHtml(m);
+  }).catch(function(){body.innerHTML='<p class="ai-rt__empty">We couldn\u2019t load your orders just now. Try again in a moment.</p>'});
+}
+function openReturns(){
+  if(!RETURNS||isStreaming)return;
+  var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
+  messages.push({role:'user',content:'Returns & exchanges',local:true});var ud=appendMsg('user','Returns & exchanges');
+  var text=CUST_LOGGED_IN?'Here are your recent orders \u2014 pick the one you\u2019d like to return or exchange.':'Sign in to start a return here'+(RETURNS.lookup?', or look an order up.':'.'),m={role:'assistant',content:text,returns:true};
+  messages.push(m);
+  var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
+  saveH(messages);scrollMsgTop(ud||md);
 }
 
 /* The chat guard (server) ended this chat. The pause is kept here too, so a
@@ -7291,6 +7361,10 @@ var supportCtaBtn=e.target.closest('[data-support-cta]');
 if(supportCtaBtn){e.preventDefault();humanUsed('live_chat');openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
 var rwOpen=e.target.closest('[data-rewards-open]');
 if(rwOpen){e.preventDefault();openRewards();return;}
+var rtOpen=e.target.closest('[data-returns-open]');
+if(rtOpen){e.preventDefault();openReturns();return;}
+var rtHelp=e.target.closest('[data-rt-help]');
+if(rtHelp){e.preventDefault();var rtList=document.getElementById(rtHelp.getAttribute('aria-controls'));if(rtList){rtList.hidden=!rtList.hidden;rtHelp.setAttribute('aria-expanded',String(!rtList.hidden))}return;}
 var hhRow=e.target.closest('[data-human]');
 if(hhRow){var hhHow=hhRow.getAttribute('data-human');humanUsed(hhHow);if(hhHow==='live_chat'){e.preventDefault();openSupportChat(SUPPORT_URL)}return;}
 var deadEnd=e.target.closest('[data-dead-end]');
@@ -7361,10 +7435,11 @@ function restoreExtras(m,md,live){
   /* The instant cards (no AI): drawn from the store's current settings. */
   if(m.rewards&&REWARDS){add(rewardsCardHtml(REWARDS));var rwc=b.querySelector('[data-rw]');if(rwc)rwFillBalance(rwc)}
   if(m.human&&HUMAN)add(humanCardHtml(HUMAN));
+  if(m.returns&&RETURNS){add(returnsCardHtml(m));var rtc=b.querySelector('[data-rt]');if(rtc)rtFill(rtc,m)}
   var fit=cleanFit(m.fit);
   if(fit){var fp=$('.ai-chat-msg-bubble > p',md);if(fp)fp.insertAdjacentHTML('afterend',fitCardHtml(fit))}
   if(m.comparison)add(compareHtml(m.comparison));
-  if(Array.isArray(m.orders)&&m.orders.length){
+  if(Array.isArray(m.orders)&&m.orders.length&&!m.returns){
     if(Array.isArray(m.returnMethods)&&m.returnMethods.length)RET_METHODS=m.returnMethods;
     add(ordersHtml(m.orders));
   }

@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog } = await import("./mock-store.mjs");
+const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -971,7 +971,9 @@ for (const [vp, login, tag] of [[{ width: 390, height: 844 }, "&login=Ann", "pho
   await page.waitForFunction(() => /points|balance/.test(document.querySelector("[data-rw-bal]")?.textContent || ""), null, { timeout: 4000 });
   const card = await page.evaluate(() => { const c = document.querySelector(".ai-rw"); const r = c.getBoundingClientRect(); const over = [...c.querySelectorAll("*")].filter((e) => { const x = e.getBoundingClientRect(); return x.width && (x.right > r.right + 1 || x.left < r.left - 1); }).length; return { user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim(), logo: !!c.querySelector(".ai-rw__logo"), bal: document.querySelector("[data-rw-bal]").textContent.trim(), earn: c.querySelectorAll(".ai-rw__col")[0]?.querySelectorAll("li").length, spend: c.querySelectorAll(".ai-rw__col")[1]?.querySelectorAll("li").length, notes: c.querySelectorAll(".ai-rw__notes li").length, cta: c.querySelector(".ai-rw__cta")?.getAttribute("href"), width: Math.round(r.width), over, fits: r.right <= window.innerWidth }; });
   check(`My rewards (${tag}): the first link on the home; one tap, no AI call, the card with the lockup, Earn and Spend, the notes and the rewards link`, first === "My rewards" && chatBodies.length === sentBefore && card.user === "My rewards" && card.logo && card.earn === 4 && card.spend === 4 && card.notes === 4 && card.cta === "https://www.example.com/pages/rewards" && card.over === 0 && card.fits, JSON.stringify(card));
-  check(`My rewards (${tag}): ${login ? "the balance read live" : "a sign-in link instead of a balance"}`, login ? /2,350 points · \$11\.75 · Silver/.test(card.bal) : /Log in to see your balance/.test(card.bal), card.bal);
+  const landed = await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages").getBoundingClientRect(); const u = document.querySelector(".ai-chat-msg--user").getBoundingClientRect(); const c = document.querySelector(".ai-rw").getBoundingClientRect(); return { userTop: Math.round(u.top - m.top), cardTop: Math.round(c.top - m.top), view: Math.round(m.height) }; });
+  check(`My rewards (${tag}): the chat lands on the top of the card (the tap and the lockup in view), not its bottom`, landed.userTop >= -2 && landed.userTop < 80 && landed.cardTop < landed.view, JSON.stringify(landed));
+  check(`My rewards (${tag}): ${login ? "the balance read live" : "a sign-in link instead of a balance"}`, login ? /^2,350 points · \$11\.75$/.test(card.bal) : /Log in to see your balance/.test(card.bal), card.bal);
   await page.click(".ai-chat-menu-btn");
   const items = await page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.textContent.trim()));
   await page.click('.ai-chat-menu-item[data-action="human"]');
@@ -995,6 +997,71 @@ for (const [vp, login, tag] of [[{ width: 390, height: 844 }, "&login=Ann", "pho
   const back = await page.evaluate(() => ({ rw: !!document.querySelector(".ai-rw"), hh: !!document.querySelector(".ai-hh") }));
   check(`instant cards (${tag}): both come back after a reload`, back.rw && back.hh, JSON.stringify(back));
   check(`instant cards (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Returns & exchanges (?rt=1) and the four pills: My rewards, Returns &
+// exchanges, then the store's links (Track my order, Deals) — all alike, no
+// icons, one row that scrolls sideways on a phone. One tap on Returns &
+// exchanges draws the card at once (no AI): signed in, the recent orders
+// with the return button leading; signed out, sign in or an order lookup,
+// with where to find the number. The card comes back after a reload.
+for (const [vp, login, tag] of [[{ width: 360, height: 760 }, "&login=Ann", "phone, signed in"], [{ width: 1280, height: 860 }, "", "computer, signed out"]]) {
+  const ctx = await browser.newContext({ viewport: vp });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`http://localhost:4789/full?home=focus&rw=1&hh=1&rt=1${login}`);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(800);
+  const pills = await page.evaluate(() => {
+    const row = document.querySelector(".ai-chat-focus__links");
+    const btns = [...row.querySelectorAll("button")];
+    const st = btns.map((b) => { const c = getComputedStyle(b); return [c.borderColor, c.color, c.height, c.backgroundColor, c.fontWeight, c.fontSize].join("|"); });
+    const tops = btns.map((b) => Math.round(b.getBoundingClientRect().top));
+    return { labels: btns.map((b) => b.textContent.trim()), icons: row.querySelectorAll("svg, img").length, alike: new Set(st).size === 1, oneRow: new Set(tops).size === 1, scrolls: row.scrollWidth > row.clientWidth + 1, overflowX: getComputedStyle(row).overflowX, barHidden: getComputedStyle(row).scrollbarWidth === "none", rowInside: (() => { const r = row.getBoundingClientRect(); return r.left >= -1 && r.right <= window.innerWidth + 1; })() };
+  });
+  check(`pills (${tag}): My rewards, Returns & exchanges, then the store's links — all alike, no icons, on one row`, pills.labels.join(" · ") === "My rewards · Returns & exchanges · Track my order · Deals" && pills.icons === 0 && pills.alike && pills.oneRow, JSON.stringify(pills));
+  if (vp.width < 500) check(`pills (${tag}): the row scrolls sideways within the screen, no bar`, pills.scrolls && pills.overflowX === "auto" && pills.barHidden && pills.rowInside, JSON.stringify(pills));
+  const sentBefore = chatBodies.length, ordersBefore = ordersLog.length;
+  await page.click("[data-returns-open]");
+  await page.waitForSelector(".ai-rt", { timeout: 3000 });
+  if (login) {
+    await page.waitForSelector(".ai-rt .ai-ord", { timeout: 4000 });
+    const got = await page.evaluate(() => {
+      const card = document.querySelector(".ai-rt"), r = card.getBoundingClientRect();
+      const first = card.querySelector(".ai-ord"), btns = [...first.querySelectorAll(".ai-ord__actions .ai-ord__btn")];
+      const over = [...card.querySelectorAll("*")].filter((e) => { const x = e.getBoundingClientRect(); return x.width && (x.right > r.right + 1 || x.left < r.left - 1); }).length;
+      return { user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim(), title: card.querySelector(".ai-rt__head strong")?.textContent, orders: card.querySelectorAll(".ai-ord").length, lead: btns[0]?.textContent.trim(), leadPrimary: btns[0]?.classList.contains("is-primary"), second: btns[1]?.textContent.trim(), secondPrimary: btns[1]?.classList.contains("is-primary"), why: card.querySelectorAll(".ai-ord__why").length, whyText: card.querySelector(".ai-ord__why")?.textContent, more: card.querySelector(".ai-rt__more")?.textContent || "", over, fits: r.right <= window.innerWidth, wait: !!card.querySelector(".ai-rt__wait") };
+    });
+    check(`Returns & exchanges (${tag}): one tap, no AI call, the orders read once — the return button leads on the delivered order, tracking second; the one on its way says why; older orders go to the returns center`, chatBodies.length === sentBefore && ordersLog.length === ordersBefore + 1 && got.user === "Returns & exchanges" && got.title === "Returns & exchanges" && got.orders === 2 && got.lead === "Return an item" && got.leadPrimary && got.second === "Track package" && !got.secondPrimary && got.why === 1 && /delivered/.test(got.whyText) && /last 2 orders/.test(got.more) && /returns center/.test(got.more) && got.over === 0 && got.fits && !got.wait, JSON.stringify(got));
+    await page.click('.ai-rt [data-ord-return]');
+    await page.waitForSelector(".ai-ret", { timeout: 4000 });
+    check(`Returns & exchanges (${tag}): Return an item starts the chat's own return flow on that order`, !!(await page.$(".ai-rt .ai-ret")), "");
+  } else {
+    const got = await page.evaluate(() => {
+      const card = document.querySelector(".ai-rt");
+      const opts = [...card.querySelectorAll(".ai-ordl__opt")].map((o) => [o.getAttribute("data-ord-login") || (o.hasAttribute("data-ordl-open") ? "lookup" : o.getAttribute("href") || ""), o.querySelector("b")?.textContent]);
+      const help = card.querySelector("[data-rt-help]"), list = document.getElementById(help?.getAttribute("aria-controls") || "");
+      return { opts, head: !!card.querySelector(".ai-ordl__head"), helpHidden: list?.hidden, helpItems: list?.querySelectorAll("li b").length, helpWords: [...(list?.querySelectorAll("li b") || [])].map((b) => b.textContent), form: !!card.querySelector(".ai-ordl__form[hidden]") };
+    });
+    check(`Returns & exchanges (${tag}): sign in (back to this card), the returns center and an order lookup; where to find the number folded under`, JSON.stringify(got.opts) === JSON.stringify([["returns-card", "Sign in"], ["https://returns.example/", "Returns center"], ["lookup", "Order status"]]) && !got.head && got.helpHidden === true && got.helpWords.join("|") === "Order number|Confirmation number|Email" && got.form, JSON.stringify(got));
+    await page.click("[data-rt-help]");
+    const open = await page.evaluate(() => { const h = document.querySelector("[data-rt-help]"); return [h.getAttribute("aria-expanded"), document.getElementById(h.getAttribute("aria-controls")).hidden]; });
+    check(`Returns & exchanges (${tag}): the help opens on a tap`, open[0] === "true" && open[1] === false, JSON.stringify(open));
+    await page.click(".ai-rt [data-ordl-open]");
+    await page.fill(".ai-rt input[name=order]", "1172010");
+    await page.fill(".ai-rt input[name=email]", "pat@example.com");
+    await page.click(".ai-rt .ai-ordl__go");
+    await page.waitForSelector(".ai-rt .ai-ord[data-ord]", { timeout: 4000 }).catch(() => {});
+    const looked = await page.evaluate(() => ({ order: document.querySelector(".ai-rt .ai-ord__num")?.textContent, signin: document.querySelector('.ai-rt [data-ord-login="return"]')?.textContent.trim() }));
+    check(`Returns & exchanges (${tag}): the looked-up order shows with Sign in to return`, /1172010/.test(looked.order || "") && looked.signin === "Sign in to return", JSON.stringify(looked));
+  }
+  await page.reload();
+  await page.click(".ai-chat-launcher");
+  await page.waitForFunction(() => document.querySelector(".ai-rt") && (document.querySelector(".ai-rt .ai-ord") || document.querySelector(".ai-rt .ai-ordl")), null, { timeout: 4000 }).catch(() => {});
+  const back = await page.evaluate(() => ({ rt: !!document.querySelector(".ai-rt"), orders: document.querySelectorAll(".ai-rt .ai-ord").length, lookup: !!document.querySelector(".ai-rt .ai-ordl") }));
+  check(`Returns & exchanges (${tag}): the card comes back after a reload${login ? " with the orders, without another read" : ""}`, back.rt && (login ? back.orders === 2 && ordersLog.length === ordersBefore + 1 : back.lookup), JSON.stringify({ back, reads: ordersLog.length - ordersBefore }));
+  check(`Returns & exchanges (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // The chat guard ended the chat (the server answers 423 chat_ended): the

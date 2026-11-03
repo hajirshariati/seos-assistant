@@ -6,7 +6,14 @@
 // within minutes without a resync; a failed read is retried sooner.
 import { ADMIN_API_VERSION } from "./admin-api-version.js";
 import { htmlToText, parseThemeJson, themeTemplateText } from "./store-knowledge/extract.js";
-import { cutPromoSection, pageHandleFromUrl } from "./promo-page.js";
+import { cutPromoSection, hasStopLine, pageHandleFromUrl } from "./promo-page.js";
+
+// Memory of offers (app/lib/memory.js): each real read is recorded. Loaded
+// when first needed, so this module stays free of the database for tests.
+async function rememberSnapshot(shop, text, now) {
+  const { recordPromoSnapshot } = await import("../models/PromoMemory.server.js");
+  return recordPromoSnapshot(shop, text, now);
+}
 
 const FRESH_MS = 15 * 60 * 1000;
 const RETRY_MS = 2 * 60 * 1000;
@@ -59,7 +66,7 @@ async function viaPublicPage({ url, fetchImpl, timeoutMs }) {
 
 // → the promotions section's text, or "" (no page set, the stop line isn't
 // on it, or it couldn't be read — the chat then has no page promotions).
-export async function getPagePromos({ shop, accessToken, url, stopLine, fetchImpl = fetch, timeoutMs = 4000, now = Date.now() }) {
+export async function getPagePromos({ shop, accessToken, url, stopLine, fetchImpl = fetch, timeoutMs = 4000, now = Date.now(), remember = rememberSnapshot }) {
   const link = String(url || "").trim();
   const stop = String(stopLine || "").trim();
   if (!link || !stop) return "";
@@ -67,14 +74,23 @@ export async function getPagePromos({ shop, accessToken, url, stopLine, fetchImp
   const hit = cache.get(key);
   if (hit && now - hit.at < hit.ttl) return hit.text;
   let text = "";
+  let found = false; // the stop line was on a page we read: a real read of the offers
   try {
     const handle = pageHandleFromUrl(link);
     const admin = await viaAdmin({ shop, accessToken, handle, fetchImpl, timeoutMs }).catch(() => ({ template: "", body: "" }));
+    found = hasStopLine(admin.template, stop) || hasStopLine(admin.body, stop);
     text = cutPromoSection(admin.template, stop) || cutPromoSection(admin.body, stop);
-    if (!text) text = cutPromoSection(await viaPublicPage({ url: link, fetchImpl, timeoutMs }).catch(() => ""), stop);
+    if (!text) {
+      const pub = await viaPublicPage({ url: link, fetchImpl, timeoutMs }).catch(() => "");
+      found = found || hasStopLine(pub, stop);
+      text = cutPromoSection(pub, stop);
+    }
   } catch {
     text = "";
   }
+  // Memory of offers: what this read showed (a failed read records nothing,
+  // so an outage never "ends" every offer).
+  if (found && remember) Promise.resolve().then(() => remember(shop, text, new Date(now))).catch((err) => console.warn(`[memory] ${shop}: offers snapshot failed — ${err?.message || err}`));
   if (!text && hit?.text) {
     // Couldn't read it this time: keep the last good copy a little longer.
     cache.set(key, { at: now, ttl: RETRY_MS, text: hit.text });

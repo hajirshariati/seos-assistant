@@ -96,7 +96,7 @@ export const STEPS = [
     body: "Settings → Optional add-ons → Yotpo. Paste each key from your Yotpo account.",
     list: [
       "Yotpo Reviews API key → review-based fit summaries",
-      "Yotpo Loyalty API key + GUID → points balance, tier and personal referral link in chat",
+      "Yotpo Loyalty API key + GUID → points balance and personal referral link in chat",
     ],
   },
   {

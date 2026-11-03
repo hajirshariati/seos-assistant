@@ -1,4 +1,6 @@
 import prisma from "../db.server";
+import { retireProducts, unretireProducts } from "./RetiredProduct.server.js";
+import { retireReason } from "../lib/memory.js";
 import {
   getAttributeMappings,
   buildMetafieldFragment,
@@ -149,7 +151,10 @@ function sameFields(existing, fields) {
   return Object.entries(fields).every(([k, v]) => norm(existing[k]) === norm(v));
 }
 
-async function upsertProduct(shop, node, mappings = null) {
+// `memory`: note an archived / draft product as retired (and an active one
+// as back) right here — one product at a time (webhooks). The full sync
+// does this for every product at once after its pass.
+async function upsertProduct(shop, node, mappings = null, { memory = true } = {}) {
   const fields = mapProductFields(node, mappings);
   const current = await prisma.product.findUnique({ where: { shop_shopifyId: { shop, shopifyId: fields.shopifyId } } });
   const product = sameFields(current, fields)
@@ -159,6 +164,11 @@ async function upsertProduct(shop, node, mappings = null) {
         update: { ...fields, updatedAt: new Date() },
         create: { shop, ...fields },
       });
+  if (memory) {
+    const reason = retireReason(fields.status);
+    const remember = reason ? retireProducts(shop, [fields], reason) : unretireProducts(shop, [fields.shopifyId]);
+    await remember.catch((err) => console.warn(`[memory] ${shop}: product memory failed — ${err?.message || err}`));
+  }
 
   const variants = (node.variants?.nodes || []).map((v) => mapVariantFields(v, mappings));
   const incomingIds = new Set(variants.map((v) => v.shopifyId));
@@ -253,8 +263,12 @@ export async function deleteProductByShopifyId(shop, shopifyId) {
   const gid = typeof shopifyId === "string" && shopifyId.startsWith("gid://")
     ? shopifyId
     : `gid://shopify/Product/${shopifyId}`;
+  // Memory: remembered as discontinued before the row goes.
+  const going = await prisma.product.findUnique({ where: { shop_shopifyId: { shop, shopifyId: gid } }, select: RETIRE_SELECT });
+  if (going) await retireProducts(shop, [going], "deleted").catch((err) => console.warn(`[memory] ${shop}: product memory failed — ${err?.message || err}`));
   await prisma.product.deleteMany({ where: { shop, shopifyId: gid } });
 }
+const RETIRE_SELECT = { shopifyId: true, handle: true, title: true, productType: true, featuredImageUrl: true, attributesJson: true, status: true };
 
 export async function getCatalogSyncState(shop) {
   let state = await prisma.catalogSyncState.findUnique({ where: { shop } });
@@ -322,6 +336,8 @@ export async function syncCatalog(admin, shop) {
     const syncStarted = Date.now();
     let throttleRetries = 0;
     const seenIds = new Set();
+    const activeIds = []; // memory: back in the store
+    const hidden = []; // memory: archived / draft
     for (;;) {
       const current = await prisma.catalogSyncState.findUnique({ where: { shop } });
       if (current?.status === "stopping") {
@@ -380,9 +396,11 @@ export async function syncCatalog(admin, shop) {
       pages += 1;
 
       for (const node of page.nodes) {
-        await upsertProduct(shop, node, mappings);
+        await upsertProduct(shop, node, mappings, { memory: false });
         seenIds.add(node.id);
         totalSeen += 1;
+        const reason = retireReason(node.status);
+        if (reason) hidden.push({ node, reason }); else activeIds.push(node.id);
       }
 
       await setSyncState(shop, { syncedSoFar: totalSeen });
@@ -395,8 +413,21 @@ export async function syncCatalog(admin, shop) {
     // deleted there (a missed delete webhook), so the chat stops linking it.
     // (Postgres takes up to ~32k values in one list; past that, skip.)
     if (seenIds.size > 0 && seenIds.size < 30000) {
+      // Memory: remembered as discontinued before the rows go.
+      const going = await prisma.product.findMany({ where: { shop, shopifyId: { notIn: [...seenIds] } }, select: RETIRE_SELECT, take: 5000 });
+      if (going.length) await retireProducts(shop, going, "deleted").catch((err) => console.warn(`[memory] ${shop}: product memory failed — ${err?.message || err}`));
       const removed = await prisma.product.deleteMany({ where: { shop, shopifyId: { notIn: [...seenIds] } } });
       if (removed.count) console.log(`[syncCatalog] ${shop}: removed ${removed.count} product(s) no longer in Shopify`);
+    }
+    // Memory: archived and draft products are retired, active ones are back.
+    try {
+      for (const reason of ["archived", "draft"]) {
+        const rows = hidden.filter((h) => h.reason === reason).map((h) => mapProductFields(h.node, mappings));
+        if (rows.length) await retireProducts(shop, rows, reason);
+      }
+      for (let i = 0; i < activeIds.length; i += 5000) await unretireProducts(shop, activeIds.slice(i, i + 5000));
+    } catch (err) {
+      console.warn(`[memory] ${shop}: product memory after sync failed — ${err?.message || err}`);
     }
 
     // One line per sync, not one per page: a page can hold as few as two

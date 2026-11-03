@@ -16,6 +16,9 @@ import { fetchCustomerContext } from "../customer-context.server.js";
 import { fetchYotpoLoyalty } from "../yotpo-loyalty.server.js";
 import { getActiveCampaigns } from "../../models/Campaign.server.js";
 import { getPagePromos } from "../promo-page.server.js";
+import { listPromoMemory } from "../../models/PromoMemory.server.js";
+import { getRetiredProducts } from "../../models/RetiredProduct.server.js";
+import { matchOffers, pastOffersResult, promoMemoryDays, styleMemoryDays, MEMORY_TZ } from "../memory.js";
 import { promoPageBlock, nowNote } from "../promo-page.js";
 import { savedFitNote } from "../orthotic-finder.server.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
@@ -49,7 +52,6 @@ export function formatLoyalty(loyalty, config = {}) {
   };
   const bits = [];
   if (loyalty.pointsBalance != null) bits.push(balance(loyalty.pointsBalance));
-  if (loyalty.tier) bits.push(`tier: ${loyalty.tier}`);
   if (loyalty.creditBalance > 0) bits.push(`$${loyalty.creditBalance} store credit`);
   const lines = [];
   if (bits.length) lines.push(`Loyalty: ${bits.join(", ")}.`);
@@ -61,10 +63,37 @@ export function formatLoyalty(loyalty, config = {}) {
   return lines.join("\n");
 }
 
+// Memory: offers the store showed before (the promotions page, dated
+// campaigns) that aren't running now — looked up by the customer's words.
+// The day each ended comes from the store's own reads; never guessed. The
+// store's discounts in Shopify are never read.
+export const PAST_OFFERS_TOOL = {
+  name: "lookup_past_offers",
+  description:
+    "The store's record of offers it showed before that aren't running now — a sale, a code, free shipping, a free gift the customer mentions (from an email, a text, something they saw) that isn't under ACTIVE PROMOTIONS or the promotions page. " +
+    "Returns the matching offers with the day each ended (from the store's own records) or that there's no record. " +
+    "Use it before telling a customer an offer has ended or that a code doesn't work; answer only from what it returns.",
+  input_schema: {
+    type: "object",
+    properties: { query: { type: "string", description: "The offer in the customer's words — its name, the code, the amount, what it was on (e.g. \"20% off boots email\", \"code FALL25\", \"free shipping over $50\")." } },
+    required: ["query"],
+  },
+};
+export function pastOffersTool({ shop, config = {}, listMemory = listPromoMemory, now = () => Date.now(), tz = MEMORY_TZ }) {
+  const days = promoMemoryDays(config.promoMemoryDays);
+  return {
+    definition: PAST_OFFERS_TOOL,
+    run: async (input = {}) => {
+      const rows = await listMemory(shop, { days, now: now() }).catch(() => []);
+      return pastOffersResult(matchOffers(rows, input.query, { now: now(), days }), { tz, now: now(), days });
+    },
+  };
+}
+
 export const REWARDS_TOOL = {
   name: "get_my_rewards",
   description:
-    "The customer's own rewards account (loyalty points): their points balance, tier, and points history — each entry's date, what it was for (a purchase, a reward redeemed, points taken back after a refund…), its points (negative when spent or taken back), its status (pending points haven't posted yet) and its order. " +
+    "The customer's own rewards account (loyalty points): their points balance and points history — each entry's date, what it was for (a purchase, a reward redeemed, points taken back after a refund…), its points (negative when spent or taken back), its status (pending points haven't posted yet) and its order. " +
     "Use for any question about their points or rewards: how many they have, missing or pending points, whether points came back after a return or a cancelled order, why a balance changed, expiring points. " +
     "Look into it together with their orders (get_my_orders, intent \"refunds\") and the store's rewards policy (search_store_info), then answer from what the records show.",
   input_schema: { type: "object", properties: {} },
@@ -98,7 +127,6 @@ export function rewardsTool({ shop, accessToken, loggedInCustomerId, config = {}
         signed_in: true,
         member: true,
         balance: r.pointsBalance != null ? pointsWords(r.pointsBalance, config) : undefined,
-        tier: r.tier || undefined,
         store_credit: r.creditBalance > 0 ? `$${r.creditBalance}` : undefined,
         history: history.length ? history : undefined,
         note: history.length
@@ -212,13 +240,19 @@ export async function buildLeanStoreExtras({
   const orders = ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl: ctx.trackingPageUrl, returnsPageUrl: ctx.returnsPageUrl, returnsInChat: ctx.returnsInChat, guestLookup: ctx.guestOrderLookup, policy: ctx.returnPolicy });
   wrap(orders.definition, orders.run);
 
-  // Their rewards account (Yotpo Loyalty): balance, tier and points history,
+  // Their rewards account (Yotpo Loyalty): balance and points history,
   // for the signed-in shopper — so a points question is looked into, not
   // passed to customer service.
   if (config.yotpoLoyaltyApiKey) {
     const rewards = rewardsTool({ shop, accessToken, loggedInCustomerId, config });
     wrap(rewards.definition, rewards.run);
   }
+
+  // Memory: ended offers, by the customer's words.
+  const pastOffers = pastOffersTool({ shop, config });
+  wrap(pastOffers.definition, pastOffers.run);
+  // Memory: styles that left the store (for the typed-name note in the engine).
+  const retired = await getRetiredProducts(shop, { days: styleMemoryDays(config.styleMemoryDays) }).catch((err) => { log(`[lean] retired styles unavailable — ${err?.message || err}`); return []; });
 
   if (config.fitPredictorEnabled === true) {
     wrap(FIT_PREDICTOR_TOOL, async (input) => {
@@ -336,6 +370,8 @@ export async function buildLeanStoreExtras({
   );
   return {
     tools,
+    retired,
+    memoryTz: MEMORY_TZ,
     similarAttributes: Array.isArray(similarAttributes) ? similarAttributes.map(String).filter(Boolean) : [],
     systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText, pagePromos, promoPageUrl: config.promoPageUrl || "" }),
     // This shopper and page (after the cached prompt), and the current time

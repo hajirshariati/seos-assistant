@@ -18,7 +18,8 @@ import { storeLocatorConfig } from "../feedback-survey.js";
 import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { RESTOCK_TOOL, restockCheck, restockIssues } from "./restock.js";
-import { productKind, codesInText, stylesInText } from "./catalog.js";
+import { productKind, codesInText, stylesInText, GENERIC_STYLE_WORDS } from "./catalog.js";
+import { liveStyleKeys, retiredStyleIndex, retiredStylesInText, retiredNote, claimsFromMemory } from "../memory.js";
 import { containsColorWord } from "../color-match.js";
 import { applyMedicalDisclaimer, medicalDisclaimerRequired, disclaimerAlreadyShown, footConditionQuestion } from "../medical-disclaimer.js";
 
@@ -454,6 +455,8 @@ const ACCOUNT_ASKS = [
   { re: /\bcredit\b/i, tools: ["get_my_orders", "get_my_rewards", "search_store_info"] },
   { re: /\b(refund\w*|returns?|returned|returning|exchang\w*|charged?|charges|money back|cancel\w*)\b/i, tools: ["get_my_orders", "search_store_info"] },
   { re: /\b(my orders?|order #?\d|package|parcel|deliver\w*|tracking|track my|shipped|arriv\w*)\b/i, tools: ["get_my_orders"] },
+  // An offer from an email or a code that isn't working: the store's memory first.
+  { re: /\b(promo ?code|coupon|discount code|the code|my code|an? email (about|with|for)|got an email|the (sale|offer|deal|promotion) (i|you|that|from)|expired|still (on|running|valid|good)|missed the)\b/i, tools: ["lookup_past_offers"] },
 ];
 const WANTS_PERSON = /\b(human|real person|a person|an agent|representative|someone|somebody|talk to|speak (?:to|with)|call (?:you|someone)|phone number|manager)\b/i;
 const UPSET = /\b(angry|furious|ridiculous|terrible|unacceptable|worst|scam|fraud|disgust\w*|frustrat\w*|fed up|upset)\b|!!/i;
@@ -468,6 +471,7 @@ export function supportTooSoon({ latestUserMessage = "", supportOffered = false,
   return missing;
 }
 const LOOK_INTO = {
+  lookup_past_offers: "the store's record of the offer they mention (lookup_past_offers with their words)",
   get_my_orders: "their orders (get_my_orders — intent \"refunds\" for a return or refund: status, amount, date, discounts used)",
   get_my_rewards: "their points balance and history (get_my_rewards)",
   search_store_info: "the store's own policy on it (search_store_info)",
@@ -518,6 +522,10 @@ export async function runLeanTurn({
   // Quick yes/no check: async (question) → true / false / null (couldn't
   // tell). Without it, the word-based checks stand in (tests).
   askYesNo = null,
+  // Memory: products that left the store (RetiredProduct rows) and the
+  // time zone their dates are told in.
+  retired = [],
+  memoryTz = "",
 }) {
   const started = Date.now();
   const products = catalog?.products || [];
@@ -584,6 +592,18 @@ export async function runLeanTurn({
     const note = { type: "text", text: stylesNote(typedStyles) };
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
     log(`[lean] style names typed: ${typedStyles.map((c) => c.name).join(",")}`);
+  }
+  // Memory: a typed style that left the store — the store's own record, so
+  // the reply can say "discontinued" (and when) instead of "never heard of it".
+  let memoryEvidence = false; // a record this turn backs an "ended" / "discontinued" claim
+  const retiredIdx = retired.length ? retiredStyleIndex(retired, { liveKeys: liveStyleKeys(catalog), generic: GENERIC_STYLE_WORDS, vocab: new Set(Object.values(catalog?.vocab || {}).flatMap((l) => (Array.isArray(l) ? l : []).map((v) => String(v?.value ?? v ?? "").toLowerCase().trim()))) }) : null;
+  const retiredHits = retiredIdx ? retiredStylesInText(retiredIdx, latestUserMessage).filter((h) => !typedStyles.some((t) => t.name.toLowerCase() === h.name.toLowerCase())) : [];
+  if (retiredHits.length) {
+    const last = conv[conv.length - 1];
+    const note = { type: "text", text: retiredNote(retiredHits, { tz: memoryTz }) };
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
+    memoryEvidence = true;
+    log(`[lean] retired styles typed: ${retiredHits.map((c) => c.name).join(",")}`);
   }
   const priorTitles = extractPriorShownTitles(messages);
   const priorProducts = priorTitles
@@ -777,6 +797,7 @@ export async function runLeanTurn({
       const raw = await ext.run(input);
       const { _events, ...result } = raw && typeof raw === "object" ? raw : { result: raw };
       if (Array.isArray(_events)) events.push(..._events);
+      if (name === "lookup_past_offers" && Array.isArray(result.ended) && result.ended.length) memoryEvidence = true;
       topic("tool", name);
       markSeen([...collectHandles(result)]);
       knowledgeText += `\n${JSON.stringify(result).slice(0, 6000)}`;
@@ -954,6 +975,14 @@ export async function runLeanTurn({
       available: tools.map((t) => t.name),
       soldOut,
     }));
+    // "That offer ended" / "that style was discontinued" with no record
+    // behind it: only the store's memory may say so.
+    if (claimsFromMemory(text) && !memoryEvidence && !soldOut.length) {
+      issues.push({
+        code: "memory_unchecked",
+        detail: "You're telling the customer an offer has ended or a style is discontinued, but nothing in this conversation records that. The store's own memory is the only source: for an offer, call lookup_past_offers with the customer's words and answer from what it returns (ended, with the day it gives — or no record); for a style, only a RETIRED STYLE note under their message says it left the store. With no record, say you don't have one — don't guess that it ended, when, or that it was discontinued — and share what's running / in the line-up now.",
+      });
+    }
     // Free shipping said of a product the store's offer doesn't name.
     for (const m of misappliedShipping({ text, knowledgeText, lineNames: lineNamesOf(catalog) })) {
       issues.push({

@@ -1,5 +1,5 @@
 // Fetches a customer's loyalty status from Yotpo Loyalty & Referrals so the
-// AI can reference points, tier, and a personal referral link in the chat.
+// AI can reference points and a personal referral link in the chat.
 //
 // Uses the Yotpo Loyalty API (loyalty.yotpo.com). The merchant's Loyalty
 // Merchant API Key is stored encrypted in ShopConfig.yotpoLoyaltyApiKey.
@@ -90,7 +90,7 @@ export async function fetchYotpoLoyalty({ apiKey, guid, email, history = false }
     }
     const data = await res.json();
     // Don't log raw email — Shopify reviewers inspect logs for PII.
-    console.log(`[yotpo-loyalty] points=${data?.points_balance ?? "?"} tier=${data?.vip_tier_name || data?.tier || "none"} hasReferral=${Boolean(data?.perkea_referral_link || data?.referral_url || data?.referralUrl || data?.referral_link)}`);
+    console.log(`[yotpo-loyalty] points=${data?.points_balance ?? "?"} hasReferral=${Boolean(data?.perkea_referral_link || data?.referral_url || data?.referralUrl || data?.referral_link)}`);
     // The history's shape (field names only, never values), to confirm it in the logs.
     if (history) {
       const items = [data?.history_items, data?.history, data?.points_history].find(Array.isArray);
@@ -99,8 +99,6 @@ export async function fetchYotpoLoyalty({ apiKey, guid, email, history = false }
     const result = {
       pointsBalance: data?.points_balance ?? null,
       creditBalance: data?.credit_balance ?? null,
-      tier: data?.vip_tier_name || data?.tier || null,
-      tierProgress: data?.vip_tier_progress_percentage ?? null,
       referralUrl:
         data?.perkea_referral_link ||
         data?.referral_url ||

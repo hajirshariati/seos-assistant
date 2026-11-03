@@ -25,6 +25,10 @@ import {
 import { DeleteIcon, SearchIcon, GlobeIcon, NoteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { listPromoMemory } from "../models/PromoMemory.server";
+import { listRetiredProducts } from "../models/RetiredProduct.server";
+import { promoMemoryDays, styleMemoryDays, dayWords, endedWording, titleColor, MEMORY_TZ } from "../lib/memory.js";
+import { dayKeyIn } from "../lib/store-day.js";
 import {
   listCampaigns,
   saveCampaign,
@@ -65,6 +69,16 @@ export const loader = async ({ request }) => {
     getKnowledgeFiles(session.shop),
     listCampaigns(session.shop),
   ]);
+  // Memory: ended offers and retired styles, as the chat will tell them.
+  let memory = { offers: [], styles: [], promoDays: promoMemoryDays(config.promoMemoryDays), styleDays: styleMemoryDays(config.styleMemoryDays) };
+  try {
+    const [offers, styles] = await Promise.all([listPromoMemory(session.shop, { days: memory.promoDays }), listRetiredProducts(session.shop, { days: memory.styleDays })]);
+    const day = dayKeyIn(MEMORY_TZ);
+    memory.offers = offers.filter((r) => r.endedAt).sort((a, b) => b.endedAt - a.endedAt).slice(0, 100).map((r) => ({ id: r.id, text: r.text, source: r.source, firstSeen: dayWords(day(r.firstSeenAt)), when: endedWording(r, { tz: MEMORY_TZ }).words }));
+    memory.styles = styles.map((r) => ({ id: r.id, style: r.style || r.title, color: titleColor(r.title), what: [r.gender, r.category || r.productType].filter(Boolean).join(" "), reason: r.reason, left: dayWords(day(r.retiredAt)), back: r.returnedAt ? dayWords(day(r.returnedAt)) : "" }));
+  } catch (err) {
+    console.error("[memory] list failed:", err?.message || err);
+  }
   const enrichedCounts = await Promise.all(files.map((f) => countEnrichmentsBySourceFile(f.id)));
   const filesWithCounts = files.map((f, i) => ({ ...f, enrichedSkus: enrichedCounts[i] }));
 
@@ -101,6 +115,7 @@ export const loader = async ({ request }) => {
     campaignTemplate: CAMPAIGN_TEMPLATE,
     campaignCheatCode: config.campaignCheatCode || "",
     promoPageUrl: config.promoPageUrl || "",
+    memory,
   };
 };
 
@@ -398,7 +413,7 @@ LOYALTY PROGRAM
 ═══════════════════════════════════════
 [Name of program]
 - How to join: [signup details]
-- Earning: [points-per-dollar or tier rules]
+- Earning: [points-per-dollar rules]
 - Redeeming: [what points get you]
 
 ═══════════════════════════════════════
@@ -482,6 +497,14 @@ const KNOWLEDGE_CSS = `
   .kn-inbanner { padding: 10px 16px 0; }
   .kn-chosen { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
   .kn-note { font-size: 12px; line-height: 17px; color: #616161; }
+  .kn-mem { list-style: none; margin: 0; padding: 4px 0; max-height: 420px; overflow: auto; }
+  .kn-mem__row { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; border-top: 1px solid #ebebeb; }
+  .kn-mem__row:first-child { border-top: 0; }
+  .kn-mem__row.is-back { opacity: 0.55; }
+  .kn-mem__main { font-size: 13px; line-height: 18px; color: #1a1a1a; }
+  .kn-mem__color { color: #616161; }
+  .kn-mem__sub { font-size: 12px; line-height: 16px; color: #616161; }
+  .kn-empty { padding: 18px 16px; font-size: 13px; line-height: 18px; color: #616161; }
   .kn-pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff; white-space: pre-wrap; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .kn-banner { padding: 0 16px 13px; }
   .kn-more { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
@@ -977,6 +1000,57 @@ function CampaignsCard({ initial, template, initialCheatCode }) {
 
 const KIND_LABEL = { Policy: "Policy", Page: "Page", Article: "Blog", Program: "Program" };
 
+// Memory: what the chat can say ended or was discontinued (read-only).
+function MemoryCard({ memory }) {
+  const [tab, setTab] = useState(0);
+  const offers = memory?.offers || [];
+  const styles = memory?.styles || [];
+  const tabs = [{ id: "offers", label: "Ended offers", n: offers.length }, { id: "styles", label: "Retired styles", n: styles.length }];
+  const REASON = { archived: "Archived", draft: "Draft", deleted: "Deleted" };
+  const months = (d) => (d >= 365 ? `${Math.round(d / 365)} year${d > 365 ? "s" : ""}` : d >= 60 ? `${Math.round(d / 30)} months` : `${d} days`);
+  return (
+    <Card padding="0">
+      <div className="kn-tools">
+        <div className="kn-seg" role="group" aria-label="Show">
+          {tabs.map((t, i) => (
+            <button key={t.id} type="button" className="kn-seg__btn" aria-pressed={tab === i} onClick={() => setTab(i)}>
+              {t.label}<span className="kn-seg__n">{t.n}</span>
+            </button>
+          ))}
+        </div>
+        <span className="kn-note">
+          {tab === 0 ? `Kept ${months(memory?.promoDays || 90)} after an offer ends.` : `Kept ${months(memory?.styleDays || 730)} after a style leaves.`}
+        </span>
+      </div>
+      {tab === 0 ? (
+        offers.length === 0 ? (
+          <div className="kn-empty">Nothing ended yet. Offers are remembered from each read of your promotions page (Settings → Shopping tools) and from dated campaigns below.</div>
+        ) : (
+          <ul className="kn-mem">
+            {offers.map((o) => (
+              <li key={o.id} className="kn-mem__row">
+                <span className="kn-mem__main">{o.text}</span>
+                <span className="kn-mem__sub">{o.source === "campaign" ? "Campaign" : "Promotions page"} · first seen {o.firstSeen} · {o.when}</span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : styles.length === 0 ? (
+        <div className="kn-empty">No retired styles yet. A product you archive, set to draft or delete is remembered here the moment the catalog hears about it.</div>
+      ) : (
+        <ul className="kn-mem">
+          {styles.map((s) => (
+            <li key={s.id} className={`kn-mem__row${s.back ? " is-back" : ""}`}>
+              <span className="kn-mem__main">{s.style}{s.color ? <span className="kn-mem__color"> · {s.color}</span> : null}</span>
+              <span className="kn-mem__sub">{[s.what, REASON[s.reason] || s.reason, `left ${s.left}`, s.back ? `back ${s.back}` : ""].filter(Boolean).join(" · ")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function StoreKnowledgeCard({ docs }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -1159,6 +1233,13 @@ export default function Knowledge() {
               What the website doesn't say, or says differently — FAQs, sizing advice, brand voice. AVA looks things up here, and these notes win over the website. A Rules &amp; Guidelines file is followed on every chat.
             </SectionHead>
             <KnowledgeFilesCard files={files} check={data.knowledgeCheck} />
+          </section>
+
+          <section id="kn-memory" className="kn-sec">
+            <SectionHead title="What AVA remembers">
+              From your store's own records only — never a guess. Offers your promotions page or a dated campaign showed, with the day each ended; styles you archived, set to draft or deleted, with the day they left. How long: Settings → Shopping tools → Memory.
+            </SectionHead>
+            <MemoryCard memory={data.memory} />
           </section>
 
           {/* Dated promotions: kept, folded away — offers normally come from

@@ -219,6 +219,8 @@ export function leanChatResponse({
           pageSystem: extras.pageBlock,
           turnNote: [extras.turnNote, seasonalTap && featured ? seasonalTapNote(featured) : "", sizePickTap && sizeFinder ? TRUE_FIT_PICK_NOTE : ""].filter(Boolean).join("\n"),
           similarAttributes: extras.similarAttributes,
+          retired: extras.retired || [],
+          memoryTz: extras.memoryTz || "",
           featured,
           liveStock: makeLiveStock({ shop, accessToken }),
           viewingHandle,

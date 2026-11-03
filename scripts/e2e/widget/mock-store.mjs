@@ -12,6 +12,7 @@ export const buyNowLog = [];
 export const activityLog = [];
 // Balance lookups for the My rewards card (/apps/hajirai/rewards).
 export const rewardsLog = [];
+export const ordersLog = [];
 export const REWARDS_CARD = {
   on: true, brand: "Aetrex Access", title: "Your rewards, at a glance", sub: "Free to join. Earn on every order, spend at checkout.",
   earn: [{ label: "Every $1", value: "10 points" }, { label: "Welcome bonus", value: "4,000 points" }, { label: "Refer a friend", value: "4,000 points" }, { label: "Write a review", value: "100 points" }],
@@ -388,8 +389,11 @@ export function start(port) {
           // ?rw=1: the My rewards card (Settings → Shopping tools); ?hh=1: Talk to a person (Settings → Customer care).
           rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
+          // ?rt=1: the Returns & exchanges card (Settings → Customer care).
+          returns: /[?&]rt=1/.test(String(req.headers.referer || "")) ? { inChat: true, lookup: true, pages: { track: "https://track.example/", returns: "https://returns.example/" } } : null,
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
-        if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75", tier: "Silver" } : { signedIn: false })); }
+        if (u.pathname === "/apps/hajirai/orders") { ordersLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, orders: ORDERS.map(orderNow), numberOfOrders: 7, returnMethods: METHODS } : { signedIn: false })); }
+        if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75" } : { signedIn: false })); }
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));
         if (u.pathname === "/apps/fitfinder/scan-fit") return send(200, "application/json", JSON.stringify(mockCtl.ffScan || FF_SCAN));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }

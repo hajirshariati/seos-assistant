@@ -18,6 +18,14 @@ export function pageHandleFromUrl(value) {
 
 const squash = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
 
+// Whether the page text holds the stop line at all — a read that found it
+// is a real read of the offers section (even an empty one), so the memory
+// of offers (app/lib/memory.js) may trust it.
+export function hasStopLine(text, stopLine) {
+  const stop = squash(stopLine);
+  return Boolean(stop) && squash(text).includes(stop);
+}
+
 // The text above the stop line (matched ignoring case and spacing). No stop
 // line set, or the line isn't on the page: nothing — the whole page is legal
 // terms, not offers, and guessing where the offers end could pass off old or

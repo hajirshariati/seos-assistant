@@ -56,6 +56,7 @@ import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
 import { parseRewardsCard, REWARDS_MAX, REWARDS_ROWS, REWARDS_NOTES } from "../lib/rewards-card.js";
+import { promoMemoryDays, styleMemoryDays, PROMO_DAYS_CHOICES, STYLE_DAYS_CHOICES } from "../lib/memory.js";
 import { HUMAN_MAX, humanHelpFields } from "../lib/human-help.js";
 import { shopFacts } from "../lib/shopify-facts.server.js";
 import { appName } from "../lib/app-brand.js";
@@ -171,6 +172,9 @@ export const loader = async ({ request }) => {
     homeCountries: parseCountries(config.homeCountries).join(", "),
     promoPageUrl: config.promoPageUrl || "",
     promoPageStop: config.promoPageStop || "",
+    promoMemoryDays: String(promoMemoryDays(config.promoMemoryDays)),
+    styleMemoryDays: String(styleMemoryDays(config.styleMemoryDays)),
+    returnsCardOn: config.returnsCardOn !== false,
     referralPageUrl: config.referralPageUrl || "",
     klaviyoCompanyId: config.klaviyoCompanyId || "",
     klaviyoListId: config.klaviyoListId || "",
@@ -367,8 +371,14 @@ export const action = async ({ request }) => {
     data.returnWindowDays = n;
   }
   bool("returnsDeliveredOnly");
+  bool("returnsCardOn");
 
   // Shopping tools
+  // Memory: how long ended offers and retired styles stay answerable.
+  const promoDaysRaw = formData.get("promoMemoryDays");
+  if (promoDaysRaw !== null) data.promoMemoryDays = promoMemoryDays(promoDaysRaw);
+  const styleDaysRaw = formData.get("styleMemoryDays");
+  if (styleDaysRaw !== null) data.styleMemoryDays = styleMemoryDays(styleDaysRaw);
   const promoUrl = formData.get("promoPageUrl");
   const promoStop = formData.get("promoPageStop");
   if (promoUrl !== null) {
@@ -587,8 +597,8 @@ const FIELDS = {
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   rewardsCard: ["tools", "json"],
-  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"],
-  promoPageUrl: ["tools"], promoPageStop: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"],
+  promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
@@ -1083,6 +1093,13 @@ function CareSection({ values, set, d }) {
           </div>
         </Row>
         <Row
+          title="Returns & exchanges on the home"
+          help={values.returnsCardOn ? "A “Returns & exchanges” button on the Focus home: one tap, no AI. Signed in, it shows their recent orders with Start a return on each; signed out, sign in or an order lookup, with where to find the order number." : "No Returns & exchanges button on the Focus home (shoppers can still ask)."}
+          toggle
+          checked={values.returnsCardOn}
+          onChange={set("returnsCardOn")}
+        />
+        <Row
           title="Returns and exchanges in the chat"
           help={values.returnsInChat ? "Signed-in shoppers start returns and exchanges right in the chat (needs the AfterShip key in Integrations)." : "Order cards show “Start a return”, which opens the returns page with the order filled in."}
           toggle
@@ -1338,6 +1355,12 @@ function ToolsSection({ d, values, set }) {
             <TextField label="Offers end at this line" value={values.promoPageStop} onChange={set("promoPageStop")} placeholder="STANDARD TERMS AND CONDITIONS OF SALE" autoComplete="off" disabled={!values.promoPageUrl.trim()} helpText="Only text above it counts as offers." />
           </div>
         </Row>
+        <Row title="Memory" help="AVA remembers what your store showed, from its own records only — never a guess. Offers: every read of your promotions page and every dated campaign; an offer from an old email gets “that ended on Sunday”. Styles: products you archive, set to draft or delete; a style someone asks for by name gets “discontinued”, with the date, and the closest styles sold now. What it remembers is listed on the Knowledge page." stack>
+          <div className="set-grid">
+            <Select label="Remember ended offers for" options={PROMO_DAYS_CHOICES.map((d) => ({ label: d === 365 ? "1 year" : d >= 60 ? `${Math.round(d / 30)} months` : `${d} days`, value: String(d) }))} value={values.promoMemoryDays} onChange={set("promoMemoryDays")} />
+            <Select label="Remember retired styles for" options={STYLE_DAYS_CHOICES.map((d) => ({ label: d === 180 ? "6 months" : `${Math.round(d / 365)} year${d > 365 ? "s" : ""}`, value: String(d) }))} value={values.styleMemoryDays} onChange={set("styleMemoryDays")} />
+          </div>
+        </Row>
         <Row title="Which orthotic do I have?" help="A visual quiz (Typeform) that tells shoppers which orthotic they own, so they can reorder it." stack>
           <div className="set-grid">
             <TextField label="Typeform quiz" value={values.whichOrthotic} onChange={set("whichOrthotic")} placeholder="ojyWbTvZ or its link" autoComplete="off" helpText="Blank turns it off." />
@@ -1428,7 +1451,7 @@ function IntegrationsSection({ d, values, set }) {
         <Integration title="Yotpo Reviews" help="Star ratings, fit summaries and “what do reviewers say” answers." connected={d.hasYotpoKey}>
           <TextField label="Yotpo API key" type="password" value={values.yotpoApiKey} onChange={set("yotpoApiKey")} placeholder={d.hasYotpoKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText={d.hasYotpoKey ? "Leave blank to keep the saved key." : undefined} />
         </Integration>
-        <Integration title="Yotpo Loyalty & Referrals" help="Signed-in shoppers can ask about their points: AVA looks up their balance and points history to answer — like whether points came back after a return. With VIP mode on, it also knows their tier and referral link from the start." connected={d.hasYotpoLoyaltyKey}>
+        <Integration title="Yotpo Loyalty & Referrals" help="Signed-in shoppers can ask about their points: AVA looks up their balance and points history to answer — like whether points came back after a return. With VIP mode on, it also knows their balance and referral link from the start." connected={d.hasYotpoLoyaltyKey}>
           <div className="set-grid">
             <TextField label="Loyalty API key" type="password" value={values.yotpoLoyaltyApiKey} onChange={set("yotpoLoyaltyApiKey")} placeholder={d.hasYotpoLoyaltyKey ? "•••••••• (saved)" : "Paste key"} autoComplete="off" helpText="Yotpo Loyalty → Program Settings → API Key." />
             <TextField label="GUID (optional)" value={values.yotpoLoyaltyGuid} onChange={set("yotpoLoyaltyGuid")} autoComplete="off" helpText="Only if your account needs it." />

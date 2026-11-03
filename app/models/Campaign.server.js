@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { rememberCampaign } from "./PromoMemory.server.js";
 
 // What the chat assistant reads on every turn.
 // `now` parameter exists so callers can pass a stable timestamp during
@@ -38,13 +39,19 @@ export async function saveCampaign(shop, { id, name, content, startsAt, endsAt }
   if (!(data.endsAt instanceof Date) || isNaN(+data.endsAt)) throw new Error("invalid endsAt");
   if (+data.endsAt <= +data.startsAt) throw new Error("endsAt must be after startsAt");
 
+  // Memory: the campaign's name and dates stay answerable after it ends
+  // (and after it's deleted here) — "that one ended on…".
+  const remember = () => rememberCampaign(shop, data).catch((err) => console.warn(`[memory] ${shop}: campaign memory failed — ${err?.message || err}`));
   if (id) {
     // Only this shop's campaign — an id from another shop changes nothing.
     const { count } = await prisma.campaign.updateMany({ where: { id, shop }, data });
     if (count !== 1) throw new Error("campaign not found");
+    await remember();
     return prisma.campaign.findFirst({ where: { id, shop } });
   }
-  return prisma.campaign.create({ data: { ...data, shop } });
+  const created = await prisma.campaign.create({ data: { ...data, shop } });
+  await remember();
+  return created;
 }
 
 export async function deleteCampaign(shop, id) {

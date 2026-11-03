@@ -30,6 +30,8 @@ export const action = async ({ request }) => {
     db.chatGuard.deleteMany({ where: { shop } }),
     db.chatInteraction.deleteMany({ where: { shop } }),
     db.chatDisclosure.deleteMany({ where: { shop } }),
+    db.promoMemory.deleteMany({ where: { shop } }),
+    db.retiredProduct.deleteMany({ where: { shop } }),
     db.fitData.deleteMany({ where: { shop } }),
     db.fitReturnItem.deleteMany({ where: { shop } }),
     db.chatReturn.deleteMany({ where: { shop } }),

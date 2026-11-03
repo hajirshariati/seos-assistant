@@ -1,5 +1,5 @@
 // Questions about the shopper's own account are looked into, not passed on:
-// their rewards account (balance, tier and points history from Yotpo), read
+// their rewards account (balance and points history from Yotpo), read
 // safely whatever shape the history comes in, for the signed-in shopper only,
 // and said plainly when it can't be seen.
 //
@@ -61,7 +61,7 @@ await test("the lookup asks for the history, keeps it apart from the plain balan
   const realFetch = globalThis.fetch;
   const urls = [];
   try {
-    globalThis.fetch = async (u) => { urls.push(String(u)); return new Response(JSON.stringify({ points_balance: 4200, vip_tier_name: "Gold", history_items: [{ date: "2026-10-20", action: "Refund", points: -930, status: "Approved" }] }), { status: 200 }); };
+    globalThis.fetch = async (u) => { urls.push(String(u)); return new Response(JSON.stringify({ points_balance: 4200, history_items: [{ date: "2026-10-20", action: "Refund", points: -930, status: "Approved" }] }), { status: 200 }); };
     const r = await quietly(() => fetchYotpoLoyalty({ apiKey: "k1-histo-key", email: "jo@x.com", history: true }));
     assert.match(urls[0], /customer_email=jo%40x\.com&with_history=true$/);
     assert.equal(r.pointsBalance, 4200);
@@ -78,12 +78,12 @@ await test("the lookup asks for the history, keeps it apart from the plain balan
 });
 
 console.log("\nthe rewards tool");
-const member = { pointsBalance: 4200, tier: "Gold", creditBalance: 0, historyListed: true, history: [{ date: "2026-10-20", action: "Refund", points: -930, status: "Approved", order: "1160741" }] };
+const member = { pointsBalance: 4200, creditBalance: 0, historyListed: true, history: [{ date: "2026-10-20", action: "Refund", points: -930, status: "Approved", order: "1160741" }] };
 const tool = (over = {}) => rewardsTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77", config: { yotpoLoyaltyApiKey: "k" }, emailOf: async () => "jo@x.com", fetchLoyalty: async () => member, ...over });
-await test("signed in: balance, tier and the history — in points, or points with dollars when the store shows dollars", async () => {
+await test("signed in: balance and the history — in points, or points with dollars when the store shows dollars", async () => {
   const r = await tool().run();
   assert.equal(r.signed_in, true); assert.equal(r.member, true);
-  assert.equal(r.balance, "4200 points"); assert.equal(r.tier, "Gold");
+  assert.equal(r.balance, "4200 points"); assert.equal(r.tier, undefined, "no tiers, ever");
   assert.deepEqual(r.history, [{ date: "2026-10-20", action: "Refund", points: "-930 points", status: "Approved", order: "1160741" }]);
   assert.match(r.note, /Answer from these entries/);
   assert.match(r.note, /say plainly that it isn't in their history — don't guess why/);

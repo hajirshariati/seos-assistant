@@ -30,7 +30,6 @@ export const loader = async ({ request }) => {
       signedIn: true,
       member: Boolean(loyalty),
       balance: loyalty ? rewardsBalanceWords(loyalty.pointsBalance, config) : "",
-      tier: loyalty?.tier || "",
     }, noStore);
   } catch (e) {
     if (e instanceof Response) throw e;

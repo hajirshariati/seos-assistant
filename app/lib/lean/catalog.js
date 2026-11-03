@@ -360,7 +360,7 @@ export function codesInText(catalog, text, { close = true } = {}) {
 // black?"). Each footwear style's first word (four letters or more, not a
 // generic word) is a name; a message that carries one is told so, with the
 // style's colorways in stock, the way a typed product code is.
-const GENERIC_STYLE_WORDS = new Set([
+export const GENERIC_STYLE_WORDS = new Set([
   "women's", "womens", "men's", "mens", "unisex", "kids", "kid's", "boy's", "boys", "girl's", "girls", "children's", "childrens",
   "the", "new", "classic", "aetrex", "cozy", "comfort", "sport", "sports", "casual", "active", "original", "premium", "essential",
   "essentials", "basic", "core", "ultra", "lite", "light", "soft", "easy", "free", "true", "pure", "fresh", "modern", "urban", "street",

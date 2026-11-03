@@ -7,6 +7,8 @@ import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
 import { cleanupOldGuards } from "../models/ChatGuard.server";
 import { cleanupOldInteractions } from "../models/ChatInteraction.server";
+import { cleanupOldPromoMemory } from "../models/PromoMemory.server";
+import { cleanupOldRetiredProducts } from "../models/RetiredProduct.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
 import { draftAllLessons } from "./feedback-lessons.server";
 import { refreshAllFitData } from "./fit-confidence.server";
@@ -69,6 +71,13 @@ async function runOnce() {
     await cleanupOldInteractions();
   } catch (err) {
     console.error("[retention] cleanupOldInteractions failed:", err?.message || err);
+  }
+  // Memory: ended offers past a year, retired styles past three.
+  try {
+    await cleanupOldPromoMemory();
+    await cleanupOldRetiredProducts();
+  } catch (err) {
+    console.error("[retention] memory cleanup failed:", err?.message || err);
   }
   // Fit confidence on product cards: each store's scores read again (a store
   // read in the last 20 hours is skipped). Last — it can take a few minutes.
