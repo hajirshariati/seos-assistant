@@ -200,6 +200,14 @@ model ShopConfig {
 
   supportUrl          String   @default("")
   supportLabel        String   @default("Contact customer service")
+  // Talk to a person (human-help.js): the ways to reach the team, shown
+  // in the chat's menu at any point — hours, phone, email, reply time.
+  supportHours        String   @default("")
+  supportPhone        String   @default("")
+  supportEmail        String   @default("")
+  supportReplyTime    String   @default("")
+  // My rewards (rewards-card.js): the instant rewards card, as JSON.
+  rewardsCard         String   @default("{}")
   trackingPageUrl     String   @default("")
   returnsPageUrl      String   @default("")
   // Returns and exchanges run inside the chat (AfterShip). Off: the order
@@ -855,4 +863,39 @@ model ChatReturn {
 
   @@index([shop, orderId])
   @@index([createdAt])
+}
+
+// Customer service log (NYC DCWP 6 RCNY 5-313): one row per chat with the
+// assistant — when it ran, how many messages, whether a way to reach a
+// person was offered and used, and how — kept three years. No message
+// text; the visitor is a random browser id, hashed.
+model ChatInteraction {
+  shop           String
+  sessionId      String
+  visitor        String   @default("")
+  startedAt      DateTime @default(now())
+  lastAt         DateTime @default(now())
+  messages       Int      @default(0)
+  signedIn       Boolean  @default(false)
+  humanOffered   Boolean  @default(false)
+  humanActivated Boolean  @default(false)
+  // How they reached a person: live_chat | phone | email | page | ""
+  outcome        String   @default("")
+  disclosureId   String   @default("")
+
+  @@id([shop, sessionId])
+  @@index([shop, startedAt])
+  @@index([startedAt])
+}
+
+// The exact words the chat opened with (the greeting and the note under the
+// box), one row per distinct text, with when it was first and last shown.
+model ChatDisclosure {
+  id          String   @id @default(cuid())
+  shop        String
+  text        String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([shop, text])
 }

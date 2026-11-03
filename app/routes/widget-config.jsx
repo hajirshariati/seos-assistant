@@ -14,6 +14,10 @@ import prisma from "../db.server";
 import { parseOrbColors, parseOrbBackground } from "../lib/orb-colors";
 import { launcherMarkConfig, cleanAvatarUrl } from "../lib/launcher-mark.js";
 import { recordingState } from "../lib/chat-recording.js";
+import { rewardsCardConfig } from "../lib/rewards-card.js";
+import { humanHelpConfig } from "../lib/human-help.js";
+import { shopFacts } from "../lib/shopify-facts.server.js";
+import { appBrand, appName } from "../lib/app-brand.js";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const lastSeenWrite = new Map(); // shop → ms of the last lastWidgetSeenAt write
@@ -91,6 +95,9 @@ export const loader = async ({ request }) => {
       }
     }
 
+    // The app's brand (AVA on the Aetrex app) picks the defaults of the
+    // rewards card and the ways to reach a person.
+    const brand = appBrand(appName(await shopFacts(session.shop, config).catch(() => null)));
     return Response.json(
       {
         hideOnUrls,
@@ -112,6 +119,11 @@ export const loader = async ({ request }) => {
         seasonalCta: seasonalCtaConfig(config),
         // Settings → Your app: its own message, once per visit.
         appPromo: appPromoConfig(config),
+        // Settings → Shopping tools → My rewards: the instant rewards card (no AI).
+        rewards: rewardsCardConfig(config, { brand }),
+        // Settings → Customer care → Talk to a person: the ways to reach the
+        // team, in the chat's menu at any point.
+        human: humanHelpConfig(config, { brand, supportUrl: String(config.supportUrl || "").trim(), supportLabel: String(config.supportLabel || "").trim() }),
         // Settings → Focus home: pictures for the Footwear and Orthotics cards
         // (Theme editor → Home layout → Focus).
         focusImages: focusImagesConfig(config),

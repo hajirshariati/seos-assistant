@@ -1,4 +1,7 @@
 // What the shopper did with the chat's cards, for Shopify Analytics: added to
+// the cart from the chat, or off to checkout — and, for the customer service
+// log (ChatInteraction), that they asked for a person.
+// Shopify Analytics side: added to
 // the cart from the chat, or off to checkout (Buy now, or Checkout after
 // adding). The widget tells us; the event itself is built from the store's
 // own catalog (app/lib/app-events.server.js). Nothing here changes a cart,
@@ -7,6 +10,7 @@ import { authenticate } from "../shopify.server";
 import { getShopConfigCached } from "../models/ShopConfig.server";
 import { avaAddedToCart, avaCheckoutStarted } from "../lib/app-events.server.js";
 import { checkIpShopRate, clientIp } from "../lib/rate-limit.server.js";
+import { markHuman } from "../models/ChatInteraction.server";
 
 const MAX_BODY_BYTES = 2 * 1024;
 
@@ -29,6 +33,14 @@ export const action = async ({ request }) => {
     try { body = JSON.parse(raw); } catch { /* handled below */ }
     if (!body || typeof body !== "object") return Response.json({ error: "Invalid request" }, { status: 400 });
 
+    // The shopper asked for a person (Talk to a person, or the support
+    // button): the customer service log notes it, whatever the store's
+    // analytics setting.
+    if (body.kind === "human") {
+      await markHuman(session.shop, { sessionId: typeof body.session_id === "string" ? body.session_id : "", how: typeof body.how === "string" ? body.how : "" })
+        .catch((err) => console.error("[service-log] mark failed:", err?.message || err));
+      return Response.json({ ok: true });
+    }
     const config = await getShopConfigCached(session.shop);
     if (config.appEventsEnabled === false) return Response.json({ ok: true, sent: false });
 

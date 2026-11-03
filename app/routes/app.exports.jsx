@@ -9,6 +9,8 @@ import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
 import { toCsv, csvResponse } from "../lib/csv-export.server";
 import { listRecordings } from "../models/ChatRecording.server";
 import { listFlags } from "../models/ChatFlag.server";
+import { listInteractions, listDisclosures } from "../models/ChatInteraction.server";
+import { yearlySummary, interactionRow, INTERACTION_HEADERS, SUMMARY_HEADERS, summaryRow } from "../lib/service-log.js";
 import { getConversionSummary } from "../models/ChatConversion.server";
 import { getInterestBreakdown } from "../models/ChatProductMention.server";
 import { getTopicRows } from "../models/ChatTopic.server";
@@ -57,6 +59,19 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
       ["Time", "Chat", "Tester", "Page", "Shopper", "Assistant", "Products shown", "Also shown", "OK", "Flag", "Guard"],
       rows.reverse().map((r) => [new Date(r.createdAt).toISOString(), r.sessionId, r.tester, r.page, r.message, r.reply, (r.products || []).join(" | "), r.extras, r.ok ? "yes" : "no", flagOf.get(r.sessionId) || "", r.guard || ""]),
     );
+  }
+  // Customer service log (NYC DCWP 6 RCNY 5-313): the yearly numbers the
+  // rule asks for, then one row per chat, all three years kept.
+  if (section === "service-log") {
+    const [rows, disclosures] = await Promise.all([listInteractions(shop), listDisclosures(shop)]);
+    const words = new Map(disclosures.map((d) => [d.id, d.text]));
+    const years = yearlySummary(rows);
+    const lines = [
+      ...toCsv(SUMMARY_HEADERS, years.map(summaryRow)).split("\n"),
+      "",
+      ...toCsv(INTERACTION_HEADERS, rows.map((r) => interactionRow(r, words))).split("\n"),
+    ];
+    return lines.join("\n");
   }
   // Every number for the range in one file — what the page leaves off.
   if (section === "summary") {

@@ -7663,3 +7663,57 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__quiz,
   .ai-chat-panel.is-focus .ai-chat-focus__swap { transition: none !important; }
 }
+
+/* ── My rewards: the instant rewards card (Settings → Shopping tools) ── */
+.ai-chat-panel .ai-rw { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; }
+.ai-chat-panel .ai-rw__top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; }
+.ai-chat-panel .ai-rw__logo { display: block; height: 28px; width: auto; max-width: 58%; border-radius: 6px; object-fit: contain; }
+.ai-chat-panel .ai-rw__mark { display: inline-flex; align-items: center; gap: 6px; font: 700 12px/1 var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text); }
+.ai-chat-panel .ai-rw__mark svg { width: 14px; height: 14px; }
+.ai-chat-panel .ai-rw__bal { min-width: 0; text-align: right; font: 500 12.5px/16px var(--seos-font); color: var(--seos-text-2); transition: opacity 0.2s ease; }
+.ai-chat-panel .ai-rw__bal b { font-weight: 700; color: var(--seos-text); font-variant-numeric: tabular-nums; }
+.ai-chat-panel .ai-rw__bal i { font-style: normal; }
+.ai-chat-panel .ai-rw__bal a { color: var(--seos-text-2) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong) !important; }
+.ai-chat-panel .ai-rw__bal.is-wait { opacity: 0.6; }
+.ai-chat-panel .ai-rw__head { display: grid; gap: 2px; }
+.ai-chat-panel .ai-rw__head strong { font: 700 17px/22px var(--seos-font); letter-spacing: -0.02em; }
+.ai-chat-panel .ai-rw__head span { font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+/* Earn and Spend side by side only where the card is wide enough for two
+   real columns; otherwise one under the other. */
+.ai-chat-panel .ai-rw__cols { display: grid; grid-template-columns: 1fr; gap: 10px; container-type: inline-size; }
+@container (min-width: 440px) { .ai-chat-panel .ai-rw__cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ai-chat-panel .ai-rw__col { min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--seos-surface); }
+.ai-chat-panel .ai-rw__col h4 { margin: 0 0 6px; font: 700 11px/14px var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel .ai-rw__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.ai-chat-panel .ai-rw__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 8px; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); overflow-wrap: normal; }
+.ai-chat-panel .ai-rw__list b { font-weight: 650; color: var(--seos-text); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ai-chat-panel .ai-rw__notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ai-chat-panel .ai-rw__notes li { display: flex; align-items: flex-start; gap: 8px; font: 400 13px/18px var(--seos-font); color: var(--seos-text); }
+.ai-chat-panel .ai-rw__notes svg { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--seos-ink, #0d0d12); }
+.ai-chat-panel .ai-rw__cta { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 12px; background: var(--seos-ink, #0d0d12); color: var(--seos-bg-raised, #fff) !important; font: 600 14px/1 var(--seos-font); text-decoration: none !important; transition: transform 0.15s ease, opacity 0.15s ease; }
+.ai-chat-panel .ai-rw__cta svg { width: 16px; height: 16px; }
+.ai-chat-panel .ai-rw__cta:active { transform: scale(0.985); }
+.ai-chat-panel .ai-rw__cta:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+@media (max-width: 420px) {
+  .ai-chat-panel .ai-rw__top { flex-wrap: wrap; }
+  .ai-chat-panel .ai-rw__bal { flex-basis: 100%; text-align: left; }
+}
+/* The home's My rewards button: first in the links row, with its star. */
+.ai-chat-panel.is-focus .ai-chat-focus__links button[data-rewards-open] { display: inline-flex; align-items: center; gap: 6px; color: var(--seos-text); border-color: var(--seos-text-2); }
+.ai-chat-panel.is-focus .ai-chat-focus__links button[data-rewards-open] svg { width: 13px; height: 13px; }
+
+/* ── Talk to a person: the ways to reach the team (Settings → Customer care) ── */
+.ai-chat-panel .ai-hh { display: grid; margin-top: 12px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); overflow: hidden; word-break: normal; overflow-wrap: anywhere; }
+.ai-chat-panel .ai-hh__row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 12px 10px 14px; cursor: pointer; color: var(--seos-text) !important; text-decoration: none !important; font-family: var(--seos-font); }
+.ai-chat-panel .ai-hh__row + .ai-hh__row { border-top: 1px solid var(--seos-line); }
+.ai-chat-panel .ai-hh__row:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: -2px; }
+@media (hover: hover) { .ai-chat-panel .ai-hh__row:hover { background: var(--seos-surface); } }
+.ai-chat-panel .ai-hh__ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--seos-surface); color: var(--seos-text); }
+.ai-chat-panel .ai-hh__ico svg { width: 17px; height: 17px; }
+.ai-chat-panel .ai-hh__t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ai-chat-panel .ai-hh__t b { font: 600 14px/19px var(--seos-font); overflow-wrap: anywhere; }
+.ai-chat-panel .ai-hh__t span { font: 400 12.5px/17px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-hh__row > svg:last-child { flex: none; width: 14px; height: 14px; color: var(--seos-text-2); }
+.ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh) { width: 100%; max-width: 100%; }
+.ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
+.ai-chat-panel .ai-chat-msg:has(.ai-rw), .ai-chat-panel .ai-chat-msg:has(.ai-hh) { max-width: 100%; }

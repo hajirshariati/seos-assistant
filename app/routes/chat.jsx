@@ -18,6 +18,7 @@ import { storeChatLimits, dailyCapApplies, busyMessage } from "../lib/peak-mode.
 import { avaChatStarted } from "../lib/app-events.server.js";
 import { guardMessage } from "../lib/chat-guard.server.js";
 import { saveRecording } from "../models/ChatRecording.server";
+import { touchInteraction } from "../models/ChatInteraction.server";
 
 // Real questions are short; very long pastes would crowd out the context.
 const MAX_MESSAGE_CHARS = 2000;
@@ -154,6 +155,18 @@ async function handleChatPost({ shop, sessionAccessToken, request, internal = fa
   }
   // The library keeps the shop's offline token current on app proxy requests.
   const accessToken = sessionAccessToken || null;
+
+  // Customer service log (ChatInteraction): every storefront message counts
+  // towards its chat; the first one keeps the opening words the chat showed.
+  if (!internal && sessionId) {
+    touchInteraction(shop, {
+      sessionId,
+      visitor: typeof body.visitor === "string" ? body.visitor : "",
+      signedIn: Boolean(loggedInCustomerId),
+      humanOffered: body.human_offered === true,
+      disclosure: typeof body.disclosure === "string" ? body.disclosure : "",
+    }).catch((err) => console.error("[service-log] touch failed:", err?.message || err));
+  }
 
   // Shopify Analytics: a shopper's first message is a chat started (the admin
   // test chat never counts). A note the chat showed first doesn't change that.

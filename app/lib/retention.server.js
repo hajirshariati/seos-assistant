@@ -6,6 +6,7 @@ import { cleanupOldHealth } from "../models/ChatHealth.server";
 import { cleanupOldRecordings } from "../models/ChatRecording.server";
 import { cleanupOldReturns } from "../models/ChatReturn.server";
 import { cleanupOldGuards } from "../models/ChatGuard.server";
+import { cleanupOldInteractions } from "../models/ChatInteraction.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
 import { draftAllLessons } from "./feedback-lessons.server";
 import { refreshAllFitData } from "./fit-confidence.server";
@@ -62,6 +63,12 @@ async function runOnce() {
     await cleanupOldGuards();
   } catch (err) {
     console.error("[retention] cleanupOldGuards failed:", err?.message || err);
+  }
+  // The customer service log is kept three years.
+  try {
+    await cleanupOldInteractions();
+  } catch (err) {
+    console.error("[retention] cleanupOldInteractions failed:", err?.message || err);
   }
   // Fit confidence on product cards: each store's scores read again (a store
   // read in the last 20 hours is skipped). Last — it can take a few minutes.

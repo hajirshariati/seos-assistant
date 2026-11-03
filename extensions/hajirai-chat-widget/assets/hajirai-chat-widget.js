@@ -70,6 +70,17 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(d.orbBackground!==undefined)setOrbBackground(d.orbBackground);
   if(d.launcherMark&&typeof d.launcherMark==='object')setLauncherMark(d.launcherMark);
   if(d.recording&&typeof d.recording==='object'){REC_ON=d.recording.on===true;REC_SCOPE=d.recording.scope==='everyone'?'everyone':'testers'}
+  REWARDS=d.rewards&&typeof d.rewards==='object'&&d.rewards.title?d.rewards:null;
+  HUMAN=d.human&&typeof d.human==='object'?d.human:null;
+  /* The home's links row may already be drawn: give it the My rewards button.
+     And a restored chat's cards, drawn before these settings arrived, go in now. */
+  if(typeof msgsEl!=='undefined'&&msgsEl){
+    if(msgsEl.classList.contains('is-welcome')){var _lk=msgsEl.querySelector('.ai-chat-focus__links');if(_lk)_lk.innerHTML=focusLinksHtml()}
+    var _ms=msgsEl.querySelectorAll('.ai-chat-msg--assistant');
+    for(var _i=0;_i<_ms.length;_i++){var _mm=_ms[_i].__msg,_bb=_ms[_i].querySelector('.ai-chat-msg-bubble');if(!_mm||!_bb)continue;
+      if(_mm.rewards&&REWARDS&&!_bb.querySelector('.ai-rw')){_bb.insertAdjacentHTML('beforeend',rewardsCardHtml(REWARDS));var _rc=_bb.querySelector('[data-rw]');if(_rc)rwFillBalance(_rc)}
+      if(_mm.human&&HUMAN&&!_bb.querySelector('.ai-hh'))_bb.insertAdjacentHTML('beforeend',humanCardHtml(HUMAN))}
+  }
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
   if(typeof d.supportUrl==='string'&&d.supportUrl)SUPPORT_URL=d.supportUrl;
@@ -276,6 +287,11 @@ var AEV_KEY='hajirai_appev',APP_EVENTS=true;
 try{if(localStorage.getItem(AEV_KEY)==='0')APP_EVENTS=false}catch(e){}
 function avaActivity(o){
   if(!APP_EVENTS)return;
+  postActivity(o);
+}
+/* The same post for the customer service log (a person asked for), which
+   isn't analytics and isn't switched off with it. */
+function postActivity(o){
   try{
     o.id=((window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,12)).replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);
     var body=JSON.stringify(o);
@@ -313,6 +329,11 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
     if(t&&t.name&&t.until>Date.now())TESTER=String(t.name).slice(0,40);else if(t)localStorage.removeItem(TESTER_KEY);
   }catch(e){}
 })();
+/* My rewards (Settings → Shopping tools) and Talk to a person (Settings →
+   Customer care): instant cards, no AI. A random id names this browser in
+   the customer service log — no name, no account, nothing to trace. */
+var REWARDS=null,HUMAN=null,VISITOR_KEY='hajirai_visitor',VISITOR='';
+try{VISITOR=localStorage.getItem(VISITOR_KEY)||'';if(!/^v_[a-z0-9]{8,40}$/.test(VISITOR)){VISITOR='v_'+Date.now().toString(36)+Math.random().toString(36).slice(2,12);localStorage.setItem(VISITOR_KEY,VISITOR)}}catch(e){}
 /* The look the chat starts in: the shopper's own pick (sun/moon) if they've
    made one, else the store's choice (Settings → Showing the chat, remembered
    here so the next page starts in it), else dark. */
@@ -716,10 +737,12 @@ function menuHtml(){
     chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     fit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0115.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
     user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>',
+    person:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 0118 0v5a2 2 0 01-2 2h-1v-6h3M3 11v6a2 2 0 002 2h1v-6H3"/><path d="M12 21h4"/></svg>',
     out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>'
   };
   function item(action,icon,label){return '<button type="button" role="menuitem" class="ai-chat-menu-item" data-action="'+action+'">'+icon+'<span>'+esc(label)+'</span></button>'}
-  var h=item('clear',MI.chat,'Start a new chat');
+  var h=HUMAN?item('human',MI.person,'Talk to a person'):'';
+  h+=item('clear',MI.chat,'Start a new chat');
   if(ff&&savedFit())h+=item('refit',MI.fit,'Retake my orthotic FIT');
   /* Feedback (Focus): the store's survey (Settings → Feedback button), opened inside the chat. */
   if(FOCUS&&fbShown()&&!fbOrthotic())h+=item('survey',fbIcon(),FB_LABEL);
@@ -1754,7 +1777,7 @@ function focusCardHtml(kind){
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 /* The three links above the message box: what each says, what it sends. */
-function focusLinksHtml(){var h='';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m)h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
+function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">'+RW_ICON+'<span>My rewards</span></button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m)h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
@@ -5987,6 +6010,81 @@ submitBtn.addEventListener('click',function(){
 scrollBottom();
 }
 
+/* ── My rewards: the instant rewards card (no AI) ──
+   "My rewards" on the home draws the store's card at once: how points are
+   earned and spent, what to know, the rewards page — and a signed-in
+   shopper's balance, read live. Settings → Shopping tools → My rewards. */
+var RW_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/></svg>';
+var RW_TICK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>';
+var RW_ARROW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+function rwRows(list){var h='';for(var i=0;i<list.length;i++){var r=list[i]||{};if(!r.label||!r.value)continue;h+='<li><span>'+esc(r.label)+'</span><b>'+esc(r.value)+'</b></li>'}return h?'<ul class="ai-rw__list">'+h+'</ul>':''}
+function rewardsCardHtml(c){
+  var logo=c.logo&&(safeUrl(c.logo)||/^data:image\//.test(c.logo))?c.logo:'';
+  var head=logo?'<img class="ai-rw__logo" src="'+esc(logo)+'" alt="'+esc(c.brand||'Rewards')+'">':'<span class="ai-rw__mark">'+RW_ICON+'<span>'+esc(c.brand||'Rewards')+'</span></span>';
+  var earn=Array.isArray(c.earn)?c.earn:[],use=Array.isArray(c.use)?c.use:[],notes=Array.isArray(c.notes)?c.notes:[];
+  var h='<div class="ai-rw" data-rw role="group" aria-label="'+esc(c.brand||'Rewards')+'">';
+  h+='<div class="ai-rw__top">'+head+'<span class="ai-rw__bal" data-rw-bal aria-live="polite"></span></div>';
+  h+='<div class="ai-rw__head"><strong>'+esc(c.title)+'</strong>'+(c.sub?'<span>'+esc(c.sub)+'</span>':'')+'</div>';
+  var cols='';if(earn.length)cols+='<section class="ai-rw__col"><h4>Earn</h4>'+rwRows(earn)+'</section>';if(use.length)cols+='<section class="ai-rw__col"><h4>Spend</h4>'+rwRows(use)+'</section>';
+  if(cols)h+='<div class="ai-rw__cols">'+cols+'</div>';
+  if(notes.length){h+='<ul class="ai-rw__notes">';for(var i=0;i<notes.length;i++)if(notes[i])h+='<li>'+RW_TICK+'<span>'+esc(notes[i])+'</span></li>';h+='</ul>'}
+  var url=safeUrl(c.ctaUrl||'');
+  if(url)h+='<a class="ai-rw__cta" href="'+esc(url)+'" target="_blank" rel="noopener"><span>'+esc(c.ctaLabel||'See my rewards')+'</span>'+RW_ARROW+'</a>';
+  h+='</div>';return h;
+}
+/* The balance line: signed in, read live; signed out, a sign-in link. */
+function rwFillBalance(card){
+  var el=$('[data-rw-bal]',card);if(!el)return;
+  if(!CUST_LOGGED_IN){el.innerHTML='<a href="'+esc(loginUrl())+'">Log in to see your balance</a>';return}
+  el.textContent='Checking your balance\u2026';el.classList.add('is-wait');
+  fetch('/apps/hajirai/rewards',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){
+    el.classList.remove('is-wait');
+    if(d&&d.balance)el.innerHTML='<b>'+esc(d.balance)+'</b>'+(d.tier?' \u00b7 <i>'+esc(d.tier)+'</i>':'');
+    else if(d&&d.signedIn&&d.member===false)el.textContent='No rewards account yet \u2014 joining is free.';
+    else el.textContent='';
+  }).catch(function(){el.classList.remove('is-wait');el.textContent=''});
+}
+function rewardsPlainText(c){return c.brand?'Here\u2019s '+c.brand+' at a glance.':'Here\u2019s how rewards work.'}
+function openRewards(){
+  if(!REWARDS||isStreaming)return;
+  var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
+  messages.push({role:'user',content:'My rewards',local:true});appendMsg('user','My rewards');
+  var text=rewardsPlainText(REWARDS),m={role:'assistant',content:text,rewards:true};
+  messages.push(m);
+  var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
+  saveH(messages);scrollBottom();
+}
+
+/* ── Talk to a person ──
+   In the menu at any point: one tap shows the ways to reach the team — the
+   live chat (opened straight away when the page has one), the phone with
+   its hours, the email with its reply time — and the customer service log
+   notes which was used. Settings → Customer care → Talk to a person. */
+var HH_ICON={
+  chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'
+};
+function hhRow(tag,attrs,icon,title,sub){return '<'+tag+' class="ai-hh__row" '+attrs+'><span class="ai-hh__ico">'+icon+'</span><span class="ai-hh__t"><b>'+esc(title)+'</b>'+(sub?'<span>'+esc(sub)+'</span>':'')+'</span>'+HH_ICON.chev+'</'+tag+'>'}
+function humanCardHtml(h){
+  var rows=hhRow('button','type="button" data-human="live_chat"',HH_ICON.chat,h.liveLabel||'Live chat',h.hours||'');
+  if(h.phone)rows+=hhRow('a','href="'+esc(h.telHref||('tel:'+h.phone))+'" data-human="phone"',HH_ICON.phone,h.phone,h.hours||'Call us');
+  if(h.email)rows+=hhRow('a','href="mailto:'+esc(h.email)+'" data-human="email"',HH_ICON.mail,h.email,h.reply?'We reply '+h.reply:'Email us');
+  return '<div class="ai-hh" role="group" aria-label="Ways to reach a person">'+rows+'</div>';
+}
+function humanUsed(how){postActivity({kind:'human',session_id:getSess(),how:String(how||'page')})}
+function openHuman(){
+  if(!HUMAN)return;
+  var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
+  var text='Here\u2019s how to reach a person on our team.',m={role:'assistant',content:text,human:true};
+  messages.push(m);
+  var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
+  saveH(messages);scrollBottom();
+  /* One tap is the transfer: a live chat on the page opens straight away. */
+  if(typeof window.zE==='function'||typeof window.Intercom==='function'||(window.GorgiasChat&&typeof window.GorgiasChat.open==='function')){humanUsed('live_chat');openSupportChat(SUPPORT_URL)}
+}
+
 /* The chat guard (server) ended this chat. The pause is kept here too, so a
    reload or "Start a new chat" doesn't send again before the time is up —
    the server would turn it away anyway. */
@@ -6348,6 +6446,11 @@ if(SEA_TAP&&SEA_TAP===msg)body.seasonal=true;
 SEA_TAP='';
 /* "Find my shoe size" with no shoe picked yet, and a style tile from its
    answer: the server answers the first itself and knows what the second is for. */
+/* Customer service log: this browser's random id, that a way to reach a
+   person is offered (the menu), and on the first message the opening words shown. */
+if(VISITOR)body.visitor=VISITOR;
+body.human_offered=!!HUMAN;
+if(!historyFor(msg).some(function(m){return m.role==='user'&&!m.local}))body.disclosure=(GREET+' '+DISCL).replace(/\s+/g,' ').trim().slice(0,1200);
 if(TF_INTRO&&TF_INTRO===msg&&tfData)body.size_intro=true;
 if(TF_PICK&&TF_PICK===msg)body.size_pick=true;
 TF_INTRO='';TF_PICK='';
@@ -7106,6 +7209,7 @@ menu.addEventListener('click',function(e){
   var a=item.dataset.action;
   menu.style.display='none';menuBtn.setAttribute('aria-expanded','false');
   if(a==='clear')clearChat();
+  else if(a==='human')openHuman();
   else if(a==='refit'){if(!isStreaming)startHelper('refit')}
   else if(a==='survey')openFeedback(menuBtn);
   else if(a==='login')location.href=loginUrl();
@@ -7184,11 +7288,15 @@ if(mapBtn){e.preventDefault();openLocator(mapBtn,mapBtn.getAttribute('data-map')
 var formBtn=e.target.closest('[data-form]');
 if(formBtn){e.preventDefault();openForm(formBtn,formBtn.getAttribute('data-form'),formBtn.getAttribute('data-form-label'),'quiz');return;}
 var supportCtaBtn=e.target.closest('[data-support-cta]');
-if(supportCtaBtn){e.preventDefault();openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
+if(supportCtaBtn){e.preventDefault();humanUsed('live_chat');openSupportChat(supportCtaBtn.getAttribute('data-fallback'));return;}
+var rwOpen=e.target.closest('[data-rewards-open]');
+if(rwOpen){e.preventDefault();openRewards();return;}
+var hhRow=e.target.closest('[data-human]');
+if(hhRow){var hhHow=hhRow.getAttribute('data-human');humanUsed(hhHow);if(hhHow==='live_chat'){e.preventDefault();openSupportChat(SUPPORT_URL)}return;}
 var deadEnd=e.target.closest('[data-dead-end]');
 if(deadEnd){
   var action=deadEnd.getAttribute('data-dead-end');
-  if(action==='support'){openSupportChat(SUPPORT_URL);}
+  if(action==='support'){humanUsed('live_chat');openSupportChat(SUPPORT_URL);}
   if(action==='new-chat'){clearChat();inputEl.disabled=false;inputEl.placeholder=IPLACE;sendBtn.disabled=false}
   return;
 }
@@ -7250,6 +7358,9 @@ function restoreExtras(m,md,live){
   var mc=cleanMap(m.mapCta);if(mc)add(mapCtaHtml(mc));
   var va=m.viewAll&&prods.length?cleanViewAll(m.viewAll):null;if(va)placeViewAll(b,va,prods);
   var ti=cleanSizeIntro(m.sizeIntro);if(ti)add(sizeIntroHtml(ti));
+  /* The instant cards (no AI): drawn from the store's current settings. */
+  if(m.rewards&&REWARDS){add(rewardsCardHtml(REWARDS));var rwc=b.querySelector('[data-rw]');if(rwc)rwFillBalance(rwc)}
+  if(m.human&&HUMAN)add(humanCardHtml(HUMAN));
   var fit=cleanFit(m.fit);
   if(fit){var fp=$('.ai-chat-msg-bubble > p',md);if(fp)fp.insertAdjacentHTML('afterend',fitCardHtml(fit))}
   if(m.comparison)add(compareHtml(m.comparison));

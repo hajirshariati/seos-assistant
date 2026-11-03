@@ -10,6 +10,16 @@ export const cartLog = [];
 export const buyNowLog = [];
 // What the chat told /apps/hajirai/activity (AVA in Shopify Analytics).
 export const activityLog = [];
+// Balance lookups for the My rewards card (/apps/hajirai/rewards).
+export const rewardsLog = [];
+export const REWARDS_CARD = {
+  on: true, brand: "Aetrex Access", title: "Your rewards, at a glance", sub: "Free to join. Earn on every order, spend at checkout.",
+  earn: [{ label: "Every $1", value: "10 points" }, { label: "Welcome bonus", value: "4,000 points" }, { label: "Refer a friend", value: "4,000 points" }, { label: "Write a review", value: "100 points" }],
+  use: [{ label: "1,000 points", value: "$5 off" }, { label: "4,000 points", value: "$20 off" }, { label: "25,000 points", value: "$125 off (max)" }, { label: "Works with", value: "most promo codes" }],
+  notes: ["Points from an order land 30 days after you buy.", "Return something? The points come back on their own.", "Points stay active for 12 months after your last order or share.", "Log in, add to cart, pick a reward in the cart and tap Apply."],
+  ctaLabel: "Open my rewards", ctaUrl: "https://www.example.com/pages/rewards", logo: "/pic-access.svg",
+};
+export const HUMAN_HELP = { hours: "Mon–Fri 8:30am–12am ET · Sat–Sun 9am–12am ET", phone: "1-888-526-2739", telHref: "tel:18885262739", email: "help@example.com", reply: "within 1 business day", liveLabel: "Chat with Aetrex Support", liveUrl: "https://support.example.com/" };
 export const cartUpdates = [];
 export const chatBodies = [];
 export const fitSaves = [];
@@ -301,6 +311,8 @@ export function start(port) {
         if (u.pathname === "/w.js") return send(200, "application/javascript; charset=utf-8", fs.readFileSync(W + "hajirai-chat-widget.js"));
         if (u.pathname === "/w.css") return send(200, "text/css", fs.readFileSync(W + "hajirai-chat-widget.css"));
         if (/^\/focus-pain-(heel|arch|ball|toes)\.png$/.test(u.pathname)) return send(200, "image/png", fs.readFileSync(W + u.pathname.slice(1)));
+        // The Aetrex Access lockup stand-in: "aetrex" on light slate, "ACCESS" on dark (a 5:1 strip).
+        if (u.pathname === "/pic-access.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100"><rect width="250" height="100" fill="#8fa3ad"/><rect x="250" width="250" height="100" fill="#5c6b73"/><text x="125" y="66" font-family="Arial" font-size="44" fill="#fff" text-anchor="middle">aetrex</text><text x="375" y="66" font-family="Arial" font-weight="700" font-size="40" fill="#fff" text-anchor="middle">ACCESS</text></svg>`);
         if (u.pathname === "/pic-pain.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#ffe3e3"/><circle cx="80" cy="80" r="46" fill="#ff5a5a"/></svg>`);
         if (u.pathname === "/pic-footwear.svg" || u.pathname === "/pic-orthotics.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${u.pathname.includes("foot") ? "#c7d7ff" : "#ffd9c2"}"/><circle cx="80" cy="80" r="44" fill="#fff"/></svg>`);
         if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {
@@ -373,7 +385,11 @@ export function start(port) {
           ...(/[?&]gct=1/.test(String(req.headers.referer || "")) ? { rotateGreetingCta: true, greetingCtaTranslations: [{ text: "¿En qué puedo ayudarte hoy?", dir: "ltr", code: "es" }, { text: "كيف يمكنني مساعدتك اليوم؟", dir: "rtl", code: "ar" }] } : {}),
           appPromo: /[?&]app=set/.test(String(req.headers.referer || "")) ? { on: true, ios: APP_LINKS.ios, android: APP_LINKS.android, text: "", button: "" } : /[?&]app=txt/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "Get 15% off your first app order", button: "Download" } : /[?&]app=img/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "", image: /[?&]app=imgbad/.test(String(req.headers.referer || "")) ? "/apps/hajirai/app-image?v=missing" : "/apps/hajirai/app-image?v=test1" } : /[?&]app=/.test(String(req.headers.referer || "")) ? { on: true, ios: "", android: "", text: "", button: "" } : { on: false },
           whichOrthotic: /[?&]wo=1/.test(String(req.headers.referer || "")) ? { form: "ojyWbTvZ", label: "Identify my orthotic" } : null,
+          // ?rw=1: the My rewards card (Settings → Shopping tools); ?hh=1: Talk to a person (Settings → Customer care).
+          rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
+          human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
+        if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75", tier: "Silver" } : { signedIn: false })); }
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));
         if (u.pathname === "/apps/fitfinder/scan-fit") return send(200, "application/json", JSON.stringify(mockCtl.ffScan || FF_SCAN));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }

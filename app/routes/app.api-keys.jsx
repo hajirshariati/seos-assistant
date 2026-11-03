@@ -55,6 +55,10 @@ import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
+import { parseRewardsCard, REWARDS_MAX, REWARDS_ROWS, REWARDS_NOTES } from "../lib/rewards-card.js";
+import { HUMAN_MAX, humanHelpFields } from "../lib/human-help.js";
+import { shopFacts } from "../lib/shopify-facts.server.js";
+import { appName } from "../lib/app-brand.js";
 import { findCollection } from "../lib/seasonal-cta.server.js";
 import { SeasonalSection } from "../components/SeasonalButton";
 
@@ -80,6 +84,9 @@ export const loader = async ({ request }) => {
     getChatPulse(session.shop).catch(() => null),
     getShopName(admin, session.shop),
   ]);
+  // The app's brand (AVA on the Aetrex app) picks the defaults of the
+  // rewards card and the ways to reach a person.
+  const brand = appBrand(appName(await shopFacts(session.shop, config, { admin }).catch(() => null)));
   const seasonalHandle = collectionHandle(config.seasonalCtaCollection);
   // The photo the storefront chat reported, from the store's own domains only.
   const shopHosts = await getShopHosts(admin, session.shop);
@@ -108,8 +115,15 @@ export const loader = async ({ request }) => {
     recording: recordingState(config),
     guardMode: guardMode(config),
     shopDomain: session.shop,
+    // Talk to a person: the brand's defaults, shown as placeholders.
+    humanDefaults: humanHelpFields({}, { brand }),
     supportUrl: config.supportUrl || "",
     supportLabel: config.supportLabel || "",
+    supportHours: config.supportHours || "",
+    supportPhone: config.supportPhone || "",
+    supportEmail: config.supportEmail || "",
+    supportReplyTime: config.supportReplyTime || "",
+    rewardsCard: parseRewardsCard(config.rewardsCard, { brand }),
     trackingPageUrl: config.trackingPageUrl || "",
     returnsPageUrl: config.returnsPageUrl || "",
     returnsInChat: config.returnsInChat !== false,
@@ -333,6 +347,15 @@ export const action = async ({ request }) => {
   // Customer care
   text("supportUrl");
   text("supportLabel");
+  text("supportHours", HUMAN_MAX.hours);
+  text("supportPhone", HUMAN_MAX.phone);
+  text("supportEmail", HUMAN_MAX.email);
+  text("supportReplyTime", HUMAN_MAX.reply);
+  // My rewards: the card as JSON, made safe.
+  const rewardsRaw = formData.get("rewardsCard");
+  if (rewardsRaw !== null) {
+    try { data.rewardsCard = JSON.stringify(parseRewardsCard(JSON.parse(rewardsRaw), { brand: "SEoS" })); } catch { /* ignore invalid JSON */ }
+  }
   text("trackingPageUrl");
   text("returnsPageUrl");
   bool("returnsInChat");
@@ -562,7 +585,8 @@ const FIELDS = {
   ...Object.fromEntries(CHAT_TEXT_FIELDS.map(([, field]) => [field, ["look"]])),
   appearDelayOn: ["visibility", "bool"], appearDelaySec: ["visibility"], hideInternational: ["visibility", "bool"],
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
-  supportUrl: ["care"], supportLabel: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
+  supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
+  rewardsCard: ["tools", "json"],
   returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
@@ -841,7 +865,7 @@ export default function Settings() {
               <div hidden={section !== "look"}><LookSection d={d} values={values} set={set} /></div>
               <div hidden={section !== "seasonal"}><SeasonalSection values={values} set={set} info={d.seasonalInfo} /></div>
               <div hidden={section !== "visibility"}><VisibilitySection values={values} set={set} /></div>
-              <div hidden={section !== "care"}><CareSection values={values} set={set} /></div>
+              <div hidden={section !== "care"}><CareSection values={values} set={set} d={d} /></div>
               <div hidden={section !== "tools"}><ToolsSection d={d} values={values} set={set} /></div>
               <div hidden={section !== "integrations"}><IntegrationsSection d={d} values={values} set={set} /></div>
               <div hidden={section !== "peak"}>
@@ -1031,7 +1055,7 @@ function VisibilitySection({ values, set }) {
   );
 }
 
-function CareSection({ values, set }) {
+function CareSection({ values, set, d }) {
   return (
     <BlockStack gap="400">
       <SectionHead title="Customer care">Handing shoppers to your team, and their orders and returns.</SectionHead>
@@ -1040,6 +1064,14 @@ function CareSection({ values, set }) {
           <div className="set-grid">
             <TextField label="Support page" value={values.supportUrl} onChange={set("supportUrl")} placeholder="https://yourstore.com/pages/contact" autoComplete="off" helpText="Blank: the theme editor's Support URL." />
             <TextField label="Button label" value={values.supportLabel} onChange={set("supportLabel")} placeholder="Chat with Aetrex Support" autoComplete="off" />
+          </div>
+        </Row>
+        <Row stack title="Talk to a person" help="In the chat's menu at any point: one tap opens your live chat (or the support page) and shows these ways to reach your team. Blank fields fall back to the defaults shown.">
+          <div className="set-grid">
+            <TextField label="Hours" value={values.supportHours} onChange={set("supportHours")} placeholder={d.humanDefaults.hours || "Mon–Fri 9am–5pm ET"} maxLength={HUMAN_MAX.hours} autoComplete="off" />
+            <TextField label="Phone" value={values.supportPhone} onChange={set("supportPhone")} placeholder={d.humanDefaults.phone || "1-800-000-0000"} maxLength={HUMAN_MAX.phone} autoComplete="off" />
+            <TextField label="Email" value={values.supportEmail} onChange={set("supportEmail")} placeholder={d.humanDefaults.email || "help@yourstore.com"} maxLength={HUMAN_MAX.email} autoComplete="off" />
+            <TextField label="Email reply time" value={values.supportReplyTime} onChange={set("supportReplyTime")} placeholder={d.humanDefaults.reply || "within 1 business day"} maxLength={HUMAN_MAX.reply} autoComplete="off" helpText="Shown as “we reply within …”." />
           </div>
         </Row>
       </Group>
@@ -1149,6 +1181,82 @@ function AppPicture({ initial, disabled }) {
 // Focus home (Theme editor → Home layout → Focus): a picture for each of
 // the three cards. Without one, Foot pain shows the heel picture built in
 // and the line cards a line drawing.
+// Settings → Shopping tools → My rewards: the instant card's words and logo.
+function RewardsGroup({ card, onChange }) {
+  const c = card || parseRewardsCard("{}");
+  const up = (patch) => onChange({ ...c, ...patch });
+  const row = (list, i, key, v) => { const next = [...(list || [])]; while (next.length <= i) next.push({ label: "", value: "" }); next[i] = { ...next[i], [key]: v }; return next; };
+  const note = (i, v) => { const next = [...(c.notes || [])]; while (next.length <= i) next.push(""); next[i] = v; return next; };
+  const inputRef = useRef(null);
+  const [logoError, setLogoError] = useState("");
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setLogoError("");
+    if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { setLogoError("Choose a PNG, WebP or JPEG image."); return; }
+    try { up({ logo: await resizeAppImage(file, 480) }); } catch { setLogoError("That image couldn't be read — try another one."); }
+  };
+  return (
+    <Group title="My rewards">
+      <Row
+        title="My rewards card"
+        help={c.on ? "A “My rewards” button on the home opens an instant card in the chat — how points are earned and spent, what to know, and a link to your rewards page. No AI reply, so it's free and immediate. Signed-in shoppers see their balance when Yotpo Loyalty is connected." : "Off: no My rewards button on the home."}
+        toggle
+        checked={Boolean(c.on)}
+        onChange={(v) => up({ on: v })}
+      >
+        <BlockStack gap="300">
+          <div className="set-grid">
+            <TextField label="Program name" value={c.brand} onChange={(v) => up({ brand: v })} maxLength={REWARDS_MAX.brand} autoComplete="off" helpText="Shown as a wordmark when there's no logo." />
+            <TextField label="Title" value={c.title} onChange={(v) => up({ title: v })} maxLength={REWARDS_MAX.title} autoComplete="off" />
+            <TextField label="One line under the title" value={c.sub} onChange={(v) => up({ sub: v })} maxLength={REWARDS_MAX.sub} autoComplete="off" />
+          </div>
+          <div className="set-app-pic">
+            <div className={`set-app-pic__thumb${c.logo ? "" : " is-empty"}`} style={{ aspectRatio: "auto", minHeight: 40 }}>{c.logo ? <img src={c.logo} alt="" style={{ objectFit: "contain" }} /> : <span aria-hidden="true">★</span>}</div>
+            <div className="set-app-pic__body">
+              <Text as="p" variant="bodyMd" fontWeight="semibold">Logo</Text>
+              <Text as="p" variant="bodySm" tone="subdued">A wide logo works best; it shows 28px tall at the top of the card.</Text>
+              <InlineStack gap="200" blockAlign="center">
+                <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
+                <Button onClick={() => inputRef.current?.click()}>{c.logo ? "Replace logo" : "Upload logo"}</Button>
+                {c.logo ? <Button variant="plain" tone="critical" onClick={() => up({ logo: "" })}>Remove</Button> : null}
+              </InlineStack>
+              {logoError ? <Text as="p" variant="bodySm" tone="critical">{logoError}</Text> : null}
+            </div>
+          </div>
+          <Text as="p" variant="bodySm" fontWeight="semibold">Earn — up to {REWARDS_ROWS} rows (what · how many points)</Text>
+          <div className="set-grid">
+            {Array.from({ length: REWARDS_ROWS }, (_, i) => (
+              <InlineStack key={`e${i}`} gap="200" wrap={false}>
+                <div style={{ flex: 1 }}><TextField label={`Earn ${i + 1}`} labelHidden value={c.earn?.[i]?.label || ""} onChange={(v) => up({ earn: row(c.earn, i, "label", v) })} placeholder="Every $1" maxLength={REWARDS_MAX.label} autoComplete="off" /></div>
+                <div style={{ flex: 1 }}><TextField label={`Earn ${i + 1} points`} labelHidden value={c.earn?.[i]?.value || ""} onChange={(v) => up({ earn: row(c.earn, i, "value", v) })} placeholder="10 points" maxLength={REWARDS_MAX.value} autoComplete="off" /></div>
+              </InlineStack>
+            ))}
+          </div>
+          <Text as="p" variant="bodySm" fontWeight="semibold">Spend — up to {REWARDS_ROWS} rows (points · what they're worth)</Text>
+          <div className="set-grid">
+            {Array.from({ length: REWARDS_ROWS }, (_, i) => (
+              <InlineStack key={`u${i}`} gap="200" wrap={false}>
+                <div style={{ flex: 1 }}><TextField label={`Spend ${i + 1}`} labelHidden value={c.use?.[i]?.label || ""} onChange={(v) => up({ use: row(c.use, i, "label", v) })} placeholder="1,000 points" maxLength={REWARDS_MAX.label} autoComplete="off" /></div>
+                <div style={{ flex: 1 }}><TextField label={`Spend ${i + 1} worth`} labelHidden value={c.use?.[i]?.value || ""} onChange={(v) => up({ use: row(c.use, i, "value", v) })} placeholder="$5 off" maxLength={REWARDS_MAX.value} autoComplete="off" /></div>
+              </InlineStack>
+            ))}
+          </div>
+          <Text as="p" variant="bodySm" fontWeight="semibold">Good to know — up to {REWARDS_NOTES} short lines</Text>
+          {Array.from({ length: REWARDS_NOTES }, (_, i) => (
+            <TextField key={`n${i}`} label={`Note ${i + 1}`} labelHidden value={c.notes?.[i] || ""} onChange={(v) => up({ notes: note(i, v) })} placeholder="Return something? The points come back on their own." maxLength={REWARDS_MAX.note} autoComplete="off" />
+          ))}
+          <div className="set-grid">
+            <TextField label="Button" value={c.ctaLabel} onChange={(v) => up({ ctaLabel: v })} maxLength={REWARDS_MAX.cta} autoComplete="off" />
+            <TextField label="Button link (your rewards page)" value={c.ctaUrl} onChange={(v) => up({ ctaUrl: v })} placeholder="https://www.aetrex.com/pages/rewards" autoComplete="off" />
+          </div>
+        </BlockStack>
+      </Row>
+    </Group>
+  );
+}
+
 function FocusPicture({ kind, initial }) {
   const fetcher = useFetcher();
   const inputRef = useRef(null);
@@ -1222,6 +1330,7 @@ function ToolsSection({ d, values, set }) {
           </div>
         </Row>
       </Group>
+      <RewardsGroup card={values.rewardsCard} onChange={set("rewardsCard")} />
       <Group>
         <Row title="Promotions page" help="AVA reads your offers page live (every 15 minutes), so it knows what's running." stack>
           <div className="set-grid">

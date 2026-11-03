@@ -951,6 +951,52 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 860 }], ["ph
   check("home sheets (dim): no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// My rewards (?rw=1) and Talk to a person (?hh=1): instant cards, no AI
+// call. "My rewards" is the first link on the Focus home and draws the
+// store's card at once (balance read live when signed in; a sign-in link
+// otherwise). "Talk to a person" is the first item in the ⋮ menu and shows
+// the live chat, phone and email rows; a tap on one is logged. Both cards
+// come back after a reload, and the chat sends the service-log fields.
+for (const [vp, login, tag] of [[{ width: 390, height: 844 }, "&login=Ann", "phone, signed in"], [{ width: 1280, height: 860 }, "", "computer, signed out"]]) {
+  const ctx = await browser.newContext({ viewport: vp });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`http://localhost:4789/full?home=focus&rw=1&hh=1${login}`);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(800);
+  const first = await page.$eval(".ai-chat-focus__links button:first-child", (b) => b.textContent.trim());
+  const sentBefore = chatBodies.length;
+  await page.click("[data-rewards-open]");
+  await page.waitForFunction(() => /points|balance/.test(document.querySelector("[data-rw-bal]")?.textContent || ""), null, { timeout: 4000 });
+  const card = await page.evaluate(() => { const c = document.querySelector(".ai-rw"); const r = c.getBoundingClientRect(); const over = [...c.querySelectorAll("*")].filter((e) => { const x = e.getBoundingClientRect(); return x.width && (x.right > r.right + 1 || x.left < r.left - 1); }).length; return { user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim(), logo: !!c.querySelector(".ai-rw__logo"), bal: document.querySelector("[data-rw-bal]").textContent.trim(), earn: c.querySelectorAll(".ai-rw__col")[0]?.querySelectorAll("li").length, spend: c.querySelectorAll(".ai-rw__col")[1]?.querySelectorAll("li").length, notes: c.querySelectorAll(".ai-rw__notes li").length, cta: c.querySelector(".ai-rw__cta")?.getAttribute("href"), width: Math.round(r.width), over, fits: r.right <= window.innerWidth }; });
+  check(`My rewards (${tag}): the first link on the home; one tap, no AI call, the card with the lockup, Earn and Spend, the notes and the rewards link`, first === "My rewards" && chatBodies.length === sentBefore && card.user === "My rewards" && card.logo && card.earn === 4 && card.spend === 4 && card.notes === 4 && card.cta === "https://www.example.com/pages/rewards" && card.over === 0 && card.fits, JSON.stringify(card));
+  check(`My rewards (${tag}): ${login ? "the balance read live" : "a sign-in link instead of a balance"}`, login ? /2,350 points · \$11\.75 · Silver/.test(card.bal) : /Log in to see your balance/.test(card.bal), card.bal);
+  await page.click(".ai-chat-menu-btn");
+  const items = await page.$$eval(".ai-chat-menu-item", (b) => b.map((x) => x.textContent.trim()));
+  await page.click('.ai-chat-menu-item[data-action="human"]');
+  await page.waitForSelector(".ai-hh", { timeout: 3000 });
+  const hh = await page.$$eval(".ai-hh__row", (rows) => rows.map((r) => [r.getAttribute("data-human"), r.tagName, r.getAttribute("href") || "", r.querySelector("b").textContent, r.querySelector("span span")?.textContent || ""]));
+  check(`Talk to a person (${tag}): first in the menu; live chat, phone (a tel link, with the hours) and email (a mailto link, with the reply time)`, items[0] === "Talk to a person" && hh.length === 3 && hh[0][0] === "live_chat" && hh[0][3] === "Chat with Aetrex Support" && hh[1][0] === "phone" && hh[1][2] === "tel:18885262739" && /Mon–Fri/.test(hh[1][4]) && hh[2][0] === "email" && hh[2][2] === "mailto:help@example.com" && /within 1 business day/.test(hh[2][4]), JSON.stringify({ items, hh }));
+  const actsBefore = activityLog.filter((a) => a.kind === "human").length;
+  await page.$eval('[data-human="email"]', (a) => a.addEventListener("click", (e) => e.preventDefault(), { once: true }));
+  await page.click('[data-human="email"]');
+  await page.waitForTimeout(400);
+  const acts = activityLog.filter((a) => a.kind === "human").slice(actsBefore);
+  check(`Talk to a person (${tag}): the tap is logged for the customer service log`, acts.length === 1 && acts[0].how === "email" && /^sess_/.test(acts[0].session_id || ""), JSON.stringify(acts));
+  await page.fill(".ai-chat-input-area textarea", "show me 1");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-product-card", { timeout: 8000 });
+  const sent = chatBodies.at(-1);
+  check(`service log (${tag}): the chat sends this browser's random id, that a person is offered, and the opening words with the first message`, /^v_[a-z0-9]+$/.test(sent.visitor || "") && sent.human_offered === true && typeof sent.disclosure === "string" && /personal shopping assistant/.test(sent.disclosure) && /may make mistakes/.test(sent.disclosure), JSON.stringify({ visitor: sent.visitor, human_offered: sent.human_offered, disclosure: sent.disclosure }));
+  await page.reload();
+  await page.click(".ai-chat-launcher");
+  await page.waitForFunction(() => document.querySelector(".ai-rw") && document.querySelector(".ai-hh"), null, { timeout: 4000 }).catch(() => {});
+  const back = await page.evaluate(() => ({ rw: !!document.querySelector(".ai-rw"), hh: !!document.querySelector(".ai-hh") }));
+  check(`instant cards (${tag}): both come back after a reload`, back.rw && back.hh, JSON.stringify(back));
+  check(`instant cards (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // The chat guard ended the chat (the server answers 423 chat_ended): the
 // shopper reads the server's words as a reply, the box is paused, and a
 // reload or "Start a new chat" keeps it paused until the time the server

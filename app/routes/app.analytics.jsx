@@ -719,6 +719,7 @@ const EXPORTS = [
   { section: "viewed", content: "Product details asked", helpText: "Every product, ranked" },
   { section: "conversations", content: "Conversations", helpText: "With the full back-and-forth" },
   { section: "models", content: "Cost by AI model", helpText: "Conversations and cost per model" },
+  { section: "service-log", content: "Customer service log", helpText: "Every chat for three years, with the yearly numbers NYC's automated customer service rules ask for" },
 ];
 
 function ExportMenu({ onExport, exporting }) {
