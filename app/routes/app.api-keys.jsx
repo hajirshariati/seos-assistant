@@ -177,6 +177,8 @@ export const loader = async ({ request }) => {
     promoMemoryDays: String(promoMemoryDays(config.promoMemoryDays)),
     styleMemoryDays: String(styleMemoryDays(config.styleMemoryDays)),
     returnsCardOn: config.returnsCardOn !== false,
+    dealsCardOn: config.dealsCardOn !== false,
+    dealsUrl: config.dealsUrl || "",
     returnRules: parseReturnRules(config.returnRules, { reasonKeys: RETURN_REASONS.map((r) => r.key) }),
     referralPageUrl: config.referralPageUrl || "",
     klaviyoCompanyId: config.klaviyoCompanyId || "",
@@ -387,6 +389,13 @@ export const action = async ({ request }) => {
   if (promoDaysRaw !== null) data.promoMemoryDays = promoMemoryDays(promoDaysRaw);
   const styleDaysRaw = formData.get("styleMemoryDays");
   if (styleDaysRaw !== null) data.styleMemoryDays = styleMemoryDays(styleDaysRaw);
+  bool("dealsCardOn");
+  const dealsUrlRaw = formData.get("dealsUrl");
+  if (dealsUrlRaw !== null) {
+    const u = String(dealsUrlRaw).trim();
+    if (u && !/^https?:\/\/[^\s"'<>]+$|^\/[^\s"'<>]*$/i.test(u)) return fail("The deals link must be a full https:// link or a path on your store, like /collections/sale.", "tools");
+    data.dealsUrl = u.slice(0, 500);
+  }
   const promoUrl = formData.get("promoPageUrl");
   const promoStop = formData.get("promoPageStop");
   if (promoUrl !== null) {
@@ -606,7 +615,7 @@ const FIELDS = {
   supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   rewardsCard: ["tools", "json"],
   returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], returnRules: ["care", "json"],
-  promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
+  promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], dealsCardOn: ["tools", "bool"], dealsUrl: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
   feedbackSurveyColor: ["tools"], feedbackSurveyIcon: ["tools"], feedbackSurveyHideAfter: ["tools", "bool"],
@@ -1024,7 +1033,8 @@ function LookSection({ d, values, set }) {
               </BlockStack>
             ))}
             <BlockStack gap="200">
-              <Text as="h3" variant="headingSm">Links above the message box</Text>
+              <Text as="h3" variant="headingSm">Buttons above the message box</Text>
+              <Text as="p" tone="subdued">Three are built in and open their own card — no question to AVA. Switch each where it lives: <b>My rewards</b> ({values.rewardsCard?.on ? "on" : "off"}, Shopping tools → My rewards), <b>Returns &amp; exchanges</b> ({values.returnsCardOn ? "on" : "off"}, Customer care → Returns &amp; exchanges on the home), <b>Deals</b> ({values.dealsCardOn ? "on" : "off"}, Shopping tools → Deals). Your own links below come after them; a link named like a built-in button is hidden while that button is on.</Text>
               {[1, 2, 3].map((n) => (
                 <div className="set-grid" key={n}>
                   <TextField label={`Link ${n}`} value={values[`textHomeLink${n}Label`]} onChange={set(`textHomeLink${n}Label`)} placeholder={tp(`homeLink${n}Label`)} maxLength={TEXT_MAX[`homeLink${n}Label`]} autoComplete="off" />
@@ -1390,6 +1400,15 @@ function ToolsSection({ d, values, set }) {
             <TextField label="Page link" value={values.promoPageUrl} onChange={set("promoPageUrl")} placeholder="https://www.aetrex.com/pages/terms-conditions" autoComplete="off" />
             <TextField label="Offers end at this line" value={values.promoPageStop} onChange={set("promoPageStop")} placeholder="STANDARD TERMS AND CONDITIONS OF SALE" autoComplete="off" disabled={!values.promoPageUrl.trim()} helpText="Only text above it counts as offers." />
           </div>
+        </Row>
+        <Row
+          title="Deals"
+          help={values.dealsCardOn ? "A “Deals” button on the Focus home: one tap shows the offers running now — read from your promotions page and dated campaigns, in short lines, every one checked against the page's own words — then the products on sale, best discount first. Nothing is made up: with no offers and nothing on sale it says so." : "No Deals button on the Focus home (shoppers can still ask)."}
+          toggle
+          checked={values.dealsCardOn}
+          onChange={set("dealsCardOn")}
+        >
+          {values.dealsCardOn ? <TextField label="See-all link (optional)" value={values.dealsUrl} onChange={set("dealsUrl")} placeholder="/collections/sale" autoComplete="off" helpText="A sale collection or deals page, shown at the end of the card." /> : null}
         </Row>
         <Row title="Memory" help="AVA remembers what your store showed, from its own records only — never a guess. Offers: every read of your promotions page and every dated campaign; an offer from an old email gets “that ended on Sunday”. Styles: products you archive, set to draft or delete; a style someone asks for by name gets “discontinued”, with the date, and the closest styles sold now. What it remembers is listed on the Knowledge page." stack>
           <div className="set-grid">

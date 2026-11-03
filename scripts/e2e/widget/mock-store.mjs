@@ -13,6 +13,12 @@ export const activityLog = [];
 // Balance lookups for the My rewards card (/apps/hajirai/rewards).
 export const rewardsLog = [];
 export const ordersLog = [];
+export const dealsLog = [];
+// The offers the Deals card shows (the promotions page, structured and checked).
+export const DEALS_OFFERS = [
+  { title: "20% off all boots", detail: "Enter the code at checkout.", code: "FALL20", ends: "Nov 9" },
+  { title: "Free shipping on orders over $75", detail: "Lower 48 states.", code: "", ends: "" },
+];
 export const REWARDS_CARD = {
   on: true, brand: "Aetrex Access", title: "Your rewards, at a glance", sub: "Free to join. Earn on every order, spend at checkout.",
   earn: [{ label: "Every $1", value: "10 points" }, { label: "Welcome bonus", value: "4,000 points" }, { label: "Refer a friend", value: "4,000 points" }, { label: "Write a review", value: "100 points" }],
@@ -393,9 +399,12 @@ export function start(port) {
           // ?rw=1: the My rewards card (Settings → Shopping tools); ?hh=1: Talk to a person (Settings → Customer care).
           rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
+          // ?dl=1: the Deals card (Settings → Shopping tools).
+          deals: /[?&]dl=1/.test(String(req.headers.referer || "")) ? { on: true, label: "Deals", url: "https://www.example.com/collections/sale" } : null,
           // ?rt=1: the Returns & exchanges card (Settings → Customer care).
           returns: /[?&]rt=1/.test(String(req.headers.referer || "")) ? { inChat: true, lookup: true, pages: { track: "https://track.example/", returns: "https://returns.example/" } } : null,
           ...(() => { const fb = (String(req.headers.referer || "").match(/[?&]fb=(\d)/) || [])[1]; return fb ? { feedbackSurvey: String(req.headers.referer || "").includes("fblook") ? { on: true, form: "ojyWbTvZ", label: "Identify My Orthotic", color: "green", icon: "orthotic", hideAfter: false } : { on: true, form: "jdXBrXMa", label: "Share feedback" }, hideLiveChatButton: fb === "2" } : {}; })() }));
+        if (u.pathname === "/apps/hajirai/deals") { dealsLog.push(u.search); return send(200, "application/json", JSON.stringify({ offers: DEALS_OFFERS, products: MANY_BOOTS.slice(0, 6), url: "https://www.example.com/collections/sale", label: "Deals", asOf: new Date().toISOString() })); }
         if (u.pathname === "/apps/hajirai/orders") { ordersLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, orders: ORDERS.map(orderNow), numberOfOrders: 7, returnMethods: METHODS, freeReasons: FREE_REASONS } : { signedIn: false })); }
         if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75" } : { signedIn: false })); }
         if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));

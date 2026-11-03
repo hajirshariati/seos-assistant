@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog } = await import("./mock-store.mjs");
+const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog, dealsLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -1039,6 +1039,7 @@ for (const [vp, login, tag] of [[{ width: 360, height: 760 }, "&login=Ann", "pho
     await page.waitForSelector(".ai-ret", { timeout: 4000 });
     check(`Returns & exchanges (${tag}): Return an item starts the chat's own return flow on that order`, !!(await page.$(".ai-rt .ai-ret")), "");
     // The store's return rules (AfterShip's, mirrored): the gift card is listed greyed with why, never pickable; a damaged item sends back for free.
+    await page.waitForSelector(".ai-rt .ai-ret__item[data-ret-item]", { timeout: 4000 });
     const picker = await page.evaluate(() => ({ pickable: document.querySelectorAll(".ai-rt .ai-ret__item[data-ret-item]").length, blocked: [...document.querySelectorAll(".ai-rt .ai-ret__item.is-blocked")].map((b) => [b.querySelector(".ai-ord__ititle")?.textContent, b.querySelector(".ai-ret__blocked")?.textContent, b.tagName, b.getAttribute("aria-disabled")]) }));
     check(`return rules (${tag}): the gift card is listed as not returnable (greyed, with why), the two real items pickable`, picker.pickable === 2 && JSON.stringify(picker.blocked) === JSON.stringify([["Aetrex eGift Card", "Gift cards can't be returned", "DIV", "true"]]), JSON.stringify(picker));
     await page.click('.ai-rt [data-ret-item="9001"]');
@@ -1075,6 +1076,46 @@ for (const [vp, login, tag] of [[{ width: 360, height: 760 }, "&login=Ann", "pho
   const back = await page.evaluate(() => ({ rt: !!document.querySelector(".ai-rt"), orders: document.querySelectorAll(".ai-rt .ai-ord").length, lookup: !!document.querySelector(".ai-rt .ai-ordl") }));
   check(`Returns & exchanges (${tag}): the card comes back after a reload${login ? " with the orders, without another read" : ""}`, back.rt && (login ? back.orders === 2 && ordersLog.length === ordersBefore + 1 : back.lookup), JSON.stringify({ back, reads: ordersLog.length - ordersBefore }));
   check(`Returns & exchanges (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Deals (?dl=1): the Deals pill comes last (the store's own "Deals" link
+// steps aside), one tap draws the card — the running offers (a code to copy,
+// an end) then the products on sale as the chat's usual cards — read once
+// and kept with the message, so it comes back after a reload without a read.
+for (const [vp, tag] of [[{ width: 390, height: 844 }, "phone"], [{ width: 1280, height: 860 }, "computer"]]) {
+  const ctx = await browser.newContext({ viewport: vp });
+  await ctx.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full?home=focus&rw=1&rt=1&dl=1");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(800);
+  const labels = await page.$$eval(".ai-chat-focus__links button", (b) => b.map((x) => x.textContent.trim()));
+  check(`Deals (${tag}): the pills end with Deals, the store's own Deals link stepping aside`, labels.join(" · ") === "My rewards · Returns & exchanges · Track my order · Deals", labels.join(" · "));
+  const sentBefore = chatBodies.length, readsBefore = dealsLog.length;
+  await page.click("[data-deals-open]");
+  await page.waitForSelector(".ai-dl .ai-dl__offer", { timeout: 4000 });
+  await page.waitForSelector(".ai-chat-product-card", { timeout: 4000 });
+  const got = await page.evaluate(() => {
+    const card = document.querySelector(".ai-dl"), r = card.getBoundingClientRect(), bubble = card.closest(".ai-chat-msg-bubble");
+    const offers = [...card.querySelectorAll(".ai-dl__offer")].map((o) => [o.querySelector("b")?.textContent, o.querySelector(".ai-dl__otxt > span")?.textContent || "", o.querySelector("em")?.textContent || "", o.querySelector("[data-dl-code]")?.getAttribute("data-dl-code") || ""]);
+    const order = [...bubble.children].map((c) => c.className.split(" ")[0] || c.tagName);
+    const over = [...card.querySelectorAll("*")].filter((e) => { const x = e.getBoundingClientRect(); return x.width && (x.right > r.right + 1 || x.left < r.left - 1); }).length;
+    const colorful = [...card.querySelectorAll("*")].some((e) => { const cs = getComputedStyle(e); const sat = (c) => { const m = c.match(/\d+/g); if (!m || m.length < 3) return 0; const [a, b, d] = m.map(Number); return Math.max(a, b, d) - Math.min(a, b, d); }; return e.querySelectorAll("svg, img").length === 0 && (sat(cs.color) > 20 || sat(cs.backgroundColor) > 20); });
+    return { user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim(), head: card.querySelector(".ai-dl__head strong")?.textContent, sub: card.querySelector(".ai-dl__head span")?.textContent, offers, sale: card.querySelector(".ai-dl__sale b")?.textContent, seeAll: card.querySelector(".ai-dl__sale a")?.getAttribute("href"), cards: bubble.querySelectorAll(".ai-chat-product-card").length, struck: bubble.querySelectorAll(".ai-chat-product-card .compare-at").length, order, over, fits: r.right <= window.innerWidth, icons: card.querySelectorAll("svg, img").length, colorful };
+  });
+  check(`Deals (${tag}): one tap, no AI, one read — the offers with code and end, then On sale now and six sale cards with their old prices; quiet and colourless; the card sits under the words, above the cards`, chatBodies.length === sentBefore && dealsLog.length === readsBefore + 1 && got.user === "Deals" && got.head === "Deals" && got.sub === "Running right now" && JSON.stringify(got.offers) === JSON.stringify([["20% off all boots", "Enter the code at checkout.", "Ends Nov 9", "FALL20"], ["Free shipping on orders over $75", "Lower 48 states.", "", ""]]) && got.sale === "On sale now" && got.seeAll === "https://www.example.com/collections/sale" && got.cards === 6 && got.struck >= 6 && got.order[0] === "P" && got.order[1] === "ai-dl" && got.over === 0 && got.fits && got.icons === 0 && !got.colorful, JSON.stringify(got));
+  await page.click('[data-dl-code="FALL20"]');
+  await page.waitForTimeout(300);
+  const copied = await page.evaluate(async () => ({ label: document.querySelector('[data-dl-code="FALL20"] .ai-dl__copy')?.textContent, clip: await navigator.clipboard.readText().catch(() => "") }));
+  check(`Deals (${tag}): the code copies on a tap`, copied.label === "Copied" && copied.clip === "FALL20", JSON.stringify(copied));
+  await page.reload();
+  await page.click(".ai-chat-launcher");
+  await page.waitForFunction(() => document.querySelector(".ai-dl .ai-dl__offer") && document.querySelector(".ai-chat-product-card"), null, { timeout: 4000 }).catch(() => {});
+  const back = await page.evaluate(() => ({ offers: document.querySelectorAll(".ai-dl .ai-dl__offer").length, cards: document.querySelectorAll(".ai-chat-product-card").length }));
+  check(`Deals (${tag}): the card and the sale cards come back after a reload without another read`, back.offers === 2 && back.cards === 6 && dealsLog.length === readsBefore + 1, JSON.stringify({ back, reads: dealsLog.length - readsBefore }));
+  check(`Deals (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // The chat guard ended the chat (the server answers 423 chat_ended): the

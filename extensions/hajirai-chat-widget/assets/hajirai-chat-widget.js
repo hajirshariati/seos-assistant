@@ -73,6 +73,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   REWARDS=d.rewards&&typeof d.rewards==='object'&&d.rewards.title?d.rewards:null;
   HUMAN=d.human&&typeof d.human==='object'?d.human:null;
   RETURNS=d.returns&&typeof d.returns==='object'?d.returns:null;
+  DEALS=d.deals&&typeof d.deals==='object'?d.deals:null;
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -82,7 +83,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     for(var _i=0;_i<_ms.length;_i++){var _mm=_ms[_i].__msg,_bb=_ms[_i].querySelector('.ai-chat-msg-bubble');if(!_mm||!_bb)continue;
       if(_mm.rewards&&REWARDS&&!_bb.querySelector('.ai-rw')){_bb.insertAdjacentHTML('beforeend',rewardsCardHtml(REWARDS));var _rc=_bb.querySelector('[data-rw]');if(_rc)rwFillBalance(_rc)}
       if(_mm.human&&HUMAN&&!_bb.querySelector('.ai-hh'))_bb.insertAdjacentHTML('beforeend',humanCardHtml(HUMAN));
-      if(_mm.returns&&RETURNS&&!_bb.querySelector('.ai-rt')){_bb.insertAdjacentHTML('beforeend',returnsCardHtml(_mm));rtFill(_bb.querySelector('[data-rt]'),_mm)}}
+      if(_mm.returns&&RETURNS&&!_bb.querySelector('.ai-rt')){_bb.insertAdjacentHTML('beforeend',returnsCardHtml(_mm));rtFill(_bb.querySelector('[data-rt]'),_mm)}
+      if(_mm.deals&&DEALS&&!_bb.querySelector('.ai-dl')){dlInsert(_bb,_mm);dlFill(_bb.querySelector('[data-dl]'),_mm)}}
   }
   if(d.voiceInput===false){VOICE_OFF=true;if(typeof showMic==='function')showMic()}
   /* Settings → Support link wins over the theme editor's. */
@@ -335,7 +337,7 @@ var TESTER_KEY='hajirai_tester',TESTER='',REC_ON=false,REC_SCOPE='testers';
 /* My rewards (Settings → Shopping tools) and Talk to a person (Settings →
    Customer care): instant cards, no AI. A random id names this browser in
    the customer service log — no name, no account, nothing to trace. */
-var REWARDS=null,HUMAN=null,RETURNS=null,VISITOR_KEY='hajirai_visitor',VISITOR='';
+var REWARDS=null,HUMAN=null,RETURNS=null,DEALS=null,VISITOR_KEY='hajirai_visitor',VISITOR='';
 try{VISITOR=localStorage.getItem(VISITOR_KEY)||'';if(!/^v_[a-z0-9]{8,40}$/.test(VISITOR)){VISITOR='v_'+Date.now().toString(36)+Math.random().toString(36).slice(2,12);localStorage.setItem(VISITOR_KEY,VISITOR)}}catch(e){}
 /* The look the chat starts in: the shopper's own pick (sun/moon) if they've
    made one, else the store's choice (Settings → Showing the chat, remembered
@@ -1782,7 +1784,7 @@ function focusCardHtml(kind){
 /* The pills above the box, all alike: My rewards and Returns & exchanges
    (instant cards, no AI), then the store's own links (Settings) — minus a
    returns one when the card stands in for it. */
-function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}return h}
+function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l))&&!(DEALS&&/deal|sale|promo|offer/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}if(DEALS)h+='<button type="button" data-deals-open="1">'+esc(DEALS.label||'Deals')+'</button>';return h}
 function buildFocusHome(){
   var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
@@ -6159,6 +6161,69 @@ function rtFill(card,m){
     body.innerHTML=rtOrdersHtml(m);
   }).catch(function(){body.innerHTML='<p class="ai-rt__empty">We couldn\u2019t load your orders just now. Try again in a moment.</p>'});
 }
+/* ── Deals ──
+   A pill on the home: one tap, no AI at tap time. The server answers with
+   the offers running now (the store's promotions page and dated campaigns,
+   in short lines checked against the page's own words) and the products on
+   sale, best discount first. Offers sit in a quiet typographic card under
+   the words; the sale products follow as the chat's usual product cards.
+   Kept with the message, so it comes back after a reload without a read. */
+function dlInsert(b,m){
+  var p=b.querySelector(':scope > p');
+  if(p)p.insertAdjacentHTML('afterend',dealsCardHtml(m));else b.insertAdjacentHTML('afterbegin',dealsCardHtml(m));
+}
+function dealsCardHtml(m){
+  var has=Array.isArray(m&&m.offers);
+  var h='<div class="ai-dl" data-dl role="group" aria-label="Deals">';
+  h+='<div class="ai-dl__head"><strong>'+esc((DEALS&&DEALS.label)||'Deals')+'</strong><span>'+(has?(m.offers.length?'Running right now':'No store-wide offers at the moment'):'Checking what\u2019s on\u2026')+'</span></div>';
+  h+='<div class="ai-dl__body" data-dl-body>'+(has?dlBodyHtml(m):'<div class="ai-dl__wait" aria-label="Loading"><span></span><span></span></div>')+'</div>';
+  h+='</div>';return h;
+}
+function dlBodyHtml(m){
+  var offers=m.offers||[],prods=m.products||[],url=safeUrl((m.dealsUrl||(DEALS&&DEALS.url)||'')),h='';
+  if(offers.length){
+    h+='<ol class="ai-dl__offers">';
+    for(var i=0;i<offers.length;i++){var o=offers[i];
+      h+='<li class="ai-dl__offer"><span class="ai-dl__otxt"><b>'+esc(o.title)+'</b>'+(o.detail?'<span>'+esc(o.detail)+'</span>':'')+(o.ends?'<em>Ends '+esc(o.ends)+'</em>':'')+'</span>'+
+        (o.code?'<button type="button" class="ai-dl__code" data-dl-code="'+esc(o.code)+'" aria-label="Copy code '+esc(o.code)+'"><span class="ai-dl__codetxt">'+esc(o.code)+'</span><span class="ai-dl__copy">Copy</span></button>':'')+'</li>';}
+    h+='</ol>';
+  }
+  if(prods.length)h+='<div class="ai-dl__sale"><b>On sale now</b><span>Best savings first'+(url?' \u00b7 <a href="'+esc(url)+'" target="_blank" rel="noopener">See all</a>':'')+'</span></div>';
+  else if(!offers.length)h+='<p class="ai-dl__empty">Nothing is on sale right now'+(url?' \u2014 <a href="'+esc(url)+'" target="_blank" rel="noopener">see the sale page</a>':'')+'. Check back soon, or ask me about a style.</p>';
+  else if(url)h+='<p class="ai-dl__empty"><a href="'+esc(url)+'" target="_blank" rel="noopener">See all deals</a></p>';
+  return h;
+}
+function dlCopy(btn){
+  var code=btn.getAttribute('data-dl-code')||'';if(!code)return;
+  var done=function(){var c=btn.querySelector('.ai-dl__copy');if(c){c.textContent='Copied';btn.classList.add('is-copied');setTimeout(function(){c.textContent='Copy';btn.classList.remove('is-copied')},1600)}};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(code).then(done,done);
+  else{try{var ta=document.createElement('textarea');ta.value=code;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}catch(e){}done()}
+}
+/* Read once per message: the offers and the sale cards are kept with it. */
+function dlFill(card,m){
+  if(!card||!m||Array.isArray(m.offers))return;
+  var md=card.closest('.ai-chat-msg');
+  fetch('/apps/hajirai/deals',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){
+    if(!d||!Array.isArray(d.offers)){var bd=$('[data-dl-body]',card);if(bd)bd.innerHTML='<p class="ai-dl__empty">We couldn\u2019t load the deals just now. Try again in a moment.</p>';return}
+    m.offers=d.offers.slice(0,6).map(function(o){return {title:String(o.title||'').slice(0,60),detail:String(o.detail||'').slice(0,140),code:String(o.code||'').slice(0,24),ends:String(o.ends||'').slice(0,40)}});
+    m.products=(d.products||[]).slice(0,8).map(vaCard).filter(Boolean);
+    if(d.url)m.dealsUrl=String(d.url).slice(0,500);
+    saveH(messages);
+    /* Draw the message again: the card under the words, the sale cards after it. */
+    if(md&&md.isConnected&&md.__msg===m){var md2=appendMsg('assistant',m.content,m.products);md2.__msg=m;md.replaceWith(md2);restoreExtras(m,md2,true)}
+  }).catch(function(){var bd=$('[data-dl-body]',card);if(bd)bd.innerHTML='<p class="ai-dl__empty">We couldn\u2019t load the deals just now. Try again in a moment.</p>'});
+}
+function openDeals(){
+  if(!DEALS||isStreaming)return;
+  var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
+  var label=(DEALS.label||'Deals');
+  messages.push({role:'user',content:label,local:true});var ud=appendMsg('user',label);
+  var text='Here\u2019s what\u2019s on right now.',m={role:'assistant',content:text,deals:true};
+  messages.push(m);
+  var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
+  saveH(messages);scrollMsgTop(ud||md);
+}
+
 function openReturns(){
   if(!RETURNS||isStreaming)return;
   var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');leaveHome();
@@ -7377,6 +7442,10 @@ var rwOpen=e.target.closest('[data-rewards-open]');
 if(rwOpen){e.preventDefault();openRewards();return;}
 var rtOpen=e.target.closest('[data-returns-open]');
 if(rtOpen){e.preventDefault();openReturns();return;}
+var dlOpen=e.target.closest('[data-deals-open]');
+if(dlOpen){e.preventDefault();openDeals();return;}
+var dlCode=e.target.closest('[data-dl-code]');
+if(dlCode){e.preventDefault();dlCopy(dlCode);return;}
 var rtHelp=e.target.closest('[data-rt-help]');
 if(rtHelp){e.preventDefault();var rtList=document.getElementById(rtHelp.getAttribute('aria-controls'));if(rtList){rtList.hidden=!rtList.hidden;rtHelp.setAttribute('aria-expanded',String(!rtList.hidden))}return;}
 var hhRow=e.target.closest('[data-human]');
@@ -7450,6 +7519,7 @@ function restoreExtras(m,md,live){
   if(m.rewards&&REWARDS){add(rewardsCardHtml(REWARDS));var rwc=b.querySelector('[data-rw]');if(rwc)rwFillBalance(rwc)}
   if(m.human&&HUMAN)add(humanCardHtml(HUMAN));
   if(m.returns&&RETURNS){add(returnsCardHtml(m));var rtc=b.querySelector('[data-rt]');if(rtc)rtFill(rtc,m)}
+  if(m.deals&&DEALS){dlInsert(b,m);var dlc=b.querySelector('[data-dl]');if(dlc)dlFill(dlc,m)}
   var fit=cleanFit(m.fit);
   if(fit){var fp=$('.ai-chat-msg-bubble > p',md);if(fp)fp.insertAdjacentHTML('afterend',fitCardHtml(fit))}
   if(m.comparison)add(compareHtml(m.comparison));

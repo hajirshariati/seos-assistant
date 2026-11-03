@@ -16,6 +16,7 @@ import { launcherMarkConfig, cleanAvatarUrl } from "../lib/launcher-mark.js";
 import { recordingState } from "../lib/chat-recording.js";
 import { rewardsCardConfig } from "../lib/rewards-card.js";
 import { humanHelpConfig } from "../lib/human-help.js";
+import { dealsConfig } from "../lib/deals.js";
 import { shopFacts } from "../lib/shopify-facts.server.js";
 import { appBrand, appName } from "../lib/app-brand.js";
 
@@ -123,6 +124,9 @@ export const loader = async ({ request }) => {
         appPromo: appPromoConfig(config),
         // Settings → Shopping tools → My rewards: the instant rewards card (no AI).
         rewards: rewardsCardConfig(config, { brand }),
+        // Settings → Shopping tools → Deals: the instant deals card (offers
+        // and the products on sale; read from the server when tapped).
+        deals: dealsConfig(config),
         // Settings → Customer care → Returns & exchanges on the home: the
         // instant returns card (no AI) — orders with Start a return when
         // signed in; sign in or an order lookup when not.

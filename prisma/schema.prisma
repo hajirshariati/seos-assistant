@@ -294,6 +294,9 @@ model ShopConfig {
   styleMemoryDays     Int      @default(730)
   // Returns & exchanges card on the Focus home (no AI).
   returnsCardOn       Boolean  @default(true)
+  // Deals card on the Focus home (no AI at tap time) and its "See all" link.
+  dealsCardOn         Boolean  @default(true)
+  dealsUrl            String   @default("")
 
   vipModeEnabled      Boolean  @default(false)
   showLoginPill       Boolean  @default(true)

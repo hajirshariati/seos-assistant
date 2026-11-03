@@ -7734,8 +7734,45 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-hh__t b { font: 600 14px/19px var(--seos-font); overflow-wrap: anywhere; }
 .ai-chat-panel .ai-hh__t span { font: 400 12.5px/17px var(--seos-font); color: var(--seos-text-2); }
 .ai-chat-panel .ai-hh__row > svg:last-child { flex: none; width: 14px; height: 14px; color: var(--seos-text-2); }
-.ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt) { width: 100%; max-width: 100%; }
-.ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
+.ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt), .ai-chat-msg-bubble:has(.ai-dl) { width: 100%; max-width: 100%; }
+.ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-dl) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
+
+/* ── Deals card: quiet, typographic, no colour ── */
+.ai-chat-panel .ai-dl { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; overflow: clip; container-type: inline-size; container-name: aideal; }
+.ai-chat-panel .ai-dl__head { display: grid; gap: 2px; }
+.ai-chat-panel .ai-dl__head strong { font: 700 17px/22px var(--seos-font); letter-spacing: -0.02em; }
+.ai-chat-panel .ai-dl__head span { font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-dl__body { display: grid; gap: 12px; }
+.ai-chat-panel .ai-dl__offers { list-style: none; margin: 0; padding: 0; display: grid; }
+.ai-chat-panel .ai-dl__offer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--seos-line); }
+.ai-chat-panel .ai-dl__offer:first-child { border-top: 0; padding-top: 0; }
+.ai-chat-panel .ai-dl__offer:last-child { padding-bottom: 0; }
+.ai-chat-panel .ai-dl__otxt { display: grid; gap: 2px; min-width: 0; }
+.ai-chat-panel .ai-dl__otxt b { font: 600 14px/19px var(--seos-font); letter-spacing: -0.01em; }
+.ai-chat-panel .ai-dl__otxt span { font: 400 12.5px/17px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-dl__otxt em { font: 500 11.5px/15px var(--seos-font); font-style: normal; color: var(--seos-text-2); letter-spacing: 0.01em; }
+/* The code: a hairline pill, tap to copy. */
+.ai-chat-panel .ai-dl__code { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 4px 0 11px; border: 1px solid var(--seos-line-strong, rgba(0, 0, 0, 0.14)); border-radius: 999px; background: transparent; color: var(--seos-text); font: 600 12.5px/1 var(--seos-font); letter-spacing: 0.04em; cursor: pointer; transition: border-color 0.15s ease, background-color 0.15s ease; }
+.ai-chat-panel .ai-dl__codetxt { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; letter-spacing: 0.06em; }
+.ai-chat-panel .ai-dl__copy { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--seos-text); color: var(--seos-bg-raised, #fff); font: 600 11px/1 var(--seos-font); letter-spacing: 0; }
+.ai-chat-panel .ai-dl__code.is-copied .ai-dl__copy { background: var(--seos-surface); color: var(--seos-text); box-shadow: inset 0 0 0 1px var(--seos-line-strong); }
+@media (hover: hover) { .ai-chat-panel .ai-dl__code:hover { border-color: var(--seos-text-2); } }
+.ai-chat-panel .ai-dl__code:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel .ai-dl__sale { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid var(--seos-line); }
+.ai-chat-panel .ai-dl__offers:empty + .ai-dl__sale, .ai-chat-panel .ai-dl__sale:first-child { border-top: 0; padding-top: 0; }
+.ai-chat-panel .ai-dl__sale b { font: 600 13px/18px var(--seos-font); letter-spacing: 0.02em; text-transform: uppercase; font-size: 11.5px; }
+.ai-chat-panel .ai-dl__sale span { font: 400 12.5px/17px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-dl__sale a, .ai-chat-panel .ai-dl__empty a { color: var(--seos-text) !important; text-decoration: underline !important; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong) !important; }
+.ai-chat-panel .ai-dl__empty { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-dl__wait { display: grid; gap: 10px; }
+.ai-chat-panel .ai-dl__wait span { display: block; height: 40px; border-radius: 12px; background: var(--seos-surface); animation: ai-rt-pulse 1.4s ease-in-out infinite; }
+.ai-chat-panel .ai-dl__wait span:nth-child(2) { animation-delay: 0.2s; }
+@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-dl__wait span { animation: none; } }
+/* Narrow: the code pill under the words, the sale line stacked. */
+@container aideal (max-width: 300px) {
+  .ai-chat-panel .ai-dl__offer { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .ai-chat-panel .ai-dl__sale { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
 
 /* ── Returns & exchanges card (the rewards card's language) ── */
 .ai-chat-panel .ai-rt { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; overflow: clip; }
