@@ -7780,10 +7780,11 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; width: 100%; height: 100%; }
 .ai-chat-panel .ai-chat-deco .d-gold-stop { stop-color: var(--ai-glow-3, #3d7bff); }
 .ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; isolation: isolate; }
-/* Its box reaches a little under the header's foot (the line starts and
-   ends just below it, at the right, where nothing sits); it starts past
-   the header's words (the widget sets left from a measure of them). */
-.ai-chat-panel .ai-chat-deco--line { left: 38%; right: 0; bottom: -12px; height: 34px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
+/* Its box reaches under the header's foot to the greeting's row (the line
+   starts there, at the right, past the words — where nothing sits) and
+   ends at the header's right edge; the widget sets left from a measure of
+   the words. */
+.ai-chat-panel .ai-chat-deco--line { left: 38%; right: 0; bottom: -30px; height: 56px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
 .ai-chat-panel:not(.is-home) .ai-chat-deco--line { opacity: 0; }
 /* On peak days the header's straight grey line is gone at home — with or
    without the line of gold (important, as the dark theme's border is). */

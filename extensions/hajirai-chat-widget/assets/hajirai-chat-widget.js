@@ -591,13 +591,13 @@ function applyPeakColors(){
    and a highlight that drifts along it now and then. Drawn here, so it
    fits any width. */
 function decoLineHtml(){
-  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 100 30" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".1" class="d-gold-stop" stop-opacity=".9"/><stop offset=".45" class="d-gold-stop" stop-opacity="1"/><stop offset=".9" class="d-gold-stop" stop-opacity=".85"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
+  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 100 50" preserveAspectRatio="none">'+
+    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".06" class="d-gold-stop" stop-opacity=".95"/><stop offset=".5" class="d-gold-stop" stop-opacity="1"/><stop offset=".94" class="d-gold-stop" stop-opacity=".95"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
     '<linearGradient id="ai-deco-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="9" opacity=".10" stroke-linecap="round"/>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="4.5" opacity=".2" stroke-linecap="round"/>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="2.2" stroke-linecap="round"/>'+
-    '<path class="ai-chat-deco__sheen" d="M0 0" fill="none" stroke="url(#ai-deco-sheen)" stroke-width="1" pathLength="100" stroke-dasharray="22 100"/>'+
+    '<path class="d-gold-s d-gold-s--glow2" d="M0 0" fill="url(#ai-deco-gold)" opacity=".09"/>'+
+    '<path class="d-gold-s d-gold-s--glow1" d="M0 0" fill="url(#ai-deco-gold)" opacity=".18"/>'+
+    '<path class="d-gold-s d-gold-s--body" d="M0 0" fill="url(#ai-deco-gold)"/>'+
+    '<path class="ai-chat-deco__sheen" d="M0 0" fill="none" stroke="url(#ai-deco-sheen)" stroke-width="1.5" pathLength="100" stroke-dasharray="22 100"/>'+
   '</svg></div>';
 }
 /* Draws (or removes) the line to match the setting. */
@@ -624,23 +624,43 @@ function peakDecoFit(){
   var k=W/hr.width;/* a measure taken while the panel is still scaling open comes out right as a share of the header's width */
   var t=hdr.querySelector('.ai-chat-header__title--home')||hdr.querySelector('.ai-chat-header__name'),right=hr.left;
   if(t&&t.firstChild){try{var r=document.createRange();r.selectNodeContents(t);var tr=r.getBoundingClientRect();right=tr.width?tr.right:t.getBoundingClientRect().right}catch(e){right=t.getBoundingClientRect().right}}
-  var left=Math.max(0,Math.round((right-hr.left)*k+8)),least=Math.min(140,W*0.3);
+  var g=p.querySelector('.ai-chat-focus__greet');
+  if(g&&g.firstChild){try{var rg=document.createRange();rg.selectNodeContents(g);var gr=rg.getBoundingClientRect();if(gr.width&&gr.right>right)right=gr.right}catch(e){}}
+  var left=Math.max(0,Math.round((right-hr.left)*k+10)),least=Math.min(140,W*0.3);
   if(W-left<least)left=Math.max(0,Math.round(W-least));
   line.style.left=left+'px';
-  /* The curve, from the mark-up it was drawn to: it leaves the words a
-     touch below the header's foot, rises to its crest — a little under
-     the controls, at about a third of the way — and eases down to the
-     header's right edge, ending just under the foot; thin at its ends,
-     fullest at the crest. Fixed to the header's foot, so it sits the same
-     whatever the width; only a very short stretch flattens it. On phones
-     there is no line. */
-  var Wb=W-left,H=line.clientHeight||34,F=H-12,m=Math.min(1,Math.max(0,(Wb-80)/220)),f=function(n){return Math.round(n*10)/10};
+  /* The line as it was drawn: it leaves the words at the height of the
+     greeting's second row, below the header's foot; rises to its crest
+     about a third of the way along, a little under the controls (12px
+     below them); and eases down to the header's right edge, ending just
+     under the foot. A ribbon, not a stroke: about 1.5px at its ends and
+     5px at its fullest, around the crest. Fixed to the header, so it sits
+     the same whatever the width; only a very short stretch flattens it.
+     On phones there is no line. */
+  var Wb=W-left,H=line.clientHeight||56,F=H-30,m=Math.min(1,Math.max(0,(Wb-80)/260)),f=function(n){return Math.round(n*10)/10};
   line.style.display=Wb<120?'none':'';
-  var act=hdr.querySelector('.ai-chat-header__actions'),ab=act?(act.getBoundingClientRect().bottom-hr.bottom)*k+F:-99;
-  var y0=F+8*m,yc=Math.max(F-14*m,ab+4),y1=F+3*m,xc=Wb*0.38;
-  var d='M0 '+f(y0)+' C '+f(xc*0.45)+' '+f(y0)+','+f(xc*0.6)+' '+f(yc)+','+f(xc)+' '+f(yc)+' C '+f(xc+(Wb-xc)*0.45)+' '+f(yc)+','+f(xc+(Wb-xc)*0.8)+' '+f(y1-1.5*m)+','+f(Wb)+' '+f(y1);
+  var act=hdr.querySelector('.ai-chat-header__actions'),ab=act?(act.getBoundingClientRect().bottom-hr.bottom)*k+F:F-32;
+  var y0=F+23*m,y1=F+13*m,xc=Wb*0.38,yc=Math.min(Math.max(ab+12,F-30),y0-12);
+  yc=y0-(y0-yc)*m;
+  /* The centre line: two cubics — up to the crest (level there), then the long ease down (its end tipping a little). */
+  var P=[[0,y0],[xc*0.45,y0],[xc*0.6,yc],[xc,yc],[xc+(Wb-xc)*0.45,yc],[xc+(Wb-xc)*0.8,y1-1.5*m],[Wb,y1]];
+  var bez=function(p0,p1,p2,p3,t){var u=1-t;return [u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]]};
+  var N=64,pts=[];
+  for(var i=0;i<=N;i++){var tt=i/N,q=tt<0.5?bez(P[0],P[1],P[2],P[3],tt*2):bez(P[3],P[4],P[5],P[6],(tt-0.5)*2);pts.push(q)}
+  /* A ribbon around it: the width at each point, half of it either side along the normal. */
+  var ribbon=function(wmin,wmax){
+    var up=[],dn=[];
+    for(var j=0;j<=N;j++){var tj=j/N,a=pts[Math.max(0,j-1)],c=pts[Math.min(N,j+1)],dx=c[0]-a[0],dy=c[1]-a[1],L=Math.sqrt(dx*dx+dy*dy)||1,nx=-dy/L,ny=dx/L;
+      var w=wmin+(wmax-wmin)*Math.pow(Math.sin(Math.PI*tj),0.8),h=w/2;up.push(f(pts[j][0]+nx*h)+' '+f(pts[j][1]+ny*h));dn.push(f(pts[j][0]-nx*h)+' '+f(pts[j][1]-ny*h))}
+    return 'M'+up.join(' L ')+' L '+dn.reverse().join(' L ')+' Z';
+  };
+  var centre='M'+pts.map(function(q){return f(q[0])+' '+f(q[1])}).join(' L ');
   var svg=line.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
-  var ps=svg.querySelectorAll('path');for(var i=0;i<ps.length;i++)ps[i].setAttribute('d',d);
+  svg.querySelector('.d-gold-s--body').setAttribute('d',ribbon(1.5,5));
+  svg.querySelector('.d-gold-s--glow1').setAttribute('d',ribbon(4,9));
+  svg.querySelector('.d-gold-s--glow2').setAttribute('d',ribbon(8,16));
+  svg.querySelector('.ai-chat-deco__sheen').setAttribute('d',centre);
+  return;
 }
 try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){peakDecoFit()})}catch(e){}
 
