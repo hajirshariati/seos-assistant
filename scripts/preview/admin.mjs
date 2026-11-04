@@ -65,6 +65,7 @@ try {
   const browser = await chromium.launch();
   const bp = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
   await bp.goto(`file://${path.resolve(htmlOut)}`);
+  await bp.waitForTimeout(400); // past any entrance animation
   await bp.screenshot({ path: out, fullPage: true });
   const h = await bp.evaluate(() => document.documentElement.scrollHeight);
   await browser.close();

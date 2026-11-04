@@ -3,9 +3,10 @@
 // glance on top (chats, messages, thumbs down, flagged, failed, ended by
 // the guard — each one a filter), then one card with tabs: the chats as a
 // dense list that pages, the thumbs down and up, and the issues shoppers
-// raise most. A chat opens in the reader beside the list (a full sheet on a
-// phone), with its flags, its votes and its actions — nothing pushes the
-// list down and the page never scrolls for ever. The page loads a window
+// raise most. A chat opens in a drawer over the page (full width on a
+// phone), with its flags, its votes and its actions; the arrows walk the
+// list from there — nothing pushes the list down and the page never
+// scrolls for ever. The page loads a window
 // of days (the last 7 by default; a day, 30, 90 or everything kept) plus
 // every flagged chat whatever its age; ?chat=<id> opens that chat.
 // Deleting never changes "Top shopper issues & questions": a chat it
@@ -14,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { Page, Card, Button, TextField, Select, Icon, Popover, ActionList } from "@shopify/polaris";
-import { SearchIcon, MenuHorizontalIcon, XIcon } from "@shopify/polaris-icons";
+import { SearchIcon, MenuHorizontalIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { adminWithAccess } from "../lib/staff-access.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
@@ -182,34 +183,34 @@ export const action = async ({ request }) => {
 
 const REC_CSS = `
   .rd { --rd-line: rgba(30,27,51,0.08); --rd-green: #2D6B4F; --rd-red: #a33d3d; }
-  .rd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
-  .rd-top__title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; margin-right: auto; }
-  .rd-top__title h2 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.01em; }
-  .rd-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 11.5px; line-height: 16px; font-weight: 650; color: #4a4a4a; background: rgba(26,46,38,0.06); white-space: nowrap; }
-  .rd-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #9a9a9a; }
+  .rd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .rd-top__title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; margin-right: auto; }
+  .rd-top__title h2 { margin: 0 4px 0 0; font-size: 18px; line-height: 24px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.01em; }
+  .rd-state { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 7px; border-radius: 999px; font-size: 11.5px; line-height: 16px; font-weight: 650; color: #4a4a4a; background: rgba(26,46,38,0.06); white-space: nowrap; }
+  .rd-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #9a9a9a; }
   .rd-state.is-on { color: #1f4d39; background: rgba(45,107,79,0.10); }
   .rd-state.is-on::before { background: var(--rd-green); box-shadow: 0 0 0 3px rgba(45,107,79,0.16); }
   .rd-state.is-watch { color: #7a5412; background: #fbf3e4; }
   .rd-state.is-watch::before { background: #c58a1d; }
-  .rd-state a { color: inherit; text-decoration: none; }
-  .rd-state a:hover { text-decoration: underline; text-underline-offset: 2px; }
   .rd-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); }
-  .rd-seg button { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; padding: 5px 11px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550; color: #4a4a4a; }
+  .rd-seg button { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; padding: 4px 10px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550; color: #4a4a4a; }
   .rd-seg button[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
-  .rd-seg button:focus-visible, .rd-stat:focus-visible, .rd-tab:focus-visible, .rd-row:focus-visible, .rd-chip:focus-visible, .rd-pager button:focus-visible, .rd-x:focus-visible { outline: 2px solid var(--rd-green); outline-offset: 2px; }
-  .rd-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-  .rd-stat { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 14px 11px; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); color: #1a1a1a; }
+  .rd-seg button:focus-visible, .rd-stat:focus-visible, .rd-tab:focus-visible, .rd-row:focus-visible, .rd-chip:focus-visible, .rd-pager button:focus-visible, .rd-x:focus-visible, .rd-nav:focus-visible { outline: 2px solid var(--rd-green); outline-offset: -2px; }
+  /* The numbers: one strip, each a filter. */
+  .rd-strip { display: flex; overflow-x: auto; scrollbar-width: none; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+  .rd-strip::-webkit-scrollbar { display: none; }
+  .rd-stat { all: unset; box-sizing: border-box; flex: 1 1 0; min-width: 118px; display: flex; flex-direction: column; gap: 0; padding: 9px 14px 8px; color: #1a1a1a; border-left: 1px solid var(--rd-line); }
+  .rd-stat:first-child { border-left: 0; border-radius: 12px 0 0 12px; }
+  .rd-stat:last-child { border-radius: 0 12px 12px 0; }
   .rd-stat[data-filter] { cursor: pointer; }
-  .rd-stat[data-filter]:hover { box-shadow: 0 0 0 1px rgba(45,107,79,0.35), 0 1px 2px rgba(0,0,0,0.04); }
-  .rd-stat[aria-pressed="true"] { background: rgba(45,107,79,0.07); box-shadow: 0 0 0 1.5px var(--rd-green); }
-  .rd-stat__label { font-size: 11.5px; line-height: 16px; font-weight: 600; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rd-stat__value { font-size: 24px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .rd-stat__hint { font-size: 11.5px; line-height: 16px; color: #8a8a8a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rd-stat[data-filter]:hover { background: rgba(26,46,38,0.03); }
+  .rd-stat[aria-pressed="true"] { background: rgba(45,107,79,0.08); box-shadow: inset 0 -2px 0 var(--rd-green); }
+  .rd-stat__value { font-size: 19px; line-height: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .rd-stat__label { font-size: 11.5px; line-height: 15px; font-weight: 600; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rd-stat.is-bad .rd-stat__value { color: var(--rd-red); }
   .rd-stat.is-warn .rd-stat__value { color: #7a5412; }
-  .rd-stat.is-zero .rd-stat__value { color: #8a8a8a; }
-  .rd-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 42%); gap: 14px; align-items: start; }
-  .rd-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--rd-line); overflow-x: auto; scrollbar-width: none; }
+  .rd-stat.is-zero .rd-stat__value { color: #9a9a9a; }
+  .rd-tabs { display: flex; gap: 2px; padding: 4px 8px 0; border-bottom: 1px solid var(--rd-line); overflow-x: auto; scrollbar-width: none; }
   .rd-tabs::-webkit-scrollbar { display: none; }
   .rd-tab { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; font-size: 13px; line-height: 18px; font-weight: 600; color: #616161; }
   .rd-tab:hover { color: #1a1a1a; }
@@ -217,54 +218,58 @@ const REC_CSS = `
   .rd-tab__n { padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #4a4a4a; background: rgba(26,46,38,0.08); font-variant-numeric: tabular-nums; }
   .rd-tab__n.is-bad { color: var(--rd-red); background: rgba(185,90,90,0.13); }
   .rd-tab__n.is-good { color: #1f4d39; background: rgba(45,107,79,0.12); }
-  .rd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--rd-line); }
-  .rd-search { flex: 1 1 220px; min-width: 0; }
-  .rd-tester { width: 160px; }
-  .rd-chip { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #1f4d39; background: rgba(45,107,79,0.10); box-shadow: inset 0 0 0 1px rgba(45,107,79,0.30); }
+  .rd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-bottom: 1px solid var(--rd-line); }
+  .rd-search { flex: 1 1 200px; min-width: 0; }
+  .rd-tester { width: 150px; }
+  .rd-chip { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; font-size: 12px; line-height: 18px; font-weight: 600; color: #1f4d39; background: rgba(45,107,79,0.10); box-shadow: inset 0 0 0 1px rgba(45,107,79,0.30); }
   .rd-chip__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .rd-count { margin-left: auto; font-size: 12.5px; color: #616161; white-space: nowrap; }
-  .rd-scroll { max-height: calc(100vh - 340px); min-height: 320px; overflow: auto; overscroll-behavior: contain; }
+  .rd-count { margin-left: auto; font-size: 12px; color: #616161; white-space: nowrap; }
+  .rd-scroll { max-height: min(62vh, 760px); overflow: auto; overscroll-behavior: contain; }
   .rd-list { display: grid; }
-  .rd-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; width: 100%; padding: 9px 14px; border-top: 1px solid var(--rd-line); cursor: pointer; }
+  .rd-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 6px 12px; border-top: 1px solid var(--rd-line); cursor: pointer; }
   .rd-row:first-child { border-top: 0; }
-  .rd-row:hover { background: rgba(26,46,38,0.025); }
-  .rd-row[aria-current="true"] { background: rgba(45,107,79,0.07); box-shadow: inset 3px 0 0 var(--rd-green); }
-  .rd-row__when { display: grid; gap: 1px; min-width: 0; }
-  .rd-row__day { font-size: 12.5px; line-height: 16px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rd-row__time { font-size: 11.5px; line-height: 15px; color: #8a8a8a; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .rd-row__main { display: grid; gap: 2px; min-width: 0; }
-  .rd-row__who { font-size: 11.5px; line-height: 15px; font-weight: 650; color: #616161; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rd-row:hover { background: rgba(26,46,38,0.03); }
+  .rd-row[aria-current="true"] { background: rgba(45,107,79,0.08); box-shadow: inset 3px 0 0 var(--rd-green); }
+  .rd-row__when { display: grid; min-width: 0; }
+  .rd-row__day { font-size: 12px; line-height: 15px; font-weight: 600; color: #303030; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rd-row__time { font-size: 11px; line-height: 14px; color: #8a8a8a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rd-row__text { min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 13px; line-height: 18px; color: #1a1a1a; white-space: nowrap; overflow: hidden; }
+  .rd-row__who { flex: none; font-size: 11.5px; font-weight: 650; color: #616161; }
   .rd-row__who.is-tester { color: #245a86; }
-  .rd-row__q { font-size: 13.5px; line-height: 19px; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rd-row__sub { font-size: 12px; line-height: 16px; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rd-row__meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
-  .rd-n { font-size: 12px; color: #8a8a8a; font-variant-numeric: tabular-nums; }
-  .rd-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; white-space: nowrap; color: #4a4a4a; background: rgba(26,46,38,0.07); }
+  .rd-row__q { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .rd-row__sub { font-size: 12px; color: #8a8a8a; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .rd-row__meta { display: flex; align-items: center; justify-content: flex-end; gap: 5px; white-space: nowrap; }
+  .rd-n { font-size: 11.5px; color: #8a8a8a; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+  .rd-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; white-space: nowrap; color: #4a4a4a; background: rgba(26,46,38,0.07); }
   .rd-pill--manual { color: #1f4d39; background: rgba(45,107,79,0.10); }
   .rd-pill--guard, .rd-pill--bad { color: var(--rd-red); background: #fff1f0; }
   .rd-pill--watch { color: #7a5412; background: #fbf3e4; }
   .rd-pill--good { color: #1f4d39; background: rgba(45,107,79,0.10); }
-  .rd-pill--subject { color: #4a4a4a; background: rgba(26,46,38,0.06); }
-  .rd-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--rd-line); font-size: 12.5px; color: #616161; }
+  .rd-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--rd-line); font-size: 12px; color: #616161; }
   .rd-pager__btns { display: inline-flex; gap: 4px; }
-  .rd-pager button { all: unset; box-sizing: border-box; cursor: pointer; padding: 4px 10px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #1a1a1a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .rd-pager button { all: unset; box-sizing: border-box; cursor: pointer; padding: 3px 9px; border-radius: 7px; font-size: 12px; line-height: 18px; font-weight: 600; color: #1a1a1a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
   .rd-pager button[disabled] { opacity: 0.4; cursor: default; }
-  .rd-empty { padding: 36px 16px; text-align: center; color: #616161; font-size: 13px; line-height: 19px; }
+  .rd-empty { padding: 30px 16px; text-align: center; color: #616161; font-size: 13px; line-height: 19px; }
   .rd-empty b { display: block; margin-bottom: 2px; font-size: 14px; color: #1a1a1a; }
-  .rd-reader { position: sticky; top: 16px; display: flex; flex-direction: column; max-height: calc(100vh - 32px); border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); overflow: hidden; }
-  .rd-reader__empty { display: grid; place-items: center; min-height: 260px; padding: 24px; text-align: center; color: #616161; font-size: 13px; line-height: 19px; }
-  .rd-reader__empty b { display: block; margin-bottom: 2px; font-size: 14px; color: #1a1a1a; }
-  .rd-reader__head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 10px; border-bottom: 1px solid var(--rd-line); }
-  .rd-reader__title { flex: 1; min-width: 0; display: grid; gap: 2px; }
-  .rd-reader__who { font-size: 15px; line-height: 20px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.01em; }
-  .rd-reader__sub { font-size: 12px; line-height: 16px; color: #616161; overflow-wrap: anywhere; }
-  .rd-reader__pills { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
-  .rd-x { all: unset; box-sizing: border-box; display: none; place-items: center; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #4a4a4a; background: rgba(26,46,38,0.06); flex: none; }
-  .rd-x .Polaris-Icon { margin: 0; }
-  .rd-reader__note { margin: 0 14px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 18px; color: #303030; background: #fbf3e4; }
-  .rd-reader__note.is-manual { background: rgba(45,107,79,0.08); }
-  .rd-reader__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 14px; display: grid; gap: 12px; align-content: start; }
-  .rd-reader__acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 8px 14px; border-top: 1px solid var(--rd-line); background: #fafafa; }
+  .rd-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; padding: 10px 12px; border-bottom: 1px solid var(--rd-line); }
+  .rd-hint { font-size: 12px; line-height: 17px; color: #8a8a8a; }
+  .rd-hint kbd { display: inline-block; min-width: 18px; padding: 0 4px; border-radius: 4px; font: inherit; font-size: 11px; text-align: center; color: #4a4a4a; background: rgba(26,46,38,0.08); }
+  /* The chat, in a drawer over the page. */
+  .rd-backdrop { all: unset; position: fixed; inset: 0; z-index: 70; background: rgba(20,20,20,0.28); cursor: default; }
+  .rd-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 71; width: min(540px, 100%); display: flex; flex-direction: column; background: #fff; box-shadow: -12px 0 40px rgba(0,0,0,0.18); animation: rd-in .18s ease-out; }
+  @keyframes rd-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .rd-drawer__head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--rd-line); }
+  .rd-drawer__title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .rd-drawer__who { font-size: 15px; line-height: 20px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.01em; }
+  .rd-drawer__sub { font-size: 12px; line-height: 16px; color: #616161; overflow-wrap: anywhere; }
+  .rd-drawer__pills { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 4px; }
+  .rd-nav, .rd-x { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: #4a4a4a; background: rgba(26,46,38,0.06); flex: none; }
+  .rd-nav[disabled] { opacity: 0.35; cursor: default; }
+  .rd-nav .Polaris-Icon, .rd-x .Polaris-Icon { margin: 0; }
+  .rd-drawer__note { margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 18px; color: #303030; background: #fbf3e4; }
+  .rd-drawer__note.is-manual { background: rgba(45,107,79,0.08); }
+  .rd-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 14px; display: grid; gap: 12px; align-content: start; }
+  .rd-drawer__acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 8px 14px; border-top: 1px solid var(--rd-line); background: #fafafa; }
   .rd-votes { display: grid; gap: 8px; }
   .rd-votes__title { font-size: 11px; line-height: 16px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: #616161; }
   .rd-vote { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: #f7f7f8; font-size: 12.5px; line-height: 18px; color: #303030; }
@@ -285,30 +290,25 @@ const REC_CSS = `
   .rd-dl dt { font-size: 10.5px; line-height: 18px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: #8a8a8a; }
   .rd-dl dd { margin: 0; color: #1a1a1a; overflow-wrap: anywhere; }
   .rd-dl dd.is-c { padding: 6px 10px; border-radius: 8px; background: #fff8e1; font-style: italic; }
-  .rd-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; padding: 12px 14px; border-bottom: 1px solid var(--rd-line); }
-  .rd .set-links a { color: var(--rd-green); }
-  @media (max-width: 1100px) { .rd-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 920px) {
-    .rd-main { grid-template-columns: minmax(0, 1fr); }
-    .rd-scroll { max-height: none; min-height: 0; overflow: visible; }
-    .rd-reader { position: fixed; inset: 0; z-index: 60; max-height: none; border-radius: 0; box-shadow: none; }
-    .rd-reader.is-empty { display: none; }
-    .rd-x { display: grid; }
+  @media (prefers-reduced-motion: reduce) { .rd-drawer { animation: none; } }
+  @media (max-width: 720px) {
     .rd-why { grid-template-columns: minmax(0, 1fr); }
+    .rd-scroll { max-height: none; overflow: visible; }
+    .rd-tester { width: 100%; }
+    .rd-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+    .rd-row__when { grid-column: 1 / -1; grid-row: 2; display: flex; gap: 6px; }
+    .rd-row__text { white-space: normal; flex-wrap: wrap; }
+    .rd-row__q { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .rd-row__sub { display: none; }
+    .rd-hint__keys { display: none; }
+    .rd-msg, .rd-msg--ai { max-width: 94%; }
   }
   @media (max-width: 600px) {
-    .rd-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rd-top__title { order: 0; flex: 1 1 0; min-width: 0; }
     .rd-top__menu { order: 1; }
     .rd-seg { order: 2; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; }
     .rd-seg::-webkit-scrollbar { display: none; }
     .rd-seg button { flex: 1 0 auto; text-align: center; }
-    .rd-tester { width: 100%; }
-    .rd-row { grid-template-columns: minmax(0, 1fr) auto; }
-    .rd-row__when { grid-column: 1 / -1; grid-row: 2; display: flex; gap: 6px; }
-    .rd-row__day::after { content: "·"; margin-left: 6px; color: #8a8a8a; }
-    .rd-row__q { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .rd-msg, .rd-msg--ai { max-width: 94%; }
   }
 `;
 
@@ -316,6 +316,8 @@ const plural = (n, one, many) => `${Number(n || 0).toLocaleString()} ${n === 1 ?
 const PER_PAGE = 25;
 const FLAG_WORDS = { manual: "Flagged", guard: "Ended by guard", watch: "Would have ended" };
 const TABS = [["chats", "Chats"], ["down", "Not helpful"], ["up", "Helpful"], ["issues", "Top issues"]];
+const ONLY_WORDS = { down: "Not helpful", flagged: "Flagged", failed: "Failed replies", guard: "Guard" };
+const FEEDBACK_MOMENTS_WORDS = { cart: "after an add to cart", buy_now: "back from checkout", replies: "after a few replies", order: "about an order" };
 
 function Transcript({ turns }) {
   return (
@@ -342,8 +344,8 @@ function Transcript({ turns }) {
 
 const voteWords = (v) => v.lastUserQuestion || v.question || v.comment || v.aiResponse || "";
 
-// A thumbs up or down, in the reader: what was asked, what AVA said, the
-// reason or comment, and the messages the widget sent with the vote.
+// A thumbs up or down whose chat isn't loaded: what was asked, what AVA
+// said, the reason or comment, and the messages the widget sent with it.
 function VoteDetail({ v }) {
   const said = v.flaggedAiResponse || v.aiResponse;
   return (
@@ -363,7 +365,6 @@ function VoteDetail({ v }) {
     </div>
   );
 }
-const FEEDBACK_MOMENTS_WORDS = { cart: "after an add to cart", buy_now: "back from checkout", replies: "after a few replies", order: "about an order" };
 
 export default function Recordings() {
   const { recording, sessions, concerns, flagged, window: windowDays, votes, focus, tab: tabParam } = useLoaderData();
@@ -385,10 +386,11 @@ export default function Recordings() {
   const [menuOpen, setMenuOpen] = useState(false);
   // "View chats" on a theme: the list shows only that theme's kept chats.
   const [theme, setTheme] = useState(null);
-  // What the reader shows: a chat, or a vote whose chat isn't loaded.
+  // What the drawer shows: a chat, or a vote whose chat isn't loaded.
   const [selected, setSelected] = useState(() => (focus ? { kind: "chat", id: focus } : null));
-  const readerRef = useRef(null);
   const closeRef = useRef(null);
+  const listRef = useRef(null);
+  const lastRowRef = useRef(null);
 
   // While the chats are being read, the page checks back every few seconds.
   const reading = Boolean(concerns.run?.running);
@@ -495,7 +497,7 @@ export default function Recordings() {
   const totals = useMemo(() => ({
     chats: shown.length,
     messages: shown.reduce((n, s) => n + s.turns.length, 0),
-    shoppers: shown.filter((s) => !s.tester).length,
+    tests: shown.filter((s) => s.tester).length,
     down: votes.filter((v) => v.vote === "down").length,
     up: votes.filter((v) => v.vote === "up").length,
     flagged: shown.filter((s) => s.flag).length,
@@ -516,23 +518,45 @@ export default function Recordings() {
     return { reasons: reasonRows, subjects: rank(subjects, FEEDBACK_SUBJECTS) };
   }, [downs]);
 
-  // The reader: the chat picked (gone once deleted), or a vote on its own.
+  // The drawer: the chat picked (gone once deleted), or a vote on its own.
   const bySession = useMemo(() => new Map(shown.map((s) => [s.sessionId, s])), [shown]);
   const current = selected?.kind === "chat" ? bySession.get(selected.id) || null : null;
   const currentVote = selected?.kind === "vote" ? votes.find((v) => v.id === selected.id) || null : null;
   const open = Boolean(current || currentVote);
   useEffect(() => { if (selected?.kind === "chat" && !bySession.has(selected.id) && !removing) setSelected(null); }, [selected, bySession, removing]);
-  const pick = (s) => setSelected({ kind: "chat", id: s.sessionId });
-  const pickVote = (v) => setSelected(v.sessionId && bySession.has(v.sessionId) ? { kind: "chat", id: v.sessionId } : { kind: "vote", id: v.id });
-  const close = () => setSelected(null);
-  // On a phone the reader is a sheet: focus moves in, Escape closes it.
+  const pick = (s) => { lastRowRef.current = document.activeElement; setSelected({ kind: "chat", id: s.sessionId }); };
+  const pickVote = (v) => { lastRowRef.current = document.activeElement; setSelected(v.sessionId && bySession.has(v.sessionId) ? { kind: "chat", id: v.sessionId } : { kind: "vote", id: v.id }); };
+  const close = () => { setSelected(null); const el = lastRowRef.current; if (el && typeof el.focus === "function") requestAnimationFrame(() => el.focus()); };
+  // Where the open item sits in the list, for the previous / next buttons
+  // and the arrow keys.
+  const at = open ? list.findIndex((x) => (tab === "chats" ? x.sessionId === current?.sessionId : (currentVote ? x.id === currentVote.id : x.sessionId === current?.sessionId))) : -1;
+  const step = (d) => {
+    const next = list[at + d];
+    if (!next) return;
+    if (tab === "chats") setSelected({ kind: "chat", id: next.sessionId }); else pickVote(next);
+    setPage(Math.floor((at + d) / PER_PAGE) + 1);
+  };
+  // The drawer: focus moves in; Escape closes; the arrows walk the list.
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") close(); };
+    const onKey = (e) => {
+      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+      else if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); step(1); }
+      else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); step(-1); }
+    };
     window.addEventListener("keydown", onKey);
-    if (window.matchMedia("(max-width: 920px)").matches) closeRef.current?.focus();
+    closeRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, selected]);
+  }, [open, at, list, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  // In the list, the arrows move between rows.
+  const rowKey = (e) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const rows = [...(listRef.current?.querySelectorAll(".rd-row") || [])];
+    const i = rows.indexOf(document.activeElement);
+    const n = e.key === "ArrowDown" ? Math.min(rows.length - 1, i + 1) : Math.max(0, i - 1);
+    if (rows[n]) { e.preventDefault(); rows[n].focus(); }
+  };
   const viewTheme = (t) => {
     setTheme(t ? { id: t.id, title: t.title, ids: t.sessionIds } : null);
     if (t) setTab("chats");
@@ -542,30 +566,48 @@ export default function Recordings() {
   const keepWords = recording.keepDays === 365 ? "a year" : recording.keepDays === 180 ? "6 months" : recording.keepDays === 90 ? "3 months" : `${recording.keepDays} days`;
   const windowWords = windowDays === 1 ? "the last 24 hours" : windowDays ? `the last ${windowDays} days` : "everything kept";
 
-  const stat = (label, value, hint, { filter, tone } = {}) => (
+  const stat = (label, value, { filter, tone } = {}) => (
     <button
       type="button"
       className={`rd-stat${tone && value > 0 ? ` is-${tone}` : ""}${value === 0 ? " is-zero" : ""}`}
       data-filter={filter || undefined}
-      aria-pressed={filter ? only === filter : undefined}
+      aria-pressed={filter ? only === filter && tab === "chats" : undefined}
       onClick={filter ? () => toggleOnly(filter) : undefined}
       disabled={!filter}
       style={filter ? undefined : { cursor: "default" }}
+      title={filter ? `Show only ${label.toLowerCase()}` : undefined}
     >
-      <span className="rd-stat__label">{label}</span>
       <span className="rd-stat__value">{Number(value).toLocaleString()}</span>
-      <span className="rd-stat__hint">{hint}</span>
+      <span className="rd-stat__label">{label}</span>
+    </button>
+  );
+
+  const Row = ({ s }) => (
+    <button type="button" className="rd-row" aria-current={current?.sessionId === s.sessionId ? "true" : undefined} onClick={() => pick(s)} onKeyDown={rowKey}>
+      <span className="rd-row__when"><span className="rd-row__day">{s.day.label}</span><span className="rd-row__time">{s.time}</span></span>
+      <span className="rd-row__text">
+        <span className={`rd-row__who${s.tester ? " is-tester" : ""}`}>{s.tester ? `Test · ${s.tester}` : "Shopper"}</span>
+        <span className="rd-row__q">{s.turns[0]?.message || "(nothing typed)"}</span>
+        {s.turns.length > 1 && <span className="rd-row__sub">{`↳ ${s.turns[s.turns.length - 1].message}`}</span>}
+      </span>
+      <span className="rd-row__meta">
+        {s.flag && <span className={`rd-pill rd-pill--${s.flag.kind}`}>{FLAG_WORDS[s.flag.kind] || "Flagged"}</span>}
+        {s.down > 0 && <span className="rd-pill rd-pill--bad">{`👎 ${s.down}`}</span>}
+        {s.up > 0 && <span className="rd-pill rd-pill--good">{`👍 ${s.up}`}</span>}
+        {s.failed > 0 && <span className="rd-pill rd-pill--bad">{`${s.failed} failed`}</span>}
+        <span className="rd-n">{plural(s.turns.length, "msg", "msgs")}</span>
+      </span>
     </button>
   );
 
   return (
-    <Page fullWidth>
+    <Page>
       <TitleBar title="Recordings" />
       {/* Static CSS, injected as-is: as a text child React would escape its
           quotes on the server and the page wouldn't hydrate. */}
       <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + REC_CSS + CONCERNS_CSS }} />
       <div className="rd set-links">
-        <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "grid", gap: 12 }}>
           <BrandHeader title="Recordings" gutter={false} />
 
           <div className="rd-top">
@@ -583,246 +625,232 @@ export default function Recordings() {
                 <button key={d} type="button" aria-pressed={windowDays === d} onClick={() => setWindow(d)}>{WINDOW_WORDS[d]}</button>
               ))}
             </div>
-            <div className="rd-top__menu"><Popover
-              active={menuOpen}
-              onClose={() => setMenuOpen(false)}
-              activator={<Button icon={MenuHorizontalIcon} accessibilityLabel="More actions" onClick={() => setMenuOpen((v) => !v)} disclosure={false} />}
-            >
-              <ActionList
-                actionRole="menuitem"
-                items={[
-                  { content: exporting ? "Exporting…" : "Export chats (CSV)", onAction: () => { setMenuOpen(false); exportCsv(); }, disabled: exporting },
-                  { content: "Export thumbs down (CSV)", onAction: () => { setMenuOpen(false); exportVotes("conversations", { vote: "down" }); }, disabled: Boolean(voteExporting) || totals.down === 0 },
-                  { content: "Settings → Recording", onAction: () => { setMenuOpen(false); navigate("/app/api-keys#testing"); } },
-                  { content: deleting ? "Deleting…" : "Delete all chats", destructive: true, onAction: () => { setMenuOpen(false); removeAll(); }, disabled: deleting || sessions.length === 0 },
-                ]}
-              />
-            </Popover></div>
-          </div>
-
-          <div className="rd-stats" role="group" aria-label={`Numbers for ${windowWords}`}>
-            {stat("Chats", totals.chats, `${plural(totals.messages, "message", "messages")}${totals.chats - totals.shoppers > 0 ? ` · ${totals.chats - totals.shoppers} test` : ""}`)}
-            {stat("Not helpful", totals.down, `${totals.up} helpful`, { filter: "down", tone: "bad" })}
-            {stat("Flagged", totals.flagged, "kept until deleted", { filter: "flagged" })}
-            {stat("Failed replies", totals.failed, "chats with an error", { filter: "failed", tone: "bad" })}
-            {stat("Guard", totals.guard, recording.guard === "watch" ? "would have ended" : "ended by the guard", { filter: "guard", tone: "warn" })}
-            {stat("Top issue", concerns.top?.[0]?.count || 0, concerns.top?.[0]?.title || "none yet")}
-          </div>
-
-          <div className="rd-main">
-            <Card padding="0">
-              <div className="rd-tabs" role="tablist" aria-label="What to list">
-                {TABS.map(([id, label]) => {
-                  const n = id === "chats" ? visible.length : id === "down" ? totals.down : id === "up" ? totals.up : (concerns.top?.length || 0) + (concerns.more?.length || 0);
-                  return (
-                    <button key={id} type="button" role="tab" className="rd-tab" aria-selected={tab === id} id={`rd-tab-${id}`} aria-controls="rd-panel" onClick={() => setTab(id)}>
-                      {label}
-                      {(id !== "issues" || n > 0) && <span className={`rd-tab__n${id === "down" && n > 0 ? " is-bad" : id === "up" && n > 0 ? " is-good" : ""}`}>{n.toLocaleString()}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-              <div id="rd-panel" role="tabpanel" aria-labelledby={`rd-tab-${tab}`}>
-                {tab !== "issues" && (
-                  <div className="rd-tools">
-                    {theme && tab === "chats" && (
-                      <button type="button" className="rd-chip" onClick={() => setTheme(null)} aria-label={`Showing chats about ${theme.title}. Show all chats`}>
-                        <span className="rd-chip__label">{theme.title}</span>
-                        <span aria-hidden="true">✕</span>
-                      </button>
-                    )}
-                    {only && tab === "chats" && (
-                      <button type="button" className="rd-chip" onClick={() => setOnly("")} aria-label="Show every chat">
-                        <span className="rd-chip__label">{{ down: "Not helpful", flagged: "Flagged", failed: "Failed replies", guard: "Guard" }[only]}</span>
-                        <span aria-hidden="true">✕</span>
-                      </button>
-                    )}
-                    <div className="rd-search">
-                      <TextField
-                        label="Search"
-                        labelHidden
-                        size="slim"
-                        prefix={<Icon source={SearchIcon} tone="subdued" />}
-                        placeholder={tab === "chats" ? "Search what was said" : "Search the votes"}
-                        value={query}
-                        onChange={setQuery}
-                        clearButton
-                        onClearButtonClick={() => setQuery("")}
-                        autoComplete="off"
-                      />
-                    </div>
-                    {tab === "chats" && testers.length > 1 && (
-                      <div className="rd-tester">
-                        <Select label="Who" labelHidden options={[{ label: "Everyone", value: "" }, ...testers.map((t) => ({ label: t, value: t }))]} value={tester} onChange={setTester} />
-                      </div>
-                    )}
-                    <span className="rd-count">{tab === "chats" ? `${plural(list.length, "chat", "chats")}${filtering ? " match" : ""}` : plural(list.length, "vote", "votes")}</span>
-                  </div>
-                )}
-
-                {tab === "chats" && (
-                  <div className="rd-scroll">{slice.length === 0 ? (
-                    <div className="rd-empty">
-                      {filtering ? <><b>No chats match</b>Try other words, or clear the filters.</> : sessions.length === 0
-                        ? <><b>{`No recorded chats in ${windowWords}`}</b>{recording.on ? "Chats appear here as they happen." : "Turn recording on in Settings and chats appear here."}{windowDays !== 0 && <div style={{ marginTop: 10 }}><Button variant="plain" onClick={() => setWindow(0)}>Show everything kept</Button></div>}</>
-                        : <><b>Nothing here</b>Pick another window above.</>}
-                    </div>
-                  ) : (
-                    <div className="rd-list">
-                      {slice.map((s) => (
-                        <button key={s.sessionId} type="button" className="rd-row" aria-current={current?.sessionId === s.sessionId ? "true" : undefined} onClick={() => pick(s)}>
-                          <span className="rd-row__when"><span className="rd-row__day">{s.day.label}</span><span className="rd-row__time">{s.time}</span></span>
-                          <span className="rd-row__main">
-                            <span className={`rd-row__who${s.tester ? " is-tester" : ""}`}>{s.tester ? `Test · ${s.tester}` : "Shopper"}{s.page ? ` · ${s.page}` : ""}</span>
-                            <span className="rd-row__q">{s.turns[0]?.message || "(nothing typed)"}</span>
-                            {s.turns.length > 1 && <span className="rd-row__sub">{`↳ ${s.turns[s.turns.length - 1].message}`}</span>}
-                          </span>
-                          <span className="rd-row__meta">
-                            {s.flag && <span className={`rd-pill rd-pill--${s.flag.kind}`}>{FLAG_WORDS[s.flag.kind] || "Flagged"}</span>}
-                            {s.down > 0 && <span className="rd-pill rd-pill--bad">{`👎 ${s.down}`}</span>}
-                            {s.up > 0 && <span className="rd-pill rd-pill--good">{`👍 ${s.up}`}</span>}
-                            {s.failed > 0 && <span className="rd-pill rd-pill--bad">{`${s.failed} failed`}</span>}
-                            <span className="rd-n">{plural(s.turns.length, "msg", "msgs")}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}</div>
-                )}
-
-                {(tab === "down" || tab === "up") && (
-                  <div className="rd-scroll">
-                    {tab === "down" && downs.length > 1 && (
-                      <div className="rd-why">
-                        <div><div className="an-col__title">Why they said so</div><RankList rows={why.reasons} tone="down" /></div>
-                        <div><div className="an-col__title">What they were asking about</div><RankList rows={why.subjects} tone="down" /></div>
-                      </div>
-                    )}
-                    {slice.length === 0 ? (
-                      <div className="rd-empty"><b>{tab === "down" ? `Nothing rated not helpful in ${windowWords}` : `No thumbs up in ${windowWords}`}</b>{q ? "Nothing matches the search." : "Votes land here as shoppers leave them."}</div>
-                    ) : (
-                      <div className="rd-list">
-                        {slice.map((v) => {
-                          const isCurrent = (currentVote && currentVote.id === v.id) || (current && v.sessionId === current.sessionId);
-                          return (
-                            <button key={v.id} type="button" className="rd-row" aria-current={isCurrent ? "true" : undefined} onClick={() => pickVote(v)}>
-                              <span className="rd-row__when"><span className="rd-row__day">{v.when}</span><span className="rd-row__time">{v.kind === "chat" ? "whole chat" : "one reply"}</span></span>
-                              <span className="rd-row__main">
-                                <span className="rd-row__who">{FEEDBACK_SUBJECTS[v.subject] || "Something else"}</span>
-                                <span className="rd-row__q">{voteWords(v) || "(no words saved)"}</span>
-                                {v.kind !== "chat" && (v.flaggedAiResponse || v.aiResponse) && <span className="rd-row__sub">{`AVA: ${v.flaggedAiResponse || v.aiResponse}`}</span>}
-                              </span>
-                              <span className="rd-row__meta">
-                                {v.reason && FEEDBACK_REASONS[v.reason] && <span className="rd-pill rd-pill--bad">{FEEDBACK_REASONS[v.reason]}</span>}
-                                {v.comment && <span className="rd-pill">Comment</span>}
-                                {v.sessionId && bySession.has(v.sessionId) && <span className="rd-n">chat kept</span>}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {tab === "issues" && (
-                  <ShopperConcerns
-                    bare
-                    concerns={concerns}
-                    activeId={theme?.id || ""}
-                    onView={viewTheme}
-                    onRefresh={() => concernFetcher.submit({ intent: "refresh_concerns" }, { method: "post" })}
-                    refreshing={concernFetcher.state !== "idle"}
-                  />
-                )}
-
-                {tab !== "issues" && list.length > PER_PAGE && (
-                  <div className="rd-pager">
-                    <span>{`${(pageNow - 1) * PER_PAGE + 1}–${Math.min(pageNow * PER_PAGE, list.length)} of ${list.length.toLocaleString()}`}</span>
-                    <span className="rd-pager__btns">
-                      <button type="button" disabled={pageNow <= 1} onClick={() => setPage(pageNow - 1)} aria-label="Previous page">‹ Newer</button>
-                      <button type="button" disabled={pageNow >= pages} onClick={() => setPage(pageNow + 1)} aria-label="Next page">Older ›</button>
-                    </span>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            <div className={`rd-reader${open ? "" : " is-empty"}`} ref={readerRef} role={open ? "dialog" : "region"} aria-modal={undefined} aria-label={current ? `Chat from ${current.tester || "a shopper"}, ${current.day.label} ${current.time}` : currentVote ? "A vote" : "The chat reader"}>
-              {!open && (
-                <div className="rd-reader__empty"><div><b>Pick a chat to read it here</b>Flag it, delete it, or see the votes it got.</div></div>
-              )}
-              {current && (
-                <>
-                  <div className="rd-reader__head">
-                    <div className="rd-reader__title">
-                      <span className="rd-reader__who">{current.tester ? `Test chat · ${current.tester}` : "Shopper"}</span>
-                      <span className="rd-reader__sub">{`${current.day.label}, ${current.time} · ${plural(current.turns.length, "message", "messages")}${current.page ? ` · started on ${current.page}` : ""}`}</span>
-                      {(current.flag || current.down > 0 || current.up > 0 || current.failed > 0 || current.lockedUntil) && (
-                        <span className="rd-reader__pills">
-                          {current.flag && <span className={`rd-pill rd-pill--${current.flag.kind}`}>{FLAG_WORDS[current.flag.kind] || "Flagged"}</span>}
-                          {current.down > 0 && <span className="rd-pill rd-pill--bad">{`👎 ${current.down}`}</span>}
-                          {current.up > 0 && <span className="rd-pill rd-pill--good">{`👍 ${current.up}`}</span>}
-                          {current.failed > 0 && <span className="rd-pill rd-pill--bad">{`${current.failed} failed`}</span>}
-                          {current.lockedUntil && <span className="rd-pill rd-pill--watch">{`Paused until ${current.lockedUntil}`}</span>}
-                        </span>
-                      )}
-                    </div>
-                    <button type="button" className="rd-x" ref={closeRef} onClick={close} aria-label="Close the chat"><Icon source={XIcon} /></button>
-                  </div>
-                  {current.flag && (current.flag.note || current.flag.kind === "manual") && (
-                    <div className={`rd-reader__note${current.flag.kind === "manual" ? " is-manual" : ""}`} style={{ marginTop: 10 }}>
-                      <b>{FLAG_WORDS[current.flag.kind] || "Flagged"}</b>{current.flag.note ? ` — ${current.flag.note}` : ""}{current.flag.kind === "manual" ? ` (${current.flag.at})` : ""}
-                    </div>
-                  )}
-                  <div className="rd-reader__body">
-                    <Transcript turns={current.turns} />
-                    {currentVotes.length > 0 && (
-                      <div className="rd-votes">
-                        <div className="rd-votes__title">{plural(currentVotes.length, "vote", "votes")} on this chat</div>
-                        {currentVotes.map((v) => (
-                          <div key={v.id} className="rd-vote">
-                            <div className="rd-vote__top">
-                              <span className={`rd-pill ${v.vote === "down" ? "rd-pill--bad" : "rd-pill--good"}`}>{v.vote === "down" ? "👎 Not helpful" : "👍 Helpful"}</span>
-                              <span className="rd-pill rd-pill--subject">{v.kind === "chat" ? "Whole chat" : "One reply"}</span>
-                              {v.reason && FEEDBACK_REASONS[v.reason] && <span className="rd-pill">{FEEDBACK_REASONS[v.reason]}</span>}
-                              <span className="rd-n">{v.when}</span>
-                            </div>
-                            {v.kind !== "chat" && (v.flaggedAiResponse || v.aiResponse) && <span>{`On: “${v.flaggedAiResponse || v.aiResponse}”`}</span>}
-                            {v.comment && <span className="rd-vote__c">{`“${v.comment}”`}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="rd-reader__acts">
-                    <Button variant="plain" onClick={() => flagChat(current)}>{current.flag ? "Remove flag" : "Flag chat"}</Button>
-                    {current.lockedUntil && <Button variant="plain" onClick={() => unlockChat(current)}>Unlock now</Button>}
-                    <Button variant="plain" tone="critical" disabled={Boolean(removing)} onClick={() => removeChat(current)}>Delete chat</Button>
-                    <Button variant="plain" tone="critical" disabled={Boolean(deletingDay)} onClick={() => removeDay(current)}>{`Delete ${current.day.label === "Today" || current.day.label === "Yesterday" ? current.day.label.toLowerCase() : current.day.label}`}</Button>
-                  </div>
-                </>
-              )}
-              {currentVote && (
-                <>
-                  <div className="rd-reader__head">
-                    <div className="rd-reader__title">
-                      <span className="rd-reader__who">{currentVote.vote === "down" ? "Not helpful" : "Helpful"}</span>
-                      <span className="rd-reader__sub">{`${currentVote.when} · ${FEEDBACK_SUBJECTS[currentVote.subject] || "Something else"} · the chat itself is not in ${windowWords}`}</span>
-                    </div>
-                    <button type="button" className="rd-x" ref={closeRef} onClick={close} aria-label="Close"><Icon source={XIcon} /></button>
-                  </div>
-                  <div className="rd-reader__body"><VoteDetail v={currentVote} /></div>
-                </>
-              )}
+            <div className="rd-top__menu">
+              <Popover
+                active={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                activator={<Button icon={MenuHorizontalIcon} accessibilityLabel="More actions" onClick={() => setMenuOpen((v) => !v)} disclosure={false} />}
+              >
+                <ActionList
+                  actionRole="menuitem"
+                  items={[
+                    { content: exporting ? "Exporting…" : "Export chats (CSV)", onAction: () => { setMenuOpen(false); exportCsv(); }, disabled: exporting },
+                    { content: "Export thumbs down (CSV)", onAction: () => { setMenuOpen(false); exportVotes("conversations", { vote: "down" }); }, disabled: Boolean(voteExporting) || totals.down === 0 },
+                    { content: "Settings → Recording", onAction: () => { setMenuOpen(false); navigate("/app/api-keys#testing"); } },
+                    { content: deleting ? "Deleting…" : "Delete all chats", destructive: true, onAction: () => { setMenuOpen(false); removeAll(); }, disabled: deleting || sessions.length === 0 },
+                  ]}
+                />
+              </Popover>
             </div>
           </div>
 
-          <div style={{ fontSize: 12.5, lineHeight: "18px", color: "#616161" }}>
-            {`Chats are kept ${keepWords} — flagged chats until you delete them. Times are in your store's time zone. Deleting never changes Top issues: its counts cover every chat read.`}
+          <div className="rd-strip" role="group" aria-label={`Numbers for ${windowWords}`}>
+            {stat("Chats", totals.chats)}
+            {stat("Messages", totals.messages)}
+            {stat("Not helpful", totals.down, { filter: "down", tone: "bad" })}
+            {stat("Flagged", totals.flagged, { filter: "flagged" })}
+            {stat("Failed replies", totals.failed, { filter: "failed", tone: "bad" })}
+            {stat(recording.guard === "watch" ? "Guard would end" : "Ended by guard", totals.guard, { filter: "guard", tone: "warn" })}
+          </div>
+
+          <Card padding="0">
+            <div className="rd-tabs" role="tablist" aria-label="What to list">
+              {TABS.map(([id, label]) => {
+                const n = id === "chats" ? visible.length : id === "down" ? totals.down : id === "up" ? totals.up : (concerns.top?.length || 0) + (concerns.more?.length || 0);
+                return (
+                  <button key={id} type="button" role="tab" className="rd-tab" aria-selected={tab === id} id={`rd-tab-${id}`} aria-controls="rd-panel" onClick={() => setTab(id)}>
+                    {label}
+                    {(id !== "issues" || n > 0) && <span className={`rd-tab__n${id === "down" && n > 0 ? " is-bad" : id === "up" && n > 0 ? " is-good" : ""}`}>{n.toLocaleString()}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div id="rd-panel" role="tabpanel" aria-labelledby={`rd-tab-${tab}`}>
+              {tab !== "issues" && (
+                <div className="rd-tools">
+                  {theme && tab === "chats" && (
+                    <button type="button" className="rd-chip" onClick={() => setTheme(null)} aria-label={`Showing chats about ${theme.title}. Show all chats`}>
+                      <span className="rd-chip__label">{theme.title}</span>
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  )}
+                  {only && tab === "chats" && (
+                    <button type="button" className="rd-chip" onClick={() => setOnly("")} aria-label="Show every chat">
+                      <span className="rd-chip__label">{ONLY_WORDS[only]}</span>
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  )}
+                  <div className="rd-search">
+                    <TextField
+                      label="Search"
+                      labelHidden
+                      size="slim"
+                      prefix={<Icon source={SearchIcon} tone="subdued" />}
+                      placeholder={tab === "chats" ? "Search what was said" : "Search the votes"}
+                      value={query}
+                      onChange={setQuery}
+                      clearButton
+                      onClearButtonClick={() => setQuery("")}
+                      autoComplete="off"
+                    />
+                  </div>
+                  {tab === "chats" && testers.length > 1 && (
+                    <div className="rd-tester">
+                      <Select label="Who" labelHidden options={[{ label: "Everyone", value: "" }, ...testers.map((t) => ({ label: t, value: t }))]} value={tester} onChange={setTester} />
+                    </div>
+                  )}
+                  <span className="rd-count">{tab === "chats" ? `${plural(list.length, "chat", "chats")}${filtering ? " match" : ""}` : plural(list.length, "vote", "votes")}</span>
+                </div>
+              )}
+
+              {tab === "chats" && (
+                <div className="rd-scroll" ref={listRef}>{slice.length === 0 ? (
+                  <div className="rd-empty">
+                    {filtering ? <><b>No chats match</b>Try other words, or clear the filters.</> : sessions.length === 0
+                      ? <><b>{`No recorded chats in ${windowWords}`}</b>{recording.on ? "Chats appear here as they happen." : "Turn recording on in Settings and chats appear here."}{windowDays !== 0 && <div style={{ marginTop: 10 }}><Button variant="plain" onClick={() => setWindow(0)}>Show everything kept</Button></div>}</>
+                      : <><b>Nothing here</b>Pick another window above.</>}
+                  </div>
+                ) : (
+                  <div className="rd-list">{slice.map((s) => <Row key={s.sessionId} s={s} />)}</div>
+                )}</div>
+              )}
+
+              {(tab === "down" || tab === "up") && (
+                <div className="rd-scroll" ref={listRef}>
+                  {tab === "down" && downs.length > 1 && (
+                    <div className="rd-why">
+                      <div><div className="an-col__title">Why they said so</div><RankList rows={why.reasons} tone="down" /></div>
+                      <div><div className="an-col__title">What they were asking about</div><RankList rows={why.subjects} tone="down" /></div>
+                    </div>
+                  )}
+                  {slice.length === 0 ? (
+                    <div className="rd-empty"><b>{tab === "down" ? `Nothing rated not helpful in ${windowWords}` : `No thumbs up in ${windowWords}`}</b>{q ? "Nothing matches the search." : "Votes land here as shoppers leave them."}</div>
+                  ) : (
+                    <div className="rd-list">
+                      {slice.map((v) => {
+                        const isCurrent = (currentVote && currentVote.id === v.id) || (current && v.sessionId === current.sessionId);
+                        return (
+                          <button key={v.id} type="button" className="rd-row" aria-current={isCurrent ? "true" : undefined} onClick={() => pickVote(v)} onKeyDown={rowKey}>
+                            <span className="rd-row__when"><span className="rd-row__day">{v.when}</span><span className="rd-row__time">{v.kind === "chat" ? "whole chat" : "one reply"}</span></span>
+                            <span className="rd-row__text">
+                              <span className="rd-row__who">{FEEDBACK_SUBJECTS[v.subject] || "Something else"}</span>
+                              <span className="rd-row__q">{voteWords(v) || "(no words saved)"}</span>
+                              {v.kind !== "chat" && (v.flaggedAiResponse || v.aiResponse) && <span className="rd-row__sub">{`AVA: ${v.flaggedAiResponse || v.aiResponse}`}</span>}
+                            </span>
+                            <span className="rd-row__meta">
+                              {v.reason && FEEDBACK_REASONS[v.reason] && <span className="rd-pill rd-pill--bad">{FEEDBACK_REASONS[v.reason]}</span>}
+                              {v.comment && <span className="rd-pill">Comment</span>}
+                              <span className="rd-n">{v.sessionId && bySession.has(v.sessionId) ? "chat ›" : ""}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === "issues" && (
+                <ShopperConcerns
+                  bare
+                  concerns={concerns}
+                  activeId={theme?.id || ""}
+                  onView={viewTheme}
+                  onRefresh={() => concernFetcher.submit({ intent: "refresh_concerns" }, { method: "post" })}
+                  refreshing={concernFetcher.state !== "idle"}
+                />
+              )}
+
+              {tab !== "issues" && list.length > PER_PAGE && (
+                <div className="rd-pager">
+                  <span>{`${(pageNow - 1) * PER_PAGE + 1}–${Math.min(pageNow * PER_PAGE, list.length)} of ${list.length.toLocaleString()}`}</span>
+                  <span className="rd-pager__btns">
+                    <button type="button" disabled={pageNow <= 1} onClick={() => setPage(pageNow - 1)} aria-label="Previous page">‹ Newer</button>
+                    <button type="button" disabled={pageNow >= pages} onClick={() => setPage(pageNow + 1)} aria-label="Next page">Older ›</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <div className="rd-hint">
+            {`Chats are kept ${keepWords} — flagged chats until you delete them. Times are in your store's time zone. Deleting never changes Top issues: its counts cover every chat read. `}
+            <span className="rd-hint__keys">Open a chat, then <kbd>↑</kbd> <kbd>↓</kbd> walk the list and <kbd>Esc</kbd> closes it.</span>
           </div>
         </div>
       </div>
+
+      {open && (
+        <>
+          <button type="button" className="rd-backdrop" onClick={close} tabIndex={-1} aria-label="Close the chat" />
+          <div className="rd-drawer" role="dialog" aria-modal="true" aria-label={current ? `Chat from ${current.tester || "a shopper"}, ${current.day.label} ${current.time}` : "A vote"}>
+            <div className="rd-drawer__head">
+              <div className="rd-drawer__title">
+                {current ? (
+                  <>
+                    <span className="rd-drawer__who">{current.tester ? `Test chat · ${current.tester}` : "Shopper"}</span>
+                    <span className="rd-drawer__sub">{`${current.day.label}, ${current.time} · ${plural(current.turns.length, "message", "messages")}${current.page ? ` · started on ${current.page}` : ""}`}</span>
+                    {(current.flag || current.down > 0 || current.up > 0 || current.failed > 0 || current.lockedUntil) && (
+                      <span className="rd-drawer__pills">
+                        {current.flag && <span className={`rd-pill rd-pill--${current.flag.kind}`}>{FLAG_WORDS[current.flag.kind] || "Flagged"}</span>}
+                        {current.down > 0 && <span className="rd-pill rd-pill--bad">{`👎 ${current.down}`}</span>}
+                        {current.up > 0 && <span className="rd-pill rd-pill--good">{`👍 ${current.up}`}</span>}
+                        {current.failed > 0 && <span className="rd-pill rd-pill--bad">{`${current.failed} failed`}</span>}
+                        {current.lockedUntil && <span className="rd-pill rd-pill--watch">{`Paused until ${current.lockedUntil}`}</span>}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="rd-drawer__who">{currentVote.vote === "down" ? "Not helpful" : "Helpful"}</span>
+                    <span className="rd-drawer__sub">{`${currentVote.when} · ${FEEDBACK_SUBJECTS[currentVote.subject] || "Something else"} · the chat itself is not in ${windowWords}`}</span>
+                  </>
+                )}
+              </div>
+              <button type="button" className="rd-nav" onClick={() => step(-1)} disabled={at <= 0} aria-label="Previous"><Icon source={ChevronUpIcon} /></button>
+              <button type="button" className="rd-nav" onClick={() => step(1)} disabled={at < 0 || at >= list.length - 1} aria-label="Next"><Icon source={ChevronDownIcon} /></button>
+              <button type="button" className="rd-x" ref={closeRef} onClick={close} aria-label="Close"><Icon source={XIcon} /></button>
+            </div>
+            {current && current.flag && (current.flag.note || current.flag.kind === "manual") && (
+              <div className={`rd-drawer__note${current.flag.kind === "manual" ? " is-manual" : ""}`}>
+                <b>{FLAG_WORDS[current.flag.kind] || "Flagged"}</b>{current.flag.note ? ` — ${current.flag.note}` : ""}{current.flag.kind === "manual" ? ` (${current.flag.at})` : ""}
+              </div>
+            )}
+            <div className="rd-drawer__body">
+              {current ? (
+                <>
+                  <Transcript turns={current.turns} />
+                  {currentVotes.length > 0 && (
+                    <div className="rd-votes">
+                      <div className="rd-votes__title">{plural(currentVotes.length, "vote", "votes")} on this chat</div>
+                      {currentVotes.map((v) => (
+                        <div key={v.id} className="rd-vote">
+                          <div className="rd-vote__top">
+                            <span className={`rd-pill ${v.vote === "down" ? "rd-pill--bad" : "rd-pill--good"}`}>{v.vote === "down" ? "👎 Not helpful" : "👍 Helpful"}</span>
+                            <span className="rd-pill">{v.kind === "chat" ? "Whole chat" : "One reply"}</span>
+                            {v.reason && FEEDBACK_REASONS[v.reason] && <span className="rd-pill">{FEEDBACK_REASONS[v.reason]}</span>}
+                            <span className="rd-n">{v.when}</span>
+                          </div>
+                          {v.kind !== "chat" && (v.flaggedAiResponse || v.aiResponse) && <span>{`On: “${v.flaggedAiResponse || v.aiResponse}”`}</span>}
+                          {v.comment && <span className="rd-vote__c">{`“${v.comment}”`}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : <VoteDetail v={currentVote} />}
+            </div>
+            {current && (
+              <div className="rd-drawer__acts">
+                <Button variant="plain" onClick={() => flagChat(current)}>{current.flag ? "Remove flag" : "Flag chat"}</Button>
+                {current.lockedUntil && <Button variant="plain" onClick={() => unlockChat(current)}>Unlock now</Button>}
+                <Button variant="plain" tone="critical" disabled={Boolean(removing)} onClick={() => removeChat(current)}>Delete chat</Button>
+                <Button variant="plain" tone="critical" disabled={Boolean(deletingDay)} onClick={() => removeDay(current)}>{`Delete ${current.day.label === "Today" || current.day.label === "Yesterday" ? current.day.label.toLowerCase() : current.day.label}`}</Button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </Page>
   );
 }
