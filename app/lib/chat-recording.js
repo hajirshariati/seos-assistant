@@ -6,7 +6,8 @@
 // opened the store with the tester link (?hajirai_tester=Name), never
 // ordinary shoppers. Chats from the app's own Test chat are recorded too
 // while it's on. Chats are kept `keepDays` (the store's choice), except
-// flagged chats, which stay until deleted by hand.
+// flagged chats, which stay as long as the flag does. Nothing is deleted
+// by hand.
 
 export const KEEP_DAYS_CHOICES = [30, 90, 180, 365];
 export const DEFAULT_KEEP_DAYS = 90;

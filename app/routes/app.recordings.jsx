@@ -8,10 +8,10 @@
 // list from there — nothing pushes the list down and the page never
 // scrolls for ever. The page loads a window
 // of days (the last 7 by default; a day, 30, 90 or everything kept) plus
-// every flagged chat whatever its age; ?chat=<id> opens that chat.
-// Deleting never changes "Top shopper issues & questions": a chat it
-// hasn't read yet is hidden now and removed once read. The lessons and
-// the chat review live on Analytics → Learn, not here.
+// every flagged chat whatever its age; ?chat=<id> opens that chat. Chats
+// are never deleted by hand: they go when the keep time in Settings runs
+// out, flagged chats never. The lessons and the chat review live on
+// Analytics → Learn, not here.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { Page, Card, Button, TextField, Select, Icon, Popover, ActionList } from "@shopify/polaris";
@@ -21,10 +21,10 @@ import { adminWithAccess } from "../lib/staff-access.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { RATINGS_CSS, RankList, useCsvExport } from "../components/Ratings";
 import { getShopConfig } from "../models/ShopConfig.server";
-import { listRecordings, deleteAllRecordings, deleteDayRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
+import { listRecordings } from "../models/ChatRecording.server";
 import { listFlags, setFlag, clearFlag } from "../models/ChatFlag.server";
 import { unlockGuardSession, getGuardStates, sessionKey } from "../models/ChatGuard.server";
-import { recordingState, groupSessions, recordingLabels, dayBounds } from "../lib/chat-recording.js";
+import { recordingState, groupSessions, recordingLabels } from "../lib/chat-recording.js";
 import { guardTurnLabel, guardMode } from "../lib/chat-guard.js";
 import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { concernSummary, startConcernRead, concernRunState, storeButtonTexts } from "../lib/chat-concerns.server";
@@ -134,32 +134,6 @@ export const action = async ({ request }) => {
   const { session, admin } = await adminWithAccess(request);
   const form = await request.formData();
   const intent = form.get("intent");
-  // Deleting never changes "Top shopper issues & questions": chats it hasn't
-  // read yet are hidden now and read soon (then removed).
-  const readSoon = async () => {
-    const config = await getShopConfig(session.shop);
-    if (!config?.anthropicApiKey) return;
-    const buttons = await storeButtonTexts(session.shop, { admin, config });
-    startConcernRead(session.shop, { apiKey: config.anthropicApiKey, buttons });
-  };
-  if (intent === "delete_all") {
-    const out = await deleteAllRecordings(session.shop);
-    if (out.trashed) await readSoon();
-    return { deleted: out.deleted + out.trashed };
-  }
-  if (intent === "delete_day") {
-    const timeZone = await getShopTimeZone(admin, session.shop).catch(() => "");
-    const bounds = dayBounds(String(form.get("day") || ""), timeZone);
-    if (!bounds) return { error: "Unknown day." };
-    const out = await deleteDayRecordings(session.shop, bounds);
-    if (out.trashed) await readSoon();
-    return { deleted: out.deleted + out.trashed, chats: out.chats };
-  }
-  if (intent === "delete_session") {
-    const out = await deleteRecordingSession(session.shop, form.get("sessionId"));
-    if (out.trashed) await readSoon();
-    return { deleted: out.deleted + out.trashed };
-  }
   if (intent === "flag_session") {
     await setFlag(session.shop, form.get("sessionId"), { kind: "manual" });
     return { flagged: true };
@@ -269,7 +243,7 @@ const REC_CSS = `
   .rd-drawer__note { margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 18px; color: #303030; background: #fbf3e4; }
   .rd-drawer__note.is-manual { background: rgba(45,107,79,0.08); }
   .rd-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 14px; display: grid; gap: 12px; align-content: start; }
-  .rd-drawer__acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 8px 14px; border-top: 1px solid var(--rd-line); background: #fafafa; }
+  .rd-drawer__flag { display: inline-flex; align-items: center; gap: 6px; flex: none; }
   .rd-votes { display: grid; gap: 8px; }
   .rd-votes__title { font-size: 11px; line-height: 16px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: #616161; }
   .rd-vote { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: #f7f7f8; font-size: 12.5px; line-height: 18px; color: #303030; }
@@ -367,12 +341,10 @@ function VoteDetail({ v }) {
 }
 
 export default function Recordings() {
-  const { recording, sessions, concerns, flagged, window: windowDays, votes, focus, tab: tabParam } = useLoaderData();
+  const { recording, sessions, concerns, window: windowDays, votes, focus, tab: tabParam } = useLoaderData();
   const [voteExporting, exportVotes] = useCsvExport(windowDays ? { range: windowDays <= 7 ? "7d" : windowDays === 30 ? "30d" : "90d" } : { range: "custom", start: new Date(Date.now() - 365 * 86400000).toISOString(), end: new Date().toISOString() });
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
-  const fetcher = useFetcher();
-  const rowFetcher = useFetcher();
   const flagFetcher = useFetcher();
   const concernFetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -425,31 +397,6 @@ export default function Recordings() {
     }
   }, [shopify]);
 
-  const deleting = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete_all";
-  const deletingDay = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete_day" ? fetcher.formData.get("day") : null;
-  // One chat at a time; it disappears as soon as Delete is confirmed.
-  const removing = rowFetcher.state !== "idle" ? rowFetcher.formData?.get("sessionId") : null;
-  const removeChat = (s) => {
-    const note = s.flag ? " This chat is flagged; deleting it removes the flag too." : "";
-    if (!window.confirm(`Delete this chat (${plural(s.turns.length, "message", "messages")})?${note} This can't be undone.`)) return;
-    setSelected(null);
-    rowFetcher.submit({ intent: "delete_session", sessionId: s.sessionId }, { method: "post" });
-  };
-  const removeDay = (s) => {
-    const same = sessions.filter((x) => x.day.key === s.day.key);
-    const kept = same.filter((x) => x.flag).length;
-    const n = same.length - kept;
-    if (n <= 0) { shopify.toast.show("Every chat that day is flagged — they stay until deleted one by one."); return; }
-    if (!window.confirm(`Delete ${plural(n, "chat", "chats")} from ${s.day.label}?${kept ? ` ${plural(kept, "flagged chat stays", "flagged chats stay")}.` : ""} "Top issues" keeps its counts. This can't be undone.`)) return;
-    if (!s.flag) setSelected(null);
-    fetcher.submit({ intent: "delete_day", day: s.day.key }, { method: "post" });
-  };
-  const removeAll = () => {
-    if (!window.confirm(`Delete all recorded chats?${flagged ? ` ${plural(flagged, "flagged chat stays", "flagged chats stay")}.` : ""} "Top issues" keeps its counts. This can't be undone.`)) return;
-    setTheme(null);
-    setSelected(null);
-    fetcher.submit({ intent: "delete_all" }, { method: "post" });
-  };
   // Flags apply at once: the row shows its new state while the save runs.
   const [flagEdits, setFlagEdits] = useState({});
   const flagChat = (s) => {
@@ -474,8 +421,6 @@ export default function Recordings() {
   const themeIds = useMemo(() => (theme ? new Set(theme.ids) : null), [theme]);
   const filtering = Boolean(q || tester || only || themeIds);
   const visible = useMemo(() => shown.filter((s) =>
-    s.sessionId !== removing &&
-    (deletingDay === null || s.day.key !== deletingDay || s.flag) &&
     (!themeIds || themeIds.has(s.sessionId)) &&
     (!tester || (s.tester || "Shopper") === tester) &&
     (only !== "failed" || s.failed > 0) &&
@@ -483,7 +428,7 @@ export default function Recordings() {
     (only !== "down" || s.down > 0) &&
     (only !== "guard" || (s.flag && s.flag.kind !== "manual")) &&
     (!q || `${s.tester} ${s.page} ${s.turns.map((t) => `${t.message} ${t.reply}`).join(" ")}`.toLowerCase().includes(q)),
-  ), [shown, removing, deletingDay, themeIds, tester, only, q]);
+  ), [shown, themeIds, tester, only, q]);
   const downs = useMemo(() => votes.filter((v) => v.vote === "down" && (!q || voteWords(v).toLowerCase().includes(q) || (v.aiResponse || "").toLowerCase().includes(q))), [votes, q]);
   const ups = useMemo(() => votes.filter((v) => v.vote === "up" && (!q || voteWords(v).toLowerCase().includes(q))), [votes, q]);
   useEffect(() => { setPage(1); }, [q, tester, only, themeIds, tab, windowDays]);
@@ -523,7 +468,7 @@ export default function Recordings() {
   const current = selected?.kind === "chat" ? bySession.get(selected.id) || null : null;
   const currentVote = selected?.kind === "vote" ? votes.find((v) => v.id === selected.id) || null : null;
   const open = Boolean(current || currentVote);
-  useEffect(() => { if (selected?.kind === "chat" && !bySession.has(selected.id) && !removing) setSelected(null); }, [selected, bySession, removing]);
+  useEffect(() => { if (selected?.kind === "chat" && !bySession.has(selected.id)) setSelected(null); }, [selected, bySession]);
   const pick = (s) => { lastRowRef.current = document.activeElement; setSelected({ kind: "chat", id: s.sessionId }); };
   const pickVote = (v) => { lastRowRef.current = document.activeElement; setSelected(v.sessionId && bySession.has(v.sessionId) ? { kind: "chat", id: v.sessionId } : { kind: "vote", id: v.id }); };
   const close = () => { setSelected(null); const el = lastRowRef.current; if (el && typeof el.focus === "function") requestAnimationFrame(() => el.focus()); };
@@ -637,7 +582,6 @@ export default function Recordings() {
                     { content: exporting ? "Exporting…" : "Export chats (CSV)", onAction: () => { setMenuOpen(false); exportCsv(); }, disabled: exporting },
                     { content: "Export thumbs down (CSV)", onAction: () => { setMenuOpen(false); exportVotes("conversations", { vote: "down" }); }, disabled: Boolean(voteExporting) || totals.down === 0 },
                     { content: "Settings → Recording", onAction: () => { setMenuOpen(false); navigate("/app/api-keys#testing"); } },
-                    { content: deleting ? "Deleting…" : "Delete all chats", destructive: true, onAction: () => { setMenuOpen(false); removeAll(); }, disabled: deleting || sessions.length === 0 },
                   ]}
                 />
               </Popover>
@@ -774,7 +718,7 @@ export default function Recordings() {
           </Card>
 
           <div className="rd-hint">
-            {`Chats are kept ${keepWords} — flagged chats until you delete them. Times are in your store's time zone. Deleting never changes Top issues: its counts cover every chat read. `}
+            {`Chats are kept ${keepWords} (Settings → Recording), flagged chats for as long as the flag stays. Times are in your store's time zone. `}
             <span className="rd-hint__keys">Open a chat, then <kbd>↑</kbd> <kbd>↓</kbd> walk the list and <kbd>Esc</kbd> closes it.</span>
           </div>
         </div>
@@ -807,6 +751,12 @@ export default function Recordings() {
                   </>
                 )}
               </div>
+              {current && (
+                <span className="rd-drawer__flag">
+                  <Button size="slim" variant={current.flag ? "secondary" : "primary"} pressed={Boolean(current.flag)} onClick={() => flagChat(current)} accessibilityLabel={current.flag ? "Remove the flag from this chat" : "Flag this chat"}>{current.flag ? "Flagged ✓" : "Flag chat"}</Button>
+                  {current.lockedUntil && <Button size="slim" onClick={() => unlockChat(current)}>Unlock now</Button>}
+                </span>
+              )}
               <button type="button" className="rd-nav" onClick={() => step(-1)} disabled={at <= 0} aria-label="Previous"><Icon source={ChevronUpIcon} /></button>
               <button type="button" className="rd-nav" onClick={() => step(1)} disabled={at < 0 || at >= list.length - 1} aria-label="Next"><Icon source={ChevronDownIcon} /></button>
               <button type="button" className="rd-x" ref={closeRef} onClick={close} aria-label="Close"><Icon source={XIcon} /></button>
@@ -840,14 +790,6 @@ export default function Recordings() {
                 </>
               ) : <VoteDetail v={currentVote} />}
             </div>
-            {current && (
-              <div className="rd-drawer__acts">
-                <Button variant="plain" onClick={() => flagChat(current)}>{current.flag ? "Remove flag" : "Flag chat"}</Button>
-                {current.lockedUntil && <Button variant="plain" onClick={() => unlockChat(current)}>Unlock now</Button>}
-                <Button variant="plain" tone="critical" disabled={Boolean(removing)} onClick={() => removeChat(current)}>Delete chat</Button>
-                <Button variant="plain" tone="critical" disabled={Boolean(deletingDay)} onClick={() => removeDay(current)}>{`Delete ${current.day.label === "Today" || current.day.label === "Yesterday" ? current.day.label.toLowerCase() : current.day.label}`}</Button>
-              </div>
-            )}
           </div>
         </>
       )}

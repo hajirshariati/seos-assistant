@@ -41,7 +41,7 @@ export function RecordingCard({ initial, shopDomain }) {
           </InlineStack>
           <Text as="p" tone="subdued">
             Save conversations to review AVA&apos;s answers under Recordings. Recording stays on until you turn it off.
-            Chats are deleted after the time you choose below; flagged chats stay until you delete them.
+            Chats are deleted after the time you choose below, and never by hand; a flagged chat stays as long as its flag does.
           </Text>
         </BlockStack>
         <ChoiceList
