@@ -183,6 +183,7 @@ export async function getRecentQuestions(shop, range = 30, limit = 300) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      sessionId: true,
       kind: true,
       comment: true,
       reason: true,
@@ -213,6 +214,8 @@ export async function getRecentQuestions(shop, range = 30, limit = 300) {
       const lastUser = [...transcript].reverse().find((m) => m.role === "user");
       questions.push({
         id: r.id,
+        // The chat it was left in (the Recordings page opens it).
+        sessionId: r.sessionId || null,
         question: firstUser ? String(firstUser.content).slice(0, 200) : null,
         lastUserQuestion: lastUser?.content || null,
         // What it was about, from the shopper's words (else from the reply).

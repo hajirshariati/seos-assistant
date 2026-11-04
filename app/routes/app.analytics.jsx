@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useLoaderData, useSearchParams, Link, useRouteLoaderData } from "react-router";
+import { useLoaderData, useSearchParams, Link, useRouteLoaderData, useNavigate, useRevalidator } from "react-router";
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
@@ -25,7 +25,12 @@ import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
-import { RATINGS_CSS, RankList } from "../components/Ratings";
+import { RATINGS_CSS, RankList, LessonsCard, ReviewCard } from "../components/Ratings";
+import { LEARN_CSS, SiteIdeasCard } from "../components/Learn";
+import { SectionHead } from "../components/SettingsUI";
+import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
+import { reviewSummary, reviewNow } from "../lib/chat-review.server";
+import { listSiteIdeas, decideSiteIdea, draftSiteIdeasNow } from "../lib/site-ideas.server";
 
 function parseRange(searchParams) {
   const preset = searchParams.get("range") || "30d";
@@ -100,11 +105,18 @@ export const loader = async ({ request }) => {
     getReplyCostSample(session.shop).catch(() => []),
   ]);
   const measured = warmAverage(costRows, { prefixTokens: modeled?.prefixTokens || 0, coldStartExtra: modeled?.coldStartExtra || 0 });
+  // Learn: the lessons, the chat review and the site ideas waiting on the owner.
+  const [lessons, review, ideas] = await Promise.all([
+    listLessons(session.shop).catch(() => ({ drafts: [], decided: [] })),
+    reviewSummary(session.shop).catch(() => ({ state: null, run: { running: false }, findings: [] })),
+    listSiteIdeas(session.shop).catch(() => ({ open: [], decided: [], lastDraftAt: null })),
+  ]);
   cleanupOldFeedback().catch(() => {});
   cleanupOldMentions().catch(() => {});
 
   return {
     usage, feedback, topProducts, productsByTool, interest, daily, conversions,
+    lessons, review, ideas,
     week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
     estimator: {
       traffic,
@@ -126,6 +138,24 @@ export const loader = async ({ request }) => {
   };
 };
 
+
+// Learn: approve or dismiss a lesson, draft today's, run the chat review,
+// draft or decide site ideas.
+export const action = async ({ request }) => {
+  const { session } = await requireFullAccess(request);
+  const form = await request.formData();
+  const intent = String(form.get("intent") || "");
+  try {
+    if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
+    if (intent === "lessons_draft") return await draftLessonsNow(session.shop);
+    if (intent === "review_now") return await reviewNow(session.shop);
+    if (intent === "ideas_draft") return await draftSiteIdeasNow(session.shop);
+    if (intent === "idea_decide") return await decideSiteIdea(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
+  } catch (err) {
+    return { error: String(err?.message || err) };
+  }
+  return null;
+};
 
 function formatCost(n) {
   if (!n) return "$0.00";
@@ -459,7 +489,16 @@ function ExportMenu({ onExport, exporting }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, daily, conversions, previous, range, estimator, week } = useLoaderData();
+  const { usage, feedback, productsByTool, daily, conversions, previous, range, estimator, week, lessons, review, ideas } = useLoaderData();
+  const navigate = useNavigate();
+  // While the chat review runs, the page checks back every few seconds.
+  const revalidator = useRevalidator();
+  const reviewing = Boolean(review?.run?.running);
+  useEffect(() => {
+    if (!reviewing) return undefined;
+    const t = setInterval(() => { if (revalidator.state === "idle" && document.visibilityState === "visible") revalidator.revalidate(); }, 4000);
+    return () => clearInterval(t);
+  }, [reviewing, revalidator]);
   // The chat's order tag carries the app's brand (AVA on the Aetrex app).
   const orderTag = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME);
   const [searchParams] = useSearchParams();
@@ -521,7 +560,7 @@ export default function Analytics() {
       <TitleBar title="Analytics" />
       {/* Static CSS, injected as-is: as a text child React would escape its
           quotes on the server and the page wouldn't hydrate. */}
-      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + ANALYTICS_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + LEARN_CSS + ANALYTICS_CSS }} />
       <div className="an set-links">
         <BlockStack gap="400">
           <BrandHeader title="Analytics" gutter={false} />
@@ -589,13 +628,23 @@ export default function Analytics() {
 
           <ProductsCard searched={top5(productsByTool?.searched)} viewed={top5(productsByTool?.viewed)} />
 
-          <Card padding="0">
-            <Row
-              title="Ratings and lessons"
-              help={`${feedback.up || 0} helpful · ${feedback.down || 0} not helpful in this range. Every vote, what the shopper asked and what AVA said, and the lessons drafted from the thumbs-down, are on the Recordings page.`}
-              control={<Button url="/app/recordings#ratings">Open Recordings</Button>}
-            />
-          </Card>
+          <div id="learn">
+            <SectionHead title="Learn">
+              What AVA learns from the chats, for you to act on: how to answer better, and what to change on the site. Nothing changes until you approve it.
+            </SectionHead>
+            <BlockStack gap="400">
+              <LessonsCard lessons={lessons} mounted={mounted} />
+              <ReviewCard review={review} mounted={mounted} onOpenChat={(id) => navigate(`/app/recordings?chat=${encodeURIComponent(id)}`)} />
+              <SiteIdeasCard ideas={ideas} mounted={mounted} />
+              <Card padding="0">
+                <Row
+                  title="Ratings"
+                  help={`${feedback.up || 0} helpful · ${feedback.down || 0} not helpful in this range. Every vote, what the shopper asked and what AVA said, next to the chats, is on the Recordings page.`}
+                  control={<Button url="/app/recordings?tab=down">Open Recordings</Button>}
+                />
+              </Card>
+            </BlockStack>
+          </div>
 
           <div>
             <Button variant="plain" disclosure={showEstimator ? "up" : "down"} onClick={() => setShowEstimator((v) => !v)}>

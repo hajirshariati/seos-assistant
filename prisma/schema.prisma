@@ -588,6 +588,29 @@ model ChatReviewState {
   updatedAt       DateTime  @updatedAt
 }
 
+// Learn → Improve the website (site-ideas.js): changes to the store's site
+// drafted from what shoppers said to the assistant, for the team to act on.
+model SiteIdea {
+  id        String    @id @default(cuid())
+  shop      String
+  title     String
+  area      String    @default("other")
+  change    String
+  why       String    @default("")
+  evidence  String[]
+  impact    String    @default("medium")
+  effort    String    @default("medium")
+  shoppers  Int       @default(0)
+  priority  Int       @default(0)
+  // open | done | dismissed
+  status    String    @default("open")
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@index([shop, status])
+  @@index([shop, createdAt])
+}
+
 model ChatReviewFinding {
   id          String   @id @default(cuid())
   shop        String

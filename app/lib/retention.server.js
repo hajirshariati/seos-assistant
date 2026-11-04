@@ -12,6 +12,7 @@ import { cleanupOldRetiredProducts } from "../models/RetiredProduct.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
 import { draftAllLessons } from "./feedback-lessons.server";
 import { reviewAllChats, cleanupOldFindings } from "./chat-review.server";
+import { draftAllSiteIdeas } from "./site-ideas.server";
 import { refreshAllFitData } from "./fit-confidence.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -59,6 +60,12 @@ async function runOnce() {
     await cleanupOldFindings();
   } catch (err) {
     console.error("[retention] reviewAllChats failed:", err?.message || err);
+  }
+  // Improve the website: once a week, site changes drafted from the facts.
+  try {
+    await draftAllSiteIdeas();
+  } catch (err) {
+    console.error("[retention] draftAllSiteIdeas failed:", err?.message || err);
   }
   try {
     await cleanupOldRecordings();

@@ -207,5 +207,6 @@ export function reviewRunLine(state, { label = (d) => new Date(d).toLocaleString
   if (!state?.lastRunAt) return "Not read yet. The first read happens tonight, or now with the button.";
   const chats = state.chats || 0;
   const flagged = state.findings || 0;
-  return `Last read ${label(state.lastRunAt)}: ${chats} chat${chats === 1 ? "" : "s"}, ${flagged === 0 ? "nothing to flag" : `${flagged} answer${flagged === 1 ? "" : "s"} flagged`}.`;
+  const when = label(state.lastRunAt);
+  return `Last read${when ? ` ${when}` : ""}: ${chats} chat${chats === 1 ? "" : "s"}, ${flagged === 0 ? "nothing to flag" : `${flagged} answer${flagged === 1 ? "" : "s"} flagged`}.`;
 }

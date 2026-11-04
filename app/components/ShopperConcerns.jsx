@@ -40,6 +40,7 @@ export const CONCERNS_CSS = `
   .sc-look { font-size: 12.5px; line-height: 18px; color: #303030; }
   .sc-look b { display: block; font-size: 11px; line-height: 16px; font-weight: 650; letter-spacing: .02em; text-transform: uppercase; color: #2D6B4F; }
   .sc-view { margin-top: auto; padding-top: 2px; }
+  .sc-head { padding: 12px 16px 0; font-size: 12.5px; line-height: 18px; color: #616161; }
   .sc-note { padding: 22px 16px; text-align: center; font-size: 13px; line-height: 19px; color: #616161; }
   .sc-note b { display: block; margin-bottom: 2px; font-size: 14px; color: #1a1a1a; }
   .sc-more { border-top: 1px solid rgba(30,27,51,0.07); }
@@ -110,7 +111,7 @@ function Tile({ t, rank, active, onView }) {
 }
 
 // concerns: the loader's concernSummary (+ hasKey, sinceLabel, updatedLabel).
-export default function ShopperConcerns({ concerns, activeId, onView, onRefresh, refreshing }) {
+export default function ShopperConcerns({ concerns, activeId, onView, onRefresh, refreshing, bare = false }) {
   const [showMore, setShowMore] = useState(false);
   const { read, top, more, pending, run, hasKey } = concerns;
   const running = Boolean(run?.running);
@@ -136,48 +137,57 @@ export default function ShopperConcerns({ concerns, activeId, onView, onRefresh,
   }
 
   const showFoot = hasKey && (read > 0 || pending > 0 || running || run?.error);
+  // Inside another card (the Recordings page's Top issues tab): no heading,
+  // no card of its own — the body, the other themes and the footer.
+  const inner = (
+    <>
+      {bare && <div className="sc-head">{head}</div>}
+      {body}
+      {hasKey && more.length > 0 && (
+        <div className="sc-more">
+          {showMore && more.map((t) => (
+            <div className="sc-more__row" key={t.id}>
+              <span className="sc-more__title" title={t.summary || t.title}>{t.title}</span>
+              <Kind kind={t.kind} />
+              <span className="sc-more__n">{plural(t.count, "chat", "chats")}</span>
+            </div>
+          ))}
+          <div className="sc-more__row" style={{ gridTemplateColumns: "1fr" }}>
+            <span>
+              <Button variant="plain" disclosure={showMore ? "up" : "down"} onClick={() => setShowMore((v) => !v)}>
+                {showMore ? "Hide the other themes" : `Show ${plural(more.length, "more theme", "more themes")}`}
+              </Button>
+            </span>
+          </div>
+        </div>
+      )}
+      {showFoot && (
+        <div className="sc-foot">
+          <span className="sc-foot__state">
+            {running ? (
+              <>
+                <Spinner size="small" accessibilityLabel="Reading chats" />
+                <span>{run.total > 0 ? `Reading chats… ${Math.min(run.done, run.total).toLocaleString()} of ${run.total.toLocaleString()}` : "Reading chats…"}</span>
+              </>
+            ) : run?.error ? (
+              <span className="sc-err">{run.error}</span>
+            ) : (
+              <span>
+                {[concerns.updatedLabel ? `Updated ${concerns.updatedLabel}` : "", pending > 0 ? `${plural(pending, "new chat", "new chats")} to read` : ""].filter(Boolean).join(" · ") || "Up to date"}
+              </span>
+            )}
+          </span>
+          <Button size="slim" onClick={onRefresh} loading={refreshing} disabled={running || pending === 0}>Refresh</Button>
+        </div>
+      )}
+    </>
+  );
+  if (bare) return inner;
   return (
     <div>
       <SectionHead title="Top shopper issues & questions">{head}</SectionHead>
       <Card padding="0">
-        {body}
-        {hasKey && more.length > 0 && (
-          <div className="sc-more">
-            {showMore && more.map((t) => (
-              <div className="sc-more__row" key={t.id}>
-                <span className="sc-more__title" title={t.summary || t.title}>{t.title}</span>
-                <Kind kind={t.kind} />
-                <span className="sc-more__n">{plural(t.count, "chat", "chats")}</span>
-              </div>
-            ))}
-            <div className="sc-more__row" style={{ gridTemplateColumns: "1fr" }}>
-              <span>
-                <Button variant="plain" disclosure={showMore ? "up" : "down"} onClick={() => setShowMore((v) => !v)}>
-                  {showMore ? "Hide the other themes" : `Show ${plural(more.length, "more theme", "more themes")}`}
-                </Button>
-              </span>
-            </div>
-          </div>
-        )}
-        {showFoot && (
-          <div className="sc-foot">
-            <span className="sc-foot__state">
-              {running ? (
-                <>
-                  <Spinner size="small" accessibilityLabel="Reading chats" />
-                  <span>{run.total > 0 ? `Reading chats… ${Math.min(run.done, run.total).toLocaleString()} of ${run.total.toLocaleString()}` : "Reading chats…"}</span>
-                </>
-              ) : run?.error ? (
-                <span className="sc-err">{run.error}</span>
-              ) : (
-                <span>
-                  {[concerns.updatedLabel ? `Updated ${concerns.updatedLabel}` : "", pending > 0 ? `${plural(pending, "new chat", "new chats")} to read` : ""].filter(Boolean).join(" · ") || "Up to date"}
-                </span>
-              )}
-            </span>
-            <Button size="slim" onClick={onRefresh} loading={refreshing} disabled={running || pending === 0}>Refresh</Button>
-          </div>
-        )}
+        {inner}
       </Card>
     </div>
   );
