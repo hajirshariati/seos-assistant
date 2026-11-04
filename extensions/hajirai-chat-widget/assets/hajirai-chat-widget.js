@@ -605,7 +605,7 @@ function peakDecoRender(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
   var want=PEAK&&PEAK.decor==='line';
   var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--line'):null;
-  if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLineHtml());
+  if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLineHtml());peakDecoFit.greet=0;
     /* Measured again once the panel or header finishes moving (opening
        animates the header's words), so the line sits by the words at rest. */
     if(!peakDecoRender.bound){peakDecoRender.bound=true;var fit=function(ev){if(ev.target===p||hdr.contains(ev.target))peakDecoFit()};p.addEventListener('transitionend',fit);p.addEventListener('animationend',fit)}}}
@@ -624,9 +624,12 @@ function peakDecoFit(){
   var k=W/hr.width;/* a measure taken while the panel is still scaling open comes out right as a share of the header's width */
   var t=hdr.querySelector('.ai-chat-header__title--home')||hdr.querySelector('.ai-chat-header__name'),right=hr.left;
   if(t&&t.firstChild){try{var r=document.createRange();r.selectNodeContents(t);var tr=r.getBoundingClientRect();right=tr.width?tr.right:t.getBoundingClientRect().right}catch(e){right=t.getBoundingClientRect().right}}
-  var g=p.querySelector('.ai-chat-focus__greet');
-  if(g&&g.firstChild){try{var rg=document.createRange();rg.selectNodeContents(g);var gr=rg.getBoundingClientRect();if(gr.width&&gr.right>right)right=gr.right}catch(e){}}
-  var left=Math.max(0,Math.round((right-hr.left)*k+10)),least=Math.min(140,W*0.3);
+  /* The greeting's words too (the line runs at their height): the one
+     showing now — and the widest seen, so the start never jumps back as
+     the greeting changes. */
+  var g=p.querySelector('.ai-chat-focus__greet .ai-chat-greet__item.is-in')||p.querySelector('.ai-chat-focus__greet');
+  if(g&&g.firstChild){try{var rg=document.createRange();rg.selectNodeContents(g);var gr=rg.getBoundingClientRect();if(gr.width){var gx=(gr.right-hr.left)*k;peakDecoFit.greet=Math.max(peakDecoFit.greet||0,gx)}}catch(e){}}
+  var left=Math.max(0,Math.round(Math.max((right-hr.left)*k,peakDecoFit.greet||0)+10)),least=Math.min(140,W*0.3);
   if(W-left<least)left=Math.max(0,Math.round(W-least));
   line.style.left=left+'px';
   /* The line as it was drawn: it leaves the words at the height of the
@@ -642,8 +645,8 @@ function peakDecoFit(){
   var act=hdr.querySelector('.ai-chat-header__actions'),ab=act?(act.getBoundingClientRect().bottom-hr.bottom)*k+F:F-32;
   var y0=F+23*m,y1=F+13*m,xc=Wb*0.38,yc=Math.min(Math.max(ab+12,F-30),y0-12);
   yc=y0-(y0-yc)*m;
-  /* The centre line: two cubics — up to the crest (level there), then the long ease down (its end tipping a little). */
-  var P=[[0,y0],[xc*0.45,y0],[xc*0.6,yc],[xc,yc],[xc+(Wb-xc)*0.45,yc],[xc+(Wb-xc)*0.8,y1-1.5*m],[Wb,y1]];
+  /* The centre line: two cubics — a gentle rise from the start to the crest (level there), then the long ease down (its end tipping a little). */
+  var P=[[0,y0],[xc*0.3,y0-(y0-yc)*0.12],[xc*0.62,yc],[xc,yc],[xc+(Wb-xc)*0.45,yc],[xc+(Wb-xc)*0.8,y1-1.5*m],[Wb,y1]];
   var bez=function(p0,p1,p2,p3,t){var u=1-t;return [u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]]};
   var N=64,pts=[];
   for(var i=0;i<=N;i++){var tt=i/N,q=tt<0.5?bez(P[0],P[1],P[2],P[3],tt*2):bez(P[3],P[4],P[5],P[6],(tt-0.5)*2);pts.push(q)}
@@ -2053,6 +2056,7 @@ function focusGreetShow(i){
   void nu.offsetWidth;
   nu.classList.remove('is-below');nu.classList.add('is-in');
   if(old){old.classList.remove('is-in');old.classList.add('is-above');setTimeout(function(){if(old.parentNode)old.remove()},480)}
+  if(typeof peakDecoFit==='function')peakDecoFit();
 }
 function focusGreetStart(){
   var gen=++focusGreetGen;
