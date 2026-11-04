@@ -7776,10 +7776,10 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-peak__tiles { display: grid; gap: var(--ai-peak-gap); }
 .ai-chat-panel .ai-chat-peak__tile { position: relative; display: block; box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 18px; overflow: hidden; background: var(--seos-surface); aspect-ratio: var(--ai-peak-ar, 16 / 9); color: inherit; font: inherit; text-decoration: none !important; cursor: pointer; -webkit-tap-highlight-color: transparent; transform: translateZ(0); transition: transform 0.18s ease; }
 .ai-chat-panel .ai-chat-peak__tile.is-still { cursor: default; }
-.ai-chat-panel .ai-chat-peak__tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.ai-chat-panel .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; background: var(--seos-surface); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .ai-chat-panel .ai-chat-peak__tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(13, 13, 18, 0.06); pointer-events: none; }
 .ai-chat-panel[data-theme="dark"] .ai-chat-peak__tile::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
-@media (hover: hover) { .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img { transform: scale(1.04); } }
+@media (hover: hover) { .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img, .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover video { transform: scale(1.04); } }
 .ai-chat-panel .ai-chat-peak__tile:not(.is-still):active { transform: scale(0.985); }
 .ai-chat-panel .ai-chat-peak__tile:focus-visible { outline: 2px solid var(--seos-text); outline-offset: 2px; }
 /* Rail: one row that scrolls sideways, snapping tile by tile — two and a
@@ -7829,8 +7829,8 @@ button.ai-chat-launcher__text {
   .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n] .ai-chat-peak__tile:nth-child(n) { aspect-ratio: var(--ai-peak-ar, 16 / 9); height: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ai-chat-panel .ai-chat-peak__tile, .ai-chat-panel .ai-chat-peak__tile img { transition: none; }
-  .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img { transform: none; }
+  .ai-chat-panel .ai-chat-peak__tile, .ai-chat-panel .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak__tile video { transition: none; }
+  .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img, .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover video { transform: none; }
   .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles { scroll-behavior: auto; }
 }
 /* ── Deals card: quiet, typographic, no colour ── */

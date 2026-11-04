@@ -7,7 +7,7 @@ import { CHAT_TEXT_FIELDS, AVA_TEXT_DEFAULTS, chatTextsFromForm, chatTextsForFor
 import { buyNowCodeError, BUY_NOW_CODE_MAX } from "../lib/buy-now.js";
 import { useLoaderData, useActionData, useNavigation, Form, useFetcher, useRevalidator, useRouteLoaderData } from "react-router";
 import { visualizeLabel } from "../lib/visualize-cta.server";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Page,
   BlockStack,
@@ -22,6 +22,8 @@ import {
   ButtonGroup,
   Box,
   Icon,
+  Modal,
+  Spinner,
 } from "@shopify/polaris";
 import {
   MagicIcon,
@@ -35,7 +37,7 @@ import {
   CheckCircleIcon,
   FlowerIcon,
 } from "@shopify/polaris-icons";
-import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
+import { TitleBar, SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { requireFullAccess } from "../lib/staff-access.server";
 import { ALLOWED_MODELS, chatModel } from "../lib/claude-models.js";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
@@ -1232,6 +1234,87 @@ function resizeAppImage(file, maxHeight = APP_IMAGE_HEIGHT) {
     img.src = url;
   });
 }
+// Settings → Choose from files: the store's Shopify Files — pictures, and
+// videos where a field takes them — searched by name, a page at a time
+// (app/routes/app.files.jsx). A pick hands back the file's link; nothing is
+// copied, so it stays as sharp as it was uploaded.
+const FILE_KIND_OPTIONS = [{ label: "Pictures and videos", value: "all" }, { label: "Pictures", value: "image" }, { label: "Videos", value: "video" }];
+function FilesPicker({ open, onClose, onPick, kinds = "image", title = "Choose from your files" }) {
+  const shopify = useAppBridge();
+  const [q, setQ] = useState("");
+  const [words, setWords] = useState("");
+  const [kind, setKind] = useState(kinds);
+  const [files, setFiles] = useState([]);
+  const [after, setAfter] = useState("");
+  const [hasNext, setHasNext] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const gen = useRef(0);
+  useEffect(() => { const t = setTimeout(() => setWords(q.trim()), 300); return () => clearTimeout(t); }, [q]);
+  const load = useCallback(async (reset) => {
+    const my = ++gen.current;
+    setBusy(true); setError("");
+    try {
+      const params = new URLSearchParams({ kind, q: words, after: reset ? "" : after });
+      const token = await shopify.idToken();
+      const res = await fetch(`/app/files?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const body = await res.json().catch(() => ({}));
+      if (my !== gen.current) return;
+      if (!res.ok) throw new Error(body.error || "Your files couldn't be read just now.");
+      setFiles((old) => (reset ? body.files : [...old, ...body.files.filter((f) => !old.some((o) => o.id === f.id))]));
+      setAfter(body.after || ""); setHasNext(Boolean(body.hasNext));
+    } catch (err) {
+      if (my === gen.current) setError(err.message || "Your files couldn't be read just now.");
+    } finally {
+      if (my === gen.current) setBusy(false);
+    }
+  }, [kind, words, after, shopify]);
+  useEffect(() => { if (open) load(true); }, [open, kind, words]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!open) { setQ(""); setWords(""); setKind(kinds); } }, [open, kinds]);
+  const dur = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  return (
+    <Modal open={open} onClose={onClose} title={title} size="large">
+      <Modal.Section>
+        <BlockStack gap="300">
+          <InlineStack gap="200" blockAlign="center" wrap={false}>
+            <div style={{ flex: 1 }}><TextField label="Search your files" labelHidden placeholder="Search by file name" value={q} onChange={setQ} clearButton onClearButtonClick={() => setQ("")} autoComplete="off" /></div>
+            {kinds === "all" ? <Select label="Kind" labelHidden options={FILE_KIND_OPTIONS} value={kind} onChange={setKind} /> : null}
+          </InlineStack>
+          {error ? <Banner tone="critical">{error}</Banner> : null}
+          {files.length > 0 ? (
+            <div className="set-files">
+              {files.map((f) => (
+                <button key={f.id} type="button" className="set-file" onClick={() => onPick(f)} aria-label={`${f.name || f.alt || "File"}${f.kind === "video" ? ", video" : ""}`}>
+                  <span className="set-file__pic">
+                    {f.poster ? <img src={f.poster} alt="" loading="lazy" /> : <span className="set-file__blank" aria-hidden="true">▶</span>}
+                    {f.kind === "video" ? <span className="set-file__badge" aria-hidden="true">▶ {f.duration ? dur(f.duration) : "video"}</span> : null}
+                  </span>
+                  <span className="set-file__name">{f.name || f.alt || "Untitled"}</span>
+                  <span className="set-file__meta">{f.width && f.height ? `${f.width} × ${f.height}` : "\u00a0"}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!busy && !files.length && !error ? <Text as="p" variant="bodySm" tone="subdued">{words ? `Nothing named “${words}” in your files.` : "No files yet — upload them in Shopify under Content → Files, then pick them here."}</Text> : null}
+          <InlineStack gap="200" blockAlign="center">
+            {hasNext ? <Button onClick={() => load(false)} loading={busy}>Show more</Button> : null}
+            {busy && !files.length ? <Spinner size="small" accessibilityLabel="Loading your files" /> : null}
+          </InlineStack>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
+  );
+}
+// The button that opens the picker, for every picture field in Settings.
+function FilesButton({ onPick, kinds = "image", label = "Choose from files", disabled = false, title }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button onClick={() => setOpen(true)} disabled={disabled}>{label}</Button>
+      <FilesPicker open={open} onClose={() => setOpen(false)} kinds={kinds} title={title} onPick={(f) => { setOpen(false); onPick(f); }} />
+    </>
+  );
+}
 function AppPicture({ initial, disabled }) {
   const fetcher = useFetcher();
   const inputRef = useRef(null);
@@ -1271,6 +1354,7 @@ function AppPicture({ initial, disabled }) {
         <InlineStack gap="200" blockAlign="center">
           <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
           <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked} disabled={disabled}>{image ? "Replace picture" : "Upload picture"}</Button>
+          <FilesButton disabled={disabled} onPick={(f) => { setLocalError(""); setPicked(f.url); send(f.url); }} />
           {image ? <Button variant="plain" tone="critical" onClick={remove} disabled={disabled || busy}>Remove</Button> : null}
           {fetcher.data?.appImageSaved && !busy ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
         </InlineStack>
@@ -1322,6 +1406,7 @@ function RewardsGroup({ card, onChange }) {
               <InlineStack gap="200" blockAlign="center">
                 <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
                 <Button onClick={() => inputRef.current?.click()}>{c.logo ? "Replace logo" : "Upload logo"}</Button>
+                <FilesButton onPick={(f) => { setLogoError(""); up({ logo: f.url }); }} />
                 {c.logo ? <Button variant="plain" tone="critical" onClick={() => up({ logo: "" })}>Remove</Button> : null}
               </InlineStack>
               {logoError ? <Text as="p" variant="bodySm" tone="critical">{logoError}</Text> : null}
@@ -1361,7 +1446,7 @@ function RewardsGroup({ card, onChange }) {
 
 // Peak Mode → the home on peak days: the assistant's peak picture and up to
 // six promotion blocks, saved with the form (pictures resized in the browser).
-function PeakPicture({ image, onChange, title, hint, round = false, size = 640 }) {
+function PeakPicture({ image, onChange, title, hint, round = false, size = 640, kinds = "image", video = "", onPickFile = null, onRemoveVideo = null }) {
   const inputRef = useRef(null);
   const [error, setError] = useState("");
   const onFile = async (e) => {
@@ -1374,15 +1459,21 @@ function PeakPicture({ image, onChange, title, hint, round = false, size = 640 }
   };
   return (
     <div className="set-app-pic">
-      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`} style={round ? { width: 64, height: 64, borderRadius: "50%", overflow: "hidden" } : { width: 96, height: 64, borderRadius: 12, overflow: "hidden" }}>{image ? <img src={image} alt="" style={{ width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "cover", filter: "none" }} /> : <span aria-hidden="true">{round ? "☺" : "▭"}</span>}</div>
+      <div className={`set-app-pic__thumb${image || video ? "" : " is-empty"}`} style={round ? { width: 64, height: 64, borderRadius: "50%", overflow: "hidden" } : { width: 96, height: 64, borderRadius: 12, overflow: "hidden", position: "relative" }}>
+        {image ? <img src={image} alt="" style={{ width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "cover", filter: "none" }} /> : video ? <video src={video} muted playsInline preload="metadata" aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span aria-hidden="true">{round ? "☺" : "▭"}</span>}
+        {video ? <span className="set-file__badge" aria-hidden="true">▶</span> : null}
+      </div>
       <div className="set-app-pic__body">
         <Text as="p" variant="bodyMd" fontWeight="semibold">{title}</Text>
         {hint ? <Text as="p" variant="bodySm" tone="subdued">{hint}</Text> : null}
         <InlineStack gap="200" blockAlign="center">
           <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
           <Button onClick={() => inputRef.current?.click()}>{image ? "Replace picture" : "Upload picture"}</Button>
-          {image ? <Button variant="plain" tone="critical" onClick={() => onChange("")}>Remove</Button> : null}
+          <FilesButton kinds={kinds} label={kinds === "all" ? "Choose from files (picture or video)" : "Choose from files"} onPick={(f) => { setError(""); if (onPickFile) onPickFile(f); else onChange(f.url); }} />
+          {image ? <Button variant="plain" tone="critical" onClick={() => onChange("")}>{video ? "Remove picture" : "Remove"}</Button> : null}
+          {video && onRemoveVideo ? <Button variant="plain" tone="critical" onClick={onRemoveVideo}>Remove video</Button> : null}
         </InlineStack>
+        {video ? <Text as="p" variant="bodySm" tone="subdued">A video from your files plays silently on a loop{image ? ", with the picture shown until it starts" : ""}.</Text> : null}
         {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
       </div>
     </div>
@@ -1405,7 +1496,7 @@ function PeakHomeEditor({ value, onChange }) {
   const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
   const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
-  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", audience: "all", tag: "" }] }); };
+  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", video: "", audience: "all", tag: "" }] }); };
   const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
   const layout = PEAK_LAYOUTS.includes(v.layout) ? v.layout : "rail";
   const shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, v.shape) ? v.shape : "wide";
@@ -1463,7 +1554,7 @@ function PeakHomeEditor({ value, onChange }) {
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
-          <PeakPicture image={b.image || ""} onChange={(image) => setBlock(i, { image })} title="The picture" hint={`Just the picture — no words or buttons are drawn on it. Shown ${shapeWords}; make it at least 800px wide.`} size={900} />
+          <PeakPicture image={b.image || ""} video={b.video || ""} kinds="all" onChange={(image) => setBlock(i, { image })} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "" }) : setBlock(i, { image: f.url }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}; make it at least 800px wide. Upload a picture, or pick a picture or video from your Shopify files.`} size={900} />
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
             {b.kind === "ask"
@@ -1551,6 +1642,7 @@ function FocusPicture({ kind, initial }) {
         <InlineStack gap="200" blockAlign="center">
           <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
           <Button onClick={() => inputRef.current?.click()} loading={busy && !!picked}>{image ? "Replace picture" : "Upload picture"}</Button>
+          <FilesButton onPick={(f) => { setLocalError(""); setPicked(f.url); send(f.url); }} />
           {image ? <Button variant="plain" tone="critical" onClick={remove} disabled={busy}>Remove</Button> : null}
           {fetcher.data?.focusImageSaved && !busy ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
         </InlineStack>

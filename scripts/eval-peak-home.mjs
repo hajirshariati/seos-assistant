@@ -26,7 +26,7 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.equal(h.layout, "mosaic"); assert.equal(h.shape, "square");
   assert.deepEqual(h.colors, ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], "four good colours, lowercased, the rest dropped");
   assert.equal(h.blocks.length, PEAK_BLOCKS_MAX);
-  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, audience: "all", tag: "" }, "no eyebrow, text or button any more");
+  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, video: "", audience: "all", tag: "" }, "no eyebrow, text or button any more");
   assert.equal(h.blocks[1].id, "badid"); assert.equal(h.blocks[1].url, ""); assert.equal(h.blocks[1].message, "What's my offer?");
   assert.equal(h.blocks[2].tag, "VIP");
   assert.equal(h.blocks[3].url, "", "an unsafe link is dropped");
@@ -43,6 +43,26 @@ test("what's wrong is named: a picture too large or missing, a tag audience with
   assert.match(peakHomeError({ blocks: [{ image: PNG, kind: "ask" }] }), /write the question/);
   assert.match(peakHomeError({ blocks: [{ image: PNG, kind: "link", url: "nope" }] }), /give it one/);
   assert.equal(peakHomeError({ blocks: [{ image: PNG, kind: "link", url: "/sale" }, { image: PNG, kind: "none" }, {}, { id: "x", kind: "link" }] }), "");
+});
+const CDN = "https://cdn.shopify.com/s/files/1/0001/0002/files/sale-banner.jpg?v=1730000000";
+const MP4 = "https://cdn.shopify.com/videos/c/o/v/abc123.mp4";
+test("Shopify Files: a picture or a video picked from the store's files is kept as its link; a video alone is enough; other links are refused", () => {
+  const h = parsePeakHome({ blocks: [
+    { id: "f1", title: "Sale", kind: "link", url: "/sale", image: CDN, audience: "all" },
+    { id: "f2", title: "Clip", kind: "none", video: MP4, audience: "all" },
+    { id: "f3", title: "Both", kind: "none", image: PNG, video: MP4 },
+    { id: "f4", title: "Elsewhere", kind: "none", image: "https://example.com/pic.jpg" },
+    { id: "f5", title: "Not a video", kind: "none", video: "https://cdn.shopify.com/s/files/1/0001/doc.pdf" },
+  ] });
+  assert.deepEqual(h.blocks.map((b) => [b.id, b.image, b.video]), [["f1", CDN, ""], ["f2", "", MP4], ["f3", PNG, MP4]]);
+  assert.match(peakHomeError({ blocks: [{ title: "x", image: "https://example.com/pic.jpg" }] }), /Picture 1: pick the picture from your Shopify files/);
+  assert.match(peakHomeError({ blocks: [{ title: "x", image: PNG, video: "https://example.com/clip.mp4" }] }), /Picture 1: pick the video from your Shopify files/);
+  assert.equal(peakHomeError({ blocks: [{ title: "x", kind: "none", video: MP4 }] }), "");
+  const on = peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ avatar: CDN, blocks: [{ id: "f1", kind: "none", image: CDN, video: MP4 }, { id: "f2", kind: "none", image: PNG }] }) });
+  assert.equal(on.avatar, CDN, "a Shopify link is handed over as it is");
+  assert.deepEqual([on.blocks[0].image, on.blocks[0].video], [CDN, MP4]);
+  assert.match(on.blocks[1].image, /^\/apps\/hajirai\/peak-image\?b=f2&v=/);
+  assert.ok(!("video" in on.blocks[1]));
 });
 test("the colour sets: her usual colours are an empty set; every other set is four good colours; the cleaner caps at four", () => {
   assert.deepEqual(PEAK_COLOR_SETS[0].colors, []);

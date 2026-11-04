@@ -11,8 +11,9 @@
 // hands the home over while Peak Mode is on.
 //
 // Stored as one JSON (pictures as resized data URLs, like the app's
-// picture); the route turns a picture into bytes. Pure.
-import { appImageData, shortHash } from "./app-promo.js";
+// picture, or as Shopify Files links; videos always as Shopify Files
+// links); the route turns a data URL into bytes. Pure.
+import { appImageData, appImageValue, appImageLink, cdnVideoUrl } from "./app-promo.js";
 import { peakState } from "./peak-mode.js";
 
 export const PEAK_IMAGE_PATH = "/apps/hajirai/peak-image";
@@ -53,8 +54,9 @@ const cleanUrl = (v) => { const s = String(v ?? "").trim().slice(0, PEAK_MAX.url
 const cleanId = (v, i) => { const s = String(v ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12); return s || `b${i + 1}`; };
 const parseJson = (v) => { if (v && typeof v === "object") return v; try { return JSON.parse(v); } catch { return null; } };
 
-// A picture as stored: a data URL within the size limit, else "".
-const picture = (v) => (appImageData(v) ? String(v) : "");
+// A picture as stored: a data URL within the size limit, or a Shopify
+// Files link; else "". A video is always a Shopify Files link.
+const picture = (v) => appImageValue(v);
 
 // The saved JSON → clean { avatar, layout, shape, colors, blocks }. Blocks
 // without a picture are dropped; the name is only for screen readers.
@@ -70,7 +72,8 @@ export function parsePeakHome(raw) {
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
     if (!b || typeof b !== "object") continue;
     const image = picture(b.image);
-    if (!image) continue;
+    const video = cdnVideoUrl(b.video);
+    if (!image && !video) continue;
     let id = cleanId(b.id, i);
     while (seen.has(id)) id = `${id}x`;
     seen.add(id);
@@ -83,6 +86,7 @@ export function parsePeakHome(raw) {
       url: kind === "link" ? cleanUrl(b.url) : "",
       message: kind === "ask" ? clean(b.message, PEAK_MAX.message) : "",
       image,
+      video,
       audience,
       tag: audience === "tag" ? clean(b.tag, PEAK_MAX.tag) : "",
     });
@@ -102,8 +106,9 @@ export function peakHomeError(raw) {
     if (!b || typeof b !== "object") continue;
     const n = `Picture ${i + 1}`;
     const filled = clean(b.title, PEAK_MAX.title) || cleanUrl(b.url) || clean(b.message, PEAK_MAX.message) || clean(b.tag, PEAK_MAX.tag);
-    if (b.image && !appImageData(b.image)) return `${n}: the picture is too large — pick a smaller one.`;
-    if (!b.image) { if (filled) return `${n}: add the picture (or remove the block).`; continue; }
+    if (b.image && !appImageValue(b.image)) return appImageData(b.image) === null && /^data:/.test(String(b.image)) ? `${n}: the picture is too large — pick a smaller one.` : `${n}: pick the picture from your Shopify files, or upload one.`;
+    if (b.video && !cdnVideoUrl(b.video)) return `${n}: pick the video from your Shopify files (an MP4 or WebM).`;
+    if (!b.image && !b.video) { if (filled) return `${n}: add the picture or video (or remove the block).`; continue; }
     if (b.audience === "tag" && !clean(b.tag, PEAK_MAX.tag)) return `${n}: name the customer tag that sees it.`;
     if (b.kind === "ask" && !clean(b.message, PEAK_MAX.message)) return `${n}: a tap asks AVA — write the question.`;
     if (b.kind !== "ask" && b.kind !== "none" && !cleanUrl(b.url)) return `${n}: a tap opens a link — give it one (https://… or /…).`;
@@ -116,15 +121,16 @@ export function peakHomeError(raw) {
 export function peakHomeConfig(config = {}, now = new Date(), { force = false } = {}) {
   if (!force && !peakState(config, now).active) return null;
   const home = parsePeakHome(config.peakHome);
-  const link = (which, data) => `${PEAK_IMAGE_PATH}?b=${encodeURIComponent(which)}&v=${shortHash(data)}`;
+  const link = (which, data) => appImageLink(data, (v) => `${PEAK_IMAGE_PATH}?b=${encodeURIComponent(which)}&v=${v}`);
   const blocks = home.blocks.map((b) => ({
     id: b.id, title: b.title,
     ...(b.kind === "ask" ? { message: b.message } : b.kind === "link" ? { url: b.url } : {}),
     image: link(b.id, b.image),
+    ...(b.video ? { video: b.video } : {}),
     audience: b.audience, tag: b.tag,
   }));
   if (!blocks.length && !home.avatar && !home.colors.length) return null;
-  return { avatar: home.avatar ? link("avatar", home.avatar) : "", layout: home.layout, shape: home.shape, colors: home.colors, blocks };
+  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, blocks };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.

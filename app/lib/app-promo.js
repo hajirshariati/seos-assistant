@@ -37,11 +37,41 @@ export function appImageData(value) {
   if (size <= 0 || size > APP_IMAGE_MAX_BYTES) return null;
   return { type: m[1], base64: m[2] };
 }
+// A file picked from the store's Shopify Files (Settings → Choose from
+// files): a link on Shopify's CDN to a picture, or to a video. Kept as the
+// link — nothing is copied — so it stays as sharp as it was uploaded.
+const SHOPIFY_CDN = /^https:\/\/cdn\.shopify\.com\/[^\s"'<>]+$/i;
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg|avif)(\?[^\s"'<>]*)?$/i;
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?[^\s"'<>]*)?$/i;
+export function cdnImageUrl(value) {
+  const v = String(value || "").trim();
+  return SHOPIFY_CDN.test(v) && IMAGE_EXT.test(v) && v.length <= 600 ? v : "";
+}
+export function cdnVideoUrl(value) {
+  const v = String(value || "").trim();
+  return SHOPIFY_CDN.test(v) && VIDEO_EXT.test(v) && v.length <= 600 ? v : "";
+}
+// A picture as it may be stored: a data URL within the size limit, or a
+// Shopify Files link; else "".
+export function appImageValue(value) {
+  const v = String(value || "");
+  return appImageData(v) ? v : cdnImageUrl(v);
+}
+// For widget-config: a stored picture as a link the page can load — the
+// app's own route (with the picture's fingerprint) for a data URL, the
+// Shopify link as it is.
+export function appImageLink(value, route) {
+  const v = String(value || "");
+  if (appImageData(v)) return route(shortHash(v));
+  return cdnImageUrl(v);
+}
 // Settings: a picture that can't be used is refused, with why.
 export function appImageError(value) {
   const v = String(value || "");
-  if (!v || appImageData(v)) return "";
-  return IMAGE_DATA_URL.test(v) ? "That picture is too large — try a smaller one." : "The app picture should be a PNG, WebP or JPEG image.";
+  if (!v || appImageValue(v)) return "";
+  if (IMAGE_DATA_URL.test(v)) return "That picture is too large — try a smaller one.";
+  if (/^https?:/i.test(v)) return "Pick the picture from your Shopify files, or upload one.";
+  return "The app picture should be a PNG, WebP or JPEG image.";
 }
 // A short fingerprint of the picture, so a new one gets a new link (cached for good).
 export function shortHash(s) {
@@ -54,7 +84,7 @@ export const APP_IMAGE_PATH = "/apps/hajirai/app-image";
 // For widget-config: off, or on with whichever links are set.
 export function appPromoConfig(config = {}) {
   if (config.appPromoOn === false) return { on: false };
-  const image = appImageData(config.appPromoImage) ? `${APP_IMAGE_PATH}?v=${shortHash(String(config.appPromoImage))}` : "";
+  const image = appImageLink(config.appPromoImage, (v) => `${APP_IMAGE_PATH}?v=${v}`);
   return {
     on: true,
     ios: cleanAppLink("ios", config.appIosUrl),

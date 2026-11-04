@@ -39,6 +39,16 @@ export const SETTINGS_CSS = `
   .set-app-pic__thumb.is-empty span { font-size: 26px; opacity: 0.6; }
   .set-app-pic__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .set-peak-block { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; border: 1px solid #e3e3e3; border-radius: 12px; background: #fafafa; }
+  .set-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; max-height: 56vh; overflow: auto; padding: 2px; }
+  .set-file { all: unset; box-sizing: border-box; display: grid; gap: 4px; min-width: 0; padding: 4px; border-radius: 10px; cursor: pointer; }
+  .set-file:hover .set-file__pic, .set-file:focus-visible .set-file__pic { box-shadow: 0 0 0 2px #2D6B4F; }
+  .set-file:focus-visible { outline: none; }
+  .set-file__pic { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #f1f1f1; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); transition: box-shadow .12s ease; }
+  .set-file__pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .set-file__blank { font-size: 22px; color: #8a8a8a; }
+  .set-file__badge { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .02em; }
+  .set-file__name { font-size: 12px; line-height: 16px; color: #303030; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .set-file__meta { font-size: 11px; line-height: 14px; color: #616161; font-variant-numeric: tabular-nums; }
   .set-peak-colors { display: grid; gap: 8px; }
   .set-palettes { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
   .set-palette { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; border: 1px solid #e3e3e3; background: #fff; font-size: 13px; line-height: 18px; color: #303030; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }

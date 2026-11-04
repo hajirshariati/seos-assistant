@@ -494,7 +494,7 @@ function setAvatar(url){
 function peakBlocks(){
   if(!PEAK||!Array.isArray(PEAK.blocks))return [];
   return PEAK.blocks.filter(function(b){
-    if(!b||!b.image||!safeUrl(b.image))return false;
+    if(!b||!((b.image&&safeUrl(b.image))||(b.video&&safeUrl(b.video))))return false;
     var a=b.audience||'all';
     if(a==='all')return true;
     if(a==='guest')return !CUST_LOGGED_IN;
@@ -513,11 +513,25 @@ var PEAK_SHAPES={wide:'16 / 9',standard:'4 / 3',square:'1 / 1'};
 function peakTilesHtml(blocks){
   var layout=PEAK&&/^(rail|mosaic|grid)$/.test(String(PEAK.layout))?PEAK.layout:'rail',ar=PEAK_SHAPES[PEAK&&PEAK.shape]||PEAK_SHAPES.wide;
   var h='<div class="ai-chat-peak ai-chat-peak--'+layout+'" data-peak role="region" aria-label="Today\u2019s offers" style="--ai-peak-ar:'+ar+'"><div class="ai-chat-peak__tiles" data-n="'+blocks.length+'">';
-  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=safeUrl(b.image),url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',label=esc(b.title||('Offer '+(i+1))),img='<img src="'+pic+'" alt="" loading="lazy" draggable="false">';
+  var still=!focusMotionOk();
+  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image?safeUrl(b.image):'',vid=b.video?safeUrl(b.video):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',label=esc(b.title||('Offer '+(i+1))),img;
+    /* A video plays by itself, silent and looping (not for shoppers who prefer reduced motion: its first frame, or its picture, stays); its picture is the poster. */
+    if(vid)img='<video class="ai-chat-peak__video" muted loop playsinline preload="metadata"'+(still?'':' autoplay')+(pic?' poster="'+pic+'"':'')+' aria-hidden="true" tabindex="-1"><source src="'+vid+'" type="'+(/\.webm(\?|$)/i.test(vid)?'video/webm':'video/mp4')+'"></video>';
+    else img='<img src="'+pic+'" alt="" loading="lazy" draggable="false">';
     if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+'</button>';
     else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+'</a>';
     else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+'</div>'}
   return h+'</div></div>';
+}
+/* The tiles' videos play only while in view (the home open, the tile on
+   screen): off screen, minimized or behind a chat, they pause. */
+var peakVidObs=null;
+function peakVideosWatch(){
+  var vids=msgsEl?msgsEl.querySelectorAll('.ai-chat-peak__video'):[];
+  if(peakVidObs){peakVidObs.disconnect();peakVidObs=null}
+  if(!vids.length||!('IntersectionObserver' in window)||!focusMotionOk())return;
+  peakVidObs=new IntersectionObserver(function(es){for(var i=0;i<es.length;i++){var v=es[i].target;try{if(es[i].isIntersecting){var p=v.play();if(p&&p.catch)p.catch(function(){})}else v.pause()}catch(e){}}},{threshold:0.2});
+  for(var j=0;j<vids.length;j++)peakVidObs.observe(vids[j]);
 }
 /* Her colours on peak days (Settings → Peak Mode): up to four, standing in
    for the usual pink, violet, blue and teal in the glow around her face,
@@ -1892,6 +1906,7 @@ function buildFocusHome(){
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
   panel.classList.add('is-home');
+  peakVideosWatch();
   focusMeasure();
   focusGreetRender();
   focusGreetStart();
@@ -2461,6 +2476,7 @@ h+='</div>';
 msgsEl.innerHTML=h;
 msgsEl.classList.add('is-welcome');
 panel.classList.add('is-home');
+peakVideosWatch();
 renderHelpers();
 /* FITFinder's config loads when the chat opens; the tool appears then. */
 if(ffLoading)ffLoading.then(renderHelpers);

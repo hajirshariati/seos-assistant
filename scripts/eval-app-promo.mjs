@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 
 const { cleanAppLink, appPromoConfig, appLinkError, cleanAppText, defaultAppText, APP_TEXT_MAX, APP_BUTTON_MAX } = await import("../app/lib/app-promo.js");
 const { focusImagesConfig, focusImageError, focusImageKey, FOCUS_IMAGE_PATH } = await import("../app/lib/focus-home.js");
+const { appImageError, appImageValue, cdnImageUrl, cdnVideoUrl } = await import("../app/lib/app-promo.js");
 
 let passed = 0;
 let failed = 0;
@@ -106,6 +107,24 @@ await test("focus pictures: Settings refuses anything but a small PNG, WebP or J
   assert.equal(focusImageError(PNG), "");
   assert.match(focusImageError("data:text/html;base64,PGI+"), /PNG, WebP or JPEG/);
   assert.match(focusImageError("data:image/png;base64," + "A".repeat(600 * 1024)), /too large/);
+});
+
+
+console.log("\nShopify Files");
+await test("a Shopify Files link is a good picture: kept as the link (the app's own route only for a data URL); other sites and other kinds are refused with a hint", () => {
+  const CDN = "https://cdn.shopify.com/s/files/1/0001/0002/files/app-phone.png?v=1730000000";
+  assert.equal(cdnImageUrl(CDN), CDN);
+  assert.equal(cdnImageUrl("https://cdn.shopify.com/videos/c/o/v/a.mp4"), "");
+  assert.equal(cdnImageUrl("https://example.com/a.png"), "");
+  assert.equal(cdnVideoUrl("https://cdn.shopify.com/videos/c/o/v/a.mp4"), "https://cdn.shopify.com/videos/c/o/v/a.mp4");
+  assert.equal(cdnVideoUrl(CDN), "");
+  assert.equal(appImageValue(CDN), CDN);
+  assert.equal(appImageError(CDN), "");
+  assert.match(appImageError("https://example.com/a.png"), /Pick the picture from your Shopify files/);
+  assert.match(appImageError("not a picture"), /PNG, WebP or JPEG/);
+  assert.equal(appPromoConfig({ appPromoImage: CDN }).image, CDN);
+  assert.equal(focusImagesConfig({ focusPainImage: CDN }).pain, CDN);
+  assert.equal(focusImageError(CDN), "");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

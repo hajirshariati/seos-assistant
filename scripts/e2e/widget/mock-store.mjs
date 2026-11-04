@@ -24,7 +24,7 @@ function peakFor(referer) {
 export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], blocks: [
   { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", audience: "all", tag: "" },
   { id: "b2", title: "An extra 10% for members", message: "What is my member offer today?", image: "/pic-orthotics.svg", audience: "signed", tag: "" },
-  { id: "b3", title: "Early access to the winter styles", message: "Show me the VIP early-access styles", image: "/pic-pain.svg", audience: "tag", tag: "VIP" },
+  { id: "b3", title: "Early access to the winter styles", message: "Show me the VIP early-access styles", image: "/pic-pain.svg", video: "/peak.webm", audience: "tag", tag: "VIP" },
   { id: "b4", title: "Join free and save 15%", url: "/account/register", image: "/pic-footwear.svg", audience: "guest", tag: "" },
 ] };
 // The offers the Deals card shows (the promotions page, structured and checked).
@@ -337,6 +337,8 @@ export function start(port) {
         if (/^\/focus-pain-(heel|arch|ball|toes)\.png$/.test(u.pathname)) return send(200, "image/png", fs.readFileSync(W + u.pathname.slice(1)));
         // The Aetrex Access lockup stand-in: "aetrex" on light slate, "ACCESS" on dark (a 5:1 strip).
         if (u.pathname === "/pic-access.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100"><rect width="250" height="100" fill="#8fa3ad"/><rect x="250" width="250" height="100" fill="#5c6b73"/><text x="125" y="66" font-family="Arial" font-size="44" fill="#fff" text-anchor="middle">aetrex</text><text x="375" y="66" font-family="Arial" font-weight="700" font-size="40" fill="#fff" text-anchor="middle">ACCESS</text></svg>`);
+        // A short video for a peak tile (VP8, which the test browser plays).
+        if (u.pathname === "/peak.webm") return send(200, "video/webm", fs.readFileSync(new URL("./fixtures/peak.webm", import.meta.url)));
         if (u.pathname === "/pic-pain.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#ffe3e3"/><circle cx="80" cy="80" r="46" fill="#ff5a5a"/></svg>`);
         if (u.pathname === "/pic-footwear.svg" || u.pathname === "/pic-orthotics.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${u.pathname.includes("foot") ? "#c7d7ff" : "#ffd9c2"}"/><circle cx="80" cy="80" r="44" fill="#fff"/></svg>`);
         if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {

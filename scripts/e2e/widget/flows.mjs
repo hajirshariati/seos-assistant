@@ -3742,6 +3742,11 @@ for (const coop of ["1", "2"]) {
       const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
       const tagged = await readPeak(vip.page);
       check("peak home (signed in with the tag, any case): the tag's picture too, in the saved order — and with three the rail shows two and a half, the third a swipe away, no arrows", tagged.labels.join("|") === "Black Friday: 30% off everything|An extra 10% for members|Early access to the winter styles" && oneRow(tagged) && tagged.scrolls && tagged.inside && Math.abs(tagged.rects[0].w - (tagged.box.w - 20) / 2.5) <= 2 && tagged.clean, JSON.stringify({ labels: tagged.labels, w: tagged.rects[0]?.w, box: tagged.box?.w }));
+      // The third tile is a video from Shopify Files: silent, looping, playing by itself once in view, its picture as the poster, still a question tile.
+      await vip.page.evaluate(() => document.querySelector(".ai-chat-peak__tiles").scrollTo({ left: 9999 }));
+      await vip.page.waitForTimeout(1200);
+      const vt = await vip.page.evaluate(() => { const t = document.querySelectorAll(".ai-chat-peak__tile")[2]; const v = t.querySelector("video"); return { tag: t.tagName, ask: t.getAttribute("data-message"), has: !!v, muted: v?.muted, loop: v?.loop, inline: v?.hasAttribute("playsinline"), auto: v?.hasAttribute("autoplay"), poster: v?.getAttribute("poster") || "", src: v?.querySelector("source")?.getAttribute("src") || "", type: v?.querySelector("source")?.getAttribute("type") || "", playing: !!v && !v.paused && v.currentTime > 0, hidden: v?.getAttribute("aria-hidden") }; });
+      check("peak home (video tile): a silent looping video with its picture as the poster plays by itself in view, inside a tap-to-ask tile", vt.tag === "BUTTON" && vt.ask === "Show me the VIP early-access styles" && vt.has && vt.muted && vt.loop && vt.inline && vt.auto && /pic-pain/.test(vt.poster) && vt.src === "/peak.webm" && vt.type === "video/webm" && vt.playing && vt.hidden === "true", JSON.stringify(vt));
       await vip.ctx.close();
       // The mosaic: the first big over two rows, the rest around it, edges level, no holes.
       const mo = await open("/full?home=focus&pk=1&pkl=mosaic&login=Ann&tags=vip");

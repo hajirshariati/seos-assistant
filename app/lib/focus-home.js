@@ -1,9 +1,9 @@
 // The Focus home (Theme editor → AVA → Home layout → Focus): the pictures
 // of its three cards — Foot pain, Footwear and Orthotics — uploaded in
 // Settings. Stored like the app's picture (a resized PNG, WebP or JPEG data
-// URL); the route turns them into bytes. Without one, Foot pain shows the
+// URL, or a Shopify Files link); the route turns a data URL into bytes. Without one, Foot pain shows the
 // heel picture built in and the line cards a line drawing. Pure.
-import { appImageData, appImageError, shortHash } from "./app-promo.js";
+import { appImageData, appImageError, appImageLink } from "./app-promo.js";
 
 export const FOCUS_IMAGE_PATH = "/apps/hajirai/focus-image";
 export const FOCUS_IMAGE_KINDS = ["pain", "footwear", "orthotics"];
@@ -21,8 +21,8 @@ export function focusImageError(value) {
 export function focusImagesConfig(config = {}) {
   const out = {};
   for (const kind of FOCUS_IMAGE_KINDS) {
-    const v = config[focusImageKey(kind)];
-    if (appImageData(v)) out[kind] = `${FOCUS_IMAGE_PATH}?kind=${kind}&v=${shortHash(String(v))}`;
+    const link = appImageLink(config[focusImageKey(kind)], (v) => `${FOCUS_IMAGE_PATH}?kind=${kind}&v=${v}`);
+    if (link) out[kind] = link;
   }
   return out;
 }
