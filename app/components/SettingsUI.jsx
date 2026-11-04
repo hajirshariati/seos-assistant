@@ -49,6 +49,17 @@ export const SETTINGS_CSS = `
   .set-file__badge { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .02em; }
   .set-file__name { font-size: 12px; line-height: 16px; color: #303030; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .set-file__meta { font-size: 11px; line-height: 14px; color: #616161; font-variant-numeric: tabular-nums; }
+  .set-anchor { display: flex; align-items: center; gap: 14px; }
+  .set-anchor__tile { position: relative; width: 200px; max-width: 45%; flex: none; border-radius: 12px; overflow: hidden; background: #f1f1f1; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
+  .set-anchor__tile img, .set-anchor__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: object-position .25s ease; }
+  .set-anchor__blank { position: absolute; inset: 0; display: grid; place-items: center; color: #8a8a8a; }
+  .set-anchor__grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+  .set-anchor__dot { all: unset; box-sizing: border-box; position: relative; cursor: pointer; }
+  .set-anchor__dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: rgba(255,255,255,0.75); box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.3); transition: transform .15s ease, background .15s ease; }
+  .set-anchor__dot:hover::after { transform: scale(1.3); }
+  .set-anchor__dot[aria-checked="true"]::after { width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #2D6B4F; box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,0.35); }
+  .set-anchor__dot:focus-visible::after { outline: 2px solid #2D6B4F; outline-offset: 2px; }
+  .set-anchor__words { display: grid; gap: 2px; min-width: 0; }
   .set-peak-colors { display: grid; gap: 8px; }
   .set-palettes { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
   .set-palette { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; border: 1px solid #e3e3e3; background: #fff; font-size: 13px; line-height: 18px; color: #303030; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }

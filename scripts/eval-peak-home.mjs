@@ -26,13 +26,20 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.equal(h.layout, "mosaic"); assert.equal(h.shape, "square");
   assert.deepEqual(h.colors, ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], "four good colours, lowercased, the rest dropped");
   assert.equal(h.blocks.length, PEAK_BLOCKS_MAX);
-  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, video: "", audience: "all", tag: "" }, "no eyebrow, text or button any more");
+  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, video: "", focus: "center", audience: "all", tag: "" }, "no eyebrow, text or button any more");
+  assert.equal(parsePeakHome({ blocks: [{ image: PNG, focus: "top right" }] }).blocks[0].focus, "top right");
+  assert.equal(parsePeakHome({ blocks: [{ image: PNG, focus: "middle" }] }).blocks[0].focus, "center", "an unknown anchor is the centre");
+  const anchored = peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ blocks: [{ id: "r", kind: "none", image: PNG, focus: "right" }, { id: "c", kind: "none", image: PNG }] }) });
+  assert.equal(anchored.blocks[0].focus, "right"); assert.ok(!("focus" in anchored.blocks[1]), "the centre goes without saying");
   assert.equal(h.blocks[1].id, "badid"); assert.equal(h.blocks[1].url, ""); assert.equal(h.blocks[1].message, "What's my offer?");
   assert.equal(h.blocks[2].tag, "VIP");
   assert.equal(h.blocks[3].url, "", "an unsafe link is dropped");
   assert.deepEqual([h.blocks[4].kind, h.blocks[4].url, h.blocks[4].title], ["none", "", ""], "a picture that does nothing when tapped");
-  assert.deepEqual(parsePeakHome("{broken"), { avatar: "", layout: "rail", shape: "wide", colors: [], blocks: [] });
-  assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red" }), { avatar: "", layout: "rail", shape: "wide", colors: [], blocks: [] }, "unknown choices fall back");
+  const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, blocks: [] };
+  assert.deepEqual(parsePeakHome("{broken"), plain);
+  assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
+  const look = parsePeakHome({ ring: "bold", decor: "header", tint: true });
+  assert.deepEqual([look.ring, look.decor, look.tint], ["bold", "header", true]);
 });
 test("what's wrong is named: a picture too large or missing, a tag audience without a tag, a tap without its link or question; an empty block is left out quietly", () => {
   assert.match(peakHomeError({ avatar: HUGE }), /too large/);
@@ -91,7 +98,9 @@ test("the home is handed over only while Peak Mode is on, pictures as fingerprin
   assert.equal(peakHomeConfig(sched, new Date("2026-11-26T12:00:00Z")), null, "not yet");
   assert.ok(peakHomeConfig(sched, new Date("2026-11-28T12:00:00Z")), "the day itself");
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: "{}" }), null, "nothing set: the usual home");
-  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], blocks: [] }, "colours alone are worth handing over");
+  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, blocks: [] }, "colours alone are worth handing over");
+  assert.deepEqual([on.ring, on.decor, on.tint], ["fine", "off", false]);
+  assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ decor: "both" }) }).decor, "both", "a look alone is worth handing over too");
   assert.equal(peakImage({ peakHome: saved }, "b1").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "avatar").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "nope"), null);

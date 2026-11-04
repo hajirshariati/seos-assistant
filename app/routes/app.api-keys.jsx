@@ -57,7 +57,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -1489,6 +1489,28 @@ function glowRing(colors) {
   while (g.length < 4) g.push(g[g.length - n]);
   return { background: `conic-gradient(from 0deg, ${g[0]}, ${g[1]}, ${g[2]}, ${g[3]}, ${g[0]})` };
 }
+// Where a tile's picture is anchored when cropped to its shape: nine
+// points on a live preview of the tile, the picture moving as one is picked.
+const FOCUS_WORDS = { center: "Centre", left: "Left", right: "Right", top: "Top", bottom: "Bottom", "top left": "Top left", "top right": "Top right", "bottom left": "Bottom left", "bottom right": "Bottom right" };
+const FOCUS_GRID = ["top left", "top", "top right", "left", "center", "right", "bottom left", "bottom", "bottom right"];
+function AnchorPicker({ image, video, shape, value, onChange }) {
+  const focus = PEAK_FOCUS.includes(value) ? value : "center";
+  const ar = { wide: "16 / 9", standard: "4 / 3", square: "1 / 1" }[shape] || "16 / 9";
+  return (
+    <div className="set-anchor">
+      <div className="set-anchor__tile" style={{ aspectRatio: ar }}>
+        {image ? <img src={image} alt="" style={{ objectPosition: focus }} /> : video ? <video src={video} muted playsInline preload="metadata" aria-hidden="true" style={{ objectPosition: focus }} /> : <span className="set-anchor__blank" aria-hidden="true">▭</span>}
+        <div className="set-anchor__grid" role="radiogroup" aria-label="Where the picture is anchored">
+          {FOCUS_GRID.map((k) => <button key={k} type="button" role="radio" aria-checked={focus === k} aria-label={FOCUS_WORDS[k]} className="set-anchor__dot" onClick={() => onChange(k)} />)}
+        </div>
+      </div>
+      <div className="set-anchor__words">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">Anchored {FOCUS_WORDS[focus].toLowerCase()}</Text>
+        <Text as="p" variant="bodySm" tone="subdued">The picture is cropped to the tile's shape; pick the point that stays in view — the preview shows the crop.</Text>
+      </div>
+    </div>
+  );
+}
 function PeakHomeEditor({ value, onChange }) {
   const v = value && typeof value === "object" && !Array.isArray(value) ? value : { avatar: "", blocks: [] };
   const blocks = Array.isArray(v.blocks) ? v.blocks : [];
@@ -1496,7 +1518,7 @@ function PeakHomeEditor({ value, onChange }) {
   const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
   const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
-  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", video: "", audience: "all", tag: "" }] }); };
+  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", video: "", focus: "center", audience: "all", tag: "" }] }); };
   const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
   const layout = PEAK_LAYOUTS.includes(v.layout) ? v.layout : "rail";
   const shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, v.shape) ? v.shape : "wide";
@@ -1538,6 +1560,11 @@ function PeakHomeEditor({ value, onChange }) {
           </div>
         ) : null}
       </div>
+      <div className="set-grid set-grid--3">
+        <Select label="The ring around her face" options={PEAK_RINGS.map((k) => ({ value: k, label: PEAK_RING_WORDS[k] }))} value={PEAK_RINGS.includes(v.ring) ? v.ring : "fine"} onChange={(x) => up({ ring: x })} helpText="Heavier reads as a band of colour; the glow follows." />
+        <Select label="Holiday ornaments" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="Drawn in her colours, so they fit any screen: a pine sprig with a bow and a thread of gold under the header's controls; and a garland of sprigs, baubles and thread across the foot of the home." />
+        <Select label="Tint behind the header" options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot." />
+      </div>
       <div className="set-grid">
         <Select label="How the pictures sit" options={PEAK_LAYOUTS.map((k) => ({ value: k, label: PEAK_LAYOUT_WORDS[k] }))} value={layout} onChange={(x) => up({ layout: x })} helpText={layout === "rail" ? "Two and a half in view on a computer, one and a quarter on a phone; the rest a swipe away, no arrows." : layout === "mosaic" ? "The first picture big, the others around it — three to six look best." : "Two to a row, all the same size."} />
         <Select label="Their shape" options={Object.keys(PEAK_SHAPES).map((k) => ({ value: k, label: PEAK_SHAPE_WORDS[k] }))} value={shape} onChange={(x) => up({ shape: x })} helpText="Every picture is cropped to this shape, centred." />
@@ -1555,6 +1582,7 @@ function PeakHomeEditor({ value, onChange }) {
             </InlineStack>
           </InlineStack>
           <PeakPicture image={b.image || ""} video={b.video || ""} kinds="all" onChange={(image) => setBlock(i, { image })} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "" }) : setBlock(i, { image: f.url }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}; make it at least 800px wide. Upload a picture, or pick a picture or video from your Shopify files.`} size={900} />
+          {b.image || b.video ? <AnchorPicker image={b.image || ""} video={b.video || ""} shape={shape} value={b.focus || "center"} onChange={(focus) => setBlock(i, { focus })} /> : null}
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
             {b.kind === "ask"

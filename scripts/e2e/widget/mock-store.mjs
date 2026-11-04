@@ -21,8 +21,8 @@ function peakFor(referer) {
   const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
   return { ...PEAK_HOME, layout, blocks };
 }
-export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], blocks: [
-  { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", audience: "all", tag: "" },
+export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], ring: "bold", decor: "both", tint: true, blocks: [
+  { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", focus: "right", audience: "all", tag: "" },
   { id: "b2", title: "An extra 10% for members", message: "What is my member offer today?", image: "/pic-orthotics.svg", audience: "signed", tag: "" },
   { id: "b3", title: "Early access to the winter styles", message: "Show me the VIP early-access styles", image: "/pic-pain.svg", video: "/peak.webm", audience: "tag", tag: "VIP" },
   { id: "b4", title: "Join free and save 15%", url: "/account/register", image: "/pic-footwear.svg", audience: "guest", tag: "" },

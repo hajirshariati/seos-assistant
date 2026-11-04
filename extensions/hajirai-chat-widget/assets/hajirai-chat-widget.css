@@ -7342,9 +7342,9 @@ button.ai-chat-launcher__text {
    slowly — a box with a blur (a blurred SVG stroke smears in Safari; a
    blurred box does not), masked to a soft ring just outside the band's
    ring. It fades with the ring (--ro) when a chat starts. */
-.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -9px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, var(--ai-glow-1, #ff4fa3), var(--ai-glow-2, #a35cff), var(--ai-glow-3, #3d7bff), var(--ai-glow-4, #29e0d0), var(--ai-glow-2, #a35cff), var(--ai-glow-1, #ff4fa3)); -webkit-mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); filter: blur(10px); opacity: calc(var(--ro, 1) * 0.08); animation: aiChatHaloSpin 18s linear infinite; }
+.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -9px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, var(--ai-glow-1, #ff4fa3), var(--ai-glow-2, #a35cff), var(--ai-glow-3, #3d7bff), var(--ai-glow-4, #29e0d0), var(--ai-glow-2, #a35cff), var(--ai-glow-1, #ff4fa3)); -webkit-mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); filter: blur(10px); opacity: calc(var(--ro, 1) * 0.08 * (1 + (var(--ai-ring-k, 1) - 1) * 0.5)); animation: aiChatHaloSpin 18s linear infinite; }
 @keyframes aiChatHaloSpin { to { transform: rotate(360deg); } }
-.ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
+.ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: calc(2.5px + (var(--ai-ring-k, 1) - 1) * 1.1px); z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .ai-chat-panel.is-focus .ai-chat-hero__mono { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: var(--seos-ink, #0d0d12); color: #fff; font: 700 24px/1 var(--seos-font); }
 .ai-chat-panel.is-focus .ai-chat-band { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
@@ -7355,10 +7355,13 @@ button.ai-chat-launcher__text {
    and the line alike, on phones too. */
 .ai-chat-panel.is-focus .ai-chat-band__linel,
 .ai-chat-panel.is-focus .ai-chat-band__ringl { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--4, .ai-chat-panel.is-focus .ai-chat-band__ringl--4 { stroke-width: 10; opacity: 0.02; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--3, .ai-chat-panel.is-focus .ai-chat-band__ringl--3 { stroke-width: 6; opacity: 0.045; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: 3; opacity: 0.09; }
-.ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: 1.2; opacity: 1; }
+/* The strokes take the ring's weight on peak days (--ai-ring-k, 1 as
+   usual): the hairline fully, its glows less, so a bold ring reads as a
+   band of colour rather than a blur. */
+.ai-chat-panel.is-focus .ai-chat-band__linel--4, .ai-chat-panel.is-focus .ai-chat-band__ringl--4 { stroke-width: calc(10px * (1 + (var(--ai-ring-k, 1) - 1) * 0.3)); opacity: 0.02; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--3, .ai-chat-panel.is-focus .ai-chat-band__ringl--3 { stroke-width: calc(6px * (1 + (var(--ai-ring-k, 1) - 1) * 0.4)); opacity: 0.045; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--2, .ai-chat-panel.is-focus .ai-chat-band__ringl--2 { stroke-width: calc(3px * (1 + (var(--ai-ring-k, 1) - 1) * 0.6)); opacity: 0.09; }
+.ai-chat-panel.is-focus .ai-chat-band__linel--1, .ai-chat-panel.is-focus .ai-chat-band__ringl--1 { stroke-width: calc(1.2px * var(--ai-ring-k, 1)); opacity: 1; }
 .ai-chat-panel.is-focus .ai-chat-band__lit { transition: opacity 0.45s ease; }
 /* In a chat the gray header line goes; the glow breathes while Ava is writing. */
 .ai-chat-panel.is-focus.is-chatting .ai-chat-header { border-bottom-color: transparent !important; }
@@ -7768,6 +7771,57 @@ button.ai-chat-launcher__text {
 .ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt), .ai-chat-msg-bubble:has(.ai-dl) { width: 100%; max-width: 100%; }
 .ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-dl) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
 
+/* ── Peak days: holiday ornaments in her colours, and the tint behind the header ──
+   Drawn by the widget (no pictures), so they fit any screen; never in
+   the way of a tap. The header's: a sprig, a bauble and a bow tucked
+   under the controls at the right, the thread trailing left. The foot's:
+   a garland across the bottom of the home, behind the links. */
+.ai-chat-panel .ai-chat-deco { position: absolute; pointer-events: none; z-index: 6; }
+.ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; }
+.ai-chat-panel .ai-chat-deco .d-red { fill: var(--ai-glow-1, #ff4fa3); }
+.ai-chat-panel .ai-chat-deco .d-deep { fill: var(--ai-glow-4, #29e0d0); }
+.ai-chat-panel .ai-chat-deco .d-gold { fill: var(--ai-glow-3, #3d7bff); }
+.ai-chat-panel .ai-chat-deco .d-gold-s { stroke: var(--ai-glow-3, #3d7bff); }
+.ai-chat-panel .ai-chat-deco .d-green-s { stroke: var(--ai-glow-2, #a35cff); }
+.ai-chat-panel .ai-chat-deco .d-stem { stroke: color-mix(in srgb, var(--ai-glow-2, #a35cff) 45%, #4a3521); }
+.ai-chat-panel .ai-chat-deco .d-gold-stop { stop-color: var(--ai-glow-3, #3d7bff); }
+.ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; }
+/* The header's: the thread's arc across the header's foot (stretching with
+   it), the sprig and bow at the right under the controls. At home the
+   header's grey line gives way to the thread. */
+.ai-chat-panel .ai-chat-deco--head { left: 0; right: 0; top: 0; bottom: 0; transition: opacity 0.4s ease; }
+.ai-chat-panel:not(.is-home) .ai-chat-deco--head { opacity: 0; }
+.ai-chat-panel .ai-chat-deco__arc { position: absolute; left: 0; right: 0; bottom: -40px; height: 80px; width: auto; }
+.ai-chat-panel .ai-chat-deco__sprig { position: absolute; right: 10px; top: 38px; width: min(50%, 260px); aspect-ratio: 260 / 120; height: auto; }
+/* The Focus header is short (the greeting sits below it, in the home):
+   the thread sweeps under the greeting, from behind the face, up to the
+   sprig at the right. */
+.ai-chat-panel.is-focus .ai-chat-deco__arc { bottom: -72px; }
+.ai-chat-panel.is-focus .ai-chat-deco__sprig { top: 50px; }
+/* The links above the box sit on the garland, not see-through. */
+.ai-chat-panel[data-peak-decor] .ai-chat-focus__links button { background: var(--ai-chat-bg); }
+.ai-chat-panel[data-peak-decor].is-home .ai-chat-header { border-bottom-color: transparent; }
+.ai-chat-panel[data-peak-decor] .ai-chat-welcome { position: relative; }
+.ai-chat-panel .ai-chat-deco--foot { left: 0; right: 0; bottom: 0; height: 72px; z-index: 0; }
+.ai-chat-panel .ai-chat-deco__thread { position: absolute; left: 110px; right: 130px; bottom: 16px; height: 40px; width: auto; }
+.ai-chat-panel .ai-chat-deco__left { position: absolute; left: -6px; bottom: 0; width: 150px; height: 70px; }
+.ai-chat-panel .ai-chat-deco__right { position: absolute; right: -6px; bottom: 0; width: 170px; height: 72px; }
+.ai-chat-panel.is-focus .ai-chat-focus__links { position: relative; z-index: 1; }
+.ai-chat-panel .ai-chat-deco .d-sway { transform-box: fill-box; transform-origin: 50% 0; animation: aiDecoSway 6.5s ease-in-out infinite alternate; }
+@keyframes aiDecoSway { from { transform: rotate(-2.4deg); } to { transform: rotate(2.4deg); } }
+@container aipeak (max-width: 439px) { .ai-chat-panel .ai-chat-deco__thread { left: 90px; right: 110px; } }
+@media (max-width: 480px) {
+  .ai-chat-panel .ai-chat-deco__sprig, .ai-chat-panel.is-focus .ai-chat-deco__sprig { width: 46%; right: 8px; top: 50px; }
+  .ai-chat-panel .ai-chat-deco__arc { height: 64px; bottom: -30px; }
+  .ai-chat-panel.is-focus .ai-chat-deco__arc { bottom: -58px; }
+  .ai-chat-panel .ai-chat-deco__left { width: 120px; height: 56px; }
+  .ai-chat-panel .ai-chat-deco__right { width: 136px; height: 58px; }
+  .ai-chat-panel .ai-chat-deco__thread { left: 92px; right: 104px; bottom: 12px; height: 30px; }
+  .ai-chat-panel .ai-chat-deco--foot { height: 60px; }
+}
+.ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%); }
+.ai-chat-panel[data-theme="dark"][data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 14%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 5%, transparent) 70%, transparent 100%); }
+@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco .d-sway { animation: none; } }
 /* ── Peak Mode's home: the day's pictures where the banner was ──
    Each tile is just a picture (a link, a question, or nothing), the shape
    set in Settings (--ai-peak-ar). The picture eases a touch larger under

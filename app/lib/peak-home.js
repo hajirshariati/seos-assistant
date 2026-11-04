@@ -41,6 +41,18 @@ export const PEAK_COLOR_SETS = [
   { id: "spring", label: "Spring — mint, lemon and sky", colors: ["#7bd389", "#ffd166", "#ff9fb2", "#9ad0ff"] },
 ];
 export const PEAK_COLORS_MAX = 4;
+// Where a picture is anchored when it's cropped to the tile's shape (the
+// CSS object-position words): the centre as usual, or an edge or corner.
+export const PEAK_FOCUS = ["center", "left", "right", "top", "bottom", "top left", "top right", "bottom left", "bottom right"];
+// Her look on peak days, beyond the colours: the ring around her face
+// (fine as usual, or thicker), holiday ornaments drawn in the colours — a
+// pine sprig with a bow and a thread of gold under the header's controls,
+// and a garland across the foot of the home — and a faint tint of the
+// first colour behind the header.
+export const PEAK_RINGS = ["fine", "regular", "bold"];
+export const PEAK_RING_WORDS = { fine: "Fine — as usual", regular: "Regular", bold: "Bold" };
+export const PEAK_DECORS = ["off", "header", "both"];
+export const PEAK_DECOR_WORDS = { off: "None", header: "Under the header", both: "Header and the foot of the home" };
 const HEX = /^#[0-9a-f]{6}$/i;
 // Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
 export function cleanPeakColors(list) {
@@ -62,12 +74,15 @@ const picture = (v) => appImageValue(v);
 // without a picture are dropped; the name is only for screen readers.
 export function parsePeakHome(raw) {
   const o = parseJson(raw);
-  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], blocks: [] };
+  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, blocks: [] };
   if (!o || typeof o !== "object") return out;
   out.avatar = picture(o.avatar);
   out.layout = PEAK_LAYOUTS.includes(o.layout) ? o.layout : "rail";
   out.shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, o.shape) ? o.shape : "wide";
   out.colors = cleanPeakColors(o.colors);
+  out.ring = PEAK_RINGS.includes(o.ring) ? o.ring : "fine";
+  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : "off";
+  out.tint = o.tint === true;
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
     if (!b || typeof b !== "object") continue;
@@ -87,6 +102,7 @@ export function parsePeakHome(raw) {
       message: kind === "ask" ? clean(b.message, PEAK_MAX.message) : "",
       image,
       video,
+      focus: PEAK_FOCUS.includes(b.focus) ? b.focus : "center",
       audience,
       tag: audience === "tag" ? clean(b.tag, PEAK_MAX.tag) : "",
     });
@@ -127,10 +143,12 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
     ...(b.kind === "ask" ? { message: b.message } : b.kind === "link" ? { url: b.url } : {}),
     image: link(b.id, b.image),
     ...(b.video ? { video: b.video } : {}),
+    ...(b.focus !== "center" ? { focus: b.focus } : {}),
     audience: b.audience, tag: b.tag,
   }));
-  if (!blocks.length && !home.avatar && !home.colors.length) return null;
-  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, blocks };
+  const look = home.ring !== "fine" || home.decor !== "off" || home.tint;
+  if (!blocks.length && !home.avatar && !home.colors.length && !look) return null;
+  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, blocks };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.
