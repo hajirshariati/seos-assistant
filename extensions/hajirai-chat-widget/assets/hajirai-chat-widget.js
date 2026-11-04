@@ -19,16 +19,22 @@ var ACTIVITY_URL='/apps/hajirai/activity';
 var HRK='hajirai_hide_rules';
 var PCSK='hajirai_product_card_style';
 
-function matchesHideRule(rules){
-  if(!rules||!rules.length)return false;
+/* The rule for this page (Settings → Showing the chat → Hide on pages):
+   each hides the chat here, or shows it minimized (mode "compact"). */
+function hideRuleFor(rules){
+  if(!rules||!rules.length)return null;
   var path=window.location.pathname;
   for(var i=0;i<rules.length;i++){
-    var r=rules[i];
-    if(r.matchType==='equals'&&path===r.pattern)return true;
-    if(r.matchType==='contains'&&path.indexOf(r.pattern)!==-1)return true;
+    var r=rules[i];if(!r)continue;
+    if(r.matchType==='equals'&&path===r.pattern)return r;
+    if(r.matchType==='contains'&&path.indexOf(r.pattern)!==-1)return r;
   }
-  return false;
+  return null;
 }
+function matchesHideRule(rules){var r=hideRuleFor(rules);return !!r&&r.mode!=='compact'}
+function compactRuleFor(rules){var r=hideRuleFor(rules);return !!r&&r.mode==='compact'}
+/* Set when this page shows the chat minimized: the bar stays a bubble here. */
+var COMPACT_BY_URL=false;
 
 /* Set when the assistant is hidden here: a page the store hides it on, or a
    shopper outside the store's home countries. */
@@ -75,6 +81,9 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   RETURNS=d.returns&&typeof d.returns==='object'?d.returns:null;
   DEALS=d.deals&&typeof d.deals==='object'?d.deals:null;
   FOCUS_COLLECTIONS=d.focusCollections!==false;
+  var _pk=d.peak&&typeof d.peak==='object'?d.peak:null,_pkWas=JSON.stringify(PEAK);
+  try{if(_pk)sessionStorage.setItem(PEAK_KEY,JSON.stringify(_pk));else sessionStorage.removeItem(PEAK_KEY)}catch(e){}
+  if(JSON.stringify(_pk)!==_pkWas){PEAK=_pk;setAvatar(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar)?PEAK.avatar:AVATAR_USUAL);if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -146,6 +155,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   var rules=d.hideOnUrls||[];
   try{sessionStorage.setItem(HRK,JSON.stringify(rules))}catch(e){}
   if(matchesHideRule(rules))hideAssistant();
+  else if(compactRuleFor(rules))compactAssistant();
   if(d.international&&typeof d.international==='object'){
     var intl={hide:d.international.hide===true,home:Array.isArray(d.international.home)?d.international.home:['US']};
     try{localStorage.setItem(INTL_KEY,JSON.stringify(intl))}catch(e){}
@@ -159,6 +169,14 @@ var GREET=C.greeting||'Hi! I\'m your personal shopping assistant.';
 var GREET_LOGGED=C.greetingLoggedIn||'';
 var GREETCTA=C.greetingCta||'What can I help you find today?';
 var AVATAR=C.avatarUrl||'';
+/* Peak Mode's home (Settings → Peak Mode → The home on peak days): the
+   promotion blocks and the peak picture, from the settings read — kept for
+   the session so the home opens with them (no banner flashing first). */
+var PEAK_KEY='hajirai_peak',PEAK=null;
+try{PEAK=JSON.parse(sessionStorage.getItem(PEAK_KEY)||'null');if(PEAK&&typeof PEAK!=='object')PEAK=null}catch(e){PEAK=null}
+/* The assistant's usual picture; the peak one stands in while Peak Mode is on. */
+var AVATAR_USUAL=AVATAR;
+if(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar))AVATAR=PEAK.avatar;
 var BANNER=C.bannerUrl||'';
 var NAME=C.assistantName||'AI Shopping Assistant';
 var LPLACE=C.launcherPlaceholder||'How can I help you today?';
@@ -185,7 +203,7 @@ var TXT_BASE={name:NAME,greeting:GREET,greetingLoggedIn:GREET_LOGGED,greetingCta
 var FT_DEF={homePainEyebrow:'Help me with',homePainTitle:'Foot pain',homePainTitleWide:'Let\u2019s talk about your foot pain.',homePainSub:'Say where it hurts and what you wear. A few taps, then Ava\u2019s best match.',homePainCta:'Start',
   homeFootwearEyebrow:'Help me find',homeFootwearTitle:'Footwear',homeFootwearSub:'Sneakers, sandals, boots and more \u2014 support built in.',homeFootwearCta:'Browse',
   homeOrthoticsEyebrow:'Help me find',homeOrthoticsTitle:'Orthotics',homeOrthoticsSub:'Inserts for the shoes you already own, matched to your arch.',homeOrthoticsCta:'Browse',
-  homeLink1Label:'Track my order',homeLink1Message:'Where is my order?',homeLink2Label:'Returns & exchanges',homeLink2Message:'I\u2019d like to return or exchange something.',homeLink3Label:'Deals',homeLink3Message:'What deals are running right now?'};
+  homeLink1Label:'',homeLink1Message:'',homeLink2Label:'Returns & exchanges',homeLink2Message:'I\u2019d like to return or exchange something.',homeLink3Label:'Deals',homeLink3Message:'What deals are running right now?'};
 var FT={};for(var _fk in FT_DEF)FT[_fk]=FT_DEF[_fk];
 function setTexts(t){
   t=t&&typeof t==='object'?t:{};
@@ -257,6 +275,7 @@ try{applySeasonal(JSON.parse(localStorage.getItem(SEA_KEY)||'null'))}catch(e){ap
 /* The button's text comes from the app's Settings → Support link (widget-config). */
 var SUPPORT_LABEL='Chat with Aetrex Support';
 var CUST_LOGGED_IN=C.customerLoggedIn===true;
+var CUST_TAGS=(Array.isArray(C.customerTags)?C.customerTags:[]).map(function(t){return String(t).trim().toLowerCase()}).filter(Boolean);
 var CUST_NAME=C.customerFirstName||'';
 var CUST_LOGIN_URL=C.customerLoginUrl||'/account/login';
 var CUST_LOGOUT_URL=C.customerLogoutUrl||'/account/logout';
@@ -456,6 +475,42 @@ function syncThemeCart(){
   });
 }
 
+/* A new picture for the assistant everywhere it shows: the header's face,
+   the bar's photo, the replies' small one (new replies), the home's. */
+function setAvatar(url){
+  if(url===AVATAR)return;
+  AVATAR=url;
+  assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':assistantBubbleAvatar.replace(/^<img[^>]*>$/,'');
+  var hp=document.querySelector('.ai-chat-hero__photo');if(hp){var hi=hp.querySelector('img');if(safeUrl(AVATAR)){if(hi)hi.src=safeUrl(AVATAR);else hp.innerHTML='<img src="'+safeUrl(AVATAR)+'" alt="">'}}
+  var lp=document.querySelector('.ai-chat-launcher__photo');if(lp&&safeUrl(AVATAR))lp.src=safeUrl(AVATAR);
+  var wa=document.querySelector('.ai-chat-welcome__avatar img');if(wa&&safeUrl(AVATAR))wa.src=safeUrl(AVATAR);
+}
+/* The peak blocks this shopper sees: everyone's; signed out, the signed-out
+   ones; signed in, the signed-in ones and a tag's when they carry it. */
+function peakBlocks(){
+  if(!PEAK||!Array.isArray(PEAK.blocks))return [];
+  return PEAK.blocks.filter(function(b){
+    if(!b||!b.title)return false;
+    var a=b.audience||'all';
+    if(a==='all')return true;
+    if(a==='guest')return !CUST_LOGGED_IN;
+    if(!CUST_LOGGED_IN)return false;
+    if(a==='signed')return true;
+    return a==='tag'&&!!b.tag&&CUST_TAGS.indexOf(String(b.tag).trim().toLowerCase())>=0;
+  }).slice(0,6);
+}
+/* The blocks where the banner was: a rail of cards — the picture on top
+   when there is one, the small line, the name, the line under it and the
+   button (a link, or a question to the assistant). Phones: one and a bit
+   in view, the rest a swipe away; wider: side by side. */
+function peakRailHtml(blocks){
+  var h='<div class="ai-chat-peak" data-peak role="region" aria-label="Today\u2019s offers"><div class="ai-chat-peak__rail" data-n="'+blocks.length+'">';
+  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image&&safeUrl(b.image)?safeUrl(b.image):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'';
+    h+='<article class="ai-chat-peak__card'+(pic?' has-pic':'')+'">'+(pic?'<div class="ai-chat-peak__pic"><img src="'+pic+'" alt="" loading="lazy"></div>':'')+'<div class="ai-chat-peak__body">'+(b.eyebrow?'<span class="ai-chat-peak__eyebrow">'+esc(b.eyebrow)+'</span>':'')+'<h3 class="ai-chat-peak__title">'+esc(b.title)+'</h3>'+(b.text?'<p class="ai-chat-peak__text">'+esc(b.text)+'</p>':'');
+    if(b.cta){if(b.message)h+='<div class="ai-chat-peak__foot"><button type="button" class="ai-chat-peak__cta" data-message="'+esc(b.message)+'">'+esc(b.cta)+'</button></div>';else if(url)h+='<div class="ai-chat-peak__foot"><a class="ai-chat-peak__cta" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+'>'+esc(b.cta)+'</a></div>'}
+    h+='</div></article>'}
+  return h+'</div></div>';
+}
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 /* A clean AI sparkle: one four-point star and a small twinkle. */
@@ -835,8 +890,18 @@ function applyMark(){
   var x=$('.ai-chat-launcher__close',launcher);if(x)x.setAttribute('aria-label',photo?'Minimize':'Minimize to a bubble');
   launcherA11y();
 }
+/* This page shows the chat minimized: the bubble, kept through opens and
+   closes (the chat itself opens as always). */
+function compactAssistant(){
+  COMPACT_BY_URL=true;
+  if(typeof launcher==='undefined'||!launcher||launcher.classList.contains('is-bubble'))return;
+  cancelMorph();launcher.classList.add('is-bubble');launcher.classList.remove('is-tucked');tucked=false;tuckWant=false;launcherA11y();placeLauncher();
+}
 function setLauncherBubble(on,animate){
-  try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
+  /* A page shown minimized keeps the bubble, and that's this page's doing —
+     not remembered for the pages after it. */
+  if(COMPACT_BY_URL)on=true;
+  else try{if(on)sessionStorage.setItem(LBUBBLE_KEY,'1');else sessionStorage.removeItem(LBUBBLE_KEY)}catch(e){}
   var apply=function(){
     launcher.classList.toggle('is-bubble',!!on);
     launcher.classList.remove('is-tucked');tucked=false;tuckWant=false;
@@ -1137,6 +1202,8 @@ function liftFloaters(on){
   liftedEls=liftedEls.filter(function(rec){if(keep.indexOf(rec.el)!==-1)return true;dropLift(rec);return false});
 }
 try{if(sessionStorage.getItem(LBUBBLE_KEY)==='1')launcher.classList.add('is-bubble')}catch(e){}
+/* A page remembered as minimized starts so — no bar flashing first. */
+if(_cachedRules&&compactRuleFor(_cachedRules))compactAssistant();
 applyMark();
 window.addEventListener('resize',placeLauncher);
 setTimeout(placeLauncher,600);
@@ -1787,10 +1854,11 @@ function focusCardHtml(kind){
    returns one when the card stands in for it. */
 function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l))&&!(DEALS&&/deal|sale|promo|offer/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}if(DEALS)h+='<button type="button" data-deals-open="1">'+esc(DEALS.label||'Deals')+'</button>';return h}
 function buildFocusHome(){
-  var banner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
-  var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+'">';
+  var pk=peakBlocks(),banner=!pk.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
+  var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+(pk.length?' has-peak':'')+'">';
   h+='<div class="ai-chat-focus__greet"></div>';
-  if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
+  if(pk.length)h+=peakRailHtml(pk);
+  else if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
   h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
   h+='<div class="ai-chat-focus__links">'+focusLinksHtml()+'</div>';
   h+='</div>';
@@ -2326,9 +2394,10 @@ if(FOCUS){
 }
 function buildWelcome(){
 if(FOCUS){buildFocusHome();return}
-var hasBanner=!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
-var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+'">';
-if(SHOWBAN&&BANNER){
+var pkc=peakBlocks(),hasBanner=!pkc.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
+var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+(pkc.length?' has-peak':'')+'">';
+if(pkc.length)h+=peakRailHtml(pkc);
+else if(SHOWBAN&&BANNER){
   h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
 }
 var welcomeGreeting=welcomeGreetingText();
@@ -6220,7 +6289,9 @@ function dlFill(card,m){
     if(d.url)m.dealsUrl=String(d.url).slice(0,500);
     saveH(messages);
     /* Draw the message again: the card under the words, the sale cards after it. */
-    if(md&&md.isConnected&&md.__msg===m){var md2=appendMsg('assistant',m.content,m.products);md2.__msg=m;md.replaceWith(md2);restoreExtras(m,md2,true)}
+    if(md&&md.isConnected&&md.__msg===m){var md2=appendMsg('assistant',m.content,m.products);md2.__msg=m;md.replaceWith(md2);restoreExtras(m,md2,true);
+      /* Just opened (the newest message): back to its top — the redraw with the sale cards had scrolled to the bottom on phones. */
+      if(messages[messages.length-1]===m){var ud=md2.previousElementSibling;scrollMsgTop(ud&&ud.classList.contains('ai-chat-msg--user')?ud:md2)}}
   }).catch(function(){var bd=$('[data-dl-body]',card);if(bd)bd.innerHTML='<p class="ai-dl__empty">We couldn\u2019t load the deals just now. Try again in a moment.</p>'});
 }
 function openDeals(){

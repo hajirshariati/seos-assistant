@@ -344,6 +344,7 @@ model ShopConfig {
   peakLimitPerHour   Int       @default(8000)
   peakLiftDailyCap   Boolean   @default(true)
   peakPauseSync      Boolean   @default(true)
+  peakHome           String    @default("{}") // the home on peak days: the assistant's peak picture and the promotion blocks (JSON)
 
   // Updated on each /widget-config call from the storefront, throttled to
   // once every 5 minutes. Used by the home-page setup checklist to detect

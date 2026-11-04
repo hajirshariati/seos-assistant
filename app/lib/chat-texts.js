@@ -41,8 +41,8 @@ export const CHAT_TEXT_FIELDS = [
   ["homeOrthoticsSub", "textHomeOrthoticsSub", 120, "Inserts for the shoes you already own, matched to your arch."],
   ["homeOrthoticsCta", "textHomeOrthoticsCta", 16, "Browse"],
   // …and the three links above the message box (what it says, what it sends).
-  ["homeLink1Label", "textHomeLink1Label", 30, "Track my order"],
-  ["homeLink1Message", "textHomeLink1Message", 160, "Where is my order?"],
+  ["homeLink1Label", "textHomeLink1Label", 30, ""],
+  ["homeLink1Message", "textHomeLink1Message", 160, ""],
   ["homeLink2Label", "textHomeLink2Label", 30, "Returns & exchanges"],
   ["homeLink2Message", "textHomeLink2Message", 160, "I’d like to return or exchange something."],
   ["homeLink3Label", "textHomeLink3Label", 30, "Deals"],

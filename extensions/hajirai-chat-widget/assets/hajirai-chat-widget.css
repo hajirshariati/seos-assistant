@@ -7667,7 +7667,12 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { min-height: 124px; }
   .ai-chat-panel.is-focus .ai-chat-welcome--focus { padding: 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__greet { padding-left: 76px; }
-  .ai-chat-panel.is-focus .ai-chat-focus__helpers { grid-template-columns: 1fr; }
+  /* The helper rows stay side by side — two to a row — and the row scrolls
+     sideways on a very narrow phone rather than stacking them. */
+  .ai-chat-panel.is-focus .ai-chat-focus__helpers { display: flex; flex: none; gap: 10px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+  .ai-chat-panel.is-focus .ai-chat-focus__helpers::-webkit-scrollbar { display: none; }
+  .ai-chat-panel.is-focus .ai-chat-focus__helpers .ai-chat-helper { flex: 0 0 auto; width: calc(50% - 5px); min-width: 168px; scroll-snap-align: start; }
+  .ai-chat-panel.is-focus .ai-chat-focus__helpers .ai-chat-helper__sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender { order: 5; flex-basis: 100%; width: auto; margin: 2px 0 0; }
   .ai-chat-panel.is-focus .ai-chat-focus__seg.ai-chat-focus__gender button { height: 36px; font-size: 14px; }
   .ai-chat-panel.is-focus .ai-chat-focus__opt { min-height: 56px; }
@@ -7744,6 +7749,40 @@ button.ai-chat-launcher__text {
 .ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt), .ai-chat-msg-bubble:has(.ai-dl) { width: 100%; max-width: 100%; }
 .ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-dl) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
 
+/* ── Peak Mode's home: the promotion blocks where the banner was ──
+   A rail of cards: the picture on top when there is one, the small line,
+   the name, the line under it and the button on one bottom line across the
+   cards. Measured on the rail itself: wide, side by side; narrower (the
+   500px panel with three or more), two in view and the rest a swipe away;
+   phones, one card and the edge of the next. Quiet surfaces — the pictures
+   carry the colour. */
+.ai-chat-panel .ai-chat-peak { flex: none; margin: 0 0 14px; container-type: inline-size; container-name: aipeak; }
+.ai-chat-panel .ai-chat-peak__rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+.ai-chat-panel .ai-chat-peak__rail::-webkit-scrollbar { display: none; }
+.ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: calc((100% - 20px) / 3); }
+.ai-chat-panel .ai-chat-peak__card { display: flex; flex-direction: column; min-width: 0; border-radius: 18px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); overflow: hidden; scroll-snap-align: start; }
+.ai-chat-panel .ai-chat-peak__pic { flex: none; aspect-ratio: 3 / 2; background: var(--seos-surface); }
+.ai-chat-panel .ai-chat-peak__pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ai-chat-panel .ai-chat-peak__body { display: flex; flex-direction: column; flex: 1 1 auto; gap: 4px; padding: 14px 16px 16px; }
+.ai-chat-panel .ai-chat-peak__eyebrow { font: 600 11px/14px var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-peak__title { margin: 0; font: 700 17px/22px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); }
+.ai-chat-panel .ai-chat-peak__text { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-peak__foot { margin-top: auto; padding-top: 12px; }
+.ai-chat-panel .ai-chat-peak__cta { display: inline-flex; align-items: center; justify-content: center; max-width: 100%; min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff !important; font: 600 13px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none !important; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.18s ease; }
+.ai-chat-panel .ai-chat-peak__cta:hover { box-shadow: 0 6px 16px rgba(13, 13, 18, 0.16); }
+.ai-chat-panel .ai-chat-peak__cta:active { transform: scale(0.97); }
+.ai-chat-panel .ai-chat-peak__cta:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-peak__cta { color: #0d0d12 !important; }
+/* Narrower than 560px with three or more: two in view, the rest a swipe away. */
+@container aipeak (max-width: 559px) {
+  .ai-chat-panel .ai-chat-peak__rail[data-n="3"], .ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: calc((100% - 10px) / 2); }
+}
+/* Phones: one card and the edge of the next (a lone card, the whole width). */
+@container aipeak (max-width: 439px) {
+  .ai-chat-panel .ai-chat-peak__rail, .ai-chat-panel .ai-chat-peak__rail[data-n="3"], .ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: 84%; }
+  .ai-chat-panel .ai-chat-peak__rail[data-n="1"] { grid-auto-columns: 100%; }
+  .ai-chat-panel .ai-chat-peak__pic { aspect-ratio: 2 / 1; }
+}
 /* ── Deals card: quiet, typographic, no colour ── */
 .ai-chat-panel .ai-dl { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; overflow: clip; container-type: inline-size; container-name: aideal; }
 /* The head: the name at the left, the state ("Running right now") small at the right on the same line. */

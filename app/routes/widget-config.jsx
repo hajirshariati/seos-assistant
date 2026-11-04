@@ -1,5 +1,6 @@
 import { feedbackSurveyConfig, whichOrthoticConfig } from "../lib/feedback-survey.js";
 import { seasonalCtaConfig } from "../lib/seasonal-cta.js";
+import { peakHomeConfig } from "../lib/peak-home.js";
 import { appPromoConfig } from "../lib/app-promo.js";
 import { focusImagesConfig } from "../lib/focus-home.js";
 import { buyNowConfig } from "../lib/buy-now.js";
@@ -126,6 +127,9 @@ export const loader = async ({ request }) => {
         appPromo: appPromoConfig(config),
         // Settings → Shopping tools → My rewards: the instant rewards card (no AI).
         rewards: rewardsCardConfig(config, { brand }),
+        // Settings → Peak Mode → The home on peak days: the promotion blocks and
+        // the peak picture, only while Peak Mode is on; null otherwise.
+        peak: peakHomeConfig(config),
         // Settings → Shopping tools → Deals: the instant deals card (offers
         // and the products on sale; read from the server when tapped).
         deals: dealsConfig(config),

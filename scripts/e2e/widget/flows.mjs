@@ -1000,7 +1000,7 @@ for (const [vp, login, tag] of [[{ width: 390, height: 844 }, "&login=Ann", "pho
   await ctx.close();
 }
 // Returns & exchanges (?rt=1) and the four pills: My rewards, Returns &
-// exchanges, then the store's links (Track my order, Deals) — all alike, no
+// exchanges, then the store's links (Deals) — all alike, no
 // icons, one row that scrolls sideways on a phone. One tap on Returns &
 // exchanges draws the card at once (no AI): signed in, the recent orders
 // with the return button leading; signed out, sign in or an order lookup,
@@ -1021,7 +1021,7 @@ for (const [vp, login, tag] of [[{ width: 360, height: 760 }, "&login=Ann", "pho
     const tops = btns.map((b) => Math.round(b.getBoundingClientRect().top));
     return { labels: btns.map((b) => b.textContent.trim()), icons: row.querySelectorAll("svg, img").length, alike: new Set(st).size === 1, oneRow: new Set(tops).size === 1, scrolls: row.scrollWidth > row.clientWidth + 1, overflowX: getComputedStyle(row).overflowX, barHidden: getComputedStyle(row).scrollbarWidth === "none", rowInside: (() => { const r = row.getBoundingClientRect(); return r.left >= -1 && r.right <= window.innerWidth + 1; })() };
   });
-  check(`pills (${tag}): My rewards, Returns & exchanges, then the store's links — all alike, no icons, on one row`, pills.labels.join(" · ") === "My rewards · Returns & exchanges · Track my order · Deals" && pills.icons === 0 && pills.alike && pills.oneRow, JSON.stringify(pills));
+  check(`pills (${tag}): My rewards, Returns & exchanges, then the store's links — all alike, no icons, on one row`, pills.labels.join(" · ") === "My rewards · Returns & exchanges · Deals" && pills.icons === 0 && pills.alike && pills.oneRow, JSON.stringify(pills));
   if (vp.width < 500) check(`pills (${tag}): the row scrolls sideways within the screen, no bar`, pills.scrolls && pills.overflowX === "auto" && pills.barHidden && pills.rowInside, JSON.stringify(pills));
   const sentBefore = chatBodies.length, ordersBefore = ordersLog.length;
   await page.click("[data-returns-open]");
@@ -1092,7 +1092,7 @@ for (const [vp, tag] of [[{ width: 390, height: 844 }, "phone"], [{ width: 1280,
   await page.click(".ai-chat-launcher");
   await page.waitForTimeout(800);
   const labels = await page.$$eval(".ai-chat-focus__links button", (b) => b.map((x) => x.textContent.trim()));
-  check(`Deals (${tag}): the pills end with Deals, the store's own Deals link stepping aside`, labels.join(" · ") === "My rewards · Returns & exchanges · Track my order · Deals", labels.join(" · "));
+  check(`Deals (${tag}): the pills end with Deals, the store's own Deals link stepping aside`, labels.join(" · ") === "My rewards · Returns & exchanges · Deals", labels.join(" · "));
   const sentBefore = chatBodies.length, readsBefore = dealsLog.length;
   await page.click("[data-deals-open]");
   await page.waitForSelector(".ai-dl .ai-dl__offer", { timeout: 4000 });
@@ -1116,6 +1116,30 @@ for (const [vp, tag] of [[{ width: 390, height: 844 }, "phone"], [{ width: 1280,
   const back = await page.evaluate(() => ({ offers: document.querySelectorAll(".ai-dl .ai-dl__offer").length, cards: document.querySelectorAll(".ai-chat-product-card").length }));
   check(`Deals (${tag}): the card and the sale cards come back after a reload without another read`, back.offers === 2 && back.cards === 6 && dealsLog.length === readsBefore + 1, JSON.stringify({ back, reads: dealsLog.length - readsBefore }));
   check(`Deals (${tag}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+// Settings → Showing the chat → Hide on pages: a page can show the chat
+// minimized instead (mode "compact"): the bar is the bubble from the first
+// paint, the chat opens from it as always, and closing leaves the bubble.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 760 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/compact-page");
+  await page.waitForTimeout(900);
+  const first = await page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const cs = getComputedStyle(l); return { bubble: l.classList.contains("is-bubble"), shown: cs.display !== "none" && cs.visibility !== "hidden", pill: l.querySelector(".ai-chat-launcher__pill")?.textContent, text: getComputedStyle(l.querySelector(".ai-chat-launcher__text")).display }; });
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(600);
+  const opened = await page.evaluate(() => document.querySelector(".ai-chat-panel").classList.contains("open"));
+  await page.click(".ai-chat-close-btn");
+  await page.waitForTimeout(800);
+  const after = await page.evaluate(() => ({ bubble: document.querySelector(".ai-chat-launcher").classList.contains("is-bubble"), open: document.querySelector(".ai-chat-panel").classList.contains("open") }));
+  await page.goto("http://localhost:4789/full");
+  await page.waitForTimeout(900);
+  const elsewhere = await page.evaluate(() => document.querySelector(".ai-chat-launcher").classList.contains("is-bubble"));
+  check("hide on pages (compact): on that page the chat is minimized from the first paint — the bubble, not the bar — opens from it, and is the bubble again after closing; other pages keep the bar", first.bubble && first.shown && first.text === "none" && opened && after.bubble && !after.open && !elsewhere, JSON.stringify({ first, opened, after, elsewhere }));
+  check("hide on pages (compact): no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 // The chat guard ended the chat (the server answers 423 chat_ended): the
@@ -3510,7 +3534,7 @@ for (const coop of ["1", "2"]) {
     const { ctx, page, errors } = await open("/full?home=focus&qp=1");
     const st = await state(page);
     const parts = await page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome--focus"); const order = [...w.children].map((c) => c.className.split(" ")[0]); return { heroImg: !!document.querySelector(".ai-chat-hero__photo img, .ai-chat-hero__photo .ai-chat-hero__mono"), glow: document.querySelectorAll(".ai-chat-band__lit .ai-chat-band__linel").length === 4 && document.querySelectorAll(".ai-chat-band__ring .ai-chat-band__ringl").length === 4 && [...document.querySelectorAll(".ai-chat-band use")].every((u) => { const cs = getComputedStyle(u), w = parseFloat(cs.strokeWidth), o = parseFloat(cs.opacity); return cs.filter === "none" && ((w <= 1.5 && o === 1) || (w > 1.5 && o <= 0.1)); }) && [...document.querySelectorAll(".ai-chat-band use")].filter((u) => parseFloat(getComputedStyle(u).opacity) === 1).length === 2, halos: (() => { const h = document.querySelector(".ai-chat-hero .ai-chat-hero__halo"); if (!h) return false; const cs = getComputedStyle(h); const blur = parseFloat((cs.filter.match(/blur\((\d+(?:\.\d+)?)px\)/) || [])[1] || "0"); const r = h.getBoundingClientRect(), p = document.querySelector(".ai-chat-hero__photo").getBoundingClientRect(); return blur >= 6 && parseFloat(cs.opacity) > 0.03 && parseFloat(cs.opacity) <= 0.12 && /radial-gradient/.test(cs.maskImage || cs.webkitMaskImage || "") && h.getAnimations().length === 1 && h.offsetWidth > p.width && h.offsetWidth <= p.width + 40 && Math.abs((r.left + r.right) / 2 - (p.left + p.right) / 2) <= 1; })(), greet: document.querySelector(".ai-chat-focus__greet .ai-chat-greet__item.is-in")?.textContent, greetSet: window.__AI_CHAT_CONFIG.greetingCta, subShown: (() => { const e = document.querySelector(".ai-chat-header__sub"); return !!e && !e.hidden && getComputedStyle(e).display !== "none"; })(), order, banner: !!w.querySelector(".ai-chat-welcome__banner"), label: !!w.querySelector(".ai-chat-focus__label"), rotating: !!w.querySelector(".ai-chat-focus__line"), chips: w.querySelectorAll(".ai-chat-focus__pain, .ai-chat-focus__pains, .ai-chat-focus__ask, .ai-chat-focus__else").length, cards: [...w.querySelectorAll("[data-focus-sheet]")].map((c) => (c.querySelector(".ai-chat-focus__card-title .is-short") || c.querySelector(".ai-chat-focus__card-title")).textContent), eyebrows: [...w.querySelectorAll("[data-focus-sheet] .ai-chat-focus__card-eyebrow")].map((c) => c.textContent), arrows: w.querySelectorAll(".ai-chat-focus__card > svg").length, cardH: Math.max(...[...w.querySelectorAll("[data-focus-sheet]")].map((c) => c.getBoundingClientRect().height)), pics: w.querySelectorAll(".ai-chat-focus__card-ico.has-pic").length, painPic: (w.querySelector('[data-focus-sheet="pain"] .ai-chat-focus__card-ico img')?.getAttribute("src") || "").replace(/^.*focus-pain-/, ""), painPicLoaded: (() => { const i = w.querySelector('[data-focus-sheet="pain"] .ai-chat-focus__card-ico img'); return !!i && i.complete && i.naturalWidth > 0; })(), links: w.querySelectorAll(".ai-chat-focus__links [data-message]").length }; });
-    check("home layout focus: the face on the header's line — a solid hairline of colour with a thin faint fade behind it, and a blurred whisper turning slowly just outside (a masked box, never a smeared stroke; very faint), one row in the header, the greeting first on the home (under the name); three cards — Foot pain (Help me with, the heel picture), Footwear, Orthotics (Help me find) — with no arrows (no label, no banner where the theme has none), no chips row, three quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.halos && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__links" && parts.chips === 0 && parts.cards.join("|") === "Foot pain|Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me with|Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 330 /* level rows across the three cards (the longer Foot pain title) */ && parts.pics === 1 && parts.painPic === "heel.png" && parts.painPicLoaded && parts.links === 3, JSON.stringify({ st, parts }));
+    check("home layout focus: the face on the header's line — a solid hairline of colour with a thin faint fade behind it, and a blurred whisper turning slowly just outside (a masked box, never a smeared stroke; very faint), one row in the header, the greeting first on the home (under the name); three cards — Foot pain (Help me with, the heel picture), Footwear, Orthotics (Help me find) — with no arrows (no label, no banner where the theme has none), no chips row, two quiet links; none of the classic welcome", st.focus && st.home && !st.chatting && st.hero && st.line && st.focusHome && !st.classic && parts.heroImg && parts.glow && parts.halos && parts.greet === parts.greetSet && !parts.subShown && !parts.banner && !parts.label && !parts.rotating && parts.order.join(",") === "ai-chat-focus__greet,ai-chat-focus__cards,ai-chat-focus__links" && parts.chips === 0 && parts.cards.join("|") === "Foot pain|Footwear|Orthotics" && parts.eyebrows.join("|") === "Help me with|Help me find|Help me find" && parts.arrows === 0 && parts.cardH <= 330 /* level rows across the three cards (the longer Foot pain title) */ && parts.pics === 1 && parts.painPic === "heel.png" && parts.painPicLoaded && parts.links === 2, JSON.stringify({ st, parts }));
     // The cards: words on the left, the picture filling the whole right side edge to edge, a small call to action under the words; flat — no shadow, no border. In the default 500px panel Foot pain sits across the top with Footwear and Orthotics side by side under it, the same height.
     const cardGeo = () => page.evaluate(() => { const cs = (el) => getComputedStyle(el); const kinds = ["pain", "footwear", "orthotics"]; const q = (k) => document.querySelector(`[data-focus-sheet="${k}"]`); const r = (el) => el.getBoundingClientRect(); const one = (k) => { const c = q(k), cr = r(c), pic = r(c.querySelector(".ai-chat-focus__card-ico")), eb = r(c.querySelector(".ai-chat-focus__card-eyebrow")), ctaBox = r(c.querySelector(".ai-chat-focus__card-cta")), txt = { top: eb.top, left: Math.min(eb.left, ctaBox.left), right: Math.max(eb.right, ctaBox.right), bottom: ctaBox.bottom }, sub = c.querySelector(".ai-chat-focus__card-sub"), cta = c.querySelector(".ai-chat-focus__card-cta > span"); const titleEl = c.querySelector(".ai-chat-focus__card-title"); const title = [...titleEl.querySelectorAll("span")].find((e) => getComputedStyle(e).display !== "none")?.textContent || titleEl.textContent; return { x: Math.round(cr.left), y: Math.round(cr.top), w: Math.round(cr.width), h: Math.round(cr.height), title, eyebrowTop: Math.round(eb.top), titleTop: Math.round(r(titleEl).top), ctaBottom: Math.round(r(cta).bottom), picRight: Math.abs(pic.right - cr.right) < 1, picTall: Math.abs(pic.height - cr.height) < 1 && Math.abs(pic.top - cr.top) < 1, picWide: pic.width >= cr.width * 0.34 && pic.width <= cr.width * 0.46, picAfterText: pic.left >= txt.right - 1, picTop: Math.abs(pic.top - cr.top) < 1 && Math.abs(pic.left - cr.left) < 1 && Math.abs(pic.width - cr.width) < 1 && pic.height >= 72 && pic.height <= cr.height * 0.5, textBelowPic: txt.top >= pic.bottom - 1, sub: sub?.textContent, subWhole: sub.scrollWidth <= sub.clientWidth + 1 && sub.scrollHeight <= sub.clientHeight + 1, cta: cta?.textContent.trim(), ctaIn: cta && r(cta).bottom <= cr.bottom - 8 && r(cta).height >= 24, flat: cs(c).boxShadow === "none" && cs(c).borderStyle === "none", radius: parseFloat(cs(c).borderRadius) }; }; return Object.fromEntries(kinds.map((k) => [k, one(k)])); });
     const cards = await cardGeo();
@@ -3528,7 +3552,7 @@ for (const coop of ["1", "2"]) {
     await page.evaluate(() => { document.querySelector(".ai-chat-panel").style.width = ""; });
     await page.waitForTimeout(400);
     const tidy = await page.evaluate(() => { const cs = (el) => getComputedStyle(el); const links = [...document.querySelectorAll(".ai-chat-focus__links button")]; return { dots: document.querySelectorAll(".ai-chat-focus__links i").length, links: links.map((b) => ({ h: Math.round(b.getBoundingClientRect().height), border: cs(b).borderStyle, radius: cs(b).borderRadius, padX: parseFloat(cs(b).paddingLeft), bg: cs(b).backgroundColor })) }; });
-    check("home layout focus: the three links above the text box are compact outlined pills, no dots", tidy.dots === 0 && tidy.links.length === 3 && tidy.links.every((l) => l.h <= 34 && l.h >= 28 && l.border === "solid" && /999/.test(l.radius) && l.padX <= 14 && /rgba\(0, 0, 0, 0\)|transparent/.test(l.bg)), JSON.stringify(tidy));
+    check("home layout focus: the links above the text box are compact outlined pills, no dots", tidy.dots === 0 && tidy.links.length === 2 && tidy.links.every((l) => l.h <= 34 && l.h >= 28 && l.border === "solid" && /999/.test(l.radius) && l.padX <= 14 && /rgba\(0, 0, 0, 0\)|transparent/.test(l.bg)), JSON.stringify(tidy));
     const geo = await page.evaluate((lineY) => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const h = r(".ai-chat-hero"), d = r(".ai-chat-header"), g = r(".ai-chat-focus__greet .ai-chat-greet"), c = r(".ai-chat-focus__cards"), n = r(".ai-chat-header__name"); return { heroMid: (h.top + h.bottom) / 2, line: eval(lineY)(), hdrBottom: d.bottom, heroBottom: h.bottom, heroRight: h.right, nameLeft: n.left, nameBottom: n.bottom, greetTop: g.top, greetLeft: g.left, cardsTop: c.top }; }, lineY.toString());
     check("home layout focus: the face is centred on the header's bottom line, the name above it, the greeting just below it and aligned under the name, the home clear of the face", Math.abs(geo.heroMid - geo.line) <= 2 && Math.abs(geo.line - geo.hdrBottom) <= 2 && geo.nameBottom <= geo.line && geo.greetTop >= geo.line && geo.greetTop <= geo.line + 12 && Math.abs(geo.greetLeft - geo.nameLeft) <= 1 && geo.cardsTop > geo.heroBottom + 4 && geo.nameLeft > geo.heroRight + 6, JSON.stringify(geo));
     // "Something else" (under the Foot pain sheet's first question) only puts the cursor in the text box.
@@ -3542,9 +3566,9 @@ for (const coop of ["1", "2"]) {
     const hint = await page.evaluate(() => document.querySelector(".ai-chat-input").getAttribute("placeholder"));
     check("home layout focus: Something else (in the Foot pain sheet) closes it and only puts the cursor in the text box — its hint the store's own (Settings → Chat text), not a line of its own", s2.focused && s2.home && !s2.sheet && chatBodies.length === n && hint === "How can I help you today?", JSON.stringify({ ...s2, hint }));
     // A link above the text box sends its question straight away (no Send to tap).
-    await page.click('.ai-chat-focus__links [data-message="Where is my order?"]');
+    await page.click('.ai-chat-focus__links [data-message="What deals are running right now?"]');
     await waitUntil(() => chatBodies.length > n);
-    check("home layout focus: a link above the text box sends its question straight away", chatBodies.at(-1)?.message === "Where is my order?" && chatBodies.at(-1)?.typed === false, JSON.stringify(chatBodies.at(-1)));
+    check("home layout focus: a link above the text box sends its question straight away", chatBodies.at(-1)?.message === "What deals are running right now?" && chatBodies.at(-1)?.typed === false, JSON.stringify(chatBodies.at(-1)));
     await page.waitForTimeout(1500);
     await page.click(".ai-chat-menu-btn");
     await page.waitForTimeout(150);
@@ -3679,6 +3703,48 @@ for (const coop of ["1", "2"]) {
       const f3 = await foot();
       check("foot pain sheet (phone): at the end of the tiles the hairline and fade go; a pick turns Continue solid", !f2.more && !f2.line && !f2.fade && f2.inView && !f3.more && !f3.nextOff && f3.nextBg !== "rgba(0, 0, 0, 0)", JSON.stringify({ f2, f3 }));
       check("foot pain sheet (phone): no JS errors", ph.errors.length === 0, ph.errors.join(" | "));
+      await ph.ctx.close();
+    }
+    // Peak Mode's home (Settings → Peak Mode → The home on peak days): the
+    // promotion blocks where the banner was, each shown to its audience —
+    // everyone, signed out, signed in, a tag's — the peak picture on the face,
+    // a link button opening the link, a question button asking Ava.
+    {
+      const readPeak = (page) => page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome"); const rail = w.querySelector(".ai-chat-peak__rail"); const cards = rail ? [...rail.querySelectorAll(".ai-chat-peak__card")] : []; const wr = w.getBoundingClientRect(); return { banner: !!w.querySelector(".ai-chat-welcome__banner"), titles: cards.map((c) => c.querySelector(".ai-chat-peak__title")?.textContent), eyebrows: cards.map((c) => c.querySelector(".ai-chat-peak__eyebrow")?.textContent || ""), ctas: cards.map((c) => { const b = c.querySelector(".ai-chat-peak__cta"); return b ? [b.tagName, b.getAttribute("href") || b.getAttribute("data-message"), b.getAttribute("target") || "", b.getAttribute("rel") || "", b.textContent] : null; }), pics: cards.filter((c) => c.querySelector(".ai-chat-peak__pic img")).length, hero: (document.querySelector(".ai-chat-hero__photo img")?.getAttribute("src") || ""), oneRow: new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top))).size <= 1, scrolls: rail ? rail.scrollWidth > rail.clientWidth + 1 : false, inside: rail ? rail.getBoundingClientRect().right <= wr.right + 1 && rail.getBoundingClientRect().left >= wr.left - 1 : false, cardW: cards.length ? Math.round(cards[0].getBoundingClientRect().width) : 0, railW: rail ? Math.round(rail.getBoundingClientRect().width) : 0, noIcons: !w.querySelector(".ai-chat-peak svg") }; });
+      const out = await open("/full?home=focus&pk=1&banner=1");
+      const guest = await readPeak(out.page);
+      check("peak home (computer, signed out): the blocks take the banner's place — everyone's and the signed-out one, side by side on one row, no banner; the sale's picture on its card; the link button is a link that opens in a new tab, the store's own path in this one; the face wears the peak picture", !guest.banner && guest.titles.join("|") === "30% off everything|Join free and save 15%" && guest.eyebrows.join("|") === "Black Friday|New here?" && guest.oneRow && !guest.scrolls && guest.inside && guest.pics === 1 && guest.ctas[0]?.[0] === "A" && guest.ctas[0][1] === "https://www.example.com/collections/sale" && guest.ctas[0][2] === "_blank" && /noopener/.test(guest.ctas[0][3]) && guest.ctas[0][4] === "Shop the sale" && guest.ctas[1]?.[0] === "A" && guest.ctas[1][1] === "/account/register" && guest.ctas[1][2] === "" && /pic-orthotics/.test(guest.hero) && guest.noIcons, JSON.stringify(guest));
+      check("peak home: no JS errors", out.errors.length === 0, out.errors.join(" | "));
+      await out.ctx.close();
+      const inn = await open("/full?home=focus&pk=1&login=Ann");
+      const signed = await readPeak(inn.page);
+      const n0 = chatBodies.length;
+      await inn.page.click('.ai-chat-peak__cta[data-message]');
+      await inn.page.waitForTimeout(900);
+      const asked = await inn.page.evaluate(() => ({ home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim() }));
+      check("peak home (signed in): everyone's and the members' block, not the signed-out one nor the tag's; the question button sends its question to Ava as the shopper's own message", signed.titles.join("|") === "30% off everything|An extra 10% for members" && signed.ctas[1]?.[0] === "BUTTON" && signed.ctas[1][1] === "What is my member offer today?" && chatBodies.length === n0 + 1 && !asked.home && asked.user === "What is my member offer today?", JSON.stringify({ signed, asked, sent: chatBodies.length - n0 }));
+      await inn.ctx.close();
+      const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
+      const tagged = await readPeak(vip.page);
+      check("peak home (signed in with the tag, any case): the tag's block too, in the saved order", tagged.titles.join("|") === "30% off everything|An extra 10% for members|Early access to the winter styles", JSON.stringify(tagged.titles));
+      await vip.ctx.close();
+      const ph = await open("/full?home=focus&pk=1", { viewport: { width: 390, height: 760 } });
+      const phone = await readPeak(ph.page);
+      check("peak home (phone): the blocks in one row that scrolls sideways within the screen — one card and the edge of the next in view, never stacked", phone.titles.length === 2 && phone.oneRow && phone.scrolls && phone.inside && phone.cardW >= phone.railW * 0.78 && phone.cardW <= phone.railW * 0.9, JSON.stringify(phone));
+      await ph.ctx.close();
+      const cl = await open("/full?pk=1&banner=1");
+      const classic = await cl.page.evaluate(() => ({ peak: document.querySelectorAll(".ai-chat-welcome .ai-chat-peak__card").length, banner: !!document.querySelector(".ai-chat-welcome__banner"), avatar: document.querySelector(".ai-chat-welcome__avatar img")?.getAttribute("src") || "" }));
+      check("peak home (classic layout): the blocks in place of the banner there too, the peak picture on the welcome", classic.peak === 2 && !classic.banner && /pic-orthotics/.test(classic.avatar), JSON.stringify(classic));
+      await cl.ctx.close();
+    }
+    // Phones: the sheets' helper rows stay side by side — two to a row — and on a very narrow phone the row scrolls sideways rather than stacking them.
+    for (const w of [390, 320]) {
+      const ph = await open("/full?home=focus&qp=1", { viewport: { width: w, height: 760 } });
+      await ph.page.click('[data-focus-sheet="orthotics"]');
+      await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
+      await ph.page.waitForTimeout(400);
+      const hr = await ph.page.evaluate(() => { const r = document.querySelector(".ai-chat-focus__helpers"); const hs = [...r.querySelectorAll(".ai-chat-helper")]; const b = document.querySelector(".ai-chat-focus-sheet__body").getBoundingClientRect(); return { n: hs.length, oneRow: new Set(hs.map((h) => Math.round(h.getBoundingClientRect().top))).size === 1, tall: hs.every((h) => h.getBoundingClientRect().height >= 56), scrolls: r.scrollWidth > r.clientWidth + 1, overflowX: getComputedStyle(r).overflowX, inside: r.getBoundingClientRect().right <= b.right + 1, barHidden: getComputedStyle(r).scrollbarWidth === "none" }; });
+      check(`Orthotics sheet (${w}px phone): the two helper rows sit side by side on one row${w < 360 ? ", the row scrolling sideways" : ""}, never stacked`, hr.n === 2 && hr.oneRow && hr.tall && hr.overflowX === "auto" && hr.inside && hr.barHidden && (w < 360 ? hr.scrolls : !hr.scrolls), JSON.stringify(hr));
       await ph.ctx.close();
     }
     // Settings → Focus home → Collections off: both sheets keep their helper rows and Pick & go, with no Collections section.
@@ -3950,7 +4016,7 @@ for (const coop of ["1", "2"]) {
     await ph.page.click('[data-focus-sheet="orthotics"]');
     await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 });
     const stack = await ph.page.evaluate(() => { const r = [...document.querySelectorAll(".ai-chat-focus-sheet .ai-chat-helper")].map((e) => e.getBoundingClientRect()); return { n: r.length, stacked: r.length === 2 && r[1].top >= r[0].bottom && Math.abs(r[0].left - r[1].left) < 1, maxRight: Math.max(...r.map((x) => x.right)), vw: innerWidth }; });
-    check("home layout focus (survey, phone): the two rows stack, each the sheet's width", stack.n === 2 && stack.stacked && stack.maxRight <= stack.vw, JSON.stringify(stack));
+    check("home layout focus (survey, phone): the two rows sit side by side, within the sheet", stack.n === 2 && !stack.stacked && stack.maxRight <= stack.vw, JSON.stringify(stack));
     // Pick & go on a phone: the keys read "ACTIVITY choose one" / "FOR one or more" on one line; the Ask box is stuck at the foot; a pick in the first row brings the second into view (smoothly, clear of the bar); the picks make the sentence; Ask sends it.
     const pm = () => ph.page.evaluate(() => { const s = document.querySelector(".ai-chat-focus-sheet"); const body = s.querySelector(".ai-chat-focus-sheet__body"); const bar = s.querySelector(".ai-chat-focus__ask"); const box = bar.querySelector(".ai-chat-focus__ask-box").getBoundingClientRect(); const b = body.getBoundingClientRect(); const r1 = s.querySelectorAll(".ai-chat-focus__pick-row")[1].getBoundingClientRect(); const k = s.querySelector(".ai-chat-focus__pick-key"); const kb = k.querySelector("b").getBoundingClientRect(), ks = k.querySelector("small").getBoundingClientRect(); return { scrollTop: body.scrollTop, scrollable: body.scrollHeight > body.clientHeight + 1, boxAtFoot: box.bottom <= b.bottom + 1 && box.bottom >= b.bottom - 40, row2Clear: r1.top >= b.top - 1 && r1.bottom <= box.top - 4, row2Hidden: r1.bottom > box.top, keyInline: Math.abs(kb.top - ks.top) < 6 && ks.left > kb.right, hints: [...s.querySelectorAll(".ai-chat-focus__pick-key small")].map((x) => x.textContent).join("|"), q: s.querySelector("[data-pick-q]").value, pressed: s.querySelectorAll('[aria-pressed="true"]').length }; });
     // Pick & go comes after the Collections: bring the card up first.

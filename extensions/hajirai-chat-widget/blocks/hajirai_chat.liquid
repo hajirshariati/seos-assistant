@@ -60,6 +60,7 @@
     customerLoginUrl: {{ routes.account_login_url | json }},
     customerLogoutUrl: {{ routes.account_logout_url | json }},
     customerId: {% if customer %}{{ customer.id | json }}{% else %}null{% endif %},
+    customerTags: {% if customer %}{{ customer.tags | json }}{% else %}[]{% endif %},
     disclaimerText: {% if ava_words %}"Virtual assistant responses may be inaccurate and are not medical advice. Chats may be recorded and shared with third-party providers. Do not share sensitive personal, payment, or health information. See our"{% else %}"Powered by AI"{% endif %},
     privacyUrl: {{ block.settings.privacy_url | json }},
     supportUrl: {{ block.settings.support_url | json }}

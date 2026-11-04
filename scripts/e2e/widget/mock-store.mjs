@@ -14,6 +14,13 @@ export const activityLog = [];
 export const rewardsLog = [];
 export const ordersLog = [];
 export const dealsLog = [];
+// Peak Mode's home: four blocks — everyone, signed in, a tag's, signed out.
+export const PEAK_HOME = { avatar: "/pic-orthotics.svg", blocks: [
+  { id: "b1", eyebrow: "Black Friday", title: "30% off everything", text: "Today only, online and in stores.", cta: "Shop the sale", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", audience: "all", tag: "" },
+  { id: "b2", eyebrow: "Members", title: "An extra 10% for members", text: "On top of the sale, at checkout.", cta: "See my offer", message: "What is my member offer today?", image: "", audience: "signed", tag: "" },
+  { id: "b3", eyebrow: "VIP", title: "Early access to the winter styles", text: "", cta: "Ask Ava", message: "Show me the VIP early-access styles", image: "", audience: "tag", tag: "VIP" },
+  { id: "b4", eyebrow: "New here?", title: "Join free and save 15%", text: "Members get first dibs.", cta: "Join", url: "/account/register", image: "", audience: "guest", tag: "" },
+] };
 // The offers the Deals card shows (the promotions page, structured and checked).
 export const DEALS_OFFERS = [
   { title: "20% off all boots", detail: "Enter the code at checkout.", code: "FALL20", ends: "Nov 9" },
@@ -244,7 +251,7 @@ export function start(port) {
         if (u.pathname === "/horizontal") return send(200, "text/html", page("horizontal"));
         // ?app=1: the store's footer has its app block (links, QR codes, badges), as on the live theme.
         if ((u.pathname === "/full" || u.pathname === "/hidden-page") && u.searchParams.get("app")) return send(200, "text/html", fullPage("", "").replace("</body>", `${APP_FOOTER}</body>`));
-        if (u.pathname === "/full" || u.pathname === "/hidden-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "") + (u.searchParams.get("qp") ? `quickPick1Label:"Identify my orthotic",quickPick1Message:"https://form.typeform.com/to/ojyWbTvZ",` + (u.searchParams.get("qp") === "fb" ? `quickPick2Label:"Share feedback",quickPick2Message:"https://form.typeform.com/to/fbSurvey1",` : "") : "") + (u.searchParams.get("home") ? `homeLayout:${JSON.stringify(u.searchParams.get("home"))},focusPainImages:{heel:"/focus-pain-heel.png",arch:"/focus-pain-arch.png",ball:"/focus-pain-ball.png",toes:"/focus-pain-toes.png"},` : "") + (u.searchParams.get("banner") ? `bannerUrl:"/pic-footwear.svg",showBanner:true,` : "")));
+        if (u.pathname === "/full" || u.pathname === "/hidden-page" || u.pathname === "/compact-page") return send(200, "text/html", fullPage(u.searchParams.get("login") || (/signedin=1/.test(req.headers.cookie || "") ? "Ann" : ""), (u.searchParams.get("coop") ? `customerLoginUrl:"/account/login?coop=${u.searchParams.get("coop")}",` : "") + (u.searchParams.get("fb") ? `cta3Label:"Track my order",cta3Message:"track my order",cta4Label:"About Aetrex",cta4Message:"tell me about aetrex",` : "") + (u.searchParams.get("qp") ? `quickPick1Label:"Identify my orthotic",quickPick1Message:"https://form.typeform.com/to/ojyWbTvZ",` + (u.searchParams.get("qp") === "fb" ? `quickPick2Label:"Share feedback",quickPick2Message:"https://form.typeform.com/to/fbSurvey1",` : "") : "") + (u.searchParams.get("tags") ? `customerTags:${JSON.stringify(u.searchParams.get("tags").split(","))},` : "") + (u.searchParams.get("home") ? `homeLayout:${JSON.stringify(u.searchParams.get("home"))},focusPainImages:{heel:"/focus-pain-heel.png",arch:"/focus-pain-arch.png",ball:"/focus-pain-ball.png",toes:"/focus-pain-toes.png"},` : "") + (u.searchParams.get("banner") ? `bannerUrl:"/pic-footwear.svg",showBanner:true,` : "")));
         if (u.pathname === "/aetrex" && u.searchParams.get("sections")) return send(200, "application/json", JSON.stringify({ "cart-drawer": `<div id="shopify-section-cart-drawer"><div id="MiniCart-cart-drawer"><a href="/products/x">${cartLog.length} item(s) in your cart</a></div></div>` }));
         if (u.pathname === "/aetrex") return send(200, "text/html", aetrexPage());
         // Sign-in: sets the session cookie and goes back where it was told
@@ -376,7 +383,7 @@ export function start(port) {
           appQrLog.push(u.searchParams.get("p"));
           return QRCode.toString(APP_LINKS[u.searchParams.get("p") === "android" ? "android" : "ios"], { type: "svg", margin: 1 }).then((svg) => send(200, "image/svg+xml", svg));
         }
-        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }],
+        if (u.pathname.startsWith("/apps/hajirai/widget-config")) return send(200, "application/json", JSON.stringify({ productCardStyle: String(req.headers.referer || "").includes("horizontal") ? "horizontal" : "showcase", hideOnUrls: [{ matchType: "contains", pattern: "hidden-page" }, { matchType: "contains", pattern: "compact-page", mode: "compact" }],
           // Settings → Integrations → Klaviyo: the company id alone turns on back-in-stock alerts (no list → no newsletter form).
           klaviyoCompanyId: "TESTCO",
           // Smart Recommenders → Fit confidence: on for ?fitc=1 pages.
@@ -399,6 +406,8 @@ export function start(port) {
           // ?rw=1: the My rewards card (Settings → Shopping tools); ?hh=1: Talk to a person (Settings → Customer care).
           rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
+          // ?pk=1: Peak Mode on, with the home's promotion blocks and the peak picture (Settings → Peak Mode).
+          peak: /[?&]pk=1/.test(String(req.headers.referer || "")) ? PEAK_HOME : null,
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),
           // ?dl=1: the Deals card (Settings → Shopping tools).

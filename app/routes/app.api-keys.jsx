@@ -55,6 +55,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
+import { parsePeakHome, peakHomeError, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS } from "../lib/peak-home.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
 import { parseRewardsCard, REWARDS_MAX, REWARDS_ROWS, REWARDS_NOTES } from "../lib/rewards-card.js";
 import { promoMemoryDays, styleMemoryDays, PROMO_DAYS_CHOICES, STYLE_DAYS_CHOICES } from "../lib/memory.js";
@@ -210,6 +211,8 @@ export const loader = async ({ request }) => {
     peakLimitPerHour: config.peakLimitPerHour ?? PEAK_LIMITS.perHour,
     peakLiftDailyCap: config.peakLiftDailyCap !== false,
     peakPauseSync: config.peakPauseSync !== false,
+    // The home on peak days (promotion blocks, the peak picture).
+    peakHome: parsePeakHome(config.peakHome),
     limitsOverridden: storeChatLimits(config, { env: process.env }).overridden,
     pulse,
     plan: { id: plan.id, name: plan.name, features: plan.features },
@@ -342,7 +345,7 @@ export const action = async ({ request }) => {
   if (hideUrlsRaw !== null) {
     try {
       const parsed = JSON.parse(hideUrlsRaw);
-      if (Array.isArray(parsed)) data.hideOnUrls = JSON.stringify(parsed);
+      if (Array.isArray(parsed)) data.hideOnUrls = JSON.stringify(parsed.filter((r) => r && typeof r.pattern === "string" && r.pattern.trim()).slice(0, 100).map((r) => ({ matchType: r.matchType === "contains" ? "contains" : "equals", pattern: String(r.pattern).trim().slice(0, 300), ...(r.mode === "compact" ? { mode: "compact" } : {}) })));
     } catch { /* ignore invalid JSON */ }
   }
   bool("hideLiveChatButton");
@@ -564,6 +567,12 @@ export const action = async ({ request }) => {
   }
   bool("peakLiftDailyCap");
   bool("peakPauseSync");
+  const peakHomeRaw = formData.get("peakHome");
+  if (peakHomeRaw !== null) {
+    const bad = peakHomeError(peakHomeRaw);
+    if (bad) return fail(bad, "peak");
+    try { data.peakHome = JSON.stringify(parsePeakHome(JSON.parse(peakHomeRaw))); } catch { /* ignore invalid JSON */ }
+  }
   bool("dailyCapEnabled");
   const dailyCapMessagesRaw = formData.get("dailyCapMessages");
   if (dailyCapMessagesRaw !== null) {
@@ -633,6 +642,7 @@ const FIELDS = {
   appEventsEnabled: ["integrations", "bool"],
   peakMode: ["peak"], peakStartsAt: ["peak"], peakEndsAt: ["peak"], chatLimitPerMin: ["peak"], chatLimitPerHour: ["peak"],
   peakLimitPerMin: ["peak"], peakLimitPerHour: ["peak"], peakLiftDailyCap: ["peak", "bool"], peakPauseSync: ["peak", "bool"],
+  peakHome: ["peak", "json"],
   dailyCapEnabled: ["peak", "bool"], dailyCapMessages: ["peak"],
 };
 
@@ -717,11 +727,12 @@ function Integration({ title, help, connected, children, connectedLabel }) {
 
 function HideOnPages({ rules, onChange }) {
   const [matchType, setMatchType] = useState("equals");
+  const [mode, setMode] = useState("hide");
   const [pattern, setPattern] = useState("");
   const add = () => {
     const p = pattern.trim();
     if (!p || rules.some((r) => r.matchType === matchType && r.pattern === p)) return;
-    onChange([...rules, { matchType, pattern: p }]);
+    onChange([...rules, { matchType, pattern: p, ...(mode === "compact" ? { mode: "compact" } : {}) }]);
     setPattern("");
   };
   return (
@@ -730,7 +741,7 @@ function HideOnPages({ rules, onChange }) {
         <InlineStack gap="200" wrap>
           {rules.map((r, i) => (
             <span key={`${r.matchType}:${r.pattern}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 4px 3px 10px", borderRadius: 999, background: "rgba(26,46,38,0.06)", fontSize: 12.5 }}>
-              <span style={{ color: "#616161" }}>{r.matchType === "contains" ? "contains" : "is"}</span>
+              <span style={{ color: "#616161" }}>{r.mode === "compact" ? "minimized where the link" : "hidden where the link"} {r.matchType === "contains" ? "contains" : "is"}</span>
               <code style={{ fontSize: 12 }}>{r.pattern}</code>
               <Button variant="plain" tone="critical" accessibilityLabel={`Remove ${r.pattern}`} onClick={() => onChange(rules.filter((_, j) => j !== i))}>×</Button>
             </span>
@@ -738,7 +749,10 @@ function HideOnPages({ rules, onChange }) {
         </InlineStack>
       )}
       <InlineStack gap="200" blockAlign="end" wrap={false}>
-        <div style={{ width: 140, flex: "none" }}>
+        <div style={{ width: 170, flex: "none" }}>
+          <Select label="On that page" options={[{ label: "Hide AVA", value: "hide" }, { label: "Show minimized", value: "compact" }]} value={mode} onChange={setMode} helpText={mode === "compact" ? "The small “Ask Ava!” bubble instead of the chat bar." : undefined} />
+        </div>
+        <div style={{ width: 120, flex: "none" }}>
           <Select label="Page link" options={[{ label: "is", value: "equals" }, { label: "contains", value: "contains" }]} value={matchType} onChange={setMatchType} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1083,8 +1097,8 @@ function VisibilitySection({ values, set }) {
         </Row>
         <Row title="Hide the Zendesk chat button" help="Removes the separate live chat button from the corner. Live chat still opens from AVA when a shopper asks for a person." toggle checked={values.hideLiveChatButton} onChange={set("hideLiveChatButton")} />
       </Group>
-      <Group title="Hidden on these pages">
-        <Row stack help="The chat stays off pages whose link is (or contains) one of these.">
+      <Group title="On these pages">
+        <Row stack help="For each page link (or part of one): hide AVA there completely, or show her minimized — the small bubble instead of the chat bar, opening as always on a tap.">
           <HideOnPages rules={values.hideOnUrls} onChange={set("hideOnUrls")} />
         </Row>
       </Group>
@@ -1329,6 +1343,82 @@ function RewardsGroup({ card, onChange }) {
   );
 }
 
+// Peak Mode → the home on peak days: the assistant's peak picture and up to
+// six promotion blocks, saved with the form (pictures resized in the browser).
+function PeakPicture({ image, onChange, title, hint, round = false, size = 640 }) {
+  const inputRef = useRef(null);
+  const [error, setError] = useState("");
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { setError("Choose a PNG, WebP or JPEG image."); return; }
+    try { onChange(await resizeAppImage(file, size)); } catch { setError("That image couldn't be read — try another one."); }
+  };
+  return (
+    <div className="set-app-pic">
+      <div className={`set-app-pic__thumb${image ? "" : " is-empty"}`} style={round ? { width: 64, height: 64, borderRadius: "50%", overflow: "hidden" } : { width: 96, height: 64, borderRadius: 12, overflow: "hidden" }}>{image ? <img src={image} alt="" style={{ width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", objectFit: "cover", filter: "none" }} /> : <span aria-hidden="true">{round ? "☺" : "▭"}</span>}</div>
+      <div className="set-app-pic__body">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">{title}</Text>
+        {hint ? <Text as="p" variant="bodySm" tone="subdued">{hint}</Text> : null}
+        <InlineStack gap="200" blockAlign="center">
+          <input ref={inputRef} type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={onFile} />
+          <Button onClick={() => inputRef.current?.click()}>{image ? "Replace picture" : "Upload picture"}</Button>
+          {image ? <Button variant="plain" tone="critical" onClick={() => onChange("")}>Remove</Button> : null}
+        </InlineStack>
+        {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
+      </div>
+    </div>
+  );
+}
+function PeakHomeEditor({ value, onChange }) {
+  const v = value && typeof value === "object" && !Array.isArray(value) ? value : { avatar: "", blocks: [] };
+  const blocks = Array.isArray(v.blocks) ? v.blocks : [];
+  const up = (patch) => onChange({ ...v, blocks, ...patch });
+  const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
+  const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
+  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, eyebrow: "", title: "", text: "", cta: "", kind: "link", url: "", message: "", image: "", audience: "all", tag: "" }] }); };
+  const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
+  return (
+    <BlockStack gap="400">
+      <PeakPicture round image={v.avatar || ""} onChange={(avatar) => up({ avatar })} title="The assistant's peak picture" hint="Shown in place of her usual picture while Peak Mode is on — a festive version of the same face. Square, at least 320px." size={480} />
+      <Text as="p" variant="bodySm" fontWeight="semibold">Promotion blocks — up to {PEAK_BLOCKS_MAX}, in this order</Text>
+      {blocks.length === 0 ? <Text as="p" variant="bodySm" tone="subdued">None yet. Without blocks the home keeps its banner; the peak picture still shows.</Text> : null}
+      {blocks.map((b, i) => (
+        <div key={b.id || i} className="set-peak-block">
+          <InlineStack align="space-between" blockAlign="center" gap="200">
+            <Text as="h4" variant="headingSm">Block {i + 1}{b.title ? ` — ${b.title}` : ""}</Text>
+            <InlineStack gap="100">
+              <Button variant="plain" onClick={() => move(i, -1)} disabled={i === 0} accessibilityLabel="Move up">↑</Button>
+              <Button variant="plain" onClick={() => move(i, 1)} disabled={i === blocks.length - 1} accessibilityLabel="Move down">↓</Button>
+              <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
+            </InlineStack>
+          </InlineStack>
+          <div className="set-grid">
+            <TextField label="Small line on top" value={b.eyebrow || ""} onChange={(x) => setBlock(i, { eyebrow: x })} placeholder="Black Friday" maxLength={PEAK_MAX.eyebrow} autoComplete="off" />
+            <TextField label="Name" value={b.title || ""} onChange={(x) => setBlock(i, { title: x })} placeholder="30% off everything" maxLength={PEAK_MAX.title} autoComplete="off" />
+          </div>
+          <TextField label="Line under the name" value={b.text || ""} onChange={(x) => setBlock(i, { text: x })} placeholder="Today only, online and in stores." maxLength={PEAK_MAX.text} autoComplete="off" />
+          <div className="set-grid set-grid--3">
+            <TextField label="Button" value={b.cta || ""} onChange={(x) => setBlock(i, { cta: x })} placeholder="Shop the sale" maxLength={PEAK_MAX.cta} autoComplete="off" />
+            <Select label="The button" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }]} value={b.kind === "ask" ? "ask" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
+            {b.kind === "ask"
+              ? <TextField label="The question it asks" value={b.message || ""} onChange={(x) => setBlock(i, { message: x })} placeholder="What's on sale today?" maxLength={PEAK_MAX.message} autoComplete="off" />
+              : <TextField label="The link" value={b.url || ""} onChange={(x) => setBlock(i, { url: x })} placeholder="/collections/sale" maxLength={PEAK_MAX.url} autoComplete="off" />}
+          </div>
+          <div className="set-grid">
+            <Select label="Who sees it" options={audienceOptions} value={b.audience || "all"} onChange={(x) => setBlock(i, { audience: x })} />
+            {b.audience === "tag" ? <TextField label="Customer tag (as in Shopify)" value={b.tag || ""} onChange={(x) => setBlock(i, { tag: x })} placeholder="VIP" maxLength={PEAK_MAX.tag} autoComplete="off" helpText="Signed-in customers carrying this tag." /> : <div />}
+          </div>
+          <PeakPicture image={b.image || ""} onChange={(image) => setBlock(i, { image })} title="Picture (optional)" hint="Fills the top of the block. Wide works best, about 3 : 2." />
+        </div>
+      ))}
+      {blocks.length < PEAK_BLOCKS_MAX ? <div><Button onClick={add}>Add a block</Button></div> : null}
+    </BlockStack>
+  );
+}
 function FocusPicture({ kind, initial }) {
   const fetcher = useFetcher();
   const inputRef = useRef(null);
@@ -1681,6 +1771,12 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
           <div style={{ maxWidth: 220 }}>
             <TextField label="Messages per day" type="number" min={1} max={100000} value={values.dailyCapMessages} onChange={set("dailyCapMessages")} autoComplete="off" />
           </div>
+        </Row>
+      </Group>
+
+      <Group title="The home on peak days">
+        <Row stack help="While Peak Mode is on, the chat's home shows these blocks where the banner is — the day's promotions, each with a button that opens a link or asks AVA — and the peak picture of the assistant. Each block says who sees it: everyone, shoppers signed out, shoppers signed in, or customers carrying a Shopify tag. Nothing here changes what AVA says about offers; she still reads only your promotions page.">
+          <PeakHomeEditor value={values.peakHome} onChange={set("peakHome")} />
         </Row>
       </Group>
 
