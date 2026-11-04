@@ -164,7 +164,10 @@ export const action = async ({ request }) => {
 
 const REC_CSS = `
   .rd { --rd-line: rgba(30,27,51,0.08); --rd-green: #2D6B4F; --rd-red: #a33d3d; }
-  .rd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  /* One column no wider than the screen: a row that scrolls sideways (the
+     numbers, the windows) scrolls inside it, and never widens the page. */
+  .rd-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+  .rd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
   .rd-top__title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; margin-right: auto; }
   .rd-top__title h2 { margin: 0 4px 0 0; font-size: 18px; line-height: 24px; font-weight: 700; color: #1a1a1a; letter-spacing: -0.01em; }
   .rd-state { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 7px; border-radius: 999px; font-size: 11.5px; line-height: 16px; font-weight: 650; color: #4a4a4a; background: rgba(26,46,38,0.06); white-space: nowrap; }
@@ -173,7 +176,7 @@ const REC_CSS = `
   .rd-state.is-on::before { background: var(--rd-green); box-shadow: 0 0 0 3px rgba(45,107,79,0.16); }
   .rd-state.is-watch { color: #7a5412; background: #fbf3e4; }
   .rd-state.is-watch::before { background: #c58a1d; }
-  .rd-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); }
+  .rd-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); min-width: 0; max-width: 100%; }
   .rd-seg button { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; padding: 4px 10px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550; color: #4a4a4a; }
   .rd-seg button[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
   .rd-seg button:focus-visible, .rd-stat:focus-visible, .rd-row:focus-visible, .rd-chip:focus-visible, .rd-pager button:focus-visible, .rd-x:focus-visible, .rd-nav:focus-visible { outline: 2px solid var(--rd-green); outline-offset: -2px; }
@@ -282,6 +285,13 @@ const REC_CSS = `
   .rd-dl dd { margin: 0; color: #1a1a1a; overflow-wrap: anywhere; }
   .rd-dl dd.is-c { padding: 6px 10px; border-radius: 8px; background: #fff8e1; font-style: italic; }
   @media (prefers-reduced-motion: reduce) { .rd-drawer { animation: none; } }
+  /* Narrower than the seven numbers in a row (tablets, phones): two rows of
+     them rather than a strip that scrolls off the screen. */
+  @media (max-width: 860px) {
+    .rd-strip { flex-wrap: wrap; }
+    .rd-stat { flex: 1 1 22%; min-width: 0; padding: 9px 10px 8px; }
+    .rd-stat:last-child { border-top-right-radius: 0; }
+  }
   @media (max-width: 720px) {
     .rd-why { grid-template-columns: minmax(0, 1fr); }
     .rd-scroll { max-height: none; overflow: visible; }
@@ -294,12 +304,17 @@ const REC_CSS = `
     .rd-hint__keys { display: none; }
     .rd-msg, .rd-msg--ai { max-width: 94%; }
   }
-  @media (max-width: 600px) {
+  /* Up to tablet width the windows take a row of their own under the title
+     and the menu, rather than pushing the menu down. */
+  @media (max-width: 900px) {
     .rd-top__title { order: 0; flex: 1 1 0; min-width: 0; }
     .rd-top__menu { order: 1; }
+    /* The windows share the row's width (the page never grows past the
+       screen for them); only if a phone is too narrow for the five does the
+       row scroll sideways. */
     .rd-seg { order: 2; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; }
     .rd-seg::-webkit-scrollbar { display: none; }
-    .rd-seg button { flex: 1 0 auto; text-align: center; }
+    .rd-seg button { flex: 1 0 auto; padding: 4px 8px; text-align: center; }
   }
 `;
 
@@ -587,7 +602,7 @@ export default function Recordings() {
           quotes on the server and the page wouldn't hydrate. */}
       <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + REC_CSS + CONCERNS_CSS }} />
       <div className="rd set-links">
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="rd-page">
           <BrandHeader title="Recordings" gutter={false} />
 
           <div className="rd-top">
