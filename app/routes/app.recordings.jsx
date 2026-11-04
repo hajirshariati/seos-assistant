@@ -18,7 +18,7 @@ import { SearchIcon, MenuHorizontalIcon, XIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { adminWithAccess } from "../lib/staff-access.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
-import { RATINGS_CSS, useCsvExport } from "../components/Ratings";
+import { RATINGS_CSS, RankList, useCsvExport } from "../components/Ratings";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings, deleteAllRecordings, deleteDayRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { listFlags, setFlag, clearFlag } from "../models/ChatFlag.server";
@@ -364,20 +364,6 @@ function VoteDetail({ v }) {
   );
 }
 const FEEDBACK_MOMENTS_WORDS = { cart: "after an add to cart", buy_now: "back from checkout", replies: "after a few replies", order: "about an order" };
-
-function RankList({ rows, tone }) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  return (
-    <ul className={`an-rank${tone === "down" ? " an-rank--down" : ""}`}>
-      {rows.map((r) => (
-        <li key={r.title}>
-          <div className="an-rank__top"><span className="an-rank__title">{r.title}</span><span className="an-rank__n">{r.count}</span></div>
-          <div className="an-rank__bar"><span style={{ width: `${Math.round((r.count / max) * 100)}%` }} /></div>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export default function Recordings() {
   const { recording, sessions, concerns, flagged, window: windowDays, votes, focus, tab: tabParam } = useLoaderData();

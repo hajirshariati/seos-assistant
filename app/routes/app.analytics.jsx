@@ -21,8 +21,8 @@ import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
-import { RATINGS_CSS, LessonsCard, ReviewCard } from "../components/Ratings";
-import { LEARN_CSS, SiteIdeasCard } from "../components/Learn";
+import { RATINGS_CSS } from "../components/Ratings";
+import { LEARN_CSS, LearnCard } from "../components/Learn";
 import { SectionHead } from "../components/SettingsUI";
 import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
 import { reviewSummary, reviewNow } from "../lib/chat-review.server";
@@ -542,12 +542,10 @@ export default function Analytics() {
 
           <div id="learn">
             <SectionHead title="Learn">
-              What AVA learns from the chats, for you to act on: how to answer better, and what to change on the site. Nothing changes until you approve it.
+              What AVA learned from the chats, waiting for your yes or no.
             </SectionHead>
             <BlockStack gap="400">
-              <LessonsCard lessons={lessons} mounted={mounted} />
-              <ReviewCard review={review} mounted={mounted} onOpenChat={(id) => navigate(`/app/recordings?chat=${encodeURIComponent(id)}`)} />
-              <SiteIdeasCard ideas={ideas} mounted={mounted} />
+              <LearnCard lessons={lessons} review={review} ideas={ideas} mounted={mounted} onOpenChat={(id) => navigate(`/app/recordings?chat=${encodeURIComponent(id)}`)} />
               <Card padding="0">
                 <Row
                   title="Ratings"
