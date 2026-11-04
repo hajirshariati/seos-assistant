@@ -553,83 +553,39 @@ function applyPeakColors(){
   var els=[typeof panel!=='undefined'?panel:null,typeof launcher!=='undefined'?launcher:null];
   for(var k=0;k<els.length;k++){if(!els[k])continue;for(var i=0;i<4;i++){if(own)els[k].style.setProperty('--ai-glow-'+(i+1),g[i]);else els[k].style.removeProperty('--ai-glow-'+(i+1))}}
   var stops=document.querySelectorAll('#ai-chat-band-g stop');for(var j=0;j<stops.length;j++)stops[j].setAttribute('stop-color',g[j%4]);
-  /* Her look on peak days: the ring's weight (a multiplier on its strokes),
-     the holiday ornaments, the tint behind the header. */
+  /* Her look on peak days: the panel marked (the header's grey line goes
+     at home), the ring's weight (a multiplier on its strokes), the line
+     of gold, the tint behind the header. */
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
+  if(PEAK)p.setAttribute('data-peak','1');else p.removeAttribute('data-peak');
   var ring={fine:1,regular:1.8,bold:2.8}[PEAK&&PEAK.ring]||1;
   if(ring!==1)p.style.setProperty('--ai-ring-k',String(ring));else p.style.removeProperty('--ai-ring-k');
   if(PEAK&&PEAK.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
   peakDecoRender();
 }
-/* Holiday ornaments on peak days (Settings → Peak Mode → Holiday
-   ornaments), drawn here in her colours so they fit any screen: a pine
-   sprig with a satin bow and a thread of gold tucked under the header's
-   controls; and, across the foot of the home, a garland — sprigs, baubles
-   and the thread — passing behind the links. Never in the way of a tap.
-   The bow's tails and the baubles sway, unless motion is reduced. */
-function decoBezier(a,b,c,d,t){var u=1-t;return u*u*u*a+3*u*u*t*b+3*u*t*t*c+t*t*t*d}
-/* A sprig: a stem along a curve, needles fanning from it on both sides
-   (lengths and angles vary with a fixed pattern), berries near the base. */
-function decoSprig(p,seed,flip){
-  var f=function(n){return Math.round(n*10)/10},s=seed||1,r=function(){s=(s*9301+49297)%233280;return s/233280};
-  var stem='M'+f(p[0])+' '+f(p[1])+'C'+f(p[2])+' '+f(p[3])+','+f(p[4])+' '+f(p[5])+','+f(p[6])+' '+f(p[7]);
-  var needles='',n=16;
-  for(var i=0;i<=n;i++){
-    var t=0.06+0.9*i/n,x=decoBezier(p[0],p[2],p[4],p[6],t),y=decoBezier(p[1],p[3],p[5],p[7],t);
-    var dx=decoBezier(p[2],p[4],p[6],p[6],t)-decoBezier(p[0],p[2],p[4],p[4],t),dy=decoBezier(p[3],p[5],p[7],p[7],t)-decoBezier(p[1],p[3],p[5],p[5],t);
-    var L=Math.sqrt(dx*dx+dy*dy)||1;dx/=L;dy/=L;
-    var ang=(0.95+0.5*r())*(flip?-1:1),len=(9+6*r())*(1-0.35*t),c=Math.cos(ang),si=Math.sin(ang);
-    var ux=dx*c-dy*si,uy=dx*si+dy*c,vx=dx*c+dy*si,vy=-dx*si+dy*c;
-    needles+='M'+f(x)+' '+f(y)+'l'+f(ux*len)+' '+f(uy*len)+'M'+f(x)+' '+f(y)+'l'+f(vx*len*0.9)+' '+f(vy*len*0.9);
-  }
-  var bx=decoBezier(p[0],p[2],p[4],p[6],0.2),by=decoBezier(p[1],p[3],p[5],p[7],0.2);
-  var berries='';for(var k=0;k<3;k++){var ox=[-3,5,1][k],oy=[-6,-4,4][k];berries+='<circle class="d-red" cx="'+f(bx+ox)+'" cy="'+f(by+oy)+'" r="3.2"/><circle cx="'+f(bx+ox-1)+'" cy="'+f(by+oy-1)+'" r="1" fill="#fff" opacity=".5"/>'}
-  return '<path class="d-green-s" d="'+needles+'" fill="none" stroke-width="1.5" stroke-linecap="round" opacity=".92"/><path class="d-green-s" d="'+needles+'" fill="none" stroke-width="0.6" stroke-linecap="round" opacity=".5" transform="translate(0.6 0.8)"/><path class="d-stem" d="'+stem+'" fill="none" stroke-width="2.2" stroke-linecap="round"/>'+berries;
+/* The line under the header on peak days (Settings → Peak Mode → The line
+   under the header): a curved line of the set's gold at the right, where
+   the header's grey line was — so it covers nothing — with a soft glow
+   and a highlight that drifts along it now and then. Drawn here, so it
+   fits any width. */
+function decoLineHtml(){
+  var d='M0 19 C 150 19,260 5,420 5 C 530 5,620 12,700 11';
+  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 700 24" preserveAspectRatio="none">'+
+    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".3" class="d-gold-stop" stop-opacity=".75"/><stop offset=".62" class="d-gold-stop" stop-opacity="1"/><stop offset="1" class="d-gold-stop" stop-opacity=".55"/></linearGradient>'+
+    '<linearGradient id="ai-deco-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
+    '<path class="d-gold-s" d="'+d+'" fill="none" stroke-width="7" opacity=".10" vector-effect="non-scaling-stroke"/>'+
+    '<path class="d-gold-s" d="'+d+'" fill="none" stroke-width="3" opacity=".22" vector-effect="non-scaling-stroke"/>'+
+    '<path d="'+d+'" fill="none" stroke="url(#ai-deco-gold)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>'+
+    '<path class="ai-chat-deco__sheen" d="'+d+'" fill="none" stroke="url(#ai-deco-sheen)" stroke-width="1" vector-effect="non-scaling-stroke" pathLength="100" stroke-dasharray="22 100"/>'+
+  '</svg></div>';
 }
-/* A satin bow: two loops, a knot, two tails; the deep colour as shading, a hairline of gold on the edges. */
-function decoBow(x,y,sc,rot){
-  return '<g transform="translate('+x+' '+y+') rotate('+(rot||0)+') scale('+(sc||1)+')">'+
-    '<g class="d-sway"><path class="d-red" d="M0 3 C -3 14,-9 25,-17 33 L -8 34 C -3 25,1 15,1 3 Z"/><path class="d-deep" d="M0 3 C -2 13,-6 22,-12 30 L -8 34 C -3 25,1 15,1 3 Z" opacity=".35"/>'+
-    '<path class="d-red" d="M1 3 C 4 14,10 25,18 33 L 9 34 C 4 25,0 15,0 3 Z"/><path class="d-deep" d="M1 3 C 3 13,7 22,13 30 L 9 34 C 4 25,0 15,0 3 Z" opacity=".35"/></g>'+
-    '<path class="d-red" d="M0 0 C -12 -16,-36 -14,-33 2 C -30 14,-10 12,0 0 Z"/><path class="d-deep" d="M0 0 C -10 -10,-28 -10,-28 1 C -27 9,-12 9,0 0 Z" opacity=".3"/>'+
-    '<path class="d-red" d="M0 0 C 12 -16,36 -14,33 2 C 30 14,10 12,0 0 Z"/><path class="d-deep" d="M0 0 C 10 -10,28 -10,28 1 C 27 9,12 9,0 0 Z" opacity=".3"/>'+
-    '<path class="d-gold-s" d="M0 0 C -12 -16,-36 -14,-33 2 C -30 14,-10 12,0 0 M0 0 C 12 -16,36 -14,33 2 C 30 14,10 12,0 0" fill="none" stroke-width="0.9" opacity=".8"/>'+
-    '<ellipse class="d-deep" cx="0" cy="1" rx="5.5" ry="4.5"/><ellipse cx="-1" cy="-0.5" rx="2.5" ry="1.6" fill="#fff" opacity=".35"/>'+
-  '</g>';
-}
-/* A bauble on a short string: gold, a cap, a soft highlight; it swings. */
-function decoBauble(x,y,r){
-  return '<g transform="translate('+x+' '+y+')"><g class="d-sway"><path class="d-gold-s" d="M0 -'+(r+9)+' v6" fill="none" stroke-width="1.2"/><rect class="d-deep" x="-2.6" y="-'+(r+4)+'" width="5.2" height="4" rx="1"/><circle class="d-gold" cx="0" cy="0" r="'+r+'"/><circle class="d-deep" cx="0" cy="0" r="'+r+'" opacity=".18"/><ellipse cx="-'+(r*0.35)+'" cy="-'+(r*0.4)+'" rx="'+(r*0.32)+'" ry="'+(r*0.2)+'" fill="#fff" opacity=".55" transform="rotate(-30 -'+(r*0.35)+' -'+(r*0.4)+')"/></g></g>';
-}
-/* Under the header: a thread of gold sweeping across from the left,
-   low behind the greeting and rising to the right, where the sprig, the
-   bauble and the bow sit under the controls. The thread carries a soft
-   glow and a brighter run along its middle. */
-function decoHeadHtml(){
-  return '<div class="ai-chat-deco ai-chat-deco--head" aria-hidden="true">'+
-    '<svg class="ai-chat-deco__arc" viewBox="0 0 520 80" preserveAspectRatio="none"><defs><linearGradient id="ai-deco-arc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".18" class="d-gold-stop" stop-opacity=".7"/><stop offset=".55" class="d-gold-stop" stop-opacity="1"/><stop offset="1" class="d-gold-stop" stop-opacity=".9"/></linearGradient><linearGradient id="ai-deco-arc-s" x1="0" y1="0" x2="1" y2="0"><stop offset=".25" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset=".72" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
-    '<path d="M0 50 C 120 50,220 20,320 16 C 380 14,402 46,424 62" fill="none" stroke="url(#ai-deco-arc)" stroke-width="5" opacity=".16" vector-effect="non-scaling-stroke"/>'+
-    '<path d="M0 50 C 120 50,220 20,320 16 C 380 14,402 46,424 62" fill="none" stroke="url(#ai-deco-arc)" stroke-width="1.3" vector-effect="non-scaling-stroke"/>'+
-    '<path d="M0 50 C 120 50,220 20,320 16 C 380 14,402 46,424 62" fill="none" stroke="url(#ai-deco-arc-s)" stroke-width="0.8" vector-effect="non-scaling-stroke"/></svg>'+
-    '<svg class="ai-chat-deco__sprig" viewBox="0 0 260 120" preserveAspectRatio="xMaxYMin meet">'+decoSprig([150,62,180,52,205,56,236,40],7,false)+decoBauble(214,94,9)+decoBow(226,50,0.78,-8)+'</svg>'+
-  '</div>';
-}
-/* Across the foot of the home: a sprig and a bauble at the left, the thread across, a sprig with the bow and a bauble at the right. */
-function decoFootHtml(){
-  return '<div class="ai-chat-deco ai-chat-deco--foot" aria-hidden="true">'+
-    '<svg class="ai-chat-deco__thread" viewBox="0 0 400 40" preserveAspectRatio="none"><path class="d-gold-s" d="M0 24 C 90 8,150 36,230 20 C 300 6,340 30,400 18" fill="none" stroke-width="1.2" stroke-linecap="round" opacity=".85" vector-effect="non-scaling-stroke"/></svg>'+
-    '<svg class="ai-chat-deco__left" viewBox="0 0 170 80" preserveAspectRatio="xMinYMax meet">'+decoSprig([6,62,40,44,80,56,118,38],3,false)+decoBauble(60,58,8)+'<path class="d-gold-s" d="M118 38 C 140 30,160 36,170 34" fill="none" stroke-width="1.2" stroke-linecap="round" opacity=".85"/></svg>'+
-    '<svg class="ai-chat-deco__right" viewBox="0 0 190 80" preserveAspectRatio="xMaxYMax meet">'+'<path class="d-gold-s" d="M0 36 C 20 30,40 38,62 34" fill="none" stroke-width="1.2" stroke-linecap="round" opacity=".85"/>'+decoSprig([184,62,150,44,110,56,70,38],11,true)+decoBauble(118,62,8)+decoBow(146,44,0.72,6)+'</svg>'+
-  '</div>';
-}
-/* Draws (or removes) the header's ornament to match the setting; the
-   foot's goes with the home when it's built. */
+/* Draws (or removes) the line to match the setting. */
 function peakDecoRender(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
-  var want=PEAK&&/^(header|both)$/.test(String(PEAK.decor))?PEAK.decor:'';
-  var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--head'):null;
-  if(want){if(hdr&&!old)hdr.insertAdjacentHTML('beforeend',decoHeadHtml())}else if(old)old.remove();
-  if(want)p.setAttribute('data-peak-decor',want);else p.removeAttribute('data-peak-decor');
+  var want=PEAK&&PEAK.decor==='line';
+  var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--line'):null;
+  if(want){if(hdr&&!old)hdr.insertAdjacentHTML('beforeend',decoLineHtml())}else if(old)old.remove();
+  if(want)p.setAttribute('data-peak-decor','line');else p.removeAttribute('data-peak-decor');
 }
 
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -1982,7 +1938,6 @@ function buildFocusHome(){
   else if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
   h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
   h+='<div class="ai-chat-focus__links">'+focusLinksHtml()+'</div>';
-  if(PEAK&&PEAK.decor==='both')h+=decoFootHtml();
   h+='</div>';
   msgsEl.innerHTML=h;
   msgsEl.classList.add('is-welcome');
@@ -2553,7 +2508,6 @@ if(CUST_LOGGED_IN){
 }else if(HINT){
   h+='<a class="ai-chat-welcome__hint ai-chat-welcome__hint--link" href="'+esc(loginUrl())+'">'+esc(HINT)+'</a>';
 }
-if(PEAK&&PEAK.decor==='both')h+=decoFootHtml();
 h+='</div>';
 msgsEl.innerHTML=h;
 msgsEl.classList.add('is-welcome');

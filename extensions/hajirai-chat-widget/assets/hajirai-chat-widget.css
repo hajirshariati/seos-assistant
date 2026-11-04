@@ -7771,69 +7771,40 @@ button.ai-chat-launcher__text {
 .ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt), .ai-chat-msg-bubble:has(.ai-dl) { width: 100%; max-width: 100%; }
 .ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-dl) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
 
-/* ── Peak days: holiday ornaments in her colours, and the tint behind the header ──
-   Drawn by the widget (no pictures), so they fit any screen; never in
-   the way of a tap. The header's: a sprig, a bauble and a bow tucked
-   under the controls at the right, the thread trailing left. The foot's:
-   a garland across the bottom of the home, behind the links. */
-.ai-chat-panel .ai-chat-deco { position: absolute; pointer-events: none; z-index: 6; }
-.ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; }
-.ai-chat-panel .ai-chat-deco .d-red { fill: var(--ai-glow-1, #ff4fa3); }
-.ai-chat-panel .ai-chat-deco .d-deep { fill: var(--ai-glow-4, #29e0d0); }
-.ai-chat-panel .ai-chat-deco .d-gold { fill: var(--ai-glow-3, #3d7bff); }
+/* ── Peak days: the line of gold under the header, and the tint behind it ──
+   The line: a curve of the set's third colour at the right, drawn where
+   the header's grey line was — within the header's foot, so it covers
+   nothing — a soft glow around it and a highlight drifting along it now
+   and then. It sits under the header's controls and never takes a tap. */
+.ai-chat-panel .ai-chat-deco { position: absolute; pointer-events: none; }
+.ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; width: 100%; height: 100%; }
 .ai-chat-panel .ai-chat-deco .d-gold-s { stroke: var(--ai-glow-3, #3d7bff); }
-.ai-chat-panel .ai-chat-deco .d-green-s { stroke: var(--ai-glow-2, #a35cff); }
-.ai-chat-panel .ai-chat-deco .d-stem { stroke: color-mix(in srgb, var(--ai-glow-2, #a35cff) 45%, #4a3521); }
 .ai-chat-panel .ai-chat-deco .d-gold-stop { stop-color: var(--ai-glow-3, #3d7bff); }
-.ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; }
-/* The header's: the thread's arc across the header's foot (stretching with
-   it), the sprig and bow at the right under the controls. At home the
-   header's grey line gives way to the thread. */
-.ai-chat-panel .ai-chat-deco--head { left: 0; right: 0; top: 0; bottom: 0; transition: opacity 0.4s ease; }
-.ai-chat-panel:not(.is-home) .ai-chat-deco--head { opacity: 0; }
-.ai-chat-panel .ai-chat-deco__arc { position: absolute; left: 0; right: 0; bottom: -40px; height: 80px; width: auto; }
-.ai-chat-panel .ai-chat-deco__sprig { position: absolute; right: 10px; top: 38px; width: min(50%, 260px); aspect-ratio: 260 / 120; height: auto; }
-/* The Focus header is short (the greeting sits below it, in the home):
-   the thread sweeps under the greeting, from behind the face, up to the
-   sprig at the right. */
-.ai-chat-panel.is-focus .ai-chat-deco__arc { bottom: -72px; }
-.ai-chat-panel.is-focus .ai-chat-deco__sprig { top: 50px; }
-/* The links above the box sit on the garland, not see-through. */
-.ai-chat-panel[data-peak-decor] .ai-chat-focus__links button { background: var(--ai-chat-bg); }
-.ai-chat-panel[data-peak-decor].is-home .ai-chat-header { border-bottom-color: transparent; }
-.ai-chat-panel[data-peak-decor] .ai-chat-welcome { position: relative; }
-.ai-chat-panel .ai-chat-deco--foot { left: 0; right: 0; bottom: 0; height: 72px; z-index: 0; }
-.ai-chat-panel .ai-chat-deco__thread { position: absolute; left: 110px; right: 130px; bottom: 16px; height: 40px; width: auto; }
-.ai-chat-panel .ai-chat-deco__left { position: absolute; left: -6px; bottom: 0; width: 150px; height: 70px; }
-.ai-chat-panel .ai-chat-deco__right { position: absolute; right: -6px; bottom: 0; width: 170px; height: 72px; }
-.ai-chat-panel.is-focus .ai-chat-focus__links { position: relative; z-index: 1; }
-.ai-chat-panel .ai-chat-deco .d-sway { transform-box: fill-box; transform-origin: 50% 0; animation: aiDecoSway 6.5s ease-in-out infinite alternate; }
-@keyframes aiDecoSway { from { transform: rotate(-2.4deg); } to { transform: rotate(2.4deg); } }
-@container aipeak (max-width: 439px) { .ai-chat-panel .ai-chat-deco__thread { left: 90px; right: 110px; } }
-@media (max-width: 480px) {
-  .ai-chat-panel .ai-chat-deco__sprig, .ai-chat-panel.is-focus .ai-chat-deco__sprig { width: 46%; right: 8px; top: 50px; }
-  .ai-chat-panel .ai-chat-deco__arc { height: 64px; bottom: -30px; }
-  .ai-chat-panel.is-focus .ai-chat-deco__arc { bottom: -58px; }
-  .ai-chat-panel .ai-chat-deco__left { width: 120px; height: 56px; }
-  .ai-chat-panel .ai-chat-deco__right { width: 136px; height: 58px; }
-  .ai-chat-panel .ai-chat-deco__thread { left: 92px; right: 104px; bottom: 12px; height: 30px; }
-  .ai-chat-panel .ai-chat-deco--foot { height: 60px; }
-}
-.ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%); }
-.ai-chat-panel[data-theme="dark"][data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 14%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 5%, transparent) 70%, transparent 100%); }
-@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco .d-sway { animation: none; } }
+.ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; isolation: isolate; }
+.ai-chat-panel .ai-chat-deco--line { right: 0; bottom: -4px; width: 62%; height: 24px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
+.ai-chat-panel:not(.is-home) .ai-chat-deco--line { opacity: 0; }
+/* On peak days the header's straight grey line is gone at home — with or
+   without the line of gold (important, as the dark theme's border is). */
+.ai-chat-panel[data-peak].is-home .ai-chat-header { border-bottom-color: transparent !important; }
+.ai-chat-panel .ai-chat-deco__sheen { stroke-dashoffset: 30; opacity: 0; animation: aiDecoSheen 9s ease-in-out infinite; }
+@keyframes aiDecoSheen { 0%, 55% { stroke-dashoffset: 30; opacity: 0; } 60% { opacity: 0.9; } 90% { stroke-dashoffset: -110; opacity: 0.9; } 92%, 100% { stroke-dashoffset: -110; opacity: 0; } }
+@media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--line { width: 70%; height: 20px; bottom: -3px; } }
+/* The tint is painted once, over the whole box: repeated, its first row
+   would show again in the header's border row as a straight line. */
+.ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%) !important; background-repeat: no-repeat !important; background-origin: border-box !important; background-size: 100% 100% !important; }
+.ai-chat-panel[data-theme="dark"][data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 14%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 5%, transparent) 70%, transparent 100%) !important; }
+@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco__sheen { animation: none; } }
 /* ── Peak Mode's home: the day's pictures where the banner was ──
    Each tile is just a picture (a link, a question, or nothing), the shape
-   set in Settings (--ai-peak-ar). The picture eases a touch larger under
-   the pointer; the tile presses in. */
+   set in Settings (--ai-peak-ar). The tile presses in on a tap; the
+   picture itself stays still. */
 .ai-chat-panel .ai-chat-peak { flex: none; margin: 0 0 14px; container-type: inline-size; container-name: aipeak; --ai-peak-gap: 10px; }
 .ai-chat-panel .ai-chat-peak__tiles { display: grid; gap: var(--ai-peak-gap); }
 .ai-chat-panel .ai-chat-peak__tile { position: relative; display: block; box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 18px; overflow: hidden; background: var(--seos-surface); aspect-ratio: var(--ai-peak-ar, 16 / 9); color: inherit; font: inherit; text-decoration: none !important; cursor: pointer; -webkit-tap-highlight-color: transparent; transform: translateZ(0); transition: transform 0.18s ease; }
 .ai-chat-panel .ai-chat-peak__tile.is-still { cursor: default; }
-.ai-chat-panel .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; background: var(--seos-surface); transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.ai-chat-panel .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak__tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; background: var(--seos-surface); }
 .ai-chat-panel .ai-chat-peak__tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(13, 13, 18, 0.06); pointer-events: none; }
 .ai-chat-panel[data-theme="dark"] .ai-chat-peak__tile::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
-@media (hover: hover) { .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img, .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover video { transform: scale(1.04); } }
 .ai-chat-panel .ai-chat-peak__tile:not(.is-still):active { transform: scale(0.985); }
 .ai-chat-panel .ai-chat-peak__tile:focus-visible { outline: 2px solid var(--seos-text); outline-offset: 2px; }
 /* Rail: one row that scrolls sideways, snapping tile by tile — two and a
@@ -7884,7 +7855,6 @@ button.ai-chat-launcher__text {
 }
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-panel .ai-chat-peak__tile, .ai-chat-panel .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak__tile video { transition: none; }
-  .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img, .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover video { transform: none; }
   .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles { scroll-behavior: auto; }
 }
 /* ── Deals card: quiet, typographic, no colour ── */

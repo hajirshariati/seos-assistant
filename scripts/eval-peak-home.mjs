@@ -38,8 +38,9 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, blocks: [] };
   assert.deepEqual(parsePeakHome("{broken"), plain);
   assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
-  const look = parsePeakHome({ ring: "bold", decor: "header", tint: true });
-  assert.deepEqual([look.ring, look.decor, look.tint], ["bold", "header", true]);
+  const look = parsePeakHome({ ring: "bold", decor: "line", tint: true });
+  assert.deepEqual([look.ring, look.decor, look.tint], ["bold", "line", true]);
+  assert.equal(parsePeakHome({ decor: "both" }).decor, "off", "the ornaments of an earlier day are gone");
 });
 test("what's wrong is named: a picture too large or missing, a tag audience without a tag, a tap without its link or question; an empty block is left out quietly", () => {
   assert.match(peakHomeError({ avatar: HUGE }), /too large/);
@@ -100,7 +101,7 @@ test("the home is handed over only while Peak Mode is on, pictures as fingerprin
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: "{}" }), null, "nothing set: the usual home");
   assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, blocks: [] }, "colours alone are worth handing over");
   assert.deepEqual([on.ring, on.decor, on.tint], ["fine", "off", false]);
-  assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ decor: "both" }) }).decor, "both", "a look alone is worth handing over too");
+  assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ decor: "line" }) }).decor, "line", "a look alone is worth handing over too");
   assert.equal(peakImage({ peakHome: saved }, "b1").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "avatar").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "nope"), null);

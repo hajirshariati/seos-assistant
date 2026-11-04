@@ -45,14 +45,13 @@ export const PEAK_COLORS_MAX = 4;
 // CSS object-position words): the centre as usual, or an edge or corner.
 export const PEAK_FOCUS = ["center", "left", "right", "top", "bottom", "top left", "top right", "bottom left", "bottom right"];
 // Her look on peak days, beyond the colours: the ring around her face
-// (fine as usual, or thicker), holiday ornaments drawn in the colours — a
-// pine sprig with a bow and a thread of gold under the header's controls,
-// and a garland across the foot of the home — and a faint tint of the
-// first colour behind the header.
+// (fine as usual, or thicker); a curved line of the set's gold under the
+// header at the right, with a soft glow, in place of the header's grey
+// line on the home; and a faint tint of the first colour behind the header.
 export const PEAK_RINGS = ["fine", "regular", "bold"];
 export const PEAK_RING_WORDS = { fine: "Fine — as usual", regular: "Regular", bold: "Bold" };
-export const PEAK_DECORS = ["off", "header", "both"];
-export const PEAK_DECOR_WORDS = { off: "None", header: "Under the header", both: "Header and the foot of the home" };
+export const PEAK_DECORS = ["off", "line"];
+export const PEAK_DECOR_WORDS = { off: "Nothing", line: "A curved line of gold, glowing" };
 const HEX = /^#[0-9a-f]{6}$/i;
 // Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
 export function cleanPeakColors(list) {
