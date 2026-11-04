@@ -55,7 +55,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -1388,6 +1388,16 @@ function PeakPicture({ image, onChange, title, hint, round = false, size = 640 }
     </div>
   );
 }
+// The glow as a ring, for the colour pickers: the set's four colours, or
+// the usual ones; fewer than four repeat, as in the widget.
+const GLOW_USUAL = ["#ff4fa3", "#a35cff", "#3d7bff", "#29e0d0"];
+function glowRing(colors) {
+  const c = cleanPeakColors(colors);
+  const n = c.length;
+  const g = n ? c.slice() : GLOW_USUAL.slice();
+  while (g.length < 4) g.push(g[g.length - n]);
+  return { background: `conic-gradient(from 0deg, ${g[0]}, ${g[1]}, ${g[2]}, ${g[3]}, ${g[0]})` };
+}
 function PeakHomeEditor({ value, onChange }) {
   const v = value && typeof value === "object" && !Array.isArray(value) ? value : { avatar: "", blocks: [] };
   const blocks = Array.isArray(v.blocks) ? v.blocks : [];
@@ -1395,43 +1405,79 @@ function PeakHomeEditor({ value, onChange }) {
   const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
   const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
-  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, eyebrow: "", title: "", text: "", cta: "", kind: "link", url: "", message: "", image: "", audience: "all", tag: "" }] }); };
+  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", audience: "all", tag: "" }] }); };
   const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
+  const layout = PEAK_LAYOUTS.includes(v.layout) ? v.layout : "rail";
+  const shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, v.shape) ? v.shape : "wide";
+  // Her colours: the set that matches what's saved, else the store's own.
+  const colors = cleanPeakColors(v.colors);
+  const setId = (PEAK_COLOR_SETS.find((c) => c.colors.join() === colors.join()) || { id: "own" }).id;
+  const pickOwn = () => up({ colors: colors.length ? colors : PEAK_COLOR_SETS[1].colors });
+  const setColor = (i, hex) => { const next = (colors.length ? colors : PEAK_COLOR_SETS[1].colors).slice(); while (next.length < PEAK_COLORS_MAX) next.push(next[next.length - 1]); next[i] = hex; up({ colors: next }); };
+  const ownAt = (i) => colors[i] || colors[colors.length - 1] || "#ffffff";
+  const shapeWords = { wide: "wide (16 : 9)", standard: "standard (4 : 3)", square: "square" }[shape];
   return (
     <BlockStack gap="400">
       <PeakPicture round image={v.avatar || ""} onChange={(avatar) => up({ avatar })} title="The assistant's peak picture" hint="Shown in place of her usual picture while Peak Mode is on — a festive version of the same face. Square, at least 320px." size={480} />
-      <Text as="p" variant="bodySm" fontWeight="semibold">Promotion blocks — up to {PEAK_BLOCKS_MAX}, in this order</Text>
-      {blocks.length === 0 ? <Text as="p" variant="bodySm" tone="subdued">None yet. Without blocks the home keeps its banner; the peak picture still shows.</Text> : null}
+      <div className="set-peak-colors">
+        <Text as="p" variant="bodyMd" fontWeight="semibold">Her colours on peak days</Text>
+        <Text as="p" variant="bodySm" tone="subdued">The glow around her face, the ring and the line under the header — usually pink, violet, blue and teal. Pick a set, or your own four.</Text>
+        <div className="set-palettes" role="group" aria-label="Colour sets">
+          {PEAK_COLOR_SETS.map((c) => (
+            <button key={c.id} type="button" className="set-palette" aria-pressed={setId === c.id} onClick={() => up({ colors: c.colors })}>
+              <span className="set-palette__ring" style={glowRing(c.colors)} aria-hidden="true" />
+              <span>{c.label}</span>
+            </button>
+          ))}
+          <button type="button" className="set-palette" aria-pressed={setId === "own"} onClick={pickOwn}>
+            <span className="set-palette__ring" style={glowRing(setId === "own" ? colors : PEAK_COLOR_SETS[1].colors)} aria-hidden="true" />
+            <span>Your own</span>
+          </button>
+        </div>
+        {setId === "own" ? (
+          <div className="set-swatches" role="group" aria-label="Your own colours">
+            {Array.from({ length: PEAK_COLORS_MAX }, (_, i) => (
+              <label key={i} className="set-swatch">
+                <input type="color" value={ownAt(i)} onChange={(e) => setColor(i, e.target.value)} aria-label={`Colour ${i + 1}`} />
+                <span className="set-swatch__dot" style={{ background: ownAt(i) }} aria-hidden="true" />
+                <span className="set-swatch__hex">{ownAt(i).toUpperCase()}</span>
+              </label>
+            ))}
+            <span className="set-swatch__preview" style={glowRing(colors)} aria-hidden="true" />
+          </div>
+        ) : null}
+      </div>
+      <div className="set-grid">
+        <Select label="How the pictures sit" options={PEAK_LAYOUTS.map((k) => ({ value: k, label: PEAK_LAYOUT_WORDS[k] }))} value={layout} onChange={(x) => up({ layout: x })} helpText={layout === "rail" ? "Two and a half in view on a computer, one and a quarter on a phone; the rest a swipe away, no arrows." : layout === "mosaic" ? "The first picture big, the others around it — three to six look best." : "Two to a row, all the same size."} />
+        <Select label="Their shape" options={Object.keys(PEAK_SHAPES).map((k) => ({ value: k, label: PEAK_SHAPE_WORDS[k] }))} value={shape} onChange={(x) => up({ shape: x })} helpText="Every picture is cropped to this shape, centred." />
+      </div>
+      <Text as="p" variant="bodySm" fontWeight="semibold">Pictures — up to {PEAK_BLOCKS_MAX}, in this order</Text>
+      {blocks.length === 0 ? <Text as="p" variant="bodySm" tone="subdued">None yet. Without pictures the home keeps its banner; the peak picture and her colours still apply.</Text> : null}
       {blocks.map((b, i) => (
         <div key={b.id || i} className="set-peak-block">
           <InlineStack align="space-between" blockAlign="center" gap="200">
-            <Text as="h4" variant="headingSm">Block {i + 1}{b.title ? ` — ${b.title}` : ""}</Text>
+            <Text as="h4" variant="headingSm">Picture {i + 1}{b.title ? ` — ${b.title}` : ""}</Text>
             <InlineStack gap="100">
               <Button variant="plain" onClick={() => move(i, -1)} disabled={i === 0} accessibilityLabel="Move up">↑</Button>
               <Button variant="plain" onClick={() => move(i, 1)} disabled={i === blocks.length - 1} accessibilityLabel="Move down">↓</Button>
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
+          <PeakPicture image={b.image || ""} onChange={(image) => setBlock(i, { image })} title="The picture" hint={`Just the picture — no words or buttons are drawn on it. Shown ${shapeWords}; make it at least 800px wide.`} size={900} />
           <div className="set-grid">
-            <TextField label="Small line on top" value={b.eyebrow || ""} onChange={(x) => setBlock(i, { eyebrow: x })} placeholder="Black Friday" maxLength={PEAK_MAX.eyebrow} autoComplete="off" />
-            <TextField label="Name" value={b.title || ""} onChange={(x) => setBlock(i, { title: x })} placeholder="30% off everything" maxLength={PEAK_MAX.title} autoComplete="off" />
-          </div>
-          <TextField label="Line under the name" value={b.text || ""} onChange={(x) => setBlock(i, { text: x })} placeholder="Today only, online and in stores." maxLength={PEAK_MAX.text} autoComplete="off" />
-          <div className="set-grid set-grid--3">
-            <TextField label="Button" value={b.cta || ""} onChange={(x) => setBlock(i, { cta: x })} placeholder="Shop the sale" maxLength={PEAK_MAX.cta} autoComplete="off" />
-            <Select label="The button" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }]} value={b.kind === "ask" ? "ask" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
+            <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
             {b.kind === "ask"
               ? <TextField label="The question it asks" value={b.message || ""} onChange={(x) => setBlock(i, { message: x })} placeholder="What's on sale today?" maxLength={PEAK_MAX.message} autoComplete="off" />
-              : <TextField label="The link" value={b.url || ""} onChange={(x) => setBlock(i, { url: x })} placeholder="/collections/sale" maxLength={PEAK_MAX.url} autoComplete="off" />}
+              : b.kind === "none" ? <div /> : <TextField label="The link" value={b.url || ""} onChange={(x) => setBlock(i, { url: x })} placeholder="/collections/sale" maxLength={PEAK_MAX.url} autoComplete="off" />}
           </div>
           <div className="set-grid">
             <Select label="Who sees it" options={audienceOptions} value={b.audience || "all"} onChange={(x) => setBlock(i, { audience: x })} />
             {b.audience === "tag" ? <TextField label="Customer tag (as in Shopify)" value={b.tag || ""} onChange={(x) => setBlock(i, { tag: x })} placeholder="VIP" maxLength={PEAK_MAX.tag} autoComplete="off" helpText="Signed-in customers carrying this tag." /> : <div />}
           </div>
-          <PeakPicture image={b.image || ""} onChange={(image) => setBlock(i, { image })} title="Picture (optional)" hint="Fills the top of the block. Wide works best, about 3 : 2." />
+          <TextField label="What it says, for screen readers" value={b.title || ""} onChange={(x) => setBlock(i, { title: x })} placeholder="Black Friday: 30% off everything" maxLength={PEAK_MAX.title} autoComplete="off" helpText="Not shown — read out to shoppers who can't see the picture." />
         </div>
       ))}
-      {blocks.length < PEAK_BLOCKS_MAX ? <div><Button onClick={add}>Add a block</Button></div> : null}
+      {blocks.length < PEAK_BLOCKS_MAX ? <div><Button onClick={add}>Add a picture</Button></div> : null}
     </BlockStack>
   );
 }
@@ -1819,7 +1865,7 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
       </Group>
 
       <Group title="The home on peak days" badge={d.peakPreviewUrl ? <Button variant="plain" url={d.peakPreviewUrl} external>Preview on your store</Button> : null}>
-        <Row stack help="Preview opens your store with the peak home shown to you alone — this browser, today — whatever Peak Mode's switch says; save first. While Peak Mode is on, the chat's home shows these blocks where the banner is — the day's promotions, each with a button that opens a link or asks AVA — and the peak picture of the assistant. Each block says who sees it: everyone, shoppers signed out, shoppers signed in, or customers carrying a Shopify tag. Nothing here changes what AVA says about offers; she still reads only your promotions page.">
+        <Row stack help="Preview opens your store with the peak home shown to you alone — this browser, today — whatever Peak Mode's switch says; save first. While Peak Mode is on, the chat's home shows these pictures where the banner is — the day's promotions, each just a picture that opens a link or asks AVA when tapped — the peak picture of the assistant, and her colours for the days. Each picture says who sees it: everyone, shoppers signed out, shoppers signed in, or customers carrying a Shopify tag. Nothing here changes what AVA says about offers; she still reads only your promotions page.">
           <PeakHomeEditor value={values.peakHome} onChange={set("peakHome")} />
         </Row>
       </Group>

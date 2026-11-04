@@ -3848,7 +3848,7 @@ button.ai-chat-launcher__text {
   inset: -5px;
   z-index: 0;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3);
+  background: conic-gradient(from 0deg, var(--ai-glow-1, #ff4fa3), var(--ai-glow-2, #a35cff), var(--ai-glow-3, #3d7bff), var(--ai-glow-4, #29e0d0), var(--ai-glow-1, #ff4fa3));
   filter: blur(9px);
   opacity: 0.38;
   animation: aiChatAvatarGlow 14s linear infinite;
@@ -7242,7 +7242,7 @@ button.ai-chat-launcher__text {
   inset: -3px;
   z-index: -2;
   border-radius: inherit;
-  background: conic-gradient(from var(--ai-pill-turn), #ff4fa3, #a35cff, #3d7bff, #29e0d0, #ff4fa3);
+  background: conic-gradient(from var(--ai-pill-turn), var(--ai-glow-1, #ff4fa3), var(--ai-glow-2, #a35cff), var(--ai-glow-3, #3d7bff), var(--ai-glow-4, #29e0d0), var(--ai-glow-1, #ff4fa3));
   filter: blur(10px);
   opacity: 0.6;
   transition: opacity 0.3s ease, filter 0.3s ease;
@@ -7342,7 +7342,7 @@ button.ai-chat-launcher__text {
    slowly — a box with a blur (a blurred SVG stroke smears in Safari; a
    blurred box does not), masked to a soft ring just outside the band's
    ring. It fades with the ring (--ro) when a chat starts. */
-.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -9px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, #ff4fa3, #a35cff, #3d7bff, #29e0d0, #a35cff, #ff4fa3); -webkit-mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); filter: blur(10px); opacity: calc(var(--ro, 1) * 0.08); animation: aiChatHaloSpin 18s linear infinite; }
+.ai-chat-panel.is-focus .ai-chat-hero__halo { position: absolute; inset: -9px; z-index: 1; border-radius: 50%; pointer-events: none; background: conic-gradient(from 0deg, var(--ai-glow-1, #ff4fa3), var(--ai-glow-2, #a35cff), var(--ai-glow-3, #3d7bff), var(--ai-glow-4, #29e0d0), var(--ai-glow-2, #a35cff), var(--ai-glow-1, #ff4fa3)); -webkit-mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 72%, #000 80%, #000 86%, transparent 100%); filter: blur(10px); opacity: calc(var(--ro, 1) * 0.08); animation: aiChatHaloSpin 18s linear infinite; }
 @keyframes aiChatHaloSpin { to { transform: rotate(360deg); } }
 .ai-chat-panel.is-focus .ai-chat-hero__photo { position: absolute; inset: 2.5px; z-index: 2; border-radius: 50%; background: var(--seos-bg, #fff); padding: 2px; box-sizing: border-box; transform-origin: 50% 50%; will-change: transform, opacity; }
 .ai-chat-panel.is-focus .ai-chat-hero__photo img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
@@ -7768,39 +7768,70 @@ button.ai-chat-launcher__text {
 .ai-chat-msg-bubble:has(.ai-rw), .ai-chat-msg-bubble:has(.ai-hh), .ai-chat-msg-bubble:has(.ai-rt), .ai-chat-msg-bubble:has(.ai-dl) { width: 100%; max-width: 100%; }
 .ai-chat-panel .ai-chat-msg:has(.ai-rw) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-hh) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-rt) .ai-chat-msg-bubble, .ai-chat-panel .ai-chat-msg:has(.ai-dl) .ai-chat-msg-bubble { flex: 1 1 auto; max-width: 100%; }
 
-/* ── Peak Mode's home: the promotion blocks where the banner was ──
-   A rail of cards: the picture on top when there is one, the small line,
-   the name, the line under it and the button on one bottom line across the
-   cards. Measured on the rail itself: wide, side by side; narrower (the
-   500px panel with three or more), two in view and the rest a swipe away;
-   phones, one card and the edge of the next. Quiet surfaces — the pictures
-   carry the colour. */
-.ai-chat-panel .ai-chat-peak { flex: none; margin: 0 0 14px; container-type: inline-size; container-name: aipeak; }
-.ai-chat-panel .ai-chat-peak__rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
-.ai-chat-panel .ai-chat-peak__rail::-webkit-scrollbar { display: none; }
-.ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: calc((100% - 20px) / 3); }
-.ai-chat-panel .ai-chat-peak__card { display: flex; flex-direction: column; min-width: 0; border-radius: 18px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); overflow: hidden; scroll-snap-align: start; }
-.ai-chat-panel .ai-chat-peak__pic { flex: none; aspect-ratio: 3 / 2; background: var(--seos-surface); }
-.ai-chat-panel .ai-chat-peak__pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.ai-chat-panel .ai-chat-peak__body { display: flex; flex-direction: column; flex: 1 1 auto; gap: 4px; padding: 14px 16px 16px; }
-.ai-chat-panel .ai-chat-peak__eyebrow { font: 600 11px/14px var(--seos-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--seos-text-2); }
-.ai-chat-panel .ai-chat-peak__title { margin: 0; font: 700 17px/22px var(--seos-font); letter-spacing: -0.02em; color: var(--seos-text); }
-.ai-chat-panel .ai-chat-peak__text { margin: 0; font: 400 13px/18px var(--seos-font); color: var(--seos-text-2); }
-.ai-chat-panel .ai-chat-peak__foot { margin-top: auto; padding-top: 12px; }
-.ai-chat-panel .ai-chat-peak__cta { display: inline-flex; align-items: center; justify-content: center; max-width: 100%; min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--seos-ink, #0d0d12); color: #fff !important; font: 600 13px/1 var(--seos-font); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none !important; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.18s ease; }
-.ai-chat-panel .ai-chat-peak__cta:hover { box-shadow: 0 6px 16px rgba(13, 13, 18, 0.16); }
-.ai-chat-panel .ai-chat-peak__cta:active { transform: scale(0.97); }
-.ai-chat-panel .ai-chat-peak__cta:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; }
-.ai-chat-panel[data-theme="dark"] .ai-chat-peak__cta { color: #0d0d12 !important; }
-/* Narrower than 560px with three or more: two in view, the rest a swipe away. */
-@container aipeak (max-width: 559px) {
-  .ai-chat-panel .ai-chat-peak__rail[data-n="3"], .ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: calc((100% - 10px) / 2); }
-}
-/* Phones: one card and the edge of the next (a lone card, the whole width). */
+/* ── Peak Mode's home: the day's pictures where the banner was ──
+   Each tile is just a picture (a link, a question, or nothing), the shape
+   set in Settings (--ai-peak-ar). The picture eases a touch larger under
+   the pointer; the tile presses in. */
+.ai-chat-panel .ai-chat-peak { flex: none; margin: 0 0 14px; container-type: inline-size; container-name: aipeak; --ai-peak-gap: 10px; }
+.ai-chat-panel .ai-chat-peak__tiles { display: grid; gap: var(--ai-peak-gap); }
+.ai-chat-panel .ai-chat-peak__tile { position: relative; display: block; box-sizing: border-box; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 18px; overflow: hidden; background: var(--seos-surface); aspect-ratio: var(--ai-peak-ar, 16 / 9); color: inherit; font: inherit; text-decoration: none !important; cursor: pointer; -webkit-tap-highlight-color: transparent; transform: translateZ(0); transition: transform 0.18s ease; }
+.ai-chat-panel .ai-chat-peak__tile.is-still { cursor: default; }
+.ai-chat-panel .ai-chat-peak__tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.ai-chat-panel .ai-chat-peak__tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(13, 13, 18, 0.06); pointer-events: none; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-peak__tile::after { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+@media (hover: hover) { .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img { transform: scale(1.04); } }
+.ai-chat-panel .ai-chat-peak__tile:not(.is-still):active { transform: scale(0.985); }
+.ai-chat-panel .ai-chat-peak__tile:focus-visible { outline: 2px solid var(--seos-text); outline-offset: 2px; }
+/* Rail: one row that scrolls sideways, snapping tile by tile — two and a
+   half in view, the rest a swipe away, no arrows; two fit side by side,
+   one takes the width. */
+.ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles { grid-auto-flow: column; grid-auto-columns: calc((100% - 2 * var(--ai-peak-gap)) / 2.5); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+.ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles::-webkit-scrollbar { display: none; }
+.ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles[data-n="1"] { grid-auto-columns: 100%; }
+.ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles[data-n="2"] { grid-auto-columns: calc((100% - var(--ai-peak-gap)) / 2); }
+.ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tile { scroll-snap-align: start; }
+/* Grid: two across; an odd last one takes the row. */
+.ai-chat-panel .ai-chat-peak--grid .ai-chat-peak__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ai-chat-panel .ai-chat-peak--grid .ai-chat-peak__tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* Mosaic: the first picture big, the rest around it — each count its own
+   arrangement, no holes. The small tiles set the rows; the big one (and
+   the wide one, with four) stretch to fill. */
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(1) { grid-area: a; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(2) { grid-area: b; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(3) { grid-area: c; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(4) { grid-area: d; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(5) { grid-area: e; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tile:nth-child(6) { grid-area: f; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="1"] { grid-template-areas: "a"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a b"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="3"] { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-areas: "a b" "a c"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "a a b c" "a a d d"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="5"] { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "a a b c" "a a d e"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "a a b" "a a c" "d e f"; }
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="3"] .ai-chat-peak__tile:nth-child(1),
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="4"] .ai-chat-peak__tile:nth-child(1),
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="5"] .ai-chat-peak__tile:nth-child(1),
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="6"] .ai-chat-peak__tile:nth-child(1) { aspect-ratio: auto; height: 100%; }
+/* The wide one (four): two small tiles across, one row tall. */
+.ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="4"] .ai-chat-peak__tile:nth-child(4) { aspect-ratio: calc(var(--ai-peak-ar, 16 / 9) * 2); }
+/* Phones: the rail shows one and a quarter; the mosaic stacks — the first
+   across the top, the rest two to a row, an odd last one across. */
 @container aipeak (max-width: 439px) {
-  .ai-chat-panel .ai-chat-peak__rail, .ai-chat-panel .ai-chat-peak__rail[data-n="3"], .ai-chat-panel .ai-chat-peak__rail[data-n="4"], .ai-chat-panel .ai-chat-peak__rail[data-n="5"], .ai-chat-panel .ai-chat-peak__rail[data-n="6"] { grid-auto-columns: 84%; }
-  .ai-chat-panel .ai-chat-peak__rail[data-n="1"] { grid-auto-columns: 100%; }
-  .ai-chat-panel .ai-chat-peak__pic { aspect-ratio: 2 / 1; }
+  .ai-chat-panel .ai-chat-peak { --ai-peak-gap: 8px; }
+  .ai-chat-panel .ai-chat-peak__tile { border-radius: 16px; }
+  .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles, .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles[data-n="2"] { grid-auto-columns: calc((100% - var(--ai-peak-gap)) / 1.25); }
+  .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles[data-n="1"] { grid-auto-columns: 100%; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="2"] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "a" "b"; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="3"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "b c"; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "b c" "d d"; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="5"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "b c" "d e"; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n="6"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "b c" "d e" "f f"; }
+  .ai-chat-panel .ai-chat-peak--mosaic .ai-chat-peak__tiles[data-n] .ai-chat-peak__tile:nth-child(n) { aspect-ratio: var(--ai-peak-ar, 16 / 9); height: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-panel .ai-chat-peak__tile, .ai-chat-panel .ai-chat-peak__tile img { transition: none; }
+  .ai-chat-panel .ai-chat-peak__tile:not(.is-still):hover img { transform: none; }
+  .ai-chat-panel .ai-chat-peak--rail .ai-chat-peak__tiles { scroll-behavior: auto; }
 }
 /* ── Deals card: quiet, typographic, no colour ── */
 .ai-chat-panel .ai-dl { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--seos-bg-raised, #fff); box-shadow: inset 0 0 0 1px var(--seos-line); color: var(--seos-text); word-break: normal; overflow-wrap: normal; overflow: clip; container-type: inline-size; container-name: aideal; }

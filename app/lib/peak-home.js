@@ -1,11 +1,14 @@
 // Peak Mode's home (Settings → Peak Mode → The home on peak days): while
-// Peak Mode is on, the chat's home shows the day's promotion blocks where
-// the banner was — each with a small line on top, a name, a line under it,
-// a button that opens a link or asks AVA a question, and a picture — and a
-// peak picture of the assistant. Every block says who sees it: everyone,
-// shoppers signed out, shoppers signed in, or signed-in customers carrying a
-// Shopify tag. The widget does the choosing with what the page knows about
-// the shopper; the server only hands the blocks over while Peak Mode is on.
+// Peak Mode is on, the chat's home shows the day's pictures where the
+// banner was — each a picture and nothing else, opening a link or asking
+// AVA a question when tapped — laid out as a rail that scrolls sideways,
+// a mosaic (one big, the rest around it) or a grid; a peak picture of the
+// assistant; and the assistant's colours for the days (the glow around
+// her face, the ring and the line), a few sets or the store's own. Every
+// picture says who sees it: everyone, shoppers signed out, shoppers signed
+// in, or signed-in customers carrying a Shopify tag. The widget does the
+// choosing with what the page knows about the shopper; the server only
+// hands the home over while Peak Mode is on.
 //
 // Stored as one JSON (pictures as resized data URLs, like the app's
 // picture); the route turns a picture into bytes. Pure.
@@ -17,6 +20,33 @@ export const PEAK_BLOCKS_MAX = 6;
 export const PEAK_MAX = { eyebrow: 24, title: 60, text: 120, cta: 24, tag: 40, url: 500, message: 200 };
 export const PEAK_AUDIENCES = ["all", "guest", "signed", "tag"];
 export const PEAK_AUDIENCE_WORDS = { all: "Everyone", guest: "Signed out", signed: "Signed in", tag: "Customers with a tag" };
+// How the pictures sit: a rail that scrolls sideways (two and a half in
+// view on a computer, one and a quarter on a phone), a mosaic (the first
+// picture big, the rest around it), or a grid (two across).
+export const PEAK_LAYOUTS = ["rail", "mosaic", "grid"];
+export const PEAK_LAYOUT_WORDS = { rail: "Rail — scrolls sideways", mosaic: "Mosaic — one big, the rest around it", grid: "Grid — two across" };
+// The pictures' shape (every tile in a layout shares it).
+export const PEAK_SHAPES = { wide: "16 / 9", standard: "4 / 3", square: "1 / 1" };
+export const PEAK_SHAPE_WORDS = { wide: "Wide (16 : 9)", standard: "Standard (4 : 3)", square: "Square" };
+// The assistant's colours on peak days — the glow around her face, the
+// ring and the line: a few sets to pick from, or up to four of the store's
+// own. Empty: her usual colours.
+export const PEAK_COLOR_SETS = [
+  { id: "usual", label: "Her usual colours", colors: [] },
+  { id: "festive", label: "Festive — red, green and gold", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"] },
+  { id: "winter", label: "Winter — ice blue and silver", colors: ["#8fd3ff", "#5b8def", "#e6f4ff", "#a7b8ff"] },
+  { id: "autumn", label: "Autumn — orange, rust and gold", colors: ["#ff8a3d", "#d9452b", "#f2c14e", "#a0522d"] },
+  { id: "love", label: "Valentine — pinks and reds", colors: ["#ff4f8b", "#ffa3bd", "#c2185b", "#ff7aa8"] },
+  { id: "spring", label: "Spring — mint, lemon and sky", colors: ["#7bd389", "#ffd166", "#ff9fb2", "#9ad0ff"] },
+];
+export const PEAK_COLORS_MAX = 4;
+const HEX = /^#[0-9a-f]{6}$/i;
+// Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
+export function cleanPeakColors(list) {
+  const out = [];
+  for (const v of Array.isArray(list) ? list : []) { const c = String(v || "").trim().toLowerCase(); if (HEX.test(c)) out.push(c); if (out.length >= PEAK_COLORS_MAX) break; }
+  return out;
+}
 
 const clean = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 const cleanUrl = (v) => { const s = String(v ?? "").trim().slice(0, PEAK_MAX.url); return /^https?:\/\/[^\s"'<>]+$|^\/[^\s"'<>]*$/i.test(s) ? s : ""; };
@@ -26,32 +56,33 @@ const parseJson = (v) => { if (v && typeof v === "object") return v; try { retur
 // A picture as stored: a data URL within the size limit, else "".
 const picture = (v) => (appImageData(v) ? String(v) : "");
 
-// The saved JSON → clean { avatar, blocks }. Blocks without a name are dropped.
+// The saved JSON → clean { avatar, layout, shape, colors, blocks }. Blocks
+// without a picture are dropped; the name is only for screen readers.
 export function parsePeakHome(raw) {
   const o = parseJson(raw);
-  const out = { avatar: "", blocks: [] };
+  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], blocks: [] };
   if (!o || typeof o !== "object") return out;
   out.avatar = picture(o.avatar);
+  out.layout = PEAK_LAYOUTS.includes(o.layout) ? o.layout : "rail";
+  out.shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, o.shape) ? o.shape : "wide";
+  out.colors = cleanPeakColors(o.colors);
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
     if (!b || typeof b !== "object") continue;
-    const title = clean(b.title, PEAK_MAX.title);
-    if (!title) continue;
+    const image = picture(b.image);
+    if (!image) continue;
     let id = cleanId(b.id, i);
     while (seen.has(id)) id = `${id}x`;
     seen.add(id);
-    const kind = b.kind === "ask" ? "ask" : "link";
+    const kind = b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link";
     const audience = PEAK_AUDIENCES.includes(b.audience) ? b.audience : "all";
     out.blocks.push({
       id,
-      eyebrow: clean(b.eyebrow, PEAK_MAX.eyebrow),
-      title,
-      text: clean(b.text, PEAK_MAX.text),
-      cta: clean(b.cta, PEAK_MAX.cta),
+      title: clean(b.title, PEAK_MAX.title),
       kind,
       url: kind === "link" ? cleanUrl(b.url) : "",
       message: kind === "ask" ? clean(b.message, PEAK_MAX.message) : "",
-      image: picture(b.image),
+      image,
       audience,
       tag: audience === "tag" ? clean(b.tag, PEAK_MAX.tag) : "",
     });
@@ -61,20 +92,21 @@ export function parsePeakHome(raw) {
 }
 
 // What's wrong with what Settings sent ("" when nothing): a picture too
-// large, a tag audience without a tag, a button without its link or question.
+// large or missing, a tag audience without a tag, a tap without its link
+// or question. A block with nothing in it at all is simply left out.
 export function peakHomeError(raw) {
   const o = parseJson(raw);
   if (!o || typeof o !== "object") return "";
   if (o.avatar && !appImageData(o.avatar)) return "The peak picture of the assistant is too large — pick a smaller one.";
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
-    if (!b || typeof b !== "object" || !clean(b.title, PEAK_MAX.title)) continue;
-    const n = `Block ${i + 1}`;
+    if (!b || typeof b !== "object") continue;
+    const n = `Picture ${i + 1}`;
+    const filled = clean(b.title, PEAK_MAX.title) || cleanUrl(b.url) || clean(b.message, PEAK_MAX.message) || clean(b.tag, PEAK_MAX.tag);
     if (b.image && !appImageData(b.image)) return `${n}: the picture is too large — pick a smaller one.`;
+    if (!b.image) { if (filled) return `${n}: add the picture (or remove the block).`; continue; }
     if (b.audience === "tag" && !clean(b.tag, PEAK_MAX.tag)) return `${n}: name the customer tag that sees it.`;
-    if (clean(b.cta, PEAK_MAX.cta)) {
-      if (b.kind === "ask" && !clean(b.message, PEAK_MAX.message)) return `${n}: the button asks AVA — write its question.`;
-      if (b.kind !== "ask" && !cleanUrl(b.url)) return `${n}: the button opens a link — give it one (https://… or /…).`;
-    }
+    if (b.kind === "ask" && !clean(b.message, PEAK_MAX.message)) return `${n}: a tap asks AVA — write the question.`;
+    if (b.kind !== "ask" && b.kind !== "none" && !cleanUrl(b.url)) return `${n}: a tap opens a link — give it one (https://… or /…).`;
   }
   return "";
 }
@@ -86,13 +118,13 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
   const home = parsePeakHome(config.peakHome);
   const link = (which, data) => `${PEAK_IMAGE_PATH}?b=${encodeURIComponent(which)}&v=${shortHash(data)}`;
   const blocks = home.blocks.map((b) => ({
-    id: b.id, eyebrow: b.eyebrow, title: b.title, text: b.text, cta: b.cta,
-    ...(b.kind === "ask" ? { message: b.message } : { url: b.url }),
-    image: b.image ? link(b.id, b.image) : "",
+    id: b.id, title: b.title,
+    ...(b.kind === "ask" ? { message: b.message } : b.kind === "link" ? { url: b.url } : {}),
+    image: link(b.id, b.image),
     audience: b.audience, tag: b.tag,
   }));
-  if (!blocks.length && !home.avatar) return null;
-  return { avatar: home.avatar ? link("avatar", home.avatar) : "", blocks };
+  if (!blocks.length && !home.avatar && !home.colors.length) return null;
+  return { avatar: home.avatar ? link("avatar", home.avatar) : "", layout: home.layout, shape: home.shape, colors: home.colors, blocks };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.

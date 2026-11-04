@@ -87,7 +87,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   FOCUS_COLLECTIONS=d.focusCollections!==false;
   var _pk=d.peak&&typeof d.peak==='object'?d.peak:null,_pkWas=JSON.stringify(PEAK);
   try{if(_pk)sessionStorage.setItem(PEAK_KEY,JSON.stringify(_pk));else sessionStorage.removeItem(PEAK_KEY)}catch(e){}
-  if(JSON.stringify(_pk)!==_pkWas){PEAK=_pk;setAvatar(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar)?PEAK.avatar:AVATAR_USUAL);if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
+  if(JSON.stringify(_pk)!==_pkWas){PEAK=_pk;applyPeakColors();setAvatar(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar)?PEAK.avatar:AVATAR_USUAL);if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -494,7 +494,7 @@ function setAvatar(url){
 function peakBlocks(){
   if(!PEAK||!Array.isArray(PEAK.blocks))return [];
   return PEAK.blocks.filter(function(b){
-    if(!b||!b.title)return false;
+    if(!b||!b.image||!safeUrl(b.image))return false;
     var a=b.audience||'all';
     if(a==='all')return true;
     if(a==='guest')return !CUST_LOGGED_IN;
@@ -503,17 +503,40 @@ function peakBlocks(){
     return a==='tag'&&!!b.tag&&CUST_TAGS.indexOf(String(b.tag).trim().toLowerCase())>=0;
   }).slice(0,6);
 }
-/* The blocks where the banner was: a rail of cards — the picture on top
-   when there is one, the small line, the name, the line under it and the
-   button (a link, or a question to the assistant). Phones: one and a bit
-   in view, the rest a swipe away; wider: side by side. */
-function peakRailHtml(blocks){
-  var h='<div class="ai-chat-peak" data-peak role="region" aria-label="Today\u2019s offers"><div class="ai-chat-peak__rail" data-n="'+blocks.length+'">';
-  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image&&safeUrl(b.image)?safeUrl(b.image):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'';
-    h+='<article class="ai-chat-peak__card'+(pic?' has-pic':'')+'">'+(pic?'<div class="ai-chat-peak__pic"><img src="'+pic+'" alt="" loading="lazy"></div>':'')+'<div class="ai-chat-peak__body">'+(b.eyebrow?'<span class="ai-chat-peak__eyebrow">'+esc(b.eyebrow)+'</span>':'')+'<h3 class="ai-chat-peak__title">'+esc(b.title)+'</h3>'+(b.text?'<p class="ai-chat-peak__text">'+esc(b.text)+'</p>':'');
-    if(b.cta){if(b.message)h+='<div class="ai-chat-peak__foot"><button type="button" class="ai-chat-peak__cta" data-message="'+esc(b.message)+'">'+esc(b.cta)+'</button></div>';else if(url)h+='<div class="ai-chat-peak__foot"><a class="ai-chat-peak__cta" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+'>'+esc(b.cta)+'</a></div>'}
-    h+='</div></article>'}
+/* The pictures where the banner was — each just a picture: a link, a
+   question to the assistant, or nothing — as a rail that scrolls sideways
+   (two and a half in view on a computer, one and a quarter on a phone, no
+   arrows), a mosaic (the first big, the rest around it) or a grid (two
+   across); every tile the shape chosen in Settings. Its name is only for
+   screen readers. */
+var PEAK_SHAPES={wide:'16 / 9',standard:'4 / 3',square:'1 / 1'};
+function peakTilesHtml(blocks){
+  var layout=PEAK&&/^(rail|mosaic|grid)$/.test(String(PEAK.layout))?PEAK.layout:'rail',ar=PEAK_SHAPES[PEAK&&PEAK.shape]||PEAK_SHAPES.wide;
+  var h='<div class="ai-chat-peak ai-chat-peak--'+layout+'" data-peak role="region" aria-label="Today\u2019s offers" style="--ai-peak-ar:'+ar+'"><div class="ai-chat-peak__tiles" data-n="'+blocks.length+'">';
+  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=safeUrl(b.image),url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',label=esc(b.title||('Offer '+(i+1))),img='<img src="'+pic+'" alt="" loading="lazy" draggable="false">';
+    if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+'</button>';
+    else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+'</a>';
+    else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+'</div>'}
   return h+'</div></div>';
+}
+/* Her colours on peak days (Settings → Peak Mode): up to four, standing in
+   for the usual pink, violet, blue and teal in the glow around her face,
+   the minimized pill's glow, the ring and the line (fewer than four
+   repeat). Nothing set: the usual ones. */
+var GLOW_USUAL=['#ff4fa3','#a35cff','#3d7bff','#29e0d0'];
+function peakGlow(){
+  var c=[],src=PEAK&&Array.isArray(PEAK.colors)?PEAK.colors:[];
+  for(var i=0;i<src.length&&c.length<4;i++)if(/^#[0-9a-f]{6}$/i.test(String(src[i])))c.push(String(src[i]).toLowerCase());
+  if(!c.length)return null;
+  var n=c.length;while(c.length<4)c.push(c[c.length-n]);
+  return c;
+}
+function applyPeakColors(){
+  var own=peakGlow(),g=own||GLOW_USUAL;
+  FOCUS_BAND=g.slice();
+  var els=[typeof panel!=='undefined'?panel:null,typeof launcher!=='undefined'?launcher:null];
+  for(var k=0;k<els.length;k++){if(!els[k])continue;for(var i=0;i<4;i++){if(own)els[k].style.setProperty('--ai-glow-'+(i+1),g[i]);else els[k].style.removeProperty('--ai-glow-'+(i+1))}}
+  var stops=document.querySelectorAll('#ai-chat-band-g stop');for(var j=0;j<stops.length;j++)stops[j].setAttribute('stop-color',g[j%4]);
 }
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
@@ -1345,7 +1368,7 @@ var sendBtn=$('.ai-chat-send',panel);
    and the ring fades back in around the face. Touch screens get no blurred
    stroke (CSS). Reduced motion gets the end states at once. */
 var FOCUS_SW=3;/* the stroke */
-var FOCUS_BAND=['#ff4fa3','#a35cff','#3d7bff','#29e0d0'];
+var FOCUS_BAND=GLOW_USUAL.slice();applyPeakColors();
 var FOCUS_TAIL=0.55;/* the light's tail, as a share of the header's width */
 var focusG={W:0,cy:0,hx:54,R:34};/* measured: the header's width, the line, the face's centre and radius */
 var focusS={ro:1,lit:0,fs:1,fo:1};/* now: the ring's opacity, how far the line is lit (0–1), the face's scale and opacity */
@@ -1861,7 +1884,7 @@ function buildFocusHome(){
   var pk=peakBlocks(),banner=!pk.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+(pk.length?' has-peak':'')+'">';
   h+='<div class="ai-chat-focus__greet"></div>';
-  if(pk.length)h+=peakRailHtml(pk);
+  if(pk.length)h+=peakTilesHtml(pk);
   else if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
   h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
   h+='<div class="ai-chat-focus__links">'+focusLinksHtml()+'</div>';
@@ -2400,7 +2423,7 @@ function buildWelcome(){
 if(FOCUS){buildFocusHome();return}
 var pkc=peakBlocks(),hasBanner=!pkc.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
 var h='<div class="ai-chat-welcome'+(hasBanner?' has-banner':'')+(pkc.length?' has-peak':'')+'">';
-if(pkc.length)h+=peakRailHtml(pkc);
+if(pkc.length)h+=peakTilesHtml(pkc);
 else if(SHOWBAN&&BANNER){
   h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
 }

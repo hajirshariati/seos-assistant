@@ -74,7 +74,7 @@ test("the token is the store's and the day's: good today and yesterday, not the 
   assert.equal(previewUrl("", "s.myshopify.com", now), `https://s.myshopify.com/?ava_preview=${t}`);
 });
 test("a valid preview hands the peak home over with Peak Mode off; without blocks there is nothing to show", () => {
-  const saved = JSON.stringify({ blocks: [{ id: "b1", title: "Sale", audience: "all" }] });
+  const saved = JSON.stringify({ blocks: [{ id: "b1", title: "Sale", image: "data:image/png;base64," + Buffer.from("png").toString("base64"), audience: "all" }] });
   assert.equal(peakHomeConfig({ peakMode: "off", peakHome: saved }), null);
   assert.equal(peakHomeConfig({ peakMode: "off", peakHome: saved }, new Date(), { force: true }).blocks.length, 1);
   assert.equal(peakHomeConfig({ peakMode: "off", peakHome: "{}" }, new Date(), { force: true }), null);

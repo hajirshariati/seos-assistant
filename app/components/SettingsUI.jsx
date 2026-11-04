@@ -39,6 +39,19 @@ export const SETTINGS_CSS = `
   .set-app-pic__thumb.is-empty span { font-size: 26px; opacity: 0.6; }
   .set-app-pic__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .set-peak-block { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; border: 1px solid #e3e3e3; border-radius: 12px; background: #fafafa; }
+  .set-peak-colors { display: grid; gap: 8px; }
+  .set-palettes { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
+  .set-palette { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; border-radius: 999px; border: 1px solid #e3e3e3; background: #fff; font-size: 13px; line-height: 18px; color: #303030; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+  .set-palette:hover { border-color: #c9c9c9; }
+  .set-palette[aria-pressed="true"] { border-color: #2D6B4F; box-shadow: 0 0 0 1px #2D6B4F; color: #1a1a1a; font-weight: 600; }
+  .set-palette:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; }
+  .set-palette__ring, .set-swatch__preview { width: 22px; height: 22px; border-radius: 50%; flex: none; -webkit-mask: radial-gradient(circle closest-side, transparent 52%, #000 58%); mask: radial-gradient(circle closest-side, transparent 52%, #000 58%); }
+  .set-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .set-swatch { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 1px solid #e3e3e3; border-radius: 999px; background: #fff; cursor: pointer; font-size: 12.5px; line-height: 18px; color: #303030; font-variant-numeric: tabular-nums; }
+  .set-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .set-swatch:focus-within { outline: 2px solid #2D6B4F; outline-offset: 2px; }
+  .set-swatch__dot { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08); }
+  .set-swatch__preview { width: 28px; height: 28px; margin-left: 4px; }
   .set-switch { all: unset; box-sizing: border-box; position: relative; width: 40px; height: 24px; border-radius: 999px;
     background: #c9cccf; cursor: pointer; transition: background .18s ease; flex: none; }
   .set-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;

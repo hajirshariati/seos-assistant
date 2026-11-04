@@ -3706,32 +3706,69 @@ for (const coop of ["1", "2"]) {
       await ph.ctx.close();
     }
     // Peak Mode's home (Settings → Peak Mode → The home on peak days): the
-    // promotion blocks where the banner was, each shown to its audience —
-    // everyone, signed out, signed in, a tag's — the peak picture on the face,
-    // a link button opening the link, a question button asking Ava.
+    // day's pictures where the banner was — each just a picture, a link or a
+    // question to Ava — shown to its audience; the peak picture on the face;
+    // her colours for the days on the glow, the ring and the line; the three
+    // layouts (rail, mosaic, grid) at computer and phone widths.
     {
-      const readPeak = (page) => page.evaluate(() => { const w = document.querySelector(".ai-chat-welcome"); const rail = w.querySelector(".ai-chat-peak__rail"); const cards = rail ? [...rail.querySelectorAll(".ai-chat-peak__card")] : []; const wr = w.getBoundingClientRect(); return { banner: !!w.querySelector(".ai-chat-welcome__banner"), titles: cards.map((c) => c.querySelector(".ai-chat-peak__title")?.textContent), eyebrows: cards.map((c) => c.querySelector(".ai-chat-peak__eyebrow")?.textContent || ""), ctas: cards.map((c) => { const b = c.querySelector(".ai-chat-peak__cta"); return b ? [b.tagName, b.getAttribute("href") || b.getAttribute("data-message"), b.getAttribute("target") || "", b.getAttribute("rel") || "", b.textContent] : null; }), pics: cards.filter((c) => c.querySelector(".ai-chat-peak__pic img")).length, hero: (document.querySelector(".ai-chat-hero__photo img")?.getAttribute("src") || ""), oneRow: new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top))).size <= 1, scrolls: rail ? rail.scrollWidth > rail.clientWidth + 1 : false, inside: rail ? rail.getBoundingClientRect().right <= wr.right + 1 && rail.getBoundingClientRect().left >= wr.left - 1 : false, cardW: cards.length ? Math.round(cards[0].getBoundingClientRect().width) : 0, railW: rail ? Math.round(rail.getBoundingClientRect().width) : 0, noIcons: !w.querySelector(".ai-chat-peak svg") }; });
+      const readPeak = (page) => page.evaluate(() => {
+        const w = document.querySelector(".ai-chat-welcome"); const box = w.querySelector(".ai-chat-peak__tiles"); const tiles = box ? [...box.querySelectorAll(".ai-chat-peak__tile")] : []; const wr = w.getBoundingClientRect();
+        const r = (el) => { const b = el.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; };
+        const panel = document.querySelector(".ai-chat-panel"); const halo = document.querySelector(".ai-chat-hero__halo"); const stop = document.querySelector("#ai-chat-band-g stop");
+        return {
+          banner: !!w.querySelector(".ai-chat-welcome__banner"), layout: (w.querySelector(".ai-chat-peak")?.className.match(/ai-chat-peak--(\w+)/) || [])[1] || "",
+          labels: tiles.map((t) => t.getAttribute("aria-label")), tags: tiles.map((t) => t.tagName), hrefs: tiles.map((t) => t.getAttribute("href") || t.getAttribute("data-message") || ""), targets: tiles.map((t) => `${t.getAttribute("target") || ""}|${t.getAttribute("rel") || ""}`),
+          words: (w.querySelector(".ai-chat-peak")?.textContent || "").trim(), pics: tiles.filter((t) => t.querySelector("img[src]")).length, clean: !w.querySelector(".ai-chat-peak svg, .ai-chat-peak h3, .ai-chat-peak p, .ai-chat-peak button:not(.ai-chat-peak__tile)"),
+          hero: document.querySelector(".ai-chat-hero__photo img")?.getAttribute("src") || "",
+          rects: tiles.map(r), box: box ? r(box) : null, inside: box ? box.getBoundingClientRect().right <= wr.right + 1 && box.getBoundingClientRect().left >= wr.left - 1 : false, scrolls: box ? box.scrollWidth > box.clientWidth + 1 : false,
+          glow: panel ? panel.style.getPropertyValue("--ai-glow-1") : "", halo: halo ? getComputedStyle(halo).backgroundImage : "", stop: stop ? stop.getAttribute("stop-color") : "",
+        };
+      });
+      const oneRow = (p) => new Set(p.rects.map((x) => x.y)).size <= 1;
       const out = await open("/full?home=focus&pk=1&banner=1");
       const guest = await readPeak(out.page);
-      check("peak home (computer, signed out): the blocks take the banner's place — everyone's and the signed-out one, side by side on one row, no banner; the sale's picture on its card; the link button is a link that opens in a new tab, the store's own path in this one; the face wears the peak picture", !guest.banner && guest.titles.join("|") === "30% off everything|Join free and save 15%" && guest.eyebrows.join("|") === "Black Friday|New here?" && guest.oneRow && !guest.scrolls && guest.inside && guest.pics === 1 && guest.ctas[0]?.[0] === "A" && guest.ctas[0][1] === "https://www.example.com/collections/sale" && guest.ctas[0][2] === "_blank" && /noopener/.test(guest.ctas[0][3]) && guest.ctas[0][4] === "Shop the sale" && guest.ctas[1]?.[0] === "A" && guest.ctas[1][1] === "/account/register" && guest.ctas[1][2] === "" && /pic-orthotics/.test(guest.hero) && guest.noIcons, JSON.stringify(guest));
+      check("peak home (computer, signed out): the pictures take the banner's place — everyone's and the signed-out one, side by side, no banner, not a word or button on them; the link tile is a link that opens in a new tab, the store's own path in this one; each named for screen readers; the face wears the peak picture", !guest.banner && guest.layout === "rail" && guest.labels.join("|") === "Black Friday: 30% off everything|Join free and save 15%" && guest.words === "" && guest.pics === 2 && guest.clean && oneRow(guest) && !guest.scrolls && guest.inside && guest.tags.join() === "A,A" && guest.hrefs[0] === "https://www.example.com/collections/sale" && guest.targets[0] === "_blank|noopener" && guest.hrefs[1] === "/account/register" && guest.targets[1] === "|" && /pic-orthotics/.test(guest.hero), JSON.stringify(guest));
+      check("peak home: her colours for the days — the festive red on the glow around her face, on the ring and the line", guest.glow === "#d42b3a" && /rgb\(212, 43, 58\)/.test(guest.halo) && guest.stop === "#d42b3a", JSON.stringify({ glow: guest.glow, stop: guest.stop, halo: guest.halo.slice(0, 90) }));
       check("peak home: no JS errors", out.errors.length === 0, out.errors.join(" | "));
       await out.ctx.close();
       const inn = await open("/full?home=focus&pk=1&login=Ann");
       const signed = await readPeak(inn.page);
       const n0 = chatBodies.length;
-      await inn.page.click('.ai-chat-peak__cta[data-message]');
+      await inn.page.click('.ai-chat-peak__tile[data-message]');
       await inn.page.waitForTimeout(900);
       const asked = await inn.page.evaluate(() => ({ home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim() }));
-      check("peak home (signed in): everyone's and the members' block, not the signed-out one nor the tag's; the question button sends its question to Ava as the shopper's own message", signed.titles.join("|") === "30% off everything|An extra 10% for members" && signed.ctas[1]?.[0] === "BUTTON" && signed.ctas[1][1] === "What is my member offer today?" && chatBodies.length === n0 + 1 && !asked.home && asked.user === "What is my member offer today?", JSON.stringify({ signed, asked, sent: chatBodies.length - n0 }));
+      check("peak home (signed in): everyone's and the members' picture, not the signed-out one nor the tag's; a tap on the question tile sends its question to Ava as the shopper's own message", signed.labels.join("|") === "Black Friday: 30% off everything|An extra 10% for members" && signed.tags[1] === "BUTTON" && signed.hrefs[1] === "What is my member offer today?" && chatBodies.length === n0 + 1 && !asked.home && asked.user === "What is my member offer today?", JSON.stringify({ signed: signed.labels, asked, sent: chatBodies.length - n0 }));
       await inn.ctx.close();
       const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
       const tagged = await readPeak(vip.page);
-      check("peak home (signed in with the tag, any case): the tag's block too, in the saved order", tagged.titles.join("|") === "30% off everything|An extra 10% for members|Early access to the winter styles", JSON.stringify(tagged.titles));
+      check("peak home (signed in with the tag, any case): the tag's picture too, in the saved order — and with three the rail shows two and a half, the third a swipe away, no arrows", tagged.labels.join("|") === "Black Friday: 30% off everything|An extra 10% for members|Early access to the winter styles" && oneRow(tagged) && tagged.scrolls && tagged.inside && Math.abs(tagged.rects[0].w - (tagged.box.w - 20) / 2.5) <= 2 && tagged.clean, JSON.stringify({ labels: tagged.labels, w: tagged.rects[0]?.w, box: tagged.box?.w }));
       await vip.ctx.close();
-      const ph = await open("/full?home=focus&pk=1", { viewport: { width: 390, height: 760 } });
+      // The mosaic: the first big over two rows, the rest around it, edges level, no holes.
+      const mo = await open("/full?home=focus&pk=1&pkl=mosaic&login=Ann&tags=vip");
+      const m3 = await readPeak(mo.page);
+      const [a3, b3, c3] = m3.rects;
+      check("peak home (mosaic, three): the first picture big on the left over two rows, the other two stacked at its right, the edges level and no holes", m3.layout === "mosaic" && a3.w > b3.w * 1.8 && a3.x < b3.x && b3.x === c3.x && b3.y < c3.y && Math.abs(a3.y - b3.y) <= 1 && Math.abs(a3.y + a3.h - (c3.y + c3.h)) <= 1 && Math.abs(a3.h - (b3.h + c3.h + 10)) <= 2, JSON.stringify(m3.rects));
+      await mo.ctx.close();
+      const m4p = await open("/full?home=focus&pk=1&pkl=mosaic&pkn=4");
+      const m4 = await readPeak(m4p.page);
+      check("peak home (mosaic, four): the big one left, two small on top at the right and one wide under them, level with the big one's bottom", m4.rects.length === 4 && m4.rects[0].w > m4.rects[1].w * 1.8 && m4.rects[1].y === m4.rects[2].y && m4.rects[3].y > m4.rects[1].y && Math.abs(m4.rects[3].w - (m4.rects[1].w * 2 + 10)) <= 2 && Math.abs(m4.rects[0].y + m4.rects[0].h - (m4.rects[3].y + m4.rects[3].h)) <= 1, JSON.stringify(m4.rects));
+      await m4p.ctx.close();
+      const m6p = await open("/full?home=focus&pk=1&pkl=mosaic&pkn=6");
+      const m6 = await readPeak(m6p.page);
+      check("peak home (mosaic, six): the big one with two stacked beside it, then three across underneath, all the same size", m6.rects.length === 6 && m6.rects[0].w > m6.rects[1].w * 1.8 && m6.rects[1].x === m6.rects[2].x && new Set(m6.rects.slice(3).map((x) => x.y)).size === 1 && m6.rects[3].y >= m6.rects[0].y + m6.rects[0].h && new Set(m6.rects.slice(3).map((x) => x.w)).size === 1, JSON.stringify(m6.rects));
+      await m6p.ctx.close();
+      const gr = await open("/full?home=focus&pk=1&pkl=grid&login=Ann&tags=vip");
+      const g3 = await readPeak(gr.page);
+      check("peak home (grid, three): two across the same size, the odd last one across the whole row", g3.layout === "grid" && g3.rects[0].y === g3.rects[1].y && g3.rects[0].w === g3.rects[1].w && g3.rects[2].y > g3.rects[0].y && Math.abs(g3.rects[2].w - g3.box.w) <= 1, JSON.stringify(g3.rects));
+      await gr.ctx.close();
+      const ph = await open("/full?home=focus&pk=1&login=Ann&tags=vip", { viewport: { width: 390, height: 760 } });
       const phone = await readPeak(ph.page);
-      check("peak home (phone): the blocks in one row that scrolls sideways within the screen — one card and the edge of the next in view, never stacked", phone.titles.length === 2 && phone.oneRow && phone.scrolls && phone.inside && phone.cardW >= phone.railW * 0.78 && phone.cardW <= phone.railW * 0.9, JSON.stringify(phone));
+      check("peak home (phone): the rail shows one picture and a quarter of the next, never stacked, scrolling sideways within the screen", phone.labels.length === 3 && oneRow(phone) && phone.scrolls && phone.inside && Math.abs(phone.rects[0].w - (phone.box.w - 8) / 1.25) <= 2, JSON.stringify({ w: phone.rects[0]?.w, box: phone.box?.w }));
       await ph.ctx.close();
+      const phm = await open("/full?home=focus&pk=1&pkl=mosaic&login=Ann&tags=vip", { viewport: { width: 390, height: 760 } });
+      const pm = await readPeak(phm.page);
+      check("peak home (phone, mosaic): the first across the top, the other two side by side under it", pm.rects.length === 3 && Math.abs(pm.rects[0].w - pm.box.w) <= 1 && pm.rects[1].y === pm.rects[2].y && pm.rects[1].y > pm.rects[0].y && Math.abs(pm.rects[1].w - (pm.box.w - 8) / 2) <= 1.5, JSON.stringify(pm.rects));
+      await phm.ctx.close();
       // Settings → Peak Mode → Preview: the token on the page link shows the peak home to this browser — and on the pages after it (the session) — with Peak Mode off.
       const pv = await open("/full?home=focus&banner=1&ava_preview=0123456789abcdef0123456789abcdef");
       const previewed = await readPeak(pv.page);
@@ -3739,11 +3776,11 @@ for (const coop of ["1", "2"]) {
       await pv.page.click(".ai-chat-launcher");
       await pv.page.waitForTimeout(1200);
       const nextPage = await readPeak(pv.page);
-      check("peak preview: the signed token on the link shows the peak home to this browser with Peak Mode off, and keeps showing it on the pages after", previewed.titles.length === 2 && !previewed.banner && nextPage.titles.length === 2 && !nextPage.banner, JSON.stringify({ previewed: previewed.titles, nextPage: nextPage.titles }));
+      check("peak preview: the signed token on the link shows the peak home to this browser with Peak Mode off, and keeps showing it on the pages after", previewed.labels.length === 2 && !previewed.banner && nextPage.labels.length === 2 && !nextPage.banner, JSON.stringify({ previewed: previewed.labels, nextPage: nextPage.labels }));
       await pv.ctx.close();
       const cl = await open("/full?pk=1&banner=1");
-      const classic = await cl.page.evaluate(() => ({ peak: document.querySelectorAll(".ai-chat-welcome .ai-chat-peak__card").length, banner: !!document.querySelector(".ai-chat-welcome__banner"), avatar: document.querySelector(".ai-chat-welcome__avatar img")?.getAttribute("src") || "" }));
-      check("peak home (classic layout): the blocks in place of the banner there too, the peak picture on the welcome", classic.peak === 2 && !classic.banner && /pic-orthotics/.test(classic.avatar), JSON.stringify(classic));
+      const classic = await cl.page.evaluate(() => ({ peak: document.querySelectorAll(".ai-chat-welcome .ai-chat-peak__tile").length, banner: !!document.querySelector(".ai-chat-welcome__banner"), avatar: document.querySelector(".ai-chat-welcome__avatar img")?.getAttribute("src") || "", glow: getComputedStyle(document.querySelector(".ai-chat-avatar-glow")).backgroundImage }));
+      check("peak home (classic layout): the pictures in place of the banner there too, the peak picture on the welcome, her colours on the glow around it", classic.peak === 2 && !classic.banner && /pic-orthotics/.test(classic.avatar) && /rgb\(212, 43, 58\)/.test(classic.glow), JSON.stringify({ ...classic, glow: classic.glow.slice(0, 80) }));
       await cl.ctx.close();
     }
     // Phones: the sheets' helper rows stay side by side — two to a row — and on a very narrow phone the row scrolls sideways rather than stacking them.

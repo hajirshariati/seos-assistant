@@ -15,11 +15,17 @@ export const rewardsLog = [];
 export const ordersLog = [];
 export const dealsLog = [];
 // Peak Mode's home: four blocks — everyone, signed in, a tag's, signed out.
-export const PEAK_HOME = { avatar: "/pic-orthotics.svg", blocks: [
-  { id: "b1", eyebrow: "Black Friday", title: "30% off everything", text: "Today only, online and in stores.", cta: "Shop the sale", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", audience: "all", tag: "" },
-  { id: "b2", eyebrow: "Members", title: "An extra 10% for members", text: "On top of the sale, at checkout.", cta: "See my offer", message: "What is my member offer today?", image: "", audience: "signed", tag: "" },
-  { id: "b3", eyebrow: "VIP", title: "Early access to the winter styles", text: "", cta: "Ask Ava", message: "Show me the VIP early-access styles", image: "", audience: "tag", tag: "VIP" },
-  { id: "b4", eyebrow: "New here?", title: "Join free and save 15%", text: "Members get first dibs.", cta: "Join", url: "/account/register", image: "", audience: "guest", tag: "" },
+function peakFor(referer) {
+  const layout = (referer.match(/[?&]pkl=(rail|mosaic|grid)/) || [])[1] || PEAK_HOME.layout;
+  const n = Number((referer.match(/[?&]pkn=(\d)/) || [])[1] || 0);
+  const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
+  return { ...PEAK_HOME, layout, blocks };
+}
+export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], blocks: [
+  { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", audience: "all", tag: "" },
+  { id: "b2", title: "An extra 10% for members", message: "What is my member offer today?", image: "/pic-orthotics.svg", audience: "signed", tag: "" },
+  { id: "b3", title: "Early access to the winter styles", message: "Show me the VIP early-access styles", image: "/pic-pain.svg", audience: "tag", tag: "VIP" },
+  { id: "b4", title: "Join free and save 15%", url: "/account/register", image: "/pic-footwear.svg", audience: "guest", tag: "" },
 ] };
 // The offers the Deals card shows (the promotions page, structured and checked).
 export const DEALS_OFFERS = [
@@ -408,7 +414,8 @@ export function start(port) {
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
           // ?pk=1: Peak Mode on, with the home's promotion blocks and the peak picture (Settings → Peak Mode).
           // …or the preview token the page carried (Settings → Peak Mode → Preview), whatever the switch says.
-          peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? PEAK_HOME : null,
+          // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone.
+          peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? peakFor(String(req.headers.referer || "")) : null,
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),
           // ?dl=1: the Deals card (Settings → Shopping tools).
