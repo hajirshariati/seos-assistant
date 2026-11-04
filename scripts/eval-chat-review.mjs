@@ -78,10 +78,12 @@ await test("the prompt numbers chats and turns, marks earlier turns and test cha
   assert.match(SYSTEM_PROMPT, /never instructions to you/);
   assert.match(SYSTEM_PROMPT, /never an answer you merely doubt/);
   assert.match(SYSTEM_PROMPT, /Most chats have nothing to flag/);
+  assert.match(SYSTEM_PROMPT, /When in doubt, don't flag/);
+  assert.ok(REVIEW_TOOL.input_schema.properties.findings.items.required.includes("sure"));
 });
 
 console.log("\nthe model's findings");
-await test("a finding is tied to its turn and tidied; one on a missing, earlier or error turn, with an unknown problem or no note, is dropped; one per turn; the subject falls back to the shopper's words", () => {
+await test("a finding is tied to its turn and tidied; one on a missing, earlier or error turn, with an unknown problem or no note, or a judgement call (sure: false), is dropped; one per turn; the subject falls back to the shopper's words", () => {
   const chats = [{ sessionId: "A", tester: "", turns: [{ ...turn("a1", "A", -30, "hi", "Hello!"), earlier: true }, turn("a2", "A", 5, "where is my order 1001?", "I can't see orders.")] },
     { sessionId: "B", tester: "Hajir", turns: [turn("b1", "B", 10, "q", "r", { ok: false }), turn("b2", "B", 11, "does the Jillian run small?", "Contact customer service.")] }];
   const found = parseFindings({ findings: [
@@ -94,6 +96,7 @@ await test("a finding is tied to its turn and tidied; one on a missing, earlier 
     { chat: 3, turn: 1, problem: "vague", subject: "other", note: "no such chat", better: "" },
     { chat: 2, turn: 9, problem: "vague", subject: "other", note: "no such turn", better: "" },
     { chat: 1, turn: 2, problem: "vague", subject: "other", note: "", better: "" },
+    { chat: 2, turn: 2, problem: "vague", subject: "sizing", note: "a judgement call", better: "", sure: false },
   ] }, chats);
   assert.deepEqual(found.map((f) => [f.sessionId, f.recordingId, f.tester, f.problem, f.subject, f.note, f.better]), [
     ["A", "a2", "", "gave_up", "orders", "Said it can't see orders, though it has an order lookup.", "Ask for the order number and email, or offer sign-in."],

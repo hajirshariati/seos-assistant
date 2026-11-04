@@ -135,7 +135,7 @@ export const action = async ({ request }) => {
   const form = await request.formData();
   const intent = String(form.get("intent") || "");
   try {
-    if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
+    if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""), form.has("lesson") || form.has("fix") ? { lesson: form.has("lesson") ? String(form.get("lesson")) : undefined, fix: form.has("fix") ? String(form.get("fix")) : undefined } : null);
     if (intent === "lessons_draft") return await draftLessonsNow(session.shop);
     if (intent === "review_now") return await reviewNow(session.shop);
     if (intent === "ideas_draft") return await draftSiteIdeasNow(session.shop);

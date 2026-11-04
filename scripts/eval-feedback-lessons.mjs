@@ -133,10 +133,12 @@ if (!process.env.TEST_DATABASE_URL) {
       const page = await L.listLessons(SHOP);
       const orders = page.drafts.find((d) => d.subject === "orders");
       const sizing = page.drafts.find((d) => d.subject === "sizing");
-      assert.deepEqual(await L.decideLesson(SHOP, orders.id, "approved"), { ok: true, decision: "approved" });
+      assert.deepEqual(await L.decideLesson(SHOP, orders.id, "approved", { lesson: "  Give the tracking page link first. ", fix: "Orders are tracked at orders.example.com with the order number and the email on the order." }), { ok: true, decision: "approved" });
       const lessons = await prisma.knowledgeFile.findFirst({ where: { shop: SHOP, fileType: "lessons" } });
       assert.equal(lessons.fileName, "Lessons from thumbs-down.txt");
-      assert.match(lessons.content, /^\[\d{4}-\d{2}-\d{2}\] Orders & tracking\nOrders are tracked at orders\.example\.com/);
+      assert.match(lessons.content, /^\[\d{4}-\d{2}-\d{2}\] Orders & tracking\nOrders are tracked at orders\.example\.com with the order number and the email on the order\./, "the owner's edited words are what's written");
+      assert.equal((await prisma.feedbackLesson.findUnique({ where: { id: orders.id } })).lesson, "Give the tracking page link first.", "and kept with the lesson");
+      assert.deepEqual(await L.decideLesson(SHOP, sizing.id, "approved", { lesson: "   " }), { error: "The lesson can't be empty." });
       assert.deepEqual(await L.decideLesson(SHOP, sizing.id, "dismissed"), { ok: true, decision: "dismissed" });
       assert.equal(await prisma.knowledgeFile.count({ where: { shop: SHOP, fileType: "rules" } }), 0, "dismissed writes nothing");
       assert.deepEqual(await L.decideLesson(SHOP, sizing.id, "approved"), { error: "Already decided." });

@@ -43,7 +43,7 @@ export const ORDERS_TOOL = {
   },
 };
 
-export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true, guestLookup = true, policy = returnPolicy() }) {
+export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPageUrl = "", returnsPageUrl = "", returnsInChat = true, guestLookup = true, policy = returnPolicy(), loadCards = getOrderCards }) {
   // Which orders get the return button, in words, for the model.
   const rule = [policy.deliveredOnly ? "delivered" : "shipped", policy.windowDays > 0 ? `within ${policy.windowDays} days of ordering` : ""].filter(Boolean).join(", ");
   return {
@@ -70,8 +70,29 @@ export function ordersTool({ shop, accessToken, loggedInCustomerId, trackingPage
           _events: [{ type: "login_prompt", intent, ...(guestLookup ? { lookup: true, ...(/^[a-z0-9-]{3,24}$/i.test(hint) ? { order: hint } : {}) } : {}), ...(Object.keys(pages).length ? { pages } : {}) }],
         };
       }
-      if (!accessToken) return { error: "Orders aren't available right now." };
-      let { orders, numberOfOrders = 0 } = await getOrderCards({ shop, accessToken, customerId: loggedInCustomerId, first: refundsAsked ? 25 : 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl, policy });
+      // Their orders couldn't be read (the store's API, a scope, a hiccup):
+      // the lookup card still gets an order's status by number, so the chat
+      // helps on without a hand-off. The error is logged for the store.
+      const pages = { ...(httpsUrl(trackingPageUrl) ? { track: httpsUrl(trackingPageUrl) } : {}), ...(httpsUrl(returnsPageUrl) ? { returns: httpsUrl(returnsPageUrl) } : {}) };
+      const unavailable = (why) => {
+        console.error(`[orders] shop=${shop} customer orders unavailable: ${why}`);
+        return {
+          signed_in: true,
+          orders_unavailable: true,
+          note: "Their order list couldn't be loaded just now (a temporary problem on the store's side, not theirs). " +
+            (guestLookup ? "A card under your reply still finds one order's status by its order number and email" : "The store's own tracking page is linked under your reply") +
+            (pages.track && guestLookup ? ", and links to the store's tracking page" : "") +
+            ". Say that in one sentence, apologise once, and don't ask for their details in the chat. Don't send them to customer service for this unless the lookup fails them too.",
+          _events: [{ type: "login_prompt", intent, ...(guestLookup ? { lookup: true, ...(/^[a-z0-9-]{3,24}$/i.test(String(input.orderNumber || "").replace(/^#+/, "")) ? { order: String(input.orderNumber).replace(/^#+/, "") } : {}) } : {}), ...(Object.keys(pages).length ? { pages } : {}) }],
+        };
+      };
+      if (!accessToken) return unavailable("no access token");
+      let orders, numberOfOrders = 0;
+      try {
+        ({ orders, numberOfOrders = 0 } = await loadCards({ shop, accessToken, customerId: loggedInCustomerId, first: refundsAsked ? 25 : 5, orderNumber: input.orderNumber || "", trackingBase: trackingPageUrl, returnsBase: returnsPageUrl, policy }));
+      } catch (err) {
+        return unavailable(err?.message || String(err));
+      }
       // Returns and refunds: only the orders that had one (unless they named one).
       const recent = orders.length;
       if (refundsAsked && !input.orderNumber) orders = orders.filter((o) => o.refund || o.returnStatus || o.returns?.length || o.returnFacts);

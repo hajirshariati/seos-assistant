@@ -28,6 +28,13 @@ export const LEARN_CSS = `
   .ln-pill.is-low { color: #245a86; background: #eef4fb; }
   .ln-item__title { font-size: 14px; line-height: 20px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .ln-item__acts { display: inline-flex; align-items: center; gap: 6px; padding-top: 14px; white-space: nowrap; }
+  .ln-item__links { display: inline-flex; gap: 12px; }
+  .ln-edit { display: grid; gap: 4px; margin: 2px 0 4px; }
+  .ln-edit__label { font-size: 11px; line-height: 16px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; color: #616161; }
+  .ln-edit__box { box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid rgba(0,0,0,0.18); border-radius: 8px; font: inherit; font-size: 13.5px; line-height: 20px; color: #1a1a1a; resize: vertical; }
+  .ln-edit__box:focus { outline: 2px solid #2D6B4F; outline-offset: -1px; border-color: transparent; }
+  .ln-group { display: flex; align-items: center; gap: 8px; padding: 10px 16px 4px; font-size: 12px; line-height: 16px; font-weight: 650; color: #616161; }
+  .ln-group .ln-pill { font-size: 11px; }
   .ln-more { all: unset; box-sizing: border-box; cursor: pointer; font-size: 12.5px; line-height: 18px; font-weight: 600; color: #2D6B4F; }
   .ln-more:hover { text-decoration: underline; text-underline-offset: 2px; }
   .ln-details { grid-column: 1 / -1; display: grid; gap: 8px; padding: 6px 0 2px; font-size: 13px; line-height: 19px; color: #303030; }
@@ -51,6 +58,13 @@ export const LEARN_CSS = `
   }
 `;
 
+// The flagged answers by what went wrong, the most frequent problem first.
+function groupByProblem(findings) {
+  const by = new Map();
+  for (const f of findings) { if (!by.has(f.problemLabel)) by.set(f.problemLabel, []); by.get(f.problemLabel).push(f); }
+  return [...by.entries()].map(([label, rows]) => ({ label, rows })).sort((a, b) => b.rows.length - a.rows.length);
+}
+
 const when = (d, mounted) => (mounted && d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "");
 
 function Decide({ fetcher, intent, id, yes, yesValue, busy }) {
@@ -72,9 +86,15 @@ function Decide({ fetcher, intent, id, yes, yesValue, busy }) {
   );
 }
 
+// A lesson: approve as drafted, or edit the words first — what's approved
+// is what AVA follows, so the owner's wording wins.
 function LessonItem({ l, fetcher, busy, mounted }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [lesson, setLesson] = useState(l.lesson);
+  const [fix, setFix] = useState(l.fix || "");
   const fact = l.kind === "knowledge" && l.fix;
+  const changed = lesson.trim() !== l.lesson || (fact && fix.trim() !== l.fix);
   return (
     <div className="ln-item">
       <div>
@@ -84,17 +104,46 @@ function LessonItem({ l, fetcher, busy, mounted }) {
           <span>{l.source === "review" ? `${l.count} answers flagged by the review` : `${l.count} thumbs down`}</span>
           {mounted && <span>{when(l.createdAt, mounted)}</span>}
         </div>
-        <div className="ln-item__title">{l.lesson}</div>
-        {(fact || l.examples.length > 0) && (
-          <button type="button" className="ln-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide details" : "Details"}</button>
+        {editing ? (
+          <div className="ln-edit">
+            <label className="ln-edit__label" htmlFor={`ln-l-${l.id}`}>{fact ? "The lesson (for you)" : "The rule AVA will follow"}</label>
+            <textarea id={`ln-l-${l.id}`} className="ln-edit__box" rows={2} value={lesson} onChange={(e) => setLesson(e.target.value)} maxLength={200} />
+            {fact && (
+              <>
+                <label className="ln-edit__label" htmlFor={`ln-f-${l.id}`}>The fact AVA will learn</label>
+                <textarea id={`ln-f-${l.id}`} className="ln-edit__box" rows={3} value={fix} onChange={(e) => setFix(e.target.value)} maxLength={700} />
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="ln-item__title">{lesson.trim() || l.lesson}</div>
         )}
+        <span className="ln-item__links">
+          <button type="button" className="ln-more" aria-expanded={editing} onClick={() => setEditing((v) => !v)}>{editing ? "Done editing" : "Edit"}</button>
+          {(fact || l.examples.length > 0) && !editing && (
+            <button type="button" className="ln-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide details" : "Details"}</button>
+          )}
+        </span>
       </div>
       <div className="ln-item__acts">
-        <Decide fetcher={fetcher} intent="lesson_decide" id={l.id} yes={fact ? "Approve → Knowledge" : "Approve → Rules"} yesValue="approved" busy={busy} />
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="lesson_decide" />
+          <input type="hidden" name="id" value={l.id} />
+          <input type="hidden" name="decision" value="approved" />
+          {changed && <input type="hidden" name="lesson" value={lesson} />}
+          {changed && fact && <input type="hidden" name="fix" value={fix} />}
+          <Button size="slim" variant="primary" submit disabled={busy || !lesson.trim()}>{changed ? (fact ? "Approve edited → Knowledge" : "Approve edited → Rules") : (fact ? "Approve → Knowledge" : "Approve → Rules")}</Button>
+        </fetcher.Form>
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="lesson_decide" />
+          <input type="hidden" name="id" value={l.id} />
+          <input type="hidden" name="decision" value="dismissed" />
+          <Button size="slim" submit disabled={busy}>Dismiss</Button>
+        </fetcher.Form>
       </div>
-      {open && (
+      {open && !editing && (
         <div className="ln-details">
-          {fact && <div><b>The fact AVA will learn:</b><div className="ln-fix" style={{ marginTop: 4 }}>{l.fix}</div></div>}
+          {fact && <div><b>The fact AVA will learn:</b><div className="ln-fix" style={{ marginTop: 4 }}>{fix.trim() || l.fix}</div></div>}
           {l.examples.length > 0 && <div><b>Shoppers asked:</b> {l.examples.map((q) => `“${q}”`).join(" · ")}</div>}
         </div>
       )}
@@ -177,10 +226,11 @@ export function LearnCard({ lessons, review, ideas, mounted, onOpenChat }) {
             </span>
             <fetcher.Form method="post"><input type="hidden" name="intent" value="review_now" /><Button size="slim" variant="plain" submit disabled={busy || reviewing}>Review now</Button></fetcher.Form>
           </div>
-          {showFlags && findings.map((f) => (
+          {showFlags && groupByProblem(findings).map((g) => [
+            <div key={`g-${g.label}`} className="ln-group"><span className="ln-pill is-high">{g.label}</span><span>{`${g.rows.length} answer${g.rows.length === 1 ? "" : "s"}`}</span></div>,
+            ...g.rows.map((f) => (
             <div key={f.id} className="ln-flag">
               <div className="ln-flag__top">
-                <span className="ln-pill is-high">{f.problemLabel}</span>
                 <span className="ln-pill">{f.label}</span>
                 {f.tester && <span className="ln-pill">{`Test chat · ${f.tester}`}</span>}
                 {onOpenChat && <button type="button" className="ln-open" onClick={() => onOpenChat(f.sessionId)}>Open the chat</button>}
@@ -189,7 +239,8 @@ export function LearnCard({ lessons, review, ideas, mounted, onOpenChat }) {
               <div><b>AVA said:</b> {f.reply}</div>
               <div><b>Better:</b> {f.better || f.note}</div>
             </div>
-          ))}
+            )),
+          ])}
         </>
       ) : (
         <>

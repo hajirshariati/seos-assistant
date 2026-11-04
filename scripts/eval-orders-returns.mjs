@@ -239,6 +239,26 @@ await test("chat tool: signed out → sign in or look the order up; no order dat
   assert.deepEqual(off._events, [{ type: "login_prompt", intent: "track" }]);
 });
 
+// Live store, 2026-11-04: "Show me my recent orders" ended in a customer
+// service button four times — the order list failed to load and the model
+// had only an error to go on.
+await test("chat tool: signed in but the orders can't be read → the lookup card, a plain word about it, never customer service", async () => {
+  const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: "77", trackingPageUrl: "https://orders.aetrex.com/", loadCards: async () => { throw new Error("Shopify 403: read_all_orders"); } });
+  const r = await t.run({});
+  assert.equal(r.signed_in, true);
+  assert.equal(r.orders_unavailable, true);
+  assert.ok(!("error" in r), "no bare error for the model to apologise with");
+  assert.match(r.note, /couldn't be loaded just now/);
+  assert.match(r.note, /finds one order's status by its order number and email/);
+  assert.match(r.note, /Don't send them to customer service for this/);
+  assert.deepEqual(r._events, [{ type: "login_prompt", intent: "track", lookup: true, pages: { track: "https://orders.aetrex.com/" } }]);
+  // The number they mentioned fills the form.
+  assert.equal((await t.run({ orderNumber: "#1174861" }))._events[0].order, "1174861");
+  // No token at all: the same card, not an error.
+  const none = await ordersTool({ shop: "s", accessToken: "", loggedInCustomerId: "77" }).run({});
+  assert.equal(none.orders_unavailable, true);
+});
+
 await test("chat tool: signed out, the store's tracking page and returns center are always offered too", async () => {
   const t = ordersTool({ shop: "s", accessToken: "t", loggedInCustomerId: null, trackingPageUrl: "https://orders.aetrex.com/", returnsPageUrl: "https://www.aetrex.com/apps/aftership-returns-center" });
   const r = await t.run({ intent: "return" });

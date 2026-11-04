@@ -229,7 +229,7 @@ export function shoppingFor(message, vocab = {}) {
 // one matched "Shop" (the Shop app) and "UPS Store" and sent shoppers a
 // try-on speech instead of an answer.
 // Words a reply to the customer never has — a rewrite that argued with the fact check instead.
-export const PUSHBACK = /\b(?:the customer(?:'s)?|fact[- ]?check|my (?:previous|earlier|last|original) (?:reply|answer|response)|no correction|the (?:previous|earlier) reply|i'll wait for the customer)\b/i;
+export const PUSHBACK = /\b(?:the customer(?:'s)?\b(?!\s+(?:service|care|support|success|experience|team)\b)|fact[- ]?check|my (?:previous|earlier|last|original) (?:reply|answer|response)|no correction|the (?:previous|earlier) reply|i'll wait for the customer)\b/i;
 const textOf = (m) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((b) => (b?.type === "text" ? b.text : "")).join(" ") : "");
 // When the map is shown at such a store (they insisted, or a scan): an
 // honest heads-up to call ahead, the ZIP code they gave said back, and no
@@ -454,19 +454,23 @@ const ACCOUNT_ASKS = [
   // "my credit" / "my return credit": the refund on the return, or store credit.
   { re: /\bcredit\b/i, tools: ["get_my_orders", "get_my_rewards", "search_store_info"] },
   { re: /\b(refund\w*|returns?|returned|returning|exchang\w*|charged?|charges|money back|cancel\w*)\b/i, tools: ["get_my_orders", "search_store_info"] },
-  { re: /\b(my orders?|order #?\d|package|parcel|deliver\w*|tracking|track my|shipped|arriv\w*)\b/i, tools: ["get_my_orders"] },
+  { re: /\b(my orders?|recent orders?|order history|past orders?|my purchases?|order #?\d|package|parcel|deliver\w*|tracking|track my|shipped|arriv\w*)\b/i, tools: ["get_my_orders"] },
   // An offer from an email or a code that isn't working: the store's memory first.
   { re: /\b(promo ?code|coupon|discount code|the code|my code|an? email (about|with|for)|got an email|the (sale|offer|deal|promotion) (i|you|that|from)|expired|still (on|running|valid|good)|missed the)\b/i, tools: ["lookup_past_offers"] },
 ];
 const WANTS_PERSON = /\b(human|real person|a person|an agent|representative|someone|somebody|talk to|speak (?:to|with)|call (?:you|someone)|phone number|manager)\b/i;
 const UPSET = /\b(angry|furious|ridiculous|terrible|unacceptable|worst|scam|fraud|disgust\w*|frustrat\w*|fed up|upset)\b|!!/i;
+// "What is your return policy?" is about the store, not their order: the
+// policy is looked up, their orders are not.
+const ABOUT_THEM = /\b(my|mine|i|i'?ve|i'?m|i'?d|me|we|our|ordered|bought|purchased|received|got|sent)\b/i;
 export function supportTooSoon({ latestUserMessage = "", supportOffered = false, called = [], available = [] } = {}) {
   const msg = String(latestUserMessage || "");
   if (!supportOffered || WANTS_PERSON.test(msg) || UPSET.test(msg)) return [];
   const have = new Set(available), done = new Set(called), missing = [];
+  const theirs = ABOUT_THEM.test(msg);
   for (const a of ACCOUNT_ASKS) {
     if (!a.re.test(msg)) continue;
-    for (const t of a.tools) if (have.has(t) && !done.has(t) && !missing.includes(t)) missing.push(t);
+    for (const t of a.tools) if (have.has(t) && !done.has(t) && !missing.includes(t) && (t !== "get_my_orders" || theirs)) missing.push(t);
   }
   return missing;
 }
@@ -632,6 +636,7 @@ export async function runLeanTurn({
   let toolCalls = 0;
   let retried = false;
   let rejected = ""; // the reply the fact check sent back, kept in case the rewrite answers the check instead of the customer
+  let rejectedIssues = []; // why it was sent back
   let text = "";
   let finalIssues = [];
   const searches = [];
@@ -816,6 +821,7 @@ export async function runLeanTurn({
   let draft = "";
   let earlier = ""; // the last text written alongside a lookup (kept if the reply continues it)
   let askedForText = false;
+  let pushedBack = false; // the model answered the engine ("the customer asked…") once already
   const PRESENTING = new Set(["show_products", "compare_products", "contact_support"]);
 
   for (let hop = 0; hop < MAX_HOPS; hop++) {
@@ -851,6 +857,22 @@ export async function runLeanTurn({
     }
 
     text = said ? joinClosingQuestion(before, joinContinuation(earlier, said)) : draft;
+    // A rewrite that only adds to the reply it was asked to redo ("Also, the
+    // flash sale ends tonight…") keeps that reply: the check wanted the
+    // offers added, not the answer dropped.
+    if (retried && rejected && !text.includes(rejected) && CONTINUES.test(text) && rejectedIssues.every((c) => c === "missing_offers")) {
+      text = `${rejected.trim()}\n\n${text.trim()}`;
+    }
+    // Words about the check or "the customer" are talk for the engine, not
+    // the shopper: asked once more for the reply itself, plainly.
+    if (text && PUSHBACK.test(text) && !pushedBack && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
+      pushedBack = true;
+      log(`[lean] reply talks to the engine — asking for the customer's reply: ${JSON.stringify(text.slice(0, 120))}`);
+      conv.push({ role: "user", content: "[Nothing of this reaches the customer, and nothing needs defending. Write your reply to the customer now, as if for the first time: only words for them, answering their last message. Do not mention this check, \"the customer\", or an earlier reply.]" });
+      draft = "";
+      earlier = "";
+      continue;
+    }
     if (!text && !askedForText && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       // Ended without a word for the customer: ask once for the reply.
       askedForText = true;
@@ -1004,6 +1026,7 @@ export async function runLeanTurn({
     if (issues.length > 0 && !retried && hop < MAX_HOPS - 1 && Date.now() - started < deadlineMs) {
       retried = true;
       rejected = text;
+      rejectedIssues = issues.map((i) => i.code);
       draft = ""; // the rejected reply must not come back as the answer
       earlier = "";
       // Its hand-off to customer service waits for what the rewrite finds.
@@ -1022,9 +1045,9 @@ export async function runLeanTurn({
   // A rewrite that argued with the check ("the customer's latest message was
   // about…", "no correction is needed") is talk for the engine, not the
   // shopper: the first reply goes out instead.
-  if (retried && rejected && PUSHBACK.test(text)) {
-    log(`[lean] rewrite answered the check, not the customer — the first reply stands: ${JSON.stringify(text.slice(0, 120))}`);
-    text = rejected;
+  if (PUSHBACK.test(text)) {
+    log(`[lean] reply answered the check, not the customer — ${rejected ? "the first reply stands" : "nothing fit to send"}: ${JSON.stringify(text.slice(0, 120))}`);
+    text = rejected && !PUSHBACK.test(rejected) ? rejected : "";
   }
   if (finalIssues.some((i) => i.code === "missing_offers")) log(`[lean] reply without offers: ${JSON.stringify(text.slice(0, 160))}`);
 

@@ -118,11 +118,18 @@ export async function listLessons(shop) {
 // Approve: a knowledge lesson joins the store's "Lessons" knowledge file
 // (one file, dated notes, chunked for retrieval when the store embeds); a
 // behaviour lesson joins its rules. Dismiss: kept, rests, nothing written.
-export async function decideLesson(shop, id, decision) {
-  const lesson = await prisma.feedbackLesson.findFirst({ where: { id, shop } });
+// `edits` ({ lesson, fix }): the owner's own words for it, kept with the
+// lesson and written in its place.
+export async function decideLesson(shop, id, decision, edits = null) {
+  let lesson = await prisma.feedbackLesson.findFirst({ where: { id, shop } });
   if (!lesson) return { error: "That lesson is gone." };
   if (lesson.status !== "draft") return { error: "Already decided." };
   if (decision !== "approved" && decision !== "dismissed") return { error: "Unknown decision." };
+  if (decision === "approved" && edits && (typeof edits.lesson === "string" || typeof edits.fix === "string")) {
+    const parsed = parseLesson({ lesson: typeof edits.lesson === "string" ? edits.lesson : lesson.lesson, kind: lesson.kind, fix: typeof edits.fix === "string" ? edits.fix : lesson.fix });
+    if (!parsed) return { error: "The lesson can't be empty." };
+    if (parsed.lesson !== lesson.lesson || parsed.fix !== lesson.fix) lesson = await prisma.feedbackLesson.update({ where: { id }, data: { lesson: parsed.lesson, fix: parsed.fix } });
+  }
   if (decision === "approved") {
     const note = lessonNote(lesson);
     if (lesson.kind === "knowledge" && lesson.fix) await appendToFile(shop, LESSONS_FILE.fileType, LESSONS_FILE.fileName, note, { chunk: true });

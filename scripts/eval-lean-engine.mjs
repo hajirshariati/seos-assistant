@@ -608,13 +608,14 @@ await test("a rewrite that answers the fact check instead of the customer → th
     { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "wedge", categories: ["wedges/heels"] })] },
     { stop_reason: "tool_use", content: [tu("t2", "show_products", { handles: [H["Ashley Arch Support Wedge - Navy"]] })] },
     { stop_reason: "end_turn", content: [txt("The Ashley in navy, or the Savannah sandal.")] },
-    { stop_reason: "end_turn", content: [txt("I think there may be some confusion — the customer's latest message was about a wedge. My previous reply correctly addressed it. No correction is needed here; I'll wait for the customer's next message.")] },
+    { stop_reason: "end_turn", content: [txt("I think there may be some confusion — the customer's latest message was about a wedge. My previous reply correctly addressed it. No correction is needed here; I'll wait for the customer.")] },
+    { stop_reason: "end_turn", content: [txt("As I said, the customer's latest message was about a wedge and my previous reply stands.ustomer's next message.")] },
   ]);
   const logs = [];
   const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "dressy wedge" }], callModel: s.callModel, log: (l) => logs.push(String(l)) });
   assert.equal(r.retried, true, "the fact check asked for a rewrite");
   assert.equal(r.text, "The Ashley in navy, or the Savannah sandal.", "the first reply, not the argument");
-  assert.ok(logs.some((l) => /rewrite answered the check/.test(l)), logs.join("\n"));
+  assert.ok(logs.some((l) => /answered the check, not the customer — the first reply stands/.test(l)), logs.join("\n"));
   assert.match(JSON.stringify(s.requests[3].messages.at(-1)), /Write only words for the customer/);
 });
 await test("no store word list: \"signed in through Shop\" and \"return at UPS STORE\" trigger no store rule", async () => {
@@ -627,6 +628,53 @@ await test("no store word list: \"signed in through Shop\" and \"return at UPS S
     assert.equal(r.text, "Let me look into that for you.");
   }
   assert.equal(PUSHBACK.test("Totally understand — here's how returns work."), false, "ordinary replies never trip the pushback check");
+  assert.equal(PUSHBACK.test("Tap the button below to connect with the customer service team — they'll get it sorted."), false, "the customer service team is not the engine's customer");
+  assert.equal(PUSHBACK.test("The customer simply asked about the return policy. My reply correctly answered it."), true);
+});
+// Live store, 2026-11-04: asked the return policy, a shopper was sent "The
+// customer simply asked about the return and refund policy… My reply
+// correctly answered their policy question." — the model answering the
+// engine's nudge, with no earlier reply to fall back on.
+await test("a reply that talks to the engine is asked for again, plainly; the second one goes out", async () => {
+  const s = scripted([
+    { stop_reason: "tool_use", content: [tu("t1", "contact_support", { reason: "policy" })] },
+    { stop_reason: "end_turn", content: [txt("The customer simply asked about the return and refund policy — they didn't mention an order. There's nothing to investigate. My reply correctly answered their policy question.")] },
+    { stop_reason: "end_turn", content: [txt("Returns are free within 30 days of delivery — unworn, in the box. Want me to check an order of yours?")] },
+    // the hand-off before looking asks once for the policy to be looked up; the same reply again
+    { stop_reason: "end_turn", content: [txt("Returns are free within 30 days of delivery — unworn, in the box. Want me to check an order of yours?")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "What is your return and refund policy?" }], latestUserMessage: "What is your return and refund policy?", callModel: s.callModel, log: (l) => logs.push(String(l)) });
+  assert.equal(r.text, "Returns are free within 30 days of delivery — unworn, in the box. Want me to check an order of yours?");
+  assert.ok(logs.some((l) => /talks to the engine/.test(l)), logs.join("\n"));
+  assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /Nothing of this reaches the customer/);
+});
+await test("a reply that still talks to the engine after being asked again is never sent: the fallback goes instead", async () => {
+  const s = scripted([
+    { stop_reason: "end_turn", content: [txt("The customer's latest message was about the policy; no correction is needed.")] },
+    { stop_reason: "end_turn", content: [txt("As I said, the customer asked about the policy and my previous reply stands.")] },
+  ]);
+  const r = await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "What is your return policy?" }], latestUserMessage: "What is your return policy?", callModel: s.callModel, log: quiet });
+  assert.doesNotMatch(r.text, /the customer|my previous reply/i);
+  assert.match(r.text, /couldn't finish|try asking again/i);
+});
+// Live store, 2026-11-04: asked whether the L720 has the most arch support,
+// the shopper got only "Also, the Flash Sale ends tonight…" — the fact check
+// wanted the offer added and the rewrite added it alone.
+await test("a rewrite that only adds the offers keeps the answer it was adding to", async () => {
+  const sys = "ACTIVE PROMOTIONS\n- Flash sale: 20% off sitewide, ends tonight at 11:59 PM PT.";
+  const s = scripted([
+    { stop_reason: "end_turn", content: [txt("Yes — the L720 Lynco Firm has the most arch support in the line, with a firm posted heel; the arch is a molded support, not a loose plastic insert.")] },
+    { stop_reason: "end_turn", content: [txt("Also, the Flash Sale ends tonight at 11:59 PM PT — worth grabbing before it closes!")] },
+  ]);
+  const logs = [];
+  const r = await runLeanTurn({ catalog: ORTHO, model: "m", messages: [{ role: "user", content: "any sales on the L720? is it the model with the most arch support" }], latestUserMessage: "any sales on the L720? is it the model with the most arch support", extraSystem: sys, callModel: s.callModel, log: (l) => logs.push(String(l)) });
+  if (r.retried && logs.some((l) => /missing_offers/.test(l))) {
+    assert.match(r.text, /^Yes — the L720 Lynco Firm has the most arch support/);
+    assert.match(r.text, /Flash Sale ends tonight/);
+  } else {
+    assert.match(r.text, /L720 Lynco Firm has the most arch support/, "the answer is kept either way");
+  }
 });
 // The live failure: on a product page, "i have these but in size 8" — the
 // assistant didn't know which product "these" was. Now the page's product is
@@ -2153,6 +2201,9 @@ await test("a hand-off before looking: the tools that can know, by what was aske
   assert.deepEqual(supportTooSoon({ latestUserMessage: "how many points do I have", supportOffered: true, called: [], available: ["get_my_orders", "search_store_info"] }), ["search_store_info"], "no rewards tool here: the policy at least");
   // Live store, 2026-10-30: "my return credit" went straight to customer service.
   assert.deepEqual(supportTooSoon({ latestUserMessage: "my return credit", supportOffered: true, called: [], available: all }), ["get_my_orders", "get_my_rewards", "search_store_info"]);
+  // Live store, 2026-11-04: "What is your return and refund policy?" asked for the policy — their orders weren't the point.
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "What is your return and refund policy?", supportOffered: true, called: [], available: all }), ["search_store_info"], "a policy question: the policy, not their orders");
+  assert.deepEqual(supportTooSoon({ latestUserMessage: "Show me my recent orders", supportOffered: true, called: [], available: all }), ["get_my_orders"], "recent orders are their orders");
   assert.deepEqual(supportTooSoon({ latestUserMessage: "where is my credit", supportOffered: true, called: ["get_my_rewards", "search_store_info"], available: all }), ["get_my_orders"], "a credit can be the refund on a return");
 });
 await test("no hand-off, everything looked at, a person asked for, an upset shopper, another topic: nothing to add", () => {
