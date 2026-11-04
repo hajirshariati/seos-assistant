@@ -89,6 +89,9 @@ model ShopConfig {
   aftershipApiKey     String   @default("")
 
   showFollowUps       Boolean  @default(true)
+  // The words of a reply shown as they are written (a draft, replaced by
+  // the verified answer); off, the whole reply arrives at once.
+  streamRepliesOn     Boolean  @default(true)
   showFeedback        Boolean  @default(true)
   deduplicateColors   Boolean  @default(false)
   promptCaching       Boolean  @default(false)

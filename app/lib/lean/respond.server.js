@@ -6,7 +6,7 @@ import { getKnowledgeFilesWithContent, incrementRateLimitHits } from "../../mode
 import { recordChatUsage } from "../../models/ChatUsage.server.js";
 import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessage } from "../anthropic-resilience.server.js";
-import { streamModelCall, draftThrottle } from "./stream-call.server.js";
+import { streamModelCall, draftThrottle, draftSink } from "./stream-call.server.js";
 import { loadLeanCatalog } from "./catalog.server.js";
 import { buildLeanStoreExtras } from "./store-tools.server.js";
 import { logMentions } from "../../models/ChatProductMention.server.js";
@@ -229,11 +229,12 @@ export function leanChatResponse({
           // Each model call streams: the words reach the widget as they are
           // written (a draft, replaced by the verified answer at the end —
           // the fact check and the rewrite run exactly as before on the
-          // complete text). A retried call starts its draft afresh.
+          // complete text). A retried call starts its draft afresh. With
+          // the setting off, the drafts are not sent.
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
             const endAt = turnStarted + TURN_HARD_LIMIT_MS;
-            const drafts = draftThrottle((text) => send({ type: "draft", text }));
+            const drafts = draftThrottle(draftSink(config, send));
             return aiCalls.run(
               () => withAnthropicRetry(() => streamModelCall(anthropic, req, { signal: abort.signal, timeout: callTimeout(endAt), onDraft: (t) => drafts.push(t) }), { deadlineAt: endAt }).finally(() => drafts.flush()),
               { waitMs: Math.min(15_000, Math.max(0, endAt - Date.now() - 20_000)) },

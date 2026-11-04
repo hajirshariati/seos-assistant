@@ -5,7 +5,7 @@
 //
 // Run: node scripts/eval-streaming.mjs
 import assert from "node:assert/strict";
-import { streamModelCall, draftThrottle } from "../app/lib/lean/stream-call.server.js";
+import { streamModelCall, draftThrottle, draftSink } from "../app/lib/lean/stream-call.server.js";
 
 let passed = 0, failed = 0;
 const test = async (name, fn) => { try { await fn(); passed += 1; console.log(`  ✓ ${name}`); } catch (e) { failed += 1; console.log(`  ✗ ${name} — ${e.message}`); } };
@@ -45,6 +45,18 @@ await test("a draft callback that throws never breaks the call", async () => {
   const final = { content: [] };
   const client = { messages: { stream: () => fakeStream(["a", "b"], final) } };
   assert.equal(await streamModelCall(client, {}, { onDraft: () => { throw new Error("boom"); } }), final);
+});
+
+console.log("\nthe setting");
+await test("drafts go to the widget unless the store switched the words-as-written off; on by default", () => {
+  const sent = [];
+  const send = (o) => sent.push(o);
+  draftSink({}, send)("Hi");
+  draftSink({ streamRepliesOn: true }, send)("Hi there");
+  draftSink(null, send)("Hey");
+  assert.deepEqual(sent, [{ type: "draft", text: "Hi" }, { type: "draft", text: "Hi there" }, { type: "draft", text: "Hey" }]);
+  draftSink({ streamRepliesOn: false }, send)("Nothing");
+  assert.equal(sent.length, 3);
 });
 
 console.log("\nthe throttle");

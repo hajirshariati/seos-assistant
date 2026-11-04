@@ -10,6 +10,13 @@ export async function streamModelCall(anthropic, req, { signal, timeout, onDraft
   return await stream.finalMessage();
 }
 
+// Where the drafts go: to the widget, or nowhere when the store switched
+// the words-as-written off (Settings → In the chat). The call still streams
+// either way; only what the shopper sees changes.
+export function draftSink(config, send) {
+  return config?.streamRepliesOn === false ? () => {} : (text) => send({ type: "draft", text });
+}
+
 // The drafts, at most one every `everyMs` and always the latest words; the
 // final one on `flush`. The widget shows each in place of the last.
 export function draftThrottle(send, { everyMs = 80, now = Date.now, schedule = setTimeout } = {}) {

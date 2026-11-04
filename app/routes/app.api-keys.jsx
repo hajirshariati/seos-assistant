@@ -104,6 +104,7 @@ export const loader = async ({ request }) => {
     hasAnthropicKey: config.anthropicApiKey !== "",
     anthropicModel: chatModel(config.anthropicModel),
     showFollowUps: config.showFollowUps !== false,
+    streamRepliesOn: config.streamRepliesOn !== false,
     showFeedback: config.showFeedback !== false,
     chatRatingOn: config.chatRatingOn !== false,
     chatRatingAfter: chatRatingConfig(config).after,
@@ -330,6 +331,7 @@ export const action = async ({ request }) => {
   const model = formData.get("anthropicModel");
   if (model && ALLOWED_MODELS.has(String(model))) data.anthropicModel = String(model);
   bool("showFollowUps");
+  bool("streamRepliesOn");
   bool("showFeedback");
   bool("chatRatingOn");
   const ratingAfter = formData.get("chatRatingAfter");
@@ -629,7 +631,7 @@ const SECTIONS = [
 // Every field the Save button sends, the section it lives in, and its kind
 // ("bool" → "true"/"false", "json" → JSON, "secret" → cleared after a save).
 const FIELDS = {
-  anthropicApiKey: ["assistant", "secret"], anthropicModel: ["assistant"], showFollowUps: ["assistant", "bool"],
+  anthropicApiKey: ["assistant", "secret"], anthropicModel: ["assistant"], showFollowUps: ["assistant", "bool"], streamRepliesOn: ["assistant", "bool"],
   showFeedback: ["assistant", "bool"], chatRatingOn: ["assistant", "bool"], chatRatingAfter: ["assistant"],
   startTheme: ["look"], welcomeIntroOn: ["look", "bool"], voiceInput: ["look", "bool"],
   ...Object.fromEntries(CHAT_TEXT_FIELDS.map(([, field]) => [field, ["look"]])),
@@ -987,6 +989,7 @@ function AssistantSection({ d, values, set }) {
         </Row>
       </Group>
       <Group title="In the chat">
+        <Row title="Show the words as they are written" help={values.streamRepliesOn ? "The reply appears word by word while AVA writes it, then the verified answer takes its place — the fact check is the same either way. Shoppers wait for the first words, not the whole answer." : "The whole reply appears at once, after the fact check."} toggle checked={values.streamRepliesOn} onChange={set("streamRepliesOn")} />
         <Row title="Follow-up questions" help="2–3 tappable follow-ups after each answer — only ones AVA can answer." toggle checked={values.showFollowUps} onChange={set("showFollowUps")} />
         <Row title="Helpful / Not helpful" help="Quiet thumbs under the newest answer; a thumbs-down asks what went wrong, in one tap. Feedback shows in Analytics." toggle checked={values.showFeedback} onChange={set("showFeedback")} />
         <Row title="Ask how the chat went" help="One quiet question per chat: right after an add to cart or Buy now, or else after a few replies. Ratings, reasons and comments show in Analytics." toggle checked={values.chatRatingOn} onChange={set("chatRatingOn")}>
