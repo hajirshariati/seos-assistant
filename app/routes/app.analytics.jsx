@@ -3,7 +3,7 @@ import { useLoaderData, useSearchParams, Link, useRouteLoaderData, useNavigate, 
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
-  Page, Card, BlockStack, InlineStack, Box, Button, Badge, Banner, Popover, DatePicker, ActionList,
+  Page, Card, BlockStack, InlineStack, Box, Button, Banner, Popover, DatePicker, ActionList,
 } from "@shopify/polaris";
 import { ExportIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -12,20 +12,16 @@ import { getUsageSummary, getDailySeries, getReplyCostSample } from "../models/C
 import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getShopPlan } from "../lib/billing.server";
 import { getFeedbackSummary, cleanupOldFeedback } from "../models/ChatFeedback.server";
-import {
-  getTopProducts, getProductsByTool, getInterestBreakdown, cleanupOldMentions,
-} from "../models/ChatProductMention.server";
-import { getTopicRows } from "../models/ChatTopic.server";
-import { summarizeWeek } from "../lib/weekly-summary";
+import { cleanupOldMentions } from "../models/ChatProductMention.server";
 import { getConversionSummary } from "../models/ChatConversion.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import BrandHeader from "../components/BrandHeader";
-import { SETTINGS_CSS, Row, Group } from "../components/SettingsUI";
+import { SETTINGS_CSS, Row } from "../components/SettingsUI";
 import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
-import { RATINGS_CSS, RankList, LessonsCard, ReviewCard } from "../components/Ratings";
+import { RATINGS_CSS, LessonsCard, ReviewCard } from "../components/Ratings";
 import { LEARN_CSS, SiteIdeasCard } from "../components/Learn";
 import { SectionHead } from "../components/SettingsUI";
 import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
@@ -82,21 +78,15 @@ export const loader = async ({ request }) => {
   const prevStart = new Date(prevEnd.getTime() - spanDays * 86400000);
   const prevRange = { startDate: prevStart, endDate: prevEnd };
 
-  const weekRange = { startDate: new Date(Date.now() - 7 * 86400000), endDate: new Date() };
-  const [usage, feedback, topProducts, productsByTool, interest, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage] = await Promise.all([
+  const [usage, feedback, daily, prevUsage, prevFeedback, conversions, prevConversions, config] = await Promise.all([
     getUsageSummary(session.shop, rangeArg),
     getFeedbackSummary(session.shop, rangeArg),
-    getTopProducts(session.shop, rangeArg, 10),
-    getProductsByTool(session.shop, rangeArg, 10),
-    getInterestBreakdown(session.shop, rangeArg),
     getShopTimeZone(admin, session.shop).then((timeZone) => getDailySeries(session.shop, rangeArg, { timeZone })),
     getUsageSummary(session.shop, prevRange),
     getFeedbackSummary(session.shop, prevRange),
     getConversionSummary(session.shop, rangeArg),
     getConversionSummary(session.shop, prevRange),
     getShopConfig(session.shop),
-    getTopicRows(session.shop, { days: 7 }).catch(() => []),
-    getUsageSummary(session.shop, weekRange),
   ]);
   // Cost estimator: real traffic, this store's priced setup, recorded replies.
   const [traffic, modeled, costRows] = await Promise.all([
@@ -115,9 +105,8 @@ export const loader = async ({ request }) => {
   cleanupOldMentions().catch(() => {});
 
   return {
-    usage, feedback, topProducts, productsByTool, interest, daily, conversions,
+    usage, feedback, daily, conversions,
     lessons, review, ideas,
-    week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
     estimator: {
       traffic,
       modeled: modeled && {
@@ -219,12 +208,6 @@ const ANALYTICS_CSS = `
   .an-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: #616161; }
   .an-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .an-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
-  .an-cols { display: grid; grid-template-columns: repeat(var(--an-cols, 3), minmax(0, 1fr)); gap: 16px 24px; padding: 10px 16px 16px; }
-  .an-rank__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .an-rank__title { min-width: 0; font-size: 13px; line-height: 18px; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .an-rank__n { flex: none; font-size: 12.5px; font-weight: 650; color: #1a2e26; font-variant-numeric: tabular-nums; }
-  .an-rank__bar { height: 4px; margin-top: 4px; border-radius: 999px; background: rgba(26,46,38,0.06); overflow: hidden; }
-  .an-rank__bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2D6B4F, #3a8a66); }
   .an-convo__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; color: #8a8a8a; min-height: 18px; }
   .an-lesson__line { margin-top: 4px; font-size: 14px; line-height: 20px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .an-lesson__fix { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(45,107,79,0.06); font-size: 13px; line-height: 18px; color: #1a2e26; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -248,7 +231,6 @@ const ANALYTICS_CSS = `
   .an-foot { padding: 4px 8px 8px; text-align: center; font-size: 12px; line-height: 18px; color: #8a8a8a; }
   @media (max-width: 900px) { .an-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 760px) {
-    .an-cols { grid-template-columns: minmax(0, 1fr); }
     .an-kpi__value { font-size: 21px; line-height: 27px; }
   }
 `;
@@ -330,71 +312,6 @@ function LineChart({ data, height = 170 }) {
       <path d={pathMsg} fill="none" stroke="#2D6B4F" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       {data.length <= 45 && data.map((d, i) => <circle key={`m${i}`} cx={x(i)} cy={yMsg(d.messages)} r="2.5" fill="#2D6B4F" />)}
     </svg>
-  );
-}
-
-// Ranked list with proportional bars — the bar tells you "how much more"
-// at a glance.
-function WeekCard({ week }) {
-  if (!week) return null;
-  const lists = [
-    { title: "Shopping for", rows: week.categories },
-    { title: "Foot conditions", rows: week.conditions },
-    { title: "Store questions", rows: week.storeQuestions },
-    { title: "Products asked about", rows: week.products },
-    { title: "Colors", rows: week.colors },
-  ].filter((l) => l.rows?.length > 0).slice(0, 3);
-  const meta = [
-    week.messages ? `${week.messages.toLocaleString()} messages` : "",
-    week.supportHandoffs ? `${week.supportHandoffs} sent to customer service` : "",
-  ].filter(Boolean).join(" · ");
-  return (
-    <Group title="What customers asked about" badge={<Badge>Last 7 days</Badge>}>
-      {meta && <div className="set-row__help" style={{ padding: "0 16px" }}>{meta}</div>}
-      {week.empty ? (
-        <div className="an-empty">Nothing yet this week — topics show up here as customers chat.</div>
-      ) : (
-        <>
-          {week.unanswered?.length > 0 && (
-            <div className="an-callout">
-              <strong>Couldn't answer from your store info:</strong>{" "}
-              {week.unanswered.map((u) => `${u.label}${u.count > 1 ? ` (${u.count})` : ""}`).join(" · ")}.{" "}
-              Add the answer in <Link to="/app/knowledge">Knowledge → Your team's notes</Link> and AVA uses it right away.
-            </div>
-          )}
-          {lists.length > 0 ? (
-            <div className="an-cols" style={{ "--an-cols": lists.length }}>
-              {lists.map((l) => (
-                <div key={l.title}>
-                  <div className="an-col__title">{l.title}</div>
-                  <RankList rows={l.rows.map((r) => ({ title: r.label, count: r.count }))} />
-                </div>
-              ))}
-            </div>
-          ) : <div style={{ height: 14 }} />}
-        </>
-      )}
-    </Group>
-  );
-}
-
-function ProductsCard({ searched, viewed }) {
-  const cols = [
-    { title: "Searched for", rows: searched },
-    { title: "Details asked — sizes, colors, price", rows: viewed },
-  ].filter((c) => c.rows.length > 0);
-  if (cols.length === 0) return null;
-  return (
-    <Group title="Top products in chats">
-      <div className="an-cols" style={{ "--an-cols": cols.length }}>
-        {cols.map((c) => (
-          <div key={c.title}>
-            <div className="an-col__title">{c.title}</div>
-            <RankList rows={c.rows} />
-          </div>
-        ))}
-      </div>
-    </Group>
   );
 }
 
@@ -489,7 +406,7 @@ function ExportMenu({ onExport, exporting }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, daily, conversions, previous, range, estimator, week, lessons, review, ideas } = useLoaderData();
+  const { usage, feedback, daily, conversions, previous, range, estimator, lessons, review, ideas } = useLoaderData();
   const navigate = useNavigate();
   // While the chat review runs, the page checks back every few seconds.
   const revalidator = useRevalidator();
@@ -552,7 +469,6 @@ export default function Analytics() {
     }
   }, [searchParams, shopify, exporting]);
 
-  const top5 = (list) => (list || []).slice(0, 5).map((p) => ({ title: p.title, count: p.count }));
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   return (
@@ -623,10 +539,6 @@ export default function Analytics() {
             />
             <div className="an-chart"><LineChart data={daily} /></div>
           </Card>
-
-          <WeekCard week={week} />
-
-          <ProductsCard searched={top5(productsByTool?.searched)} viewed={top5(productsByTool?.viewed)} />
 
           <div id="learn">
             <SectionHead title="Learn">
