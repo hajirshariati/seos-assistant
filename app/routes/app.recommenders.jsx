@@ -18,7 +18,7 @@ import {
   DataTable,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import {
   listDecisionTrees,
@@ -45,7 +45,7 @@ import { reloadLeanCatalog } from "../lib/lean/catalog.server";
 import { FIT_LABELS, FIT_LEVELS, FIT_LEVEL_NAMES, FIT_LEVEL_FROM, parseFitLevels } from "../lib/fit-confidence.js";
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await requireFullAccess(request);
   // Fix an orthotic finder saved with a placeholder ID (e.g. "a-z") so the
   // chat can find it — before listing, so the table shows the fixed ID.
   await repairOrthoticIntent(session.shop).catch(() => null);
@@ -95,7 +95,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await requireFullAccess(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 

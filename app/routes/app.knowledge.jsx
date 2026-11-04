@@ -24,7 +24,7 @@ import {
 } from "@shopify/polaris";
 import { DeleteIcon, SearchIcon, GlobeIcon, NoteIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import { listPromoMemory } from "../models/PromoMemory.server";
 import { listRetiredProducts } from "../models/RetiredProduct.server";
 import { promoMemoryDays, styleMemoryDays, dayWords, endedWording, titleColor, MEMORY_TZ } from "../lib/memory.js";
@@ -63,7 +63,7 @@ function isCsv(fileName) {
 
 
 export const loader = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await requireFullAccess(request);
   const [config, files, campaigns] = await Promise.all([
     getShopConfig(session.shop),
     getKnowledgeFiles(session.shop),
@@ -120,7 +120,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await requireFullAccess(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 

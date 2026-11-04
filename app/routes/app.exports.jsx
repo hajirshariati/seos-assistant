@@ -1,4 +1,4 @@
-import { authenticate } from "../shopify.server";
+import { adminWithAccess } from "../lib/staff-access.server";
 import { getShopPlan } from "../lib/billing.server";
 import { getDailySeries, getUsageSummary } from "../models/ChatUsage.server";
 import { getShopTimeZone } from "../lib/shop-timezone.server";
@@ -182,7 +182,10 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
 // had a default component, causing React Router v7 to call the component
 // renderer with the Response object and crash on the destructured data.
 export const loader = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, access } = await adminWithAccess(request);
+  // The customer service team downloads the votes and the chats, nothing else.
+  const wanted = new URL(request.url).searchParams.get("section") || "";
+  if (access === "support" && !["conversations", "recordings"].includes(wanted)) return new Response("Forbidden", { status: 403 });
   const url = new URL(request.url);
 
   const section = url.searchParams.get("section");

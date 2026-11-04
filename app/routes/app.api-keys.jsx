@@ -36,7 +36,7 @@ import {
   FlowerIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar, SaveBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import { ALLOWED_MODELS, chatModel } from "../lib/claude-models.js";
 import { getShopConfig, updateShopConfig } from "../models/ShopConfig.server";
 import { getChatPulse } from "../models/ChatHealth.server";
@@ -56,6 +56,8 @@ import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
 import { parsePeakHome, peakHomeError, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS } from "../lib/peak-home.js";
+import { previewUrl } from "../lib/peak-preview.server.js";
+import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
 import { parseRewardsCard, REWARDS_MAX, REWARDS_ROWS, REWARDS_NOTES } from "../lib/rewards-card.js";
 import { promoMemoryDays, styleMemoryDays, PROMO_DAYS_CHOICES, STYLE_DAYS_CHOICES } from "../lib/memory.js";
@@ -81,7 +83,7 @@ async function seasonalInfo(admin, handle) {
 }
 
 export const loader = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await requireFullAccess(request);
   const [config, plan, pulse, shopName] = await Promise.all([
     getShopConfig(session.shop),
     getShopPlan(session.shop),
@@ -92,6 +94,8 @@ export const loader = async ({ request }) => {
   // rewards card and the ways to reach a person.
   const brand = appBrand(appName(await shopFacts(session.shop, config, { admin }).catch(() => null)));
   const seasonalHandle = collectionHandle(config.seasonalCtaCollection);
+  // The store's own domain, for the Peak Mode preview link (the myshopify one when it can't be read).
+  const storeUrl = await admin.graphql("{ shop { primaryDomain { url } } }").then((r) => r.json()).then((j) => String(j?.data?.shop?.primaryDomain?.url || "")).catch(() => "");
   // The photo the storefront chat reported, from the store's own domains only.
   const shopHosts = await getShopHosts(admin, session.shop);
   let hideOnUrls = [];
@@ -213,6 +217,8 @@ export const loader = async ({ request }) => {
     peakPauseSync: config.peakPauseSync !== false,
     // The home on peak days (promotion blocks, the peak picture).
     peakHome: parsePeakHome(config.peakHome),
+    peakPreviewUrl: previewUrl(storeUrl, session.shop),
+    supportStaff: parseSupportStaff(config.supportStaff),
     limitsOverridden: storeChatLimits(config, { env: process.env }).overridden,
     pulse,
     plan: { id: plan.id, name: plan.name, features: plan.features },
@@ -220,7 +226,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await requireFullAccess(request);
   const formData = await request.formData();
 
   // Cards that save on their own (orb colors, recording, See It
@@ -264,6 +270,12 @@ export const action = async ({ request }) => {
     return { focusImageSaved: true, focusImage: image };
   }
 
+  // Recording → Customer service team: who sees the Recordings page only.
+  if (intent === "save_support_staff") {
+    const staff = parseSupportStaff(String(formData.get("staff") || ""));
+    await updateShopConfig(session.shop, { supportStaff: JSON.stringify(staff) });
+    return { supportStaffSaved: true, supportStaff: staff };
+  }
   if (intent === "save_recording") {
     const on = formData.get("on") === "true";
     const scope = formData.get("scope") === "everyone" ? "everyone" : "testers";
@@ -919,6 +931,7 @@ export default function Settings() {
                 <BlockStack gap="400">
                   <RecordingCard initial={d.recording} shopDomain={d.shopDomain} />
                   <ChatGuardCard initial={d.guardMode} />
+                  <SupportTeamCard initial={d.supportStaff} />
                 </BlockStack>
               </div>
               {section !== "testing" && isDirty && (
@@ -1419,6 +1432,34 @@ function PeakHomeEditor({ value, onChange }) {
     </BlockStack>
   );
 }
+// Recording → Customer service team: staff whose Shopify sign-in email is
+// listed here see the Recordings page only — the chats, the shoppers'
+// ratings and the lessons — with Settings, keys, Knowledge and the catalog
+// out of reach. The store owner is never limited. Saves on its own.
+function SupportTeamCard({ initial }) {
+  const fetcher = useFetcher();
+  const [text, setText] = useState(() => (Array.isArray(initial) ? initial : []).join("\n"));
+  const saved = fetcher.data?.supportStaffSaved ? fetcher.data.supportStaff : null;
+  const current = saved ?? (Array.isArray(initial) ? initial : []);
+  const busy = fetcher.state !== "idle";
+  const dirty = parseLines(text).join("\n") !== current.join("\n");
+  const save = () => { const fd = new FormData(); fd.set("intent", "save_support_staff"); fd.set("staff", text); fetcher.submit(fd, { method: "post" }); };
+  return (
+    <Group title="Customer service team">
+      <Row stack help={`Staff whose Shopify sign-in email is listed here see the Recordings page only — the chats, the shoppers' ratings and the lessons. Settings, keys, Knowledge, the catalog and Analytics stay out of reach for them. The store owner is never limited. One email per line, up to ${SUPPORT_STAFF_MAX}; they still need access to the app in Shopify's staff permissions.`}>
+        <BlockStack gap="300">
+          <TextField label="Team emails" labelHidden multiline={4} value={text} onChange={setText} placeholder={"support@yourstore.com\njamie@yourstore.com"} autoComplete="off" />
+          <InlineStack gap="200" blockAlign="center">
+            <Button variant="primary" onClick={save} loading={busy} disabled={!dirty}>Save team</Button>
+            {current.length > 0 && !dirty ? <Text as="span" variant="bodySm" tone="subdued">{`${current.length} on the team`}</Text> : null}
+            {fetcher.data?.supportStaffSaved && !busy && !dirty ? <Text as="span" variant="bodySm" tone="success">Saved</Text> : null}
+          </InlineStack>
+        </BlockStack>
+      </Row>
+    </Group>
+  );
+}
+function parseLines(text) { return String(text || "").split(/[\n,;]/).map((v) => v.trim().toLowerCase()).filter((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)).filter((v, i, arr) => arr.indexOf(v) === i); }
 function FocusPicture({ kind, initial }) {
   const fetcher = useFetcher();
   const inputRef = useRef(null);
@@ -1774,8 +1815,8 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
         </Row>
       </Group>
 
-      <Group title="The home on peak days">
-        <Row stack help="While Peak Mode is on, the chat's home shows these blocks where the banner is — the day's promotions, each with a button that opens a link or asks AVA — and the peak picture of the assistant. Each block says who sees it: everyone, shoppers signed out, shoppers signed in, or customers carrying a Shopify tag. Nothing here changes what AVA says about offers; she still reads only your promotions page.">
+      <Group title="The home on peak days" badge={d.peakPreviewUrl ? <Button variant="plain" url={d.peakPreviewUrl} external>Preview on your store</Button> : null}>
+        <Row stack help="Preview opens your store with the peak home shown to you alone — this browser, today — whatever Peak Mode's switch says; save first. While Peak Mode is on, the chat's home shows these blocks where the banner is — the day's promotions, each with a button that opens a link or asks AVA — and the peak picture of the assistant. Each block says who sees it: everyone, shoppers signed out, shoppers signed in, or customers carrying a Shopify tag. Nothing here changes what AVA says about offers; she still reads only your promotions page.">
           <PeakHomeEditor value={values.peakHome} onChange={set("peakHome")} />
         </Row>
       </Group>

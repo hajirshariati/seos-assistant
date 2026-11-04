@@ -17,7 +17,7 @@ import {
 } from "@shopify/polaris";
 import { SearchIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import {
   getCatalogSyncState,
   getProductCount,
@@ -85,7 +85,7 @@ function safeParse(raw, fallback) {
 }
 
 export const loader = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await requireFullAccess(request);
   const [state, count, mappings, config, metafieldDefs] = await Promise.all([
     getCatalogSyncState(session.shop),
     getProductCount(session.shop),
@@ -178,7 +178,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await requireFullAccess(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 

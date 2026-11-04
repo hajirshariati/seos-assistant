@@ -344,7 +344,8 @@ model ShopConfig {
   peakLimitPerHour   Int       @default(8000)
   peakLiftDailyCap   Boolean   @default(true)
   peakPauseSync      Boolean   @default(true)
-  peakHome           String    @default("{}") // the home on peak days: the assistant's peak picture and the promotion blocks (JSON)
+  peakHome           String    @default("{}")
+  supportStaff       String    @default("[]") // the customer service team's emails: they see the Recordings page only (JSON) // the home on peak days: the assistant's peak picture and the promotion blocks (JSON)
 
   // Updated on each /widget-config call from the storefront, throttled to
   // once every 5 minutes. Used by the home-page setup checklist to detect
@@ -562,11 +563,43 @@ model FeedbackLesson {
   examples    String[]
   feedbackIds String[]
   status      String    @default("draft")
+  // feedback: from thumbs-down; review: from the daily read of all chats.
+  source      String    @default("feedback")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   decidedAt   DateTime?
 
   @@index([shop, status])
+  @@index([shop, createdAt])
+}
+
+// Chat review (chat-review.js): how far AVA's daily read of every recorded
+// chat got, and the answers it flagged — kept 90 days, and read by the
+// lesson drafts by subject.
+model ChatReviewState {
+  shop            String    @id
+  reviewedThrough DateTime?
+  lastRunAt       DateTime?
+  chats           Int       @default(0)
+  findings        Int       @default(0)
+  updatedAt       DateTime  @updatedAt
+}
+
+model ChatReviewFinding {
+  id          String   @id @default(cuid())
+  shop        String
+  sessionId   String
+  recordingId String
+  tester      String   @default("")
+  subject     String
+  problem     String
+  note        String
+  better      String   @default("")
+  message     String
+  reply       String
+  at          DateTime
+  createdAt   DateTime @default(now())
+
   @@index([shop, createdAt])
 }
 

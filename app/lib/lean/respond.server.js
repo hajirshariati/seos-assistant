@@ -6,6 +6,7 @@ import { getKnowledgeFilesWithContent, incrementRateLimitHits } from "../../mode
 import { recordChatUsage } from "../../models/ChatUsage.server.js";
 import { retrieveRelevantChunks, lexicalRetrieveChunks } from "../knowledge-chunks.server.js";
 import { withAnthropicRetry, classifyAnthropicError, customerFacingFailureMessage } from "../anthropic-resilience.server.js";
+import { streamModelCall, draftThrottle } from "./stream-call.server.js";
 import { loadLeanCatalog } from "./catalog.server.js";
 import { buildLeanStoreExtras } from "./store-tools.server.js";
 import { logMentions } from "../../models/ChatProductMention.server.js";
@@ -120,7 +121,7 @@ export function leanChatResponse({
     },
     async start(controller) {
       const send = (obj) => {
-        if (record && obj && obj.type && obj.type !== "text" && obj.type !== "products" && obj.type !== "done") shown.push(obj);
+        if (record && obj && obj.type && obj.type !== "text" && obj.type !== "products" && obj.type !== "done" && obj.type !== "draft") shown.push(obj);
         try { controller.enqueue(encoder.encode(sse(obj))); } catch { /* client gone */ }
       };
       // The answer arrives in one piece after the tool calls; until then a
@@ -225,11 +226,16 @@ export function leanChatResponse({
           liveStock: makeLiveStock({ shop, accessToken }),
           viewingHandle,
           askYesNo,
+          // Each model call streams: the words reach the widget as they are
+          // written (a draft, replaced by the verified answer at the end —
+          // the fact check and the rewrite run exactly as before on the
+          // complete text). A retried call starts its draft afresh.
           callModel: (req) => {
             if (abort.signal.aborted) throw new Error("client disconnected");
             const endAt = turnStarted + TURN_HARD_LIMIT_MS;
+            const drafts = draftThrottle((text) => send({ type: "draft", text }));
             return aiCalls.run(
-              () => withAnthropicRetry(() => anthropic.messages.create(req, { signal: abort.signal, timeout: callTimeout(endAt) }), { deadlineAt: endAt }),
+              () => withAnthropicRetry(() => streamModelCall(anthropic, req, { signal: abort.signal, timeout: callTimeout(endAt), onDraft: (t) => drafts.push(t) }), { deadlineAt: endAt }).finally(() => drafts.flush()),
               { waitMs: Math.min(15_000, Math.max(0, endAt - Date.now() - 20_000)) },
             );
           },

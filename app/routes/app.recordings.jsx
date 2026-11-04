@@ -16,7 +16,11 @@ import { useLoaderData, useFetcher, useNavigate, useRevalidator, useSearchParams
 import { Page, Card, BlockStack, InlineStack, Text, Button, Badge, TextField, Select, Icon } from "@shopify/polaris";
 import { SearchIcon, ChevronDownIcon, ChevronRightIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { adminWithAccess } from "../lib/staff-access.server";
+import { getRecentQuestions } from "../models/ChatFeedback.server";
+import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
+import { RATINGS_CSS, LessonsCard, ReviewCard, NotHelpfulCard, HelpfulCard, useCsvExport } from "../components/Ratings";
+import { reviewSummary, reviewNow } from "../lib/chat-review.server";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings, deleteAllRecordings, deleteDayRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { listFlags, setFlag, clearFlag } from "../models/ChatFlag.server";
@@ -34,16 +38,22 @@ const WINDOWS = [7, 30, 90, 0];
 const windowOf = (value) => (WINDOWS.includes(Number(value)) ? Number(value) : 7);
 
 export const loader = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await adminWithAccess(request);
   const url = new URL(request.url);
   const config = await getShopConfig(session.shop);
   const st = recordingState(config);
   const windowDays = windowOf(url.searchParams.get("days"));
   const days = windowDays || st.keepDays;
-  const [rows, flags, timeZone] = await Promise.all([
+  // The shoppers' votes over the same window (everything kept: a year), and
+  // the lessons drafted from the thumbs-down.
+  const voteDays = days || 365;
+  const [rows, flags, timeZone, votes, lessons, review] = await Promise.all([
     listRecordings(session.shop, { days }),
     listFlags(session.shop),
     getShopTimeZone(admin, session.shop).catch(() => ""),
+    getRecentQuestions(session.shop, { startDate: new Date(Date.now() - voteDays * 86400000), endDate: new Date() }, 300).catch(() => []),
+    listLessons(session.shop).catch(() => ({ drafts: [], decided: [] })),
+    reviewSummary(session.shop).catch(() => ({ state: null, run: { running: false }, findings: [] })),
   ]);
   // Flagged chats show whatever their age.
   const seen = new Set(rows.map((r) => r.sessionId));
@@ -93,6 +103,9 @@ export const loader = async ({ request }) => {
     });
   return {
     recording: { on: st.on, scope: st.scope, keepDays: st.keepDays, guard: guardMode(config) },
+    votes: { down: votes.filter((r) => r.vote === "down"), up: votes.filter((r) => r.vote === "up") },
+    lessons,
+    review,
     window: windowDays,
     sessions,
     flagged: flags.length,
@@ -113,9 +126,22 @@ function shortDate(date, timeZone) {
 }
 
 export const action = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await adminWithAccess(request);
   const form = await request.formData();
   const intent = form.get("intent");
+  // The chat review, now (it runs in the background; the page polls).
+  if (intent === "review_now") {
+    try { return await reviewNow(session.shop); } catch (err) { return { error: String(err?.message || err) }; }
+  }
+  // Lessons from thumbs-down: approve or dismiss one, or draft today's now.
+  if (intent === "lesson_decide" || intent === "lessons_draft") {
+    try {
+      if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
+      return await draftLessonsNow(session.shop);
+    } catch (err) {
+      return { error: String(err?.message || err) };
+    }
+  }
   // Deleting never changes "Top shopper issues & questions": chats it hasn't
   // read yet are hidden now and read soon (then removed).
   const readSoon = async () => {
@@ -357,7 +383,10 @@ const RECENT_DAYS = 7;
 const WINDOW_WORDS = { 7: "Last 7 days", 30: "Last 30 days", 90: "Last 90 days", 0: "Everything kept" };
 
 export default function Recordings() {
-  const { recording, sessions, concerns, flagged, window: windowDays } = useLoaderData();
+  const { recording, sessions, concerns, flagged, window: windowDays, votes, lessons, review } = useLoaderData();
+  const [voteExporting, exportVotes] = useCsvExport(windowDays ? { range: windowDays === 7 ? "7d" : windowDays === 30 ? "30d" : "90d" } : { range: "custom", start: new Date(Date.now() - 365 * 86400000).toISOString(), end: new Date().toISOString() });
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const fetcher = useFetcher();
@@ -386,8 +415,15 @@ export default function Recordings() {
     setTheme(t ? { id: t.id, title: t.title, ids: t.sessionIds } : null);
     if (t) requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
-  // While the chats are being read, the page checks back every few seconds.
-  const reading = Boolean(concerns.run?.running);
+  // "Open the chat" on a flagged answer: the list shows that chat alone, open.
+  const openChatById = useCallback((sessionId) => {
+    setTheme({ id: `chat:${sessionId}`, title: "The flagged chat", ids: [sessionId] });
+    setOpenChats(new Set([sessionId]));
+    requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, []);
+  // While the chats are being read (the top issues, or the chat review), the
+  // page checks back every few seconds.
+  const reading = Boolean(concerns.run?.running || review?.run?.running);
   const revalidatorRef = useRef(revalidator);
   revalidatorRef.current = revalidator;
   useEffect(() => {
@@ -505,7 +541,7 @@ export default function Recordings() {
       <TitleBar title="Recordings" />
       {/* Static CSS, injected as-is: as a text child React would escape its
           quotes on the server and the page wouldn't hydrate. */}
-      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + REC_CSS + CONCERNS_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + REC_CSS + CONCERNS_CSS }} />
       <div className={`rec set-links${by === "week" ? " rec--week" : ""}`}>
         <BlockStack gap="400">
           <BrandHeader title="Recordings" gutter={false} />
@@ -516,6 +552,17 @@ export default function Recordings() {
             onRefresh={() => concernFetcher.submit({ intent: "refresh_concerns" }, { method: "post" })}
             refreshing={concernFetcher.state !== "idle"}
           />
+          <div id="ratings">
+            <SectionHead title="Ratings">
+              {`What shoppers said with a thumbs up or down${windowDays ? ` in the last ${windowDays} days` : ""}, the answers AVA's daily review of every chat flagged, and the lessons she drafts from both for you to approve.`}
+            </SectionHead>
+            <BlockStack gap="400">
+              <LessonsCard lessons={lessons} mounted={mounted} />
+              <ReviewCard review={review} mounted={mounted} onOpenChat={openChatById} />
+              <NotHelpfulCard rows={votes.down} onExport={exportVotes} exporting={voteExporting} mounted={mounted} rangeWords={windowDays ? `the last ${windowDays} days` : "everything kept"} />
+              <HelpfulCard rows={votes.up} onExport={exportVotes} exporting={voteExporting} mounted={mounted} rangeWords={windowDays ? `the last ${windowDays} days` : "everything kept"} />
+            </BlockStack>
+          </div>
           <div>
             <SectionHead title="Recordings">
               {`Chats saved while recording is on, kept ${keepWords} — flagged chats until you delete them. Times are in your store's time zone.`}

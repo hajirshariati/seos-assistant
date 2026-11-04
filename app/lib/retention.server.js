@@ -11,6 +11,7 @@ import { cleanupOldPromoMemory } from "../models/PromoMemory.server";
 import { cleanupOldRetiredProducts } from "../models/RetiredProduct.server";
 import { readAllPendingConcerns } from "./chat-concerns.server";
 import { draftAllLessons } from "./feedback-lessons.server";
+import { reviewAllChats, cleanupOldFindings } from "./chat-review.server";
 import { refreshAllFitData } from "./fit-confidence.server";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,6 +50,15 @@ async function runOnce() {
     await draftAllLessons();
   } catch (err) {
     console.error("[retention] draftAllLessons failed:", err?.message || err);
+  }
+  // Chat review: every recorded chat not read yet, read for answers that
+  // were wrong or let the shopper down; a subject flagged more than once
+  // this week becomes a lesson to approve. Before old recordings go.
+  try {
+    await reviewAllChats();
+    await cleanupOldFindings();
+  } catch (err) {
+    console.error("[retention] reviewAllChats failed:", err?.message || err);
   }
   try {
     await cleanupOldRecordings();

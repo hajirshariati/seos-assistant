@@ -8,6 +8,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import { authenticate } from "../shopify.server";
+import { staffAccess } from "../lib/staff-access.server";
 import { getShopConfigCached } from "../models/ShopConfig.server";
 import { shopFacts } from "../lib/shopify-facts.server.js";
 import { appName, appNames } from "../lib/app-brand.js";
@@ -18,10 +19,11 @@ export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
   // The app's own name in Shopify ("AVA" on the
   // Aetrex app), for the pages' headers; never in the way of a page.
-  const facts = await getShopConfigCached(session.shop)
-    .then((config) => shopFacts(session.shop, config, { admin }))
-    .catch(() => null);
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", appName: appName(facts) };
+  const config = await getShopConfigCached(session.shop).catch(() => null);
+  const facts = config ? await shopFacts(session.shop, config, { admin }).catch(() => null) : null;
+  // The customer service team (Settings → Recording) sees Recordings only.
+  const access = staffAccess(session, config);
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", appName: appName(facts), access };
 };
 
 // Polaris components that take a `url` prop (Button, Banner action, ActionList,
@@ -61,7 +63,7 @@ const PolarisLink = forwardRef(function PolarisLink(
 });
 
 export default function App() {
-  const { apiKey, appName: name } = useLoaderData();
+  const { apiKey, appName: name, access } = useLoaderData();
   // "AVA" on the Aetrex app; "SEoS Assistant" on the other.
   const { short } = appNames(name);
   return (
@@ -149,15 +151,21 @@ export default function App() {
             .seos-testchat { width: 100% !important; }
           }
       `}</style>
-        <NavMenu>
-          <Link to="/app" rel="home">{short}</Link>
-          <Link to="/app/knowledge">Knowledge</Link>
-          <Link to="/app/catalog">Catalog</Link>
-          <Link to="/app/recommenders">Smart Recommenders</Link>
-          <Link to="/app/analytics">Analytics</Link>
-          <Link to="/app/recordings">Recordings</Link>
-          <Link to="/app/api-keys">Settings</Link>
-        </NavMenu>
+        {access === "support" ? (
+          <NavMenu>
+            <Link to="/app/recordings" rel="home">Recordings</Link>
+          </NavMenu>
+        ) : (
+          <NavMenu>
+            <Link to="/app" rel="home">{short}</Link>
+            <Link to="/app/knowledge">Knowledge</Link>
+            <Link to="/app/catalog">Catalog</Link>
+            <Link to="/app/recommenders">Smart Recommenders</Link>
+            <Link to="/app/analytics">Analytics</Link>
+            <Link to="/app/recordings">Recordings</Link>
+            <Link to="/app/api-keys">Settings</Link>
+          </NavMenu>
+        )}
         <Outlet />
         <div
           style={{

@@ -407,7 +407,8 @@ export function start(port) {
           rewards: /[?&]rw=1/.test(String(req.headers.referer || "")) ? REWARDS_CARD : null,
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
           // ?pk=1: Peak Mode on, with the home's promotion blocks and the peak picture (Settings → Peak Mode).
-          peak: /[?&]pk=1/.test(String(req.headers.referer || "")) ? PEAK_HOME : null,
+          // …or the preview token the page carried (Settings → Peak Mode → Preview), whatever the switch says.
+          peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? PEAK_HOME : null,
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),
           // ?dl=1: the Deals card (Settings → Shopping tools).
@@ -444,6 +445,28 @@ export function start(port) {
             w(trueFitIntro(INTRO_CATALOG, { primaryLine: "women" }));
             w({ type: "done" });
             return resp.end();
+          }
+          // A streamed reply, as the server sends it: drafts of the words as
+          // they are written (the whole text so far), then the verified
+          // answer, its cards, and done. "stream fix" ends with words that
+          // differ from the last draft (a rewrite after the fact check).
+          if (/^stream( fix| error)?$/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            const w = (o) => resp.write(`data: ${JSON.stringify(o)}\n\n`);
+            const finalText = /fix/i.test(parsed.message) ? "Here are two boots that come in wide — the Rebecca and the Jillian, both in stock in a 10 wide." : "Here are two boots that come in wide — the Rebecca and the Jillian.";
+            const drafts = ["Here are", "Here are two boots", "Here are two boots that come in wide —", "Here are two boots that come in wide — the Rebecca and the Jillian."];
+            let i = 0;
+            const step = () => {
+              if (i < drafts.length) { w({ type: "draft", text: drafts[i++] }); setTimeout(step, 120); return; }
+              if (/error/i.test(parsed.message)) { w({ type: "error", message: "I’m having trouble right now. Please try again in a moment." }); resp.end(); return; }
+              w({ type: "text", text: finalText });
+              w({ type: "products", products: MANY_BOOTS.slice(0, 2) });
+              w({ type: "suggestions", questions: ["Do these come in black?", "What about sandals?"] });
+              w({ type: "done" });
+              resp.end();
+            };
+            setTimeout(step, 60);
+            return;
           }
           // A restock question (the back_in_stock_alert tool, as the server
           // sends it): sold out in that size → the Notify-me card.

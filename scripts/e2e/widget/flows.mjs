@@ -3732,6 +3732,15 @@ for (const coop of ["1", "2"]) {
       const phone = await readPeak(ph.page);
       check("peak home (phone): the blocks in one row that scrolls sideways within the screen — one card and the edge of the next in view, never stacked", phone.titles.length === 2 && phone.oneRow && phone.scrolls && phone.inside && phone.cardW >= phone.railW * 0.78 && phone.cardW <= phone.railW * 0.9, JSON.stringify(phone));
       await ph.ctx.close();
+      // Settings → Peak Mode → Preview: the token on the page link shows the peak home to this browser — and on the pages after it (the session) — with Peak Mode off.
+      const pv = await open("/full?home=focus&banner=1&ava_preview=0123456789abcdef0123456789abcdef");
+      const previewed = await readPeak(pv.page);
+      await pv.page.goto("http://localhost:4789/full?home=focus&banner=1");
+      await pv.page.click(".ai-chat-launcher");
+      await pv.page.waitForTimeout(1200);
+      const nextPage = await readPeak(pv.page);
+      check("peak preview: the signed token on the link shows the peak home to this browser with Peak Mode off, and keeps showing it on the pages after", previewed.titles.length === 2 && !previewed.banner && nextPage.titles.length === 2 && !nextPage.banner, JSON.stringify({ previewed: previewed.titles, nextPage: nextPage.titles }));
+      await pv.ctx.close();
       const cl = await open("/full?pk=1&banner=1");
       const classic = await cl.page.evaluate(() => ({ peak: document.querySelectorAll(".ai-chat-welcome .ai-chat-peak__card").length, banner: !!document.querySelector(".ai-chat-welcome__banner"), avatar: document.querySelector(".ai-chat-welcome__avatar img")?.getAttribute("src") || "" }));
       check("peak home (classic layout): the blocks in place of the banner there too, the peak picture on the welcome", classic.peak === 2 && !classic.banner && /pic-orthotics/.test(classic.avatar), JSON.stringify(classic));
@@ -4296,6 +4305,69 @@ for (const coop of ["1", "2"]) {
     check("home layout focus (reduced motion): no JS errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
+}
+
+// A streamed reply: the words show as they are written — a draft bubble in
+// the typing dots' place, growing, with no thumbs and nothing saved — then
+// the verified answer takes the draft's place with its cards and
+// suggestions. "stream fix" is a rewrite after the fact check: the final
+// words differ from the last draft, and the final is what stays and is saved.
+for (const [label, viewport, msg, finalText] of [
+  ["desktop", { width: 1280, height: 860 }, "stream", "Here are two boots that come in wide — the Rebecca and the Jillian."],
+  ["phone", { width: 375, height: 740 }, "stream fix", "Here are two boots that come in wide — the Rebecca and the Jillian, both in stock in a 10 wide."],
+]) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, ...(label === "phone" ? { isMobile: true, hasTouch: true } : {}) });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(900);
+  await page.evaluate(() => {
+    window.__drafts = [];
+    const msgs = document.querySelector(".ai-chat-messages");
+    new MutationObserver(() => { const d = document.querySelector(".ai-chat-msg.is-draft .ai-chat-msg-bubble"); const t = d ? d.textContent.trim() : ""; if (t && window.__drafts[window.__drafts.length - 1] !== t) window.__drafts.push(t); }).observe(msgs, { subtree: true, childList: true, characterData: true });
+  });
+  await page.fill(".ai-chat-input-area textarea", msg);
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg.is-draft", { timeout: 6000 });
+  const mid = await page.evaluate(() => { const d = document.querySelector(".ai-chat-msg.is-draft"); return { text: d.querySelector(".ai-chat-msg-bubble").textContent.trim(), busy: d.getAttribute("aria-busy"), avatar: !!d.querySelector(".ai-chat-msg-avatar"), typing: document.querySelector(".ai-chat-typing").classList.contains("visible"), thumbs: !!d.querySelector(".ai-chat-feedback"), cards: d.querySelectorAll(".ai-chat-product-card").length, saved: (JSON.parse(localStorage.getItem("hajirai_chat_history") || "[]")).filter((m) => m.role === "assistant").length, caret: getComputedStyle(d.querySelector(".ai-chat-msg-bubble > p:last-of-type"), "::after").display }; });
+  check(`streamed reply (${label}): the first words show in a draft bubble while the rest is written — typing dots gone, a caret after the words, no thumbs, no cards, nothing saved`, /^Here are/.test(mid.text) && mid.text !== finalText && mid.busy === "true" && mid.avatar && !mid.typing && !mid.thumbs && mid.cards === 0 && mid.saved === 0 && mid.caret === "inline-block", JSON.stringify(mid));
+  await page.waitForSelector(".ai-chat-msg:last-child .ai-chat-product-card", { timeout: 8000 });
+  await page.waitForTimeout(150);
+  const done = await page.evaluate((finalText) => {
+    const all = [...document.querySelectorAll(".ai-chat-msg--assistant")];
+    const last = all[all.length - 1];
+    const boots = all.filter((m) => /two boots/.test(m.textContent)).length;
+    const hist = JSON.parse(localStorage.getItem("hajirai_chat_history") || "[]").filter((m) => m.role === "assistant");
+    return { drafts: window.__drafts, text: last.querySelector(".ai-chat-msg-bubble > p").textContent.trim(), draft: last.classList.contains("is-draft"), busy: last.getAttribute("aria-busy"), boots, cards: last.querySelectorAll(".ai-chat-product-card").length, sugg: document.querySelectorAll(".ai-chat-suggest-btn").length, thumbs: !!document.querySelector(".ai-chat-feedback"), hist: hist.map((m) => m.content), typing: document.querySelector(".ai-chat-typing").classList.contains("visible"), finalText };
+  }, finalText);
+  const growing = done.drafts.length >= 2 && done.drafts.every((t, i) => i === 0 || (t.length > done.drafts[i - 1].length && t.startsWith(done.drafts[i - 1].slice(0, 8))));
+  check(`streamed reply (${label}): the draft grew word by word (${done.drafts.length} steps)`, growing, JSON.stringify(done.drafts));
+  check(`streamed reply (${label}): the verified answer took the draft's place — one bubble, the final words, two cards, suggestions, thumbs, saved once`, done.text === finalText && !done.draft && done.busy === null && done.boots === 1 && done.cards === 2 && done.sugg >= 2 && done.thumbs && done.hist.length === 1 && done.hist[0] === finalText && !done.typing, JSON.stringify({ ...done, drafts: done.drafts.length }));
+  if (label === "phone") check("streamed reply (phone): the rewrite's words replaced the last draft's", done.drafts[done.drafts.length - 1] !== finalText && done.text === finalText, JSON.stringify({ last: done.drafts[done.drafts.length - 1], text: done.text }));
+  check(`streamed reply (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// A reply that fails after a draft began: the draft goes, the error is said
+// in its own bubble, nothing saved.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher__text");
+  await page.waitForTimeout(900);
+  await page.fill(".ai-chat-input-area textarea", "stream error");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg.is-draft", { timeout: 6000 });
+  await page.waitForFunction(() => !document.querySelector(".ai-chat-msg.is-draft") && [...document.querySelectorAll(".ai-chat-msg--assistant")].some((m) => /try again/i.test(m.textContent)), null, { timeout: 8000 });
+  const after = await page.evaluate(() => { const all = [...document.querySelectorAll(".ai-chat-msg--assistant")]; return { n: all.length, boots: all.filter((m) => /Here are/.test(m.textContent)).length, saved: JSON.parse(localStorage.getItem("hajirai_chat_history") || "[]").filter((m) => m.role === "assistant").length, typing: document.querySelector(".ai-chat-typing").classList.contains("visible") }; });
+  check("streamed reply (error after a draft): the draft is gone, the error is said, nothing saved", after.boots === 0 && after.saved === 0 && !after.typing, JSON.stringify(after));
+  check("streamed reply (error after a draft): no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
 }
 
 await browser.close();

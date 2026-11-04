@@ -13,6 +13,10 @@ var C=window.__AI_CHAT_CONFIG||{};
 var CHAT_URL='/apps/hajirai/chat';
 var FEEDBACK_URL='/apps/hajirai/feedback';
 var CONFIG_URL='/apps/hajirai/widget-config';
+/* Settings → Peak Mode → Preview: ?ava_preview=<token> on any page shows the
+   peak home to this browser for the session, whatever the switch says. */
+var PREVIEW='';
+try{var _pv=(location.search.match(/[?&]ava_preview=([0-9a-f]{32})/)||[])[1];if(_pv){PREVIEW=_pv;sessionStorage.setItem('hajirai_preview',_pv)}else PREVIEW=sessionStorage.getItem('hajirai_preview')||''}catch(e){}
 var VISUALIZE_URL='/apps/hajirai/visualize';
 var ACTIVITY_URL='/apps/hajirai/activity';
 (function(){try{if(document.getElementById('ai-chat-viz-keyframes-style'))return;var st=document.createElement('style');st.id='ai-chat-viz-keyframes-style';st.textContent='@keyframes aiChatViz{0%{background-position:100% 0}100%{background-position:-100% 0}}@keyframes aiChatVizSpin{to{transform:rotate(360deg)}}';(document.head||document.documentElement).appendChild(st)}catch(e){}})();
@@ -69,7 +73,7 @@ function hideAssistant(){
 }
 
 /* ?cta= is the welcome line shown here, so its translations match it. */
-fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')+'&av='+encodeURIComponent(C.avatarUrl||'')).then(function(r){return r.json()}).then(function(d){
+fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you find today?')+'&av='+encodeURIComponent(C.avatarUrl||'')+(PREVIEW?'&preview='+PREVIEW:'')).then(function(r){return r.json()}).then(function(d){
   if(d.showFeedback===false){SHOW_FEEDBACK=false;var _fr=msgsEl.querySelectorAll('.ai-chat-feedback');for(var _fi=0;_fi<_fr.length;_fi++)_fr[_fi].remove()}
   if(d.chatRating&&typeof d.chatRating==='object'){RATE_ON=d.chatRating.on!==false;var _ra=parseInt(d.chatRating.after,10);if(_ra>=2&&_ra<=8)RATE_AFTER=_ra}
   if(d.orbColors!==undefined)setOrbColors(d.orbColors);
@@ -6066,6 +6070,7 @@ if(rate){
 function showStreamError(em){
 isStreaming=false;sendBtn.disabled=false;
 typingEl.classList.remove('visible');
+var dr=msgsEl.querySelector('.ai-chat-msg.is-draft');if(dr)dr.remove();
 var md=appendMsg('assistant',em);
 /* Shown, not saved: an error isn't something the assistant said, and the
    history is sent back to the model with the next message. */
@@ -6730,6 +6735,17 @@ var p=JSON.parse(data);
 if(p.type==='text'){
   full+=p.text||'';
 }
+if(p.type==='draft'){
+  /* The words as they are written: a draft in the reply's place (the
+     typing dots go), swapped for the verified answer in finish() — never
+     saved, no thumbs. Following the words only while the reader is at
+     the bottom. */
+  var dt=draftWords(p.text);
+  if(dt){
+    if(!msgDiv){typingEl.classList.remove('visible');msgDiv=appendMsg('assistant',dt);msgDiv.classList.add('is-draft');msgDiv.setAttribute('aria-busy','true')}
+    else{var db=$('.ai-chat-msg-bubble',msgDiv);if(db){var nearEnd=msgsEl.scrollHeight-msgsEl.scrollTop-msgsEl.clientHeight<80;db.innerHTML='<p>'+md(esc(dt))+'</p>';if(nearEnd)scrollBottom()}}
+  }
+}
 if(p.type==='products'&&p.products){
   /* Each products event is the FULL card set (server contract: last one wins) — replace, never append. */
   prods=p.products.slice();
@@ -6834,6 +6850,13 @@ return '<div class="ai-chat-fit-card" role="region" aria-label="Size recommendat
 // to the customer. Targets the cases left behind by chip removal: empty
 // runs (**, ****, ** **), a marker floating between spaces/punctuation,
 // and any line that ends up with an odd (unbalanced) count of ** or *.
+/* A draft's words: the chips (<<…>>, even one still being written) and an
+   unfinished link out, no dangling emphasis — the cleaning finish() gives
+   the answer, applied mid-sentence. */
+function draftWords(t){
+var s=String(t||'').replace(/\s*<<[^<>]*>>/g,'').replace(/\s*<<[^<>]*$/,'').replace(/\[[^\]]*\]\([^)]*$/,'').replace(/\[[^\]]*$/,'');
+return stripDanglingMd(s).trim();
+}
 function stripDanglingMd(s){
   s=String(s||'');
   s=s.replace(/\*\*\s*\*\*/g,'').replace(/__\s*__/g,'');
@@ -6851,6 +6874,9 @@ function finish(text,prods,md2,sugg,linkCTA,fitReport,sseChoices,vizCta,supportC
 typingEl.classList.remove('visible');isStreaming=false;sendBtn.disabled=false;
 errorRetryCount=0;
 var mDiv=md2;
+/* A draft bubble (the words as they were written) becomes the answer. */
+var wasDraft=!!(mDiv&&mDiv.classList.contains('is-draft'));
+if(wasDraft){mDiv.classList.remove('is-draft');mDiv.removeAttribute('aria-busy')}
 var choices=[];
 var cleanText=text||'';
 var choiceRe=/<<([^<>]+)>>/g;
@@ -6861,6 +6887,7 @@ if(choices.length>0)cleanText=cleanText.replace(/\s*<<[^<>]+>>/g,'').trim();
 // "interested in — **<<Men's>><<Women's>>** styles?" becomes "— ** styles?".
 // Strip any dangling/empty bold or italic markers so they never render raw.
 cleanText=stripDanglingMd(cleanText);
+if(!cleanText&&wasDraft){mDiv.remove();mDiv=null}
 // SSE-delivered choices (engine browse-clarifier) merge into the
 // same chip set as in-text <<...>> markers. finish() owns the
 // bubble's final HTML — no other code path inserts chips.
@@ -6872,7 +6899,7 @@ if(Array.isArray(sseChoices)&&sseChoices.length){
 }
 if(cleanText){
   if(!mDiv)mDiv=appendMsg('assistant',cleanText,prods);
-  else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi],fitcAny(prods));ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}b.insertAdjacentHTML('beforeend',compareCtaHtml(prods))}}}
+  else{var b=$('.ai-chat-msg-bubble',mDiv);if(b){var atEnd=msgsEl.scrollHeight-msgsEl.scrollTop-msgsEl.clientHeight<80;b.innerHTML='<p>'+md(esc(cleanText))+'</p>';if(atEnd)scrollBottom();if(prods&&prods.length){var isShowcase2=PRODUCT_CARD_STYLE==='showcase';var styleSuffix2=isShowcase2?' ai-chat-products--showcase':'';var ph='<div class="ai-chat-products'+styleSuffix2+'">';for(var pi=0;pi<prods.length;pi++)ph+=prodCard(prods[pi],fitcAny(prods));ph+='</div>';b.insertAdjacentHTML('beforeend',isShowcase2?showcaseWrap(ph):ph);if(isShowcase2){var w2=b.querySelector('.ai-chat-products-wrap');if(w2)initShowcaseArrows(w2)}b.insertAdjacentHTML('beforeend',compareCtaHtml(prods))}}}
   /* ai: an answer from the assistant (thumbs come back with it after a reload). */
   var _saved={role:'assistant',content:cleanText,products:prods||[],ai:1};
   if(mDiv)mDiv.__msg=_saved;

@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useLoaderData, useSearchParams, Link, useRouteLoaderData, useFetcher } from "react-router";
+import { useState, useCallback, useEffect } from "react";
+import { useLoaderData, useSearchParams, Link, useRouteLoaderData } from "react-router";
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
@@ -7,11 +7,11 @@ import {
 } from "@shopify/polaris";
 import { ExportIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import { getUsageSummary, getDailySeries, getReplyCostSample } from "../models/ChatUsage.server";
 import { getShopTimeZone } from "../lib/shop-timezone.server";
 import { getShopPlan } from "../lib/billing.server";
-import { getFeedbackSummary, cleanupOldFeedback, getRecentQuestions } from "../models/ChatFeedback.server";
+import { getFeedbackSummary, cleanupOldFeedback } from "../models/ChatFeedback.server";
 import {
   getTopProducts, getProductsByTool, getInterestBreakdown, cleanupOldMentions,
 } from "../models/ChatProductMention.server";
@@ -25,8 +25,7 @@ import CostEstimator from "../components/CostEstimator";
 import { getMonthlySessions } from "../lib/store-traffic.server";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
-import { FEEDBACK_REASONS, FEEDBACK_MOMENTS, FEEDBACK_SUBJECTS } from "../lib/chat-rating.js";
-import { listLessons, decideLesson, draftLessonsNow } from "../lib/feedback-lessons.server";
+import { RATINGS_CSS, RankList } from "../components/Ratings";
 
 function parseRange(searchParams) {
   const preset = searchParams.get("range") || "30d";
@@ -65,7 +64,7 @@ function daysBetween(a, b) {
 }
 
 export const loader = async ({ request }) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin } = await requireFullAccess(request);
   const url = new URL(request.url);
   const parsed = parseRange(url.searchParams);
   const planForRetention = await getShopPlan(session.shop);
@@ -79,13 +78,12 @@ export const loader = async ({ request }) => {
   const prevRange = { startDate: prevStart, endDate: prevEnd };
 
   const weekRange = { startDate: new Date(Date.now() - 7 * 86400000), endDate: new Date() };
-  const [usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage, lessons] = await Promise.all([
+  const [usage, feedback, topProducts, productsByTool, interest, daily, prevUsage, prevFeedback, conversions, prevConversions, config, weekTopics, weekUsage] = await Promise.all([
     getUsageSummary(session.shop, rangeArg),
     getFeedbackSummary(session.shop, rangeArg),
     getTopProducts(session.shop, rangeArg, 10),
     getProductsByTool(session.shop, rangeArg, 10),
     getInterestBreakdown(session.shop, rangeArg),
-    getRecentQuestions(session.shop, rangeArg, 300),
     getShopTimeZone(admin, session.shop).then((timeZone) => getDailySeries(session.shop, rangeArg, { timeZone })),
     getUsageSummary(session.shop, prevRange),
     getFeedbackSummary(session.shop, prevRange),
@@ -94,7 +92,6 @@ export const loader = async ({ request }) => {
     getShopConfig(session.shop),
     getTopicRows(session.shop, { days: 7 }).catch(() => []),
     getUsageSummary(session.shop, weekRange),
-    listLessons(session.shop).catch(() => ({ drafts: [], decided: [] })),
   ]);
   // Cost estimator: real traffic, this store's priced setup, recorded replies.
   const [traffic, modeled, costRows] = await Promise.all([
@@ -107,7 +104,7 @@ export const loader = async ({ request }) => {
   cleanupOldMentions().catch(() => {});
 
   return {
-    usage, feedback, topProducts, productsByTool, interest, recentQuestions, daily, conversions, lessons,
+    usage, feedback, topProducts, productsByTool, interest, daily, conversions,
     week: { ...summarizeWeek(weekTopics), messages: weekUsage.totalMessages },
     estimator: {
       traffic,
@@ -129,19 +126,6 @@ export const loader = async ({ request }) => {
   };
 };
 
-// Lessons from thumbs-down: approve or dismiss one, or draft today's now.
-export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const form = await request.formData();
-  const intent = String(form.get("intent") || "");
-  try {
-    if (intent === "lesson_decide") return await decideLesson(session.shop, String(form.get("id") || ""), String(form.get("decision") || ""));
-    if (intent === "lessons_draft") return await draftLessonsNow(session.shop);
-  } catch (err) {
-    return { error: String(err?.message || err) };
-  }
-  return { error: "Unknown action." };
-};
 
 function formatCost(n) {
   if (!n) return "$0.00";
@@ -206,21 +190,12 @@ const ANALYTICS_CSS = `
   .an-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .an-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
   .an-cols { display: grid; grid-template-columns: repeat(var(--an-cols, 3), minmax(0, 1fr)); gap: 16px 24px; padding: 10px 16px 16px; }
-  .an-col__title { margin-bottom: 8px; font-size: 12px; line-height: 16px; font-weight: 650; color: #303030; }
-  .an-rank { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
   .an-rank__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .an-rank__title { min-width: 0; font-size: 13px; line-height: 18px; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .an-rank__n { flex: none; font-size: 12.5px; font-weight: 650; color: #1a2e26; font-variant-numeric: tabular-nums; }
   .an-rank__bar { height: 4px; margin-top: 4px; border-radius: 999px; background: rgba(26,46,38,0.06); overflow: hidden; }
   .an-rank__bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2D6B4F, #3a8a66); }
-  .an-callout { margin: 10px 16px 0; padding: 10px 12px; border-radius: 10px; background: rgba(185,137,0,0.09); font-size: 12.5px; line-height: 18px; color: #4a3b00; }
-  .an-callout strong { color: #1a1a1a; }
-  .an-empty { padding: 18px 16px 20px; font-size: 13px; color: #616161; }
   .an-convo__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; color: #8a8a8a; min-height: 18px; }
-  .an-pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #616161; background: rgba(26,46,38,0.06); white-space: nowrap; }
-  .an-pill.is-up { color: #2D6B4F; background: rgba(45,107,79,0.10); }
-  .an-pill.is-down { color: #a33d3d; background: rgba(185,90,90,0.13); }
-  .an-lesson { padding: 12px 16px 14px; border-top: 1px solid rgba(30,27,51,0.07); }
   .an-lesson__line { margin-top: 4px; font-size: 14px; line-height: 20px; font-weight: 600; color: #1a1a1a; overflow-wrap: anywhere; }
   .an-lesson__fix { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: rgba(45,107,79,0.06); font-size: 13px; line-height: 18px; color: #1a2e26; white-space: pre-wrap; overflow-wrap: anywhere; }
   .an-lesson__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -229,19 +204,9 @@ const ANALYTICS_CSS = `
   .an-lesson__done span:last-child { overflow-wrap: anywhere; }
   .an-convo__line { margin-top: 2px; font-size: 12.5px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
   .an-convo__line b { font-weight: 600; color: #616161; }
-  .an-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .an-convo__toggle { all: unset; margin-top: 6px; font-size: 12px; font-weight: 600; color: #2D6B4F; cursor: pointer; }
   .an-convo__toggle:hover { text-decoration: underline; }
   .an-convo__toggle:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 2px; border-radius: 4px; }
-  .an-chat { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 12px; border-radius: 12px; background: rgba(26,46,38,0.03); }
-  .an-msg { max-width: 85%; padding: 7px 11px; border-radius: 12px; font-size: 13px; line-height: 18px; color: #1a1a1a; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .an-msg.is-user { align-self: flex-end; background: rgba(45,107,79,0.12); border-bottom-right-radius: 4px; }
-  .an-msg.is-ai { align-self: flex-start; background: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); border-bottom-left-radius: 4px; }
-  .an-more { padding: 10px 16px 12px; border-top: 1px solid rgba(30,27,51,0.07); }
-  .an-why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding: 12px 16px 16px; border-top: 1px solid rgba(30,27,51,0.07); }
-  .an-rank--down .an-rank__n { color: #a33d3d; }
-  .an-rank--down .an-rank__bar span { background: linear-gradient(90deg, #a33d3d, #c46a6a); }
-  .an-vote { padding: 12px 16px 13px; border-top: 1px solid rgba(30,27,51,0.07); }
   .an-vote__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; margin-bottom: 7px; font-size: 12px; line-height: 18px; color: #8a8a8a; }
   .an-vote__meta > span + span:not(.an-vote__reason)::before { content: "·"; margin: 0 7px; color: #c4c4c4; }
   .an-vote__reason { margin-left: auto; }
@@ -250,13 +215,10 @@ const ANALYTICS_CSS = `
   .an-vote__grid dd { margin: 0; min-width: 0; font-size: 13px; line-height: 18px; color: #4a4a4a; overflow-wrap: anywhere; }
   .an-vote__grid dd.is-q { font-size: 13.5px; line-height: 19px; font-weight: 600; color: #1a1a1a; }
   .an-vote__grid dd.is-c { justify-self: start; padding: 4px 9px; border-radius: 8px; background: rgba(185,137,0,0.10); color: #3d3000; white-space: pre-wrap; }
-  .an-vote .an-convo__toggle, .an-vote .an-chat { margin-left: 72px; }
   .an-foot { padding: 4px 8px 8px; text-align: center; font-size: 12px; line-height: 18px; color: #8a8a8a; }
   @media (max-width: 900px) { .an-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 760px) {
-    .an-cols, .an-why { grid-template-columns: minmax(0, 1fr); }
-    .an-vote__grid { grid-template-columns: 54px minmax(0, 1fr); }
-    .an-vote .an-convo__toggle, .an-vote .an-chat { margin-left: 0; }
+    .an-cols { grid-template-columns: minmax(0, 1fr); }
     .an-kpi__value { font-size: 21px; line-height: 27px; }
   }
 `;
@@ -343,26 +305,6 @@ function LineChart({ data, height = 170 }) {
 
 // Ranked list with proportional bars — the bar tells you "how much more"
 // at a glance.
-function RankList({ rows, tone }) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  return (
-    <ol className={`an-rank${tone === "down" ? " an-rank--down" : ""}`}>
-      {rows.map((r, i) => (
-        <li key={`${r.title}-${i}`}>
-          <div className="an-rank__top">
-            <span className="an-rank__title" title={r.title}>{r.title}</span>
-            <span className="an-rank__n">{r.count.toLocaleString()}</span>
-          </div>
-          <div className="an-rank__bar" aria-hidden="true"><span style={{ width: `${Math.max(3, (r.count / max) * 100)}%` }} /></div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-// Always the last 7 days, whatever range is picked — the quick "what are
-// customers asking?" read. The page shows the top lists; every topic is in
-// the Topics export.
 function WeekCard({ week }) {
   if (!week) return null;
   const lists = [
@@ -428,232 +370,6 @@ function ProductsCard({ searched, viewed }) {
 
 // What AVA said when the vote landed: the reply that was rated, else the
 // last reply in the saved transcript.
-function avaSaid(row) {
-  if (row.flaggedAiResponse) return row.flaggedAiResponse;
-  if (row.aiResponse) return row.aiResponse;
-  const t = Array.isArray(row.transcript) ? row.transcript : [];
-  for (let i = t.length - 1; i >= 0; i--) if (t[i].role === "assistant" && t[i].content) return t[i].content;
-  return null;
-}
-
-// One vote, readable at a glance: when it was and what it was about on one
-// line (a thumbs-down carries the reason the shopper picked, at the right,
-// so the reasons line up down the list), then what the shopper asked, what
-// AVA said, and the shopper's own words when they left any. The whole chat
-// opens under it.
-function VoteRow({ row, mounted, tone }) {
-  const [open, setOpen] = useState(false);
-  const chat = row.kind === "chat";
-  const transcript = Array.isArray(row.transcript) ? row.transcript : [];
-  const products = row.products || [];
-  const asked = row.lastUserQuestion || row.question;
-  const said = avaSaid(row);
-  const when = chat
-    ? (row.moment && FEEDBACK_MOMENTS[row.moment] ? `Whole chat · ${FEEDBACK_MOMENTS[row.moment].toLowerCase()}` : "Whole chat")
-    : (row.moment === "order" ? "An order answer" : "One reply");
-  const reason = row.reason && FEEDBACK_REASONS[row.reason] ? FEEDBACK_REASONS[row.reason] : null;
-  return (
-    <div className="an-vote">
-      <div className="an-vote__meta">
-        {mounted && <span>{new Date(row.date).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
-        {row.subject && FEEDBACK_SUBJECTS[row.subject] && <span>{FEEDBACK_SUBJECTS[row.subject]}</span>}
-        <span>{when}</span>
-        {products.length > 0 && <span>{`${products.length} product${products.length > 1 ? "s" : ""} shown`}</span>}
-        {tone === "down" && (reason
-          ? <span className="an-pill is-down an-vote__reason">{reason}</span>
-          : <span className="an-pill an-vote__reason">No reason picked</span>)}
-      </div>
-      {(asked || said || row.comment) && (
-        <dl className="an-vote__grid">
-          {asked && <><dt>Shopper</dt><dd className="is-q">{asked}</dd></>}
-          {said && <><dt>AVA</dt><dd className={open ? "" : "an-clamp"}>{said}</dd></>}
-          {row.comment && <><dt>Comment</dt><dd className="is-c">{row.comment}</dd></>}
-        </dl>
-      )}
-      {transcript.length > 0 && (
-        <button type="button" className="an-convo__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide the conversation" : `Read the conversation (${transcript.length} message${transcript.length > 1 ? "s" : ""})`}
-        </button>
-      )}
-      {open && transcript.length > 0 && (
-        <div className="an-chat">
-          {transcript.map((m, idx) => (
-            <div key={idx} className={`an-msg ${m.role === "user" ? "is-user" : "is-ai"}`}>{m.content}</div>
-          ))}
-          {products.length > 0 && <div className="set-row__help">{`Products shown: ${products.join(", ")}`}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Lessons from thumbs-down, waiting for a decision: once a day (or on Draft
-// now) the assistant reads the week's not-helpful chats and drafts, for
-// every subject with two or more, one line to do differently and, for a
-// missing fact, the fact. Approve writes it into Knowledge or Rules;
-// Dismiss rests it a week. Nothing reaches the assistant until approved.
-function LessonsCard({ lessons, mounted }) {
-  const fetcher = useFetcher();
-  const busy = fetcher.state !== "idle";
-  const drafting = busy && fetcher.formData?.get("intent") === "lessons_draft";
-  const drafts = lessons?.drafts || [];
-  const decided = lessons?.decided || [];
-  const result = fetcher.state === "idle" ? fetcher.data : null;
-  return (
-    <Card padding="0">
-      <Row
-        title={<InlineStack gap="200" blockAlign="center"><span>Lessons to review</span>{drafts.length > 0 && <Badge tone="attention">{String(drafts.length)}</Badge>}</InlineStack>}
-        help="Once a day AVA reads the chats rated not helpful this week and, for every subject with two or more, drafts one line to do differently — and, when a fact was missing, the fact to add. Approve adds it to Knowledge (a fact) or Rules (how to handle it); Dismiss rests it for a week. Nothing changes until you approve."
-        control={
-          <fetcher.Form method="post">
-            <input type="hidden" name="intent" value="lessons_draft" />
-            <Button size="slim" submit loading={drafting} disabled={busy && !drafting}>Draft now</Button>
-          </fetcher.Form>
-        }
-      />
-      {result?.error && <div className="an-callout">{result.error}</div>}
-      {result && !result.error && typeof result.drafted === "number" && (
-        <div className="an-callout">{result.drafted > 0 ? `${result.drafted} new lesson${result.drafted === 1 ? "" : "s"} drafted.` : "Nothing new to draft: no subject has two or more thumbs down this week, or its lesson is already here."}</div>
-      )}
-      {drafts.length === 0 ? (
-        <div className="an-empty">No lessons waiting. A draft appears once a subject gets two or more thumbs down in a week.</div>
-      ) : drafts.map((l) => (
-        <div key={l.id} className="an-lesson">
-          <div className="an-convo__meta">
-            <span className="an-pill is-down">{l.label}</span>
-            <span className="an-pill">{`${l.count} thumbs down`}</span>
-            <span className="an-pill">{l.kind === "knowledge" && l.fix ? "A fact to add" : "How to handle it"}</span>
-            {mounted && <span>{new Date(l.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
-          </div>
-          <div className="an-lesson__line">{l.lesson}</div>
-          {l.kind === "knowledge" && l.fix && <div className="an-lesson__fix">{l.fix}</div>}
-          {l.examples.length > 0 && <div className="an-convo__line"><b>Shoppers asked:</b> {l.examples.map((q) => `“${q}”`).join(" · ")}</div>}
-          <div className="an-lesson__actions">
-            <fetcher.Form method="post">
-              <input type="hidden" name="intent" value="lesson_decide" />
-              <input type="hidden" name="id" value={l.id} />
-              <input type="hidden" name="decision" value="approved" />
-              <Button size="slim" variant="primary" submit disabled={busy}>{l.kind === "knowledge" && l.fix ? "Approve — add to Knowledge" : "Approve — add to Rules"}</Button>
-            </fetcher.Form>
-            <fetcher.Form method="post">
-              <input type="hidden" name="intent" value="lesson_decide" />
-              <input type="hidden" name="id" value={l.id} />
-              <input type="hidden" name="decision" value="dismissed" />
-              <Button size="slim" submit disabled={busy}>Dismiss</Button>
-            </fetcher.Form>
-          </div>
-        </div>
-      ))}
-      {decided.length > 0 && (
-        <div className="an-lesson__past">
-          {decided.map((l) => (
-            <div key={l.id} className="an-lesson__done">
-              <span className={`an-pill${l.status === "approved" ? " is-up" : ""}`}>{l.status === "approved" ? "Approved" : "Dismissed"}</span>
-              <span>{`${l.label}: ${l.lesson}`}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-const VOTES_FIRST = 8;
-
-// Every thumbs down from the range in one place, newest first — what went
-// wrong, readable without a click: on top, why the shoppers said so and
-// what they were asking about (counted); then each vote with the question,
-// AVA's reply and the reason. Export downloads these rows.
-function NotHelpfulCard({ rows, onExport, exporting, mounted }) {
-  const [showAll, setShowAll] = useState(false);
-  const why = useMemo(() => {
-    const reasons = {}, subjects = {};
-    let noReason = 0;
-    for (const r of rows) {
-      if (r.reason && FEEDBACK_REASONS[r.reason]) reasons[r.reason] = (reasons[r.reason] || 0) + 1;
-      else noReason++;
-      const key = r.subject && FEEDBACK_SUBJECTS[r.subject] ? r.subject : "other";
-      subjects[key] = (subjects[key] || 0) + 1;
-    }
-    const list = (o, labels) => Object.entries(o).sort((x, y) => y[1] - x[1]).map(([key, n]) => ({ title: labels[key], count: n }));
-    const reasonRows = list(reasons, FEEDBACK_REASONS);
-    if (noReason > 0) reasonRows.push({ title: "No reason picked", count: noReason });
-    return { reasons: reasonRows, subjects: list(subjects, FEEDBACK_SUBJECTS) };
-  }, [rows]);
-  const shown = showAll ? rows : rows.slice(0, VOTES_FIRST);
-  return (
-    <Card padding="0">
-      <Row
-        title={<InlineStack gap="200" blockAlign="center"><span>Not helpful</span>{rows.length > 0 && <Badge tone="critical">{String(rows.length)}</Badge>}</InlineStack>}
-        help="Every thumbs down from this range, newest first — on one reply, or on the whole chat at its check-in. Each one shows what the shopper asked, what AVA said, and the reason they picked."
-        control={
-          <Button size="slim" onClick={() => onExport("conversations", { vote: "down" })} loading={exporting === "conversations"} disabled={(Boolean(exporting) && exporting !== "conversations") || rows.length === 0}>
-            Export
-          </Button>
-        }
-      />
-      {rows.length === 0 ? (
-        <div className="an-empty">Nothing rated not helpful in this range.</div>
-      ) : (
-        <>
-          {rows.length > 1 && (
-            <div className="an-why">
-              <div>
-                <div className="an-col__title">Why they said so</div>
-                <RankList rows={why.reasons} tone="down" />
-              </div>
-              <div>
-                <div className="an-col__title">What they were asking about</div>
-                <RankList rows={why.subjects} tone="down" />
-              </div>
-            </div>
-          )}
-          {shown.map((r) => <VoteRow key={r.id} row={r} mounted={mounted} tone="down" />)}
-          {rows.length > VOTES_FIRST && (
-            <div className="an-more">
-              <Button variant="plain" disclosure={showAll ? "up" : "down"} onClick={() => setShowAll((v) => !v)}>
-                {showAll ? "Show fewer" : `Show ${rows.length - VOTES_FIRST} more`}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </Card>
-  );
-}
-
-// The thumbs up, in their own card and folded by default: the number is
-// what matters day to day; the rows are there to read when wanted.
-function HelpfulCard({ rows, onExport, exporting, mounted }) {
-  const [open, setOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? rows : rows.slice(0, VOTES_FIRST);
-  return (
-    <Card padding="0">
-      <Row
-        title={<InlineStack gap="200" blockAlign="center"><span>Helpful</span><Badge tone="success">{String(rows.length)}</Badge></InlineStack>}
-        help="Every thumbs up from this range, newest first — on one reply, or on the whole chat at its check-in."
-        control={
-          <InlineStack gap="200">
-            <Button size="slim" disclosure={open ? "up" : "down"} onClick={() => setOpen((v) => !v)} ariaExpanded={open}>{open ? "Hide" : "Show"}</Button>
-            <Button size="slim" onClick={() => onExport("conversations", { vote: "up" })} loading={exporting === "conversations"} disabled={Boolean(exporting) && exporting !== "conversations"}>
-              Export
-            </Button>
-          </InlineStack>
-        }
-      />
-      {open && shown.map((r) => <VoteRow key={r.id} row={r} mounted={mounted} tone="up" />)}
-      {open && rows.length > VOTES_FIRST && (
-        <div className="an-more">
-          <Button variant="plain" disclosure={showAll ? "up" : "down"} onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "Show fewer" : `Show ${rows.length - VOTES_FIRST} more`}
-          </Button>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function RangeSelector({ current, searchParams }) {
   const [open, setOpen] = useState(false);
   const [pickerMonth, setPickerMonth] = useState(new Date().getMonth());
@@ -743,7 +459,7 @@ function ExportMenu({ onExport, exporting }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, productsByTool, recentQuestions, daily, conversions, previous, range, estimator, week, lessons } = useLoaderData();
+  const { usage, feedback, productsByTool, daily, conversions, previous, range, estimator, week } = useLoaderData();
   // The chat's order tag carries the app's brand (AVA on the Aetrex app).
   const orderTag = appBrand(useRouteLoaderData("routes/app")?.appName || DEFAULT_APP_NAME);
   const [searchParams] = useSearchParams();
@@ -752,8 +468,6 @@ export default function Analytics() {
   const [exporting, setExporting] = useState(null);
   const [showEstimator, setShowEstimator] = useState(false);
   const hasData = usage.totalMessages > 0;
-  // The votes, split: the thumbs down get their own card, the thumbs up another.
-  const votes = useMemo(() => ({ down: recentQuestions.filter((r) => r.vote === "down"), up: recentQuestions.filter((r) => r.vote === "up") }), [recentQuestions]);
 
   // CSV download has to run from inside the embedded iframe so the App Bridge
   // session token is available. Opening ?export=… in a new tab (the old
@@ -807,7 +521,7 @@ export default function Analytics() {
       <TitleBar title="Analytics" />
       {/* Static CSS, injected as-is: as a text child React would escape its
           quotes on the server and the page wouldn't hydrate. */}
-      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + ANALYTICS_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: SETTINGS_CSS + RATINGS_CSS + ANALYTICS_CSS }} />
       <div className="an set-links">
         <BlockStack gap="400">
           <BrandHeader title="Analytics" gutter={false} />
@@ -875,15 +589,13 @@ export default function Analytics() {
 
           <ProductsCard searched={top5(productsByTool?.searched)} viewed={top5(productsByTool?.viewed)} />
 
-          {(feedback.down > 0 || lessons?.drafts?.length > 0 || lessons?.decided?.length > 0) && (
-            <LessonsCard lessons={lessons} mounted={mounted} />
-          )}
-          {recentQuestions.length > 0 && (
-            <NotHelpfulCard rows={votes.down} onExport={handleExport} exporting={exporting} mounted={mounted} />
-          )}
-          {votes.up.length > 0 && (
-            <HelpfulCard rows={votes.up} onExport={handleExport} exporting={exporting} mounted={mounted} />
-          )}
+          <Card padding="0">
+            <Row
+              title="Ratings and lessons"
+              help={`${feedback.up || 0} helpful · ${feedback.down || 0} not helpful in this range. Every vote, what the shopper asked and what AVA said, and the lessons drafted from the thumbs-down, are on the Recordings page.`}
+              control={<Button url="/app/recordings#ratings">Open Recordings</Button>}
+            />
+          </Card>
 
           <div>
             <Button variant="plain" disclosure={showEstimator ? "up" : "down"} onClick={() => setShowEstimator((v) => !v)}>

@@ -674,6 +674,24 @@
   margin-bottom: 0;
 }
 
+/* A reply still being written: a soft caret after the last words. */
+.ai-chat-msg.is-draft .ai-chat-msg-bubble > p:last-of-type::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.7;
+  animation: ai-chat-caret 1s steps(2, start) infinite;
+}
+
+@keyframes ai-chat-caret {
+  to { visibility: hidden; }
+}
+
 .ai-chat-msg-bubble a {
   color: inherit;
   text-decoration: underline;
@@ -1437,6 +1455,7 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
   .ai-chat-panel,
   .ai-chat-launcher,
   .ai-chat-msg,
+  .ai-chat-msg.is-draft .ai-chat-msg-bubble > p:last-of-type::after,
   .ai-chat-typing-dot,
   .ai-chat-overlay {
     animation: none !important;

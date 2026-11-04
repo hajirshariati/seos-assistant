@@ -81,8 +81,8 @@ export function peakHomeError(raw) {
 
 // For widget-config: the home's peak look while Peak Mode is on, else null.
 // Pictures become links that carry their fingerprint (cached for good).
-export function peakHomeConfig(config = {}, now = new Date()) {
-  if (!peakState(config, now).active) return null;
+export function peakHomeConfig(config = {}, now = new Date(), { force = false } = {}) {
+  if (!force && !peakState(config, now).active) return null;
   const home = parsePeakHome(config.peakHome);
   const link = (which, data) => `${PEAK_IMAGE_PATH}?b=${encodeURIComponent(which)}&v=${shortHash(data)}`;
   const blocks = home.blocks.map((b) => ({

@@ -7,7 +7,7 @@ import {
   Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { requireFullAccess } from "../lib/staff-access.server";
 import { getShopConfig, getKnowledgeFiles, updateShopConfig } from "../models/ShopConfig.server";
 import { getCatalogSyncState, syncCatalogAsync } from "../models/Product.server";
 import { countEnrichmentsByShop } from "../models/ProductEnrichment.server";
@@ -21,7 +21,7 @@ import seosLogo from "../assets/SEoS.png";
 import { DEFAULT_APP_NAME, appBrand, appShortName } from "../lib/app-brand.js";
 
 export const loader = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await requireFullAccess(request);
   // "Today" is the store's day, in its own time zone.
   const timeZone = await getShopTimeZone(admin, session.shop);
   const [config, files, syncState, enrichmentCount, usage, feedback, conversions, decisionTrees, dailySeries, conversionSeries] = await Promise.all([
@@ -126,7 +126,7 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await requireFullAccess(request);
   const formData = await request.formData();
   if (formData.get("intent") === "dismiss_rate_limit") {
     await updateShopConfig(session.shop, { rateLimitHits: 0, rateLimitHitsMonth: "" });

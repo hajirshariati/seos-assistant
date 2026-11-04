@@ -103,7 +103,7 @@ export async function draftLessonsNow(shop) {
 
 const shape = (l) => ({
   id: l.id, subject: l.subject, label: FEEDBACK_SUBJECTS[l.subject] || l.subject, count: l.count, lesson: l.lesson, kind: l.kind, fix: l.fix,
-  examples: l.examples || [], status: l.status, createdAt: l.createdAt, decidedAt: l.decidedAt,
+  examples: l.examples || [], status: l.status, source: l.source || "feedback", createdAt: l.createdAt, decidedAt: l.decidedAt,
 });
 
 // The page: drafts waiting, newest first, and the last few decided.
