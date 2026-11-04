@@ -13,12 +13,27 @@ export { parseSupportStaff, staffAccess, SUPPORT_STAFF_MAX };
 export const SUPPORT_HOME = "/app/recordings";
 
 // For every page but Recordings: the admin session, or a redirect to
-// Recordings for the customer service team.
+// Recordings for the customer service team. The redirect is the library's
+// own: inside the embedded admin a plain redirect loses Shopify's query
+// parameters (shop, host, id_token), and the next request, with no
+// session, lands on the "session expired" page — which is what the team
+// saw on their first visit.
 export async function requireFullAccess(request) {
   const auth = await authenticate.admin(request);
   const config = await getShopConfigCached(auth.session.shop).catch(() => null);
-  if (staffAccess(auth.session, config) === "support") throw redirect(SUPPORT_HOME);
+  if (staffAccess(auth.session, config) === "support") throw supportRedirect(auth, request);
   return auth;
+}
+
+// The redirect to Recordings that keeps the embedded parameters: the admin
+// context's redirect when it has one, else a plain one carrying the query.
+export function supportRedirect(auth, request) {
+  if (typeof auth?.redirect === "function") {
+    const r = auth.redirect(SUPPORT_HOME);
+    if (r instanceof Response) return r;
+  }
+  const { search } = new URL(request.url);
+  return redirect(`${SUPPORT_HOME}${search}`);
 }
 
 // The Recordings page and the exports it uses: who this is.

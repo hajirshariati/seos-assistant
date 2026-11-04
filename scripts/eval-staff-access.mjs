@@ -20,7 +20,7 @@ process.env.SHOPIFY_API_KEY ||= "test-key";
 process.env.SHOPIFY_APP_URL ||= "https://example.com";
 process.env.SCOPES ||= "read_products";
 
-const { parseSupportStaff, staffAccess } = await import("../app/lib/staff-access.server.js");
+const { parseSupportStaff, staffAccess, supportRedirect } = await import("../app/lib/staff-access.server.js");
 const { previewToken, validPreview, previewUrl } = await import("../app/lib/peak-preview.server.js");
 const { peakHomeConfig } = await import("../app/lib/peak-home.js");
 
@@ -41,6 +41,22 @@ test("access: listed staff see Recordings only; everyone else, and the owner eve
   assert.equal(staffAccess(sess({ email: "sam@store.com", account_owner: false }), config), "full");
   assert.equal(staffAccess({}, config), "full", "no staff member known: not limited");
   assert.equal(staffAccess(sess({ email: "jamie@store.com" }), {}), "full", "nobody listed");
+});
+
+// Live store, 2026-11-04: the customer service team's first visit landed on
+// "Your session expired" — the redirect to Recordings had dropped Shopify's
+// embedded parameters, so the next request carried no session.
+test("the redirect to Recordings keeps the embedded parameters: the admin context's redirect when there is one, else the query string", () => {
+  const request = new Request("https://app.example.com/app?shop=s.myshopify.com&host=aG9zdA&embedded=1&id_token=abc");
+  const plain = supportRedirect({}, request);
+  assert.equal(plain.status, 302);
+  assert.equal(plain.headers.get("Location"), "/app/recordings?shop=s.myshopify.com&host=aG9zdA&embedded=1&id_token=abc");
+  let asked = "";
+  const viaLibrary = supportRedirect({ redirect: (url) => { asked = url; return new Response(null, { status: 302, headers: { Location: `${url}?shop=s.myshopify.com&host=aG9zdA` } }); } }, request);
+  assert.equal(asked, "/app/recordings");
+  assert.match(viaLibrary.headers.get("Location"), /^\/app\/recordings\?shop=/);
+  // A library redirect that throws (its embedded render) is left to throw.
+  assert.throws(() => supportRedirect({ redirect: () => { throw new Response("app bridge", { status: 200 }); } }, request));
 });
 
 console.log("\nthe peak preview");
