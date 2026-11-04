@@ -592,11 +592,11 @@ function applyPeakColors(){
    fits any width. */
 function decoLineHtml(){
   return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 100 30" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".14" class="d-gold-stop" stop-opacity=".85"/><stop offset=".5" class="d-gold-stop" stop-opacity="1"/><stop offset=".86" class="d-gold-stop" stop-opacity=".85"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
+    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".1" class="d-gold-stop" stop-opacity=".9"/><stop offset=".45" class="d-gold-stop" stop-opacity="1"/><stop offset=".9" class="d-gold-stop" stop-opacity=".85"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
     '<linearGradient id="ai-deco-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="7" opacity=".10" stroke-linecap="round"/>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="3" opacity=".22" stroke-linecap="round"/>'+
-    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="1.2" stroke-linecap="round"/>'+
+    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="9" opacity=".10" stroke-linecap="round"/>'+
+    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="4.5" opacity=".2" stroke-linecap="round"/>'+
+    '<path class="d-gold-s" d="M0 0" fill="none" stroke="url(#ai-deco-gold)" stroke-width="2.2" stroke-linecap="round"/>'+
     '<path class="ai-chat-deco__sheen" d="M0 0" fill="none" stroke="url(#ai-deco-sheen)" stroke-width="1" pathLength="100" stroke-dasharray="22 100"/>'+
   '</svg></div>';
 }
@@ -624,20 +624,21 @@ function peakDecoFit(){
   var k=W/hr.width;/* a measure taken while the panel is still scaling open comes out right as a share of the header's width */
   var t=hdr.querySelector('.ai-chat-header__title--home')||hdr.querySelector('.ai-chat-header__name'),right=hr.left;
   if(t&&t.firstChild){try{var r=document.createRange();r.selectNodeContents(t);var tr=r.getBoundingClientRect();right=tr.width?tr.right:t.getBoundingClientRect().right}catch(e){right=t.getBoundingClientRect().right}}
-  var left=Math.max(0,Math.round((right-hr.left)*k+16)),least=Math.min(140,W*0.3);
+  var left=Math.max(0,Math.round((right-hr.left)*k+8)),least=Math.min(140,W*0.3);
   if(W-left<least)left=Math.max(0,Math.round(W-least));
   line.style.left=left+'px';
-  /* The curve, drawn to the room it has: one smooth hill in the open
-     stretch between the words and the controls (the more room, the fuller
-     it is), flowing into a level run under the controls — clear of the
-     Log in pill and the icons — that fades out at the edge. One line, its
-     direction never breaking: level at the crest, level where it joins the
-     run. Nothing of it reaches above the header's middle or below its foot. */
-  var Wb=W-left,H=line.clientHeight||30,act=hdr.querySelector('.ai-chat-header__actions'),ar=act?act.getBoundingClientRect():null;
-  var S=ar&&ar.width?Math.round((ar.left-hr.left)*k)-left:Math.round(Wb*0.55);S=Math.max(0,Math.min(Wb,S));
-  var A=Math.min(16,Math.max(0,(S-30)*0.12)),yc=H-5,yt=yc-A,f=function(n){return Math.round(n*10)/10},d;
-  if(S<40||A<2)d='M0 '+f(yc)+' L '+f(Wb)+' '+f(yc);
-  else d='M0 '+f(yc)+' C '+f(S*0.28)+' '+f(yc)+','+f(S*0.22)+' '+f(yt)+','+f(S*0.5)+' '+f(yt)+' C '+f(S*0.78)+' '+f(yt)+','+f(S*0.72)+' '+f(yc)+','+f(S)+' '+f(yc)+' L '+f(Wb)+' '+f(yc);
+  /* The curve, from the mark-up it was drawn to: it leaves the words a
+     touch below the header's foot, rises to its crest — a little under
+     the controls, at about a third of the way — and eases down to the
+     header's right edge, ending just under the foot; thin at its ends,
+     fullest at the crest. Fixed to the header's foot, so it sits the same
+     whatever the width; only a very short stretch flattens it. On phones
+     there is no line. */
+  var Wb=W-left,H=line.clientHeight||34,F=H-12,m=Math.min(1,Math.max(0,(Wb-80)/220)),f=function(n){return Math.round(n*10)/10};
+  line.style.display=Wb<120?'none':'';
+  var act=hdr.querySelector('.ai-chat-header__actions'),ab=act?(act.getBoundingClientRect().bottom-hr.bottom)*k+F:-99;
+  var y0=F+8*m,yc=Math.max(F-14*m,ab+4),y1=F+3*m,xc=Wb*0.38;
+  var d='M0 '+f(y0)+' C '+f(xc*0.45)+' '+f(y0)+','+f(xc*0.6)+' '+f(yc)+','+f(xc)+' '+f(yc)+' C '+f(xc+(Wb-xc)*0.45)+' '+f(yc)+','+f(xc+(Wb-xc)*0.8)+' '+f(y1-1.5*m)+','+f(Wb)+' '+f(y1);
   var svg=line.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
   var ps=svg.querySelectorAll('path');for(var i=0;i<ps.length;i++)ps[i].setAttribute('d',d);
 }

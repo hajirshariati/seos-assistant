@@ -7780,17 +7780,18 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; width: 100%; height: 100%; }
 .ai-chat-panel .ai-chat-deco .d-gold-stop { stop-color: var(--ai-glow-3, #3d7bff); }
 .ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; isolation: isolate; }
-/* Its box ends at the header's foot, so nothing of it — box or glow —
-   reaches the home below; it starts past the header's words (the widget
-   sets left from a measure of them). */
-.ai-chat-panel .ai-chat-deco--line { left: 38%; right: 0; bottom: 0; height: 30px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
+/* Its box reaches a little under the header's foot (the line starts and
+   ends just below it, at the right, where nothing sits); it starts past
+   the header's words (the widget sets left from a measure of them). */
+.ai-chat-panel .ai-chat-deco--line { left: 38%; right: 0; bottom: -12px; height: 34px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
 .ai-chat-panel:not(.is-home) .ai-chat-deco--line { opacity: 0; }
 /* On peak days the header's straight grey line is gone at home — with or
    without the line of gold (important, as the dark theme's border is). */
 .ai-chat-panel[data-peak].is-home .ai-chat-header { border-bottom-color: transparent !important; }
 .ai-chat-panel .ai-chat-deco__sheen { stroke-dashoffset: 30; opacity: 0; animation: aiDecoSheen 9s ease-in-out infinite; }
 @keyframes aiDecoSheen { 0%, 55% { stroke-dashoffset: 30; opacity: 0; } 60% { opacity: 0.9; } 90% { stroke-dashoffset: -110; opacity: 0.9; } 92%, 100% { stroke-dashoffset: -110; opacity: 0; } }
-@media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--line { height: 26px; } }
+/* No line on phones: the header has no room for it there. */
+@media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--line { display: none !important; } }
 /* The tint is painted once, over the whole box: repeated, its first row
    would show again in the header's border row as a straight line. */
 .ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%) !important; background-repeat: no-repeat !important; background-origin: border-box !important; background-size: 100% 100% !important; }
