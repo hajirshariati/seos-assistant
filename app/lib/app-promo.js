@@ -28,7 +28,7 @@ export function defaultAppText(storeName) {
 // The app's picture, uploaded in Settings: a PNG, WebP or JPEG data URL,
 // resized there before it's saved. → { type, base64 } or null (the route
 // turns it into bytes).
-export const APP_IMAGE_MAX_BYTES = 400 * 1024;
+export const APP_IMAGE_MAX_BYTES = 800 * 1024;
 const IMAGE_DATA_URL = /^data:(image\/(?:png|webp|jpeg));base64,([A-Za-z0-9+/]+={0,2})$/;
 export function appImageData(value) {
   const m = String(value || "").match(IMAGE_DATA_URL);

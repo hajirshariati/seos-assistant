@@ -9,7 +9,7 @@ import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, blocksFor, cle
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed += 1; console.log(`  ✓ ${name}`); } catch (e) { failed += 1; console.log(`  ✗ ${name} — ${e.message}`); } };
 const PNG = "data:image/png;base64," + Buffer.from("png-bytes-here").toString("base64");
-const HUGE = "data:image/png;base64," + Buffer.alloc(500 * 1024, 65).toString("base64");
+const HUGE = "data:image/png;base64," + Buffer.alloc(900 * 1024, 65).toString("base64");
 
 console.log("\nthe saved home");
 test("blocks come back clean: a picture required, the name trimmed and capped, a link or a question by what a tap does, the audience and its tag; at most six", () => {
@@ -40,7 +40,8 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
   const look = parsePeakHome({ ring: "bold", decor: "line", tint: true });
   assert.deepEqual([look.ring, look.decor, look.tint], ["bold", "line", true]);
-  assert.equal(parsePeakHome({ decor: "both" }).decor, "off", "the ornaments of an earlier day are gone");
+  assert.equal(parsePeakHome({ decor: "both" }).decor, "line", "the ornaments of an earlier day read as the line");
+  assert.equal(parsePeakHome({ decor: "header" }).decor, "line");
 });
 test("what's wrong is named: a picture too large or missing, a tag audience without a tag, a tap without its link or question; an empty block is left out quietly", () => {
   assert.match(peakHomeError({ avatar: HUGE }), /too large/);

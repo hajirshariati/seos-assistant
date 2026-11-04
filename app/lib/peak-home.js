@@ -80,7 +80,8 @@ export function parsePeakHome(raw) {
   out.shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, o.shape) ? o.shape : "wide";
   out.colors = cleanPeakColors(o.colors);
   out.ring = PEAK_RINGS.includes(o.ring) ? o.ring : "fine";
-  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : "off";
+  // The ornaments of an earlier day ("header", "both") are read as the line, so a store that had them keeps a line of gold.
+  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : /^(header|both)$/.test(String(o.decor || "")) ? "line" : "off";
   out.tint = o.tint === true;
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {

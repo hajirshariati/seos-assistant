@@ -1,6 +1,6 @@
 import { typeformId, FEEDBACK_COLORS, FEEDBACK_ICONS, storepointId, locatorPageUrl, locatorStores } from "../lib/feedback-survey.js";
 import { chatRatingConfig } from "../lib/chat-rating.js";
-import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX } from "../lib/app-promo.js";
+import { appLinkError, cleanAppText, defaultAppText, appImageError, APP_TEXT_MAX, APP_BUTTON_MAX, APP_IMAGE_MAX_BYTES } from "../lib/app-promo.js";
 import { focusImageError, focusImageKey } from "../lib/focus-home.js";
 import { getShopName, getShopHosts } from "../lib/shop-name.server.js";
 import { CHAT_TEXT_FIELDS, AVA_TEXT_DEFAULTS, chatTextsFromForm, chatTextsForForm } from "../lib/chat-texts.js";
@@ -1216,19 +1216,29 @@ function CareSection({ values, set, d }) {
 // Your app → the app's picture: a PNG (ideally with no background) shown in
 // the chat's app message. Resized here to a small file before it's saved.
 const APP_IMAGE_HEIGHT = 360;
-function resizeAppImage(file, maxHeight = APP_IMAGE_HEIGHT) {
+// Kept as sharp as the limit allows: scaled to the height given (never up),
+// then, only if the file would still be over the size limit, encoded a
+// little smaller, and a little smaller again, until it fits.
+const dataUrlBytes = (u) => Math.floor(((u.split(",")[1] || "").length * 3) / 4);
+function resizeAppImage(file, maxHeight = APP_IMAGE_HEIGHT, maxBytes = APP_IMAGE_MAX_BYTES) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, maxHeight / img.naturalHeight);
-      const c = document.createElement("canvas");
-      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
-      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      const webp = c.toDataURL("image/webp", 0.9);
-      resolve(webp.startsWith("data:image/webp") ? webp : c.toDataURL("image/png"));
+      let scale = Math.min(1, maxHeight / img.naturalHeight);
+      const encode = (sc, q) => {
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.naturalWidth * sc));
+        c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        const webp = c.toDataURL("image/webp", q);
+        return webp.startsWith("data:image/webp") ? webp : c.toDataURL("image/png");
+      };
+      let out = encode(scale, 0.92);
+      for (const q of [0.86, 0.8]) { if (dataUrlBytes(out) <= maxBytes) break; out = encode(scale, q); }
+      for (let i = 0; i < 6 && dataUrlBytes(out) > maxBytes; i++) { scale *= 0.85; out = encode(scale, 0.84); }
+      resolve(out);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable")); };
     img.src = url;
@@ -1581,7 +1591,7 @@ function PeakHomeEditor({ value, onChange }) {
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
-          <PeakPicture image={b.image || ""} video={b.video || ""} kinds="all" onChange={(image) => setBlock(i, { image })} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "" }) : setBlock(i, { image: f.url }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}; make it at least 800px wide. Upload a picture, or pick a picture or video from your Shopify files.`} size={900} />
+          <PeakPicture image={b.image || ""} video={b.video || ""} kinds="all" onChange={(image) => setBlock(i, { image })} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "" }) : setBlock(i, { image: f.url }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
           {b.image || b.video ? <AnchorPicker image={b.image || ""} video={b.video || ""} shape={shape} value={b.focus || "center"} onChange={(focus) => setBlock(i, { focus })} /> : null}
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />

@@ -106,7 +106,7 @@ await test("focus pictures: Settings refuses anything but a small PNG, WebP or J
   assert.equal(focusImageError(""), "");
   assert.equal(focusImageError(PNG), "");
   assert.match(focusImageError("data:text/html;base64,PGI+"), /PNG, WebP or JPEG/);
-  assert.match(focusImageError("data:image/png;base64," + "A".repeat(600 * 1024)), /too large/);
+  assert.match(focusImageError("data:image/png;base64," + "A".repeat(1100 * 1024)), /too large/);
 });
 
 
