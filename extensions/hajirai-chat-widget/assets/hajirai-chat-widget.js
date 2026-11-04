@@ -569,8 +569,8 @@ function applyPeakColors(){
    and a highlight that drifts along it now and then. Drawn here, so it
    fits any width. */
 function decoLineHtml(){
-  var d='M0 19 C 150 19,260 5,420 5 C 530 5,620 12,700 11';
-  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 700 24" preserveAspectRatio="none">'+
+  var d='M0 23 C 150 23,260 14,420 14 C 530 14,620 19,700 18';
+  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 700 28" preserveAspectRatio="none">'+
     '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".3" class="d-gold-stop" stop-opacity=".75"/><stop offset=".62" class="d-gold-stop" stop-opacity="1"/><stop offset="1" class="d-gold-stop" stop-opacity=".55"/></linearGradient>'+
     '<linearGradient id="ai-deco-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
     '<path class="d-gold-s" d="'+d+'" fill="none" stroke-width="7" opacity=".10" vector-effect="non-scaling-stroke"/>'+
@@ -584,9 +584,31 @@ function peakDecoRender(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
   var want=PEAK&&PEAK.decor==='line';
   var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--line'):null;
-  if(want){if(hdr&&!old)hdr.insertAdjacentHTML('beforeend',decoLineHtml())}else if(old)old.remove();
+  if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLineHtml());
+    /* Measured again once the panel or header finishes moving (opening
+       animates the header's words), so the line sits by the words at rest. */
+    if(!peakDecoRender.bound){peakDecoRender.bound=true;var fit=function(ev){if(ev.target===p||hdr.contains(ev.target))peakDecoFit()};p.addEventListener('transitionend',fit);p.addEventListener('animationend',fit)}}}
+  else if(old)old.remove();
   if(want)p.setAttribute('data-peak-decor','line');else p.removeAttribute('data-peak-decor');
+  peakDecoFit();
 }
+/* Where the line starts: just past the end of the header's words (the
+   greeting at home), measured — so it runs under nothing at any width or
+   wording, only under the controls. Measured again whenever the header is
+   (opening, resize, new words). */
+function peakDecoFit(){
+  var p=typeof panel!=='undefined'?panel:null,hdr=p&&p.querySelector('.ai-chat-header'),line=hdr&&hdr.querySelector('.ai-chat-deco--line');
+  if(!line)return;
+  var hr=hdr.getBoundingClientRect(),W=hdr.clientWidth;if(!hr.width||!W)return;
+  var t=hdr.querySelector('.ai-chat-header__title--home')||hdr.querySelector('.ai-chat-header__name'),right=hr.left;
+  if(t&&t.firstChild){try{var r=document.createRange();r.selectNodeContents(t);var tr=r.getBoundingClientRect();right=tr.width?tr.right:t.getBoundingClientRect().right}catch(e){right=t.getBoundingClientRect().right}}
+  /* As a share of the header's width, so a measure taken while the panel is
+     still scaling open comes out right. */
+  var left=Math.max(0,Math.round((right-hr.left)/hr.width*W+16)),least=Math.min(140,W*0.3);
+  if(W-left<least)left=Math.max(0,Math.round(W-least));
+  line.style.left=left+'px';
+}
+try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){peakDecoFit()})}catch(e){}
 
 var assistantBubbleAvatar=AVATAR?'<img src="'+safeUrl(AVATAR)+'" alt="" role="presentation" aria-hidden="true" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" role="presentation" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
@@ -1460,6 +1482,7 @@ function focusMeasure(){
   var sub=$('.ai-chat-header__sub',e.hdr);if(sub)sub.hidden=true;
   var cy=e.hdr.clientHeight;
   e.hdr.style.setProperty('--ai-focus-line',cy+'px');
+  if(typeof peakDecoFit==='function')peakDecoFit();
   var R=(parseFloat(getComputedStyle(panel).getPropertyValue('--ai-hero'))||68)/2;
   var left=parseFloat(getComputedStyle(e.hero).left);if(isNaN(left))left=20;
   focusG={W:e.hdr.clientWidth,cy:cy,hx:left+R,R:R};
