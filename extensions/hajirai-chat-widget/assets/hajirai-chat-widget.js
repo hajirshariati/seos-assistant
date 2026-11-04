@@ -519,7 +519,7 @@ function peakTilesHtml(blocks){
     /* Where the picture is anchored in the tile's crop (Settings): the centre as usual, or an edge or corner. */
     var at=/^(center|left|right|top|bottom|top left|top right|bottom left|bottom right)$/.test(String(b.focus))&&b.focus!=='center'?' style="object-position:'+b.focus+'"':'';
     if(vid)img='<video class="ai-chat-peak__video" muted loop playsinline preload="metadata"'+(still?'':' autoplay')+(pic?' poster="'+pic+'"':'')+at+' aria-hidden="true" tabindex="-1"><source src="'+vid+'" type="'+(/\.webm(\?|$)/i.test(vid)?'video/webm':'video/mp4')+'"></video>';
-    else img='<img src="'+pic+'" alt="" loading="lazy" draggable="false"'+at+'>';
+    else img='<img src="'+pic+'" alt="" loading="lazy" draggable="false"'+at+(b.srcset&&peakSrcsetOk(b.srcset)?' srcset="'+esc(b.srcset)+'" sizes="'+peakSizeGuess(layout)+'px"':'')+'>';
     if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+'</button>';
     else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+'</a>';
     else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+'</div>'}
@@ -528,7 +528,29 @@ function peakTilesHtml(blocks){
 /* The tiles' videos play only while in view (the home open, the tile on
    screen): off screen, minimized or behind a chat, they pause. */
 var peakVidObs=null;
+/* A picture's candidates by width (srcset, from widget-config): the CDN's
+   sizes of a Shopify Files picture, or an upload's smaller copies — so a
+   screen draws one near its own pixel size, sharp at 1x and 2x alike.
+   Only candidates on the store's CDN or the app's own picture route. */
+function peakSrcsetOk(v){
+  var parts=String(v).split(',');if(!parts.length||parts.length>8)return false;
+  for(var i=0;i<parts.length;i++){var m=parts[i].trim().match(/^(\S+) (\d{2,4})w$/);if(!m)return false;var u=m[1];if(!(/^https:\/\/cdn\.shopify\.com\//i.test(u)||/^\/apps\/hajirai\/peak-image\?/.test(u))||!safeUrl(u))return false}
+  return true;
+}
+/* How wide a tile is before layout (a guess from the panel's width and the
+   layout), then exactly, once laid out and whenever the header is measured. */
+function peakSizeGuess(layout){
+  var W=(typeof panel!=='undefined'&&panel&&panel.clientWidth)||500;
+  return Math.round(layout==='rail'?W*0.4:layout==='grid'?W*0.5:W*0.66);
+}
+function peakSizesFit(){
+  var p=typeof panel!=='undefined'?panel:null;if(!p)return;
+  var imgs=p.querySelectorAll('.ai-chat-peak__tile img[srcset]');if(!imgs.length)return;
+  var pr=p.getBoundingClientRect(),k=pr.width?p.clientWidth/pr.width:1;
+  for(var i=0;i<imgs.length;i++){var w=Math.ceil(imgs[i].parentElement.getBoundingClientRect().width*k);if(w>0)imgs[i].sizes=w+'px'}
+}
 function peakVideosWatch(){
+  peakSizesFit();
   var vids=msgsEl?msgsEl.querySelectorAll('.ai-chat-peak__video'):[];
   if(peakVidObs){peakVidObs.disconnect();peakVidObs=null}
   if(!vids.length||!('IntersectionObserver' in window)||!focusMotionOk())return;
@@ -605,16 +627,17 @@ function peakDecoFit(){
   var left=Math.max(0,Math.round((right-hr.left)*k+16)),least=Math.min(140,W*0.3);
   if(W-left<least)left=Math.max(0,Math.round(W-least));
   line.style.left=left+'px';
-  /* The curve, drawn to the room it has: a rise in the open stretch between
-     the words and the controls (the more room, the fuller the curve), then
-     low under the controls — clear of the Log in pill and the icons — to a
-     faded end at the edge. Nothing of it reaches above the header's middle
-     or below its foot. */
+  /* The curve, drawn to the room it has: one smooth hill in the open
+     stretch between the words and the controls (the more room, the fuller
+     it is), flowing into a level run under the controls — clear of the
+     Log in pill and the icons — that fades out at the edge. One line, its
+     direction never breaking: level at the crest, level where it joins the
+     run. Nothing of it reaches above the header's middle or below its foot. */
   var Wb=W-left,H=line.clientHeight||30,act=hdr.querySelector('.ai-chat-header__actions'),ar=act?act.getBoundingClientRect():null;
   var S=ar&&ar.width?Math.round((ar.left-hr.left)*k)-left:Math.round(Wb*0.55);S=Math.max(0,Math.min(Wb,S));
-  var A=Math.min(16,Math.max(0,(S-30)*0.12)),yb=H-6,yc=H-5,f=function(n){return Math.round(n*10)/10},d;
-  if(S<40){d='M0 '+f(yb)+' C '+f(Wb*0.3)+' '+f(yb)+','+f(Wb*0.3)+' '+f(yc-3)+','+f(Wb*0.55)+' '+f(yc-3)+' C '+f(Wb*0.8)+' '+f(yc-3)+','+f(Wb*0.8)+' '+f(yc-1)+','+f(Wb)+' '+f(yc-1)}
-  else d='M0 '+f(yb)+' C '+f(S*0.25)+' '+f(yb)+','+f(S*0.25)+' '+f(yb-A)+','+f(S*0.5)+' '+f(yb-A)+' C '+f(S*0.75)+' '+f(yb-A)+','+f(S*0.75)+' '+f(yc)+','+f(S)+' '+f(yc)+' C '+f(S+(Wb-S)*0.3)+' '+f(yc)+','+f(S+(Wb-S)*0.3)+' '+f(yc-3)+','+f(S+(Wb-S)*0.55)+' '+f(yc-3)+' C '+f(S+(Wb-S)*0.8)+' '+f(yc-3)+','+f(S+(Wb-S)*0.8)+' '+f(yc-1)+','+f(Wb)+' '+f(yc-1);
+  var A=Math.min(16,Math.max(0,(S-30)*0.12)),yc=H-5,yt=yc-A,f=function(n){return Math.round(n*10)/10},d;
+  if(S<40||A<2)d='M0 '+f(yc)+' L '+f(Wb)+' '+f(yc);
+  else d='M0 '+f(yc)+' C '+f(S*0.28)+' '+f(yc)+','+f(S*0.22)+' '+f(yt)+','+f(S*0.5)+' '+f(yt)+' C '+f(S*0.78)+' '+f(yt)+','+f(S*0.72)+' '+f(yc)+','+f(S)+' '+f(yc)+' L '+f(Wb)+' '+f(yc);
   var svg=line.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
   var ps=svg.querySelectorAll('path');for(var i=0;i<ps.length;i++)ps[i].setAttribute('d',d);
 }
@@ -1493,6 +1516,7 @@ function focusMeasure(){
   var cy=e.hdr.clientHeight;
   e.hdr.style.setProperty('--ai-focus-line',cy+'px');
   if(typeof peakDecoFit==='function')peakDecoFit();
+  if(typeof peakSizesFit==='function')peakSizesFit();
   var R=(parseFloat(getComputedStyle(panel).getPropertyValue('--ai-hero'))||68)/2;
   var left=parseFloat(getComputedStyle(e.hero).left);if(isNaN(left))left=20;
   focusG={W:e.hdr.clientWidth,cy:cy,hx:left+R,R:R};

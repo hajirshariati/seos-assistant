@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog, dealsLog } = await import("./mock-store.mjs");
+const { start, peakImageLog, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog, dealsLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -3771,6 +3771,16 @@ for (const coop of ["1", "2"]) {
       check("peak home (the line set to nothing): no line of gold, and no straight grey line under the header either", ndl.peak === "1" && !ndl.decor && !ndl.line && ndl.home && /rgba\(.*, 0\)|transparent/.test(ndl.grey), JSON.stringify(ndl));
       check("peak home: nothing straight shows along the header's foot in either theme (the pixels down it change by no more than a tint's fade)", jumps.dark <= 12 && jumps.light <= 12 && jumps.theme === "light", JSON.stringify(jumps));
       await nd.ctx.close();
+      // A picture with sizes to choose from (an upload's smaller copies, or the CDN's): the page is handed its candidates by width, and asks for the one near the tile's own pixels — on a 1x screen a copy near the tile's width, not the full picture scaled down a long way.
+      peakImageLog.length = 0;
+      const ps = await open("/full?home=focus&pk=1&pks=1&pkl=grid&login=Ann&tags=vip");
+      const psz = await ps.page.evaluate(() => { const img = document.querySelector(".ai-chat-peak__tile img[srcset]"); const w = img.parentElement.getBoundingClientRect().width; return { srcset: img.getAttribute("srcset"), sizes: img.sizes, tile: Math.round(w), picked: img.currentSrc, natural: img.naturalWidth }; });
+      check("peak home (a picture with sizes): the tile's picture carries its candidates by width and asks for its own width; at 1x the page took the 400-wide copy for a tile under 400px, no bigger", /400w.*800w.*1600w/.test(psz.srcset) && Math.abs(parseInt(psz.sizes, 10) - psz.tile) <= 2 && /w=400/.test(psz.picked) && peakImageLog.some((q) => /w=400/.test(q)) && !peakImageLog.some((q) => !/w=/.test(q)), JSON.stringify({ ...psz, asked: peakImageLog }));
+      await ps.ctx.close();
+      const ps2 = await open("/full?home=focus&pk=1&pks=1&pkl=grid&login=Ann&tags=vip", { deviceScaleFactor: 2 });
+      const psz2 = await ps2.page.evaluate(() => { const img = document.querySelector(".ai-chat-peak__tile img[srcset]"); return { picked: img.currentSrc, natural: img.naturalWidth, dpr: devicePixelRatio }; });
+      check("peak home (a picture with sizes, Retina): at 2x the same tile takes the 800-wide copy", psz2.dpr === 2 && /w=800/.test(psz2.picked), JSON.stringify(psz2));
+      await ps2.ctx.close();
       const m4p = await open("/full?home=focus&pk=1&pkl=mosaic&pkn=4");
       const m4 = await readPeak(m4p.page);
       check("peak home (mosaic, four): the big one left, two small on top at the right and one wide under them, level with the big one's bottom", m4.rects.length === 4 && m4.rects[0].w > m4.rects[1].w * 1.8 && m4.rects[1].y === m4.rects[2].y && m4.rects[3].y > m4.rects[1].y && Math.abs(m4.rects[3].w - (m4.rects[1].w * 2 + 10)) <= 2 && Math.abs(m4.rects[0].y + m4.rects[0].h - (m4.rects[3].y + m4.rects[3].h)) <= 1, JSON.stringify(m4.rects));

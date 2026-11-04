@@ -17,6 +17,20 @@ import { appImageData, appImageValue, appImageLink, cdnVideoUrl } from "./app-pr
 import { peakState } from "./peak-mode.js";
 
 export const PEAK_IMAGE_PATH = "/apps/hajirai/peak-image";
+// The smaller copies an uploaded picture may carry (widths), and the sizes
+// asked of Shopify's CDN for a Files picture.
+export const PEAK_PICTURE_SIZES = [400, 800];
+const CDN_SIZES = [400, 800, 1200, 1600, 2000];
+// For the widget: the picture's candidates by width (an <img> srcset) — the
+// CDN's sizes for a Files picture; an upload's smaller copies and itself.
+export function peakSrcset(image, link, { imageW = 0, sizes = [] } = {}) {
+  if (!image) return "";
+  if (/^https:\/\/cdn\.shopify\.com\//i.test(image)) return CDN_SIZES.map((w) => `${image}${image.includes("?") ? "&" : "?"}width=${w} ${w}w`).join(", ");
+  if (!link || !sizes.length) return "";
+  const parts = sizes.map((w) => `${link}&w=${w} ${w}w`);
+  if (imageW) parts.push(`${link} ${imageW}w`);
+  return parts.join(", ");
+}
 export const PEAK_BLOCKS_MAX = 6;
 export const PEAK_MAX = { eyebrow: 24, title: 60, text: 120, cta: 24, tag: 40, url: 500, message: 200 };
 export const PEAK_AUDIENCES = ["all", "guest", "signed", "tag"];
@@ -89,6 +103,13 @@ export function parsePeakHome(raw) {
     const image = picture(b.image);
     const video = cdnVideoUrl(b.video);
     if (!image && !video) continue;
+    // An uploaded picture may come with smaller copies of itself (made in
+    // Settings), so a screen gets one near the size it draws; a Shopify
+    // Files picture has the CDN's sizes instead.
+    const own = !!appImageData(image);
+    const imageW = own ? Math.min(4000, Math.max(0, Math.round(Number(b.imageW) || 0))) : 0;
+    const smaller = {};
+    if (own) for (const w of PEAK_PICTURE_SIZES) { const v = b[`image${w}`]; if (appImageData(v) && (!imageW || w < imageW)) smaller[`image${w}`] = String(v); }
     let id = cleanId(b.id, i);
     while (seen.has(id)) id = `${id}x`;
     seen.add(id);
@@ -101,6 +122,8 @@ export function parsePeakHome(raw) {
       url: kind === "link" ? cleanUrl(b.url) : "",
       message: kind === "ask" ? clean(b.message, PEAK_MAX.message) : "",
       image,
+      ...(imageW ? { imageW } : {}),
+      ...smaller,
       video,
       focus: PEAK_FOCUS.includes(b.focus) ? b.focus : "center",
       audience,
@@ -138,10 +161,12 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
   if (!force && !peakState(config, now).active) return null;
   const home = parsePeakHome(config.peakHome);
   const link = (which, data) => appImageLink(data, (v) => `${PEAK_IMAGE_PATH}?b=${encodeURIComponent(which)}&v=${v}`);
+  const srcsetOf = (b) => peakSrcset(b.image, appImageData(b.image) ? link(b.id, b.image) : "", { imageW: b.imageW || 0, sizes: PEAK_PICTURE_SIZES.filter((w) => b[`image${w}`]) });
   const blocks = home.blocks.map((b) => ({
     id: b.id, title: b.title,
     ...(b.kind === "ask" ? { message: b.message } : b.kind === "link" ? { url: b.url } : {}),
     image: link(b.id, b.image),
+    ...(srcsetOf(b) ? { srcset: srcsetOf(b) } : {}),
     ...(b.video ? { video: b.video } : {}),
     ...(b.focus !== "center" ? { focus: b.focus } : {}),
     audience: b.audience, tag: b.tag,
@@ -152,9 +177,11 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.
-export function peakImage(config = {}, which) {
+export function peakImage(config = {}, which, width = 0) {
   const home = parsePeakHome(config?.peakHome);
-  const data = which === "avatar" ? home.avatar : (home.blocks.find((b) => b.id === which) || {}).image;
+  const block = which === "avatar" ? null : home.blocks.find((b) => b.id === which) || {};
+  const w = PEAK_PICTURE_SIZES.includes(Number(width)) ? Number(width) : 0;
+  const data = which === "avatar" ? home.avatar : (w && block[`image${w}`]) || block.image;
   return data ? appImageData(data) : null;
 }
 

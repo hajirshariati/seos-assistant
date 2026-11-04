@@ -13,6 +13,8 @@ export const activityLog = [];
 // Balance lookups for the My rewards card (/apps/hajirai/rewards).
 export const rewardsLog = [];
 export const ordersLog = [];
+// Which sizes of the peak pictures the page asked for (/apps/hajirai/peak-image?…).
+export const peakImageLog = [];
 export const dealsLog = [];
 // Peak Mode's home: four blocks — everyone, signed in, a tag's, signed out.
 function peakFor(referer) {
@@ -20,7 +22,9 @@ function peakFor(referer) {
   const n = Number((referer.match(/[?&]pkn=(\d)/) || [])[1] || 0);
   const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
   const decor = /[?&]pkd=off/.test(referer) ? "off" : PEAK_HOME.decor;
-  return { ...PEAK_HOME, layout, decor, blocks };
+  // ?pks=1: the first picture an upload with smaller copies — the app's picture route, candidates by width.
+  const withSizes = /[?&]pks=1/.test(referer) ? blocks.map((b, i) => (i ? b : { ...b, image: "/apps/hajirai/peak-image?b=b1&v=abc", srcset: "/apps/hajirai/peak-image?b=b1&v=abc&w=400 400w, /apps/hajirai/peak-image?b=b1&v=abc&w=800 800w, /apps/hajirai/peak-image?b=b1&v=abc 1600w" })) : blocks;
+  return { ...PEAK_HOME, layout, decor, blocks: withSizes };
 }
 export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], ring: "bold", decor: "line", tint: true, blocks: [
   { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", focus: "right", audience: "all", tag: "" },
@@ -341,6 +345,8 @@ export function start(port) {
         // A short video for a peak tile (VP8, which the test browser plays).
         if (u.pathname === "/peak.webm") return send(200, "video/webm", fs.readFileSync(new URL("./fixtures/peak.webm", import.meta.url)));
         if (u.pathname === "/pic-pain.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#ffe3e3"/><circle cx="80" cy="80" r="46" fill="#ff5a5a"/></svg>`);
+        // The app's picture route (an upload, or one of its smaller copies): the same picture whatever ?w says, its width in the picture for the test to read.
+        if (u.pathname === "/apps/hajirai/peak-image") { peakImageLog.push(u.search); const w = Number(u.searchParams.get("w")) || 1600; return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${Math.round(w * 9 / 16)}"><rect width="100%" height="100%" fill="#dbe6f3"/></svg>`); }
         if (u.pathname === "/pic-footwear.svg" || u.pathname === "/pic-orthotics.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${u.pathname.includes("foot") ? "#c7d7ff" : "#ffd9c2"}"/><circle cx="80" cy="80" r="44" fill="#fff"/></svg>`);
         if (u.pathname === "/apps/hajirai/activity" && req.method === "POST") {
           let a = null;
@@ -417,7 +423,7 @@ export function start(port) {
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
           // ?pk=1: Peak Mode on, with the home's promotion blocks and the peak picture (Settings → Peak Mode).
           // …or the preview token the page carried (Settings → Peak Mode → Preview), whatever the switch says.
-          // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone; ?pkd=off leaves the line of gold out.
+          // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone; ?pkd=off leaves the line of gold out; ?pks=1 gives the first picture sizes to choose from.
           peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? peakFor(String(req.headers.referer || "")) : null,
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),

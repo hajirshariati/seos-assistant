@@ -1456,7 +1456,25 @@ function RewardsGroup({ card, onChange }) {
 
 // Peak Mode → the home on peak days: the assistant's peak picture and up to
 // six promotion blocks, saved with the form (pictures resized in the browser).
-function PeakPicture({ image, onChange, title, hint, round = false, size = 640, kinds = "image", video = "", onPickFile = null, onRemoveVideo = null }) {
+// Smaller copies of an uploaded tile picture, so a screen is handed one near
+// the size it draws (a picture scaled down a long way in the browser goes
+// soft or jagged, worst with small words). Made by halving, with the best
+// smoothing, down to each width; only widths smaller than the picture.
+const PEAK_COPY_WIDTHS = [800, 400];
+async function peakCopies(dataUrl) {
+  const im = new Image(); im.src = dataUrl; await im.decode();
+  const out = { imageW: im.naturalWidth };
+  for (const w of PEAK_COPY_WIDTHS) {
+    if (w >= im.naturalWidth) continue;
+    let cur = im, cw = im.naturalWidth, ch = im.naturalHeight;
+    while (cw / 2 >= w) { const c = document.createElement("canvas"); c.width = Math.round(cw / 2); c.height = Math.round(ch / 2); const g = c.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(cur, 0, 0, c.width, c.height); cur = c; cw = c.width; ch = c.height; }
+    const c = document.createElement("canvas"); c.width = w; c.height = Math.max(1, Math.round(ch * w / cw)); const g = c.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(cur, 0, 0, c.width, c.height);
+    const webp = c.toDataURL("image/webp", 0.9);
+    out[`image${w}`] = webp.startsWith("data:image/webp") ? webp : c.toDataURL("image/png");
+  }
+  return out;
+}
+function PeakPicture({ image, onChange, title, hint, round = false, size = 640, kinds = "image", video = "", onPickFile = null, onRemoveVideo = null, copies = false }) {
   const inputRef = useRef(null);
   const [error, setError] = useState("");
   const onFile = async (e) => {
@@ -1465,7 +1483,10 @@ function PeakPicture({ image, onChange, title, hint, round = false, size = 640, 
     if (!file) return;
     setError("");
     if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { setError("Choose a PNG, WebP or JPEG image."); return; }
-    try { onChange(await resizeAppImage(file, size)); } catch { setError("That image couldn't be read — try another one."); }
+    try {
+      const data = await resizeAppImage(file, size);
+      onChange(copies ? { image: data, ...(await peakCopies(data)) } : data);
+    } catch { setError("That image couldn't be read — try another one."); }
   };
   return (
     <div className="set-app-pic">
@@ -1591,7 +1612,7 @@ function PeakHomeEditor({ value, onChange }) {
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
-          <PeakPicture image={b.image || ""} video={b.video || ""} kinds="all" onChange={(image) => setBlock(i, { image })} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "" }) : setBlock(i, { image: f.url }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
+          <PeakPicture copies image={b.image || ""} video={b.video || ""} kinds="all" onChange={(v) => setBlock(i, typeof v === "string" ? { image: v, imageW: 0, image800: "", image400: "" } : v)} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "", imageW: 0, image800: "", image400: "" }) : setBlock(i, { image: f.url, imageW: 0, image800: "", image400: "" }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
           {b.image || b.video ? <AnchorPicker image={b.image || ""} video={b.video || ""} shape={shape} value={b.focus || "center"} onChange={(focus) => setBlock(i, { focus })} /> : null}
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />

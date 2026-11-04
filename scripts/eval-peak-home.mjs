@@ -4,7 +4,7 @@
 //
 // Run: node scripts/eval-peak-home.mjs
 import assert from "node:assert/strict";
-import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, blocksFor, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
+import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, peakSrcset, blocksFor, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed += 1; console.log(`  ✓ ${name}`); } catch (e) { failed += 1; console.log(`  ✗ ${name} — ${e.message}`); } };
@@ -113,6 +113,31 @@ test("who sees what: signed out → everyone's and signed-out blocks; signed in 
   assert.deepEqual(blocksFor(blocks, { signedIn: true, tags: ["wholesale"] }).map((b) => b.id), ["a", "s"]);
   assert.deepEqual(blocksFor(blocks, { signedIn: true, tags: ["wholesale", " vip "] }).map((b) => b.id), ["a", "s", "t"]);
   assert.deepEqual(blocksFor(blocks, { signedIn: false, tags: ["VIP"] }).map((b) => b.id), ["a", "g"], "a tag counts only signed in");
+});
+
+
+console.log("\nsizes to choose from");
+test("an upload keeps its smaller copies and its width; a Files picture has none of its own (the CDN's instead); a copy not smaller than the picture is dropped", () => {
+  const png = "data:image/png;base64," + Buffer.alloc(1200, 65).toString("base64");
+  const webp = "data:image/webp;base64," + Buffer.alloc(600, 66).toString("base64");
+  const saved = parsePeakHome({ blocks: [
+    { id: "u", image: png, imageW: 1600, image800: webp, image400: webp, url: "/a" },
+    { id: "c", image: "https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1", imageW: 1600, image800: webp, url: "/b" },
+    { id: "s", image: png, imageW: 700, image800: webp, image400: webp, url: "/c" },
+  ] });
+  assert.deepEqual([saved.blocks[0].imageW, !!saved.blocks[0].image800, !!saved.blocks[0].image400], [1600, true, true]);
+  assert.deepEqual([saved.blocks[1].imageW, saved.blocks[1].image800], [undefined, undefined], "a Files picture carries no copies");
+  assert.deepEqual([saved.blocks[2].imageW, !!saved.blocks[2].image800, !!saved.blocks[2].image400], [700, false, true], "only copies smaller than the picture");
+  const config = { peakMode: "on", peakHome: JSON.stringify(saved) };
+  assert.equal(peakImage(config, "u", 800).type, "image/webp", "the 800 copy when asked");
+  assert.equal(peakImage(config, "u", 640).type, "image/png", "an unknown width: the picture");
+  assert.equal(peakImage(config, "s", 800).type, "image/png", "no such copy: the picture");
+  const on = peakHomeConfig(config);
+  assert.match(on.blocks[0].srcset, /^\/apps\/hajirai\/peak-image\?b=u&v=\w+&w=400 400w, \/apps\/hajirai\/peak-image\?b=u&v=\w+&w=800 800w, \/apps\/hajirai\/peak-image\?b=u&v=\w+ 1600w$/);
+  assert.equal(on.blocks[1].srcset, "https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1&width=400 400w, https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1&width=800 800w, https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1&width=1200 1200w, https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1&width=1600 1600w, https://cdn.shopify.com/s/files/1/0/files/gift.png?v=1&width=2000 2000w");
+  assert.match(on.blocks[2].srcset, /w=400 400w, .* 700w$/);
+  assert.equal(peakSrcset(png, "", {}), "", "an upload without copies: none");
+  assert.equal(peakSrcset("", "x", { sizes: [400] }), "");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
