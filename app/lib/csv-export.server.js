@@ -17,10 +17,14 @@ export function toCsv(headers, rows) {
 }
 
 export function csvResponse(filename, csv) {
-  return new Response(csv, {
+  return fileResponse(filename, csv, "text/csv; charset=utf-8");
+}
+
+export function fileResponse(filename, body, contentType) {
+  return new Response(body, {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": contentType,
       "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.-]+/g, "_")}"`,
       "Cache-Control": "no-store",
     },

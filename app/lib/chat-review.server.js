@@ -205,3 +205,10 @@ export async function reviewSummary(shop, { take = 20 } = {}) {
     })),
   };
 }
+
+// What the review found in the named chats, oldest first (the export).
+export async function findingsForSessions(shop, sessionIds) {
+  const ids = (sessionIds || []).slice(0, 2000);
+  if (!ids.length) return [];
+  return prisma.chatReviewFinding.findMany({ where: { shop, sessionId: { in: ids } }, orderBy: [{ at: "asc" }, { createdAt: "asc" }] });
+}

@@ -668,7 +668,10 @@ model ChatFlag {
   shop      String
   sessionId String
   kind      String   @default("manual")
+  // The team's comment (what AVA should have done), or the guard's note.
   note      String   @default("")
+  // Who on the team flagged it or left the comment (name, else email).
+  flaggedBy String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

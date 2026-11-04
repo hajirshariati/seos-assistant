@@ -252,3 +252,14 @@ export async function cleanupOldFeedback() {
   if (count > 0) console.log(`[feedback] cleaned up ${count} records older than 90 days`);
   return count;
 }
+
+// Every vote on the named chats, oldest first, for the flagged-chats export.
+export async function votesForSessions(shop, sessionIds) {
+  const ids = (sessionIds || []).slice(0, 2000);
+  if (!ids.length) return [];
+  return prisma.chatFeedback.findMany({
+    where: { shop, sessionId: { in: ids } },
+    orderBy: { createdAt: "asc" },
+    select: { sessionId: true, kind: true, vote: true, reason: true, moment: true, comment: true, botResponse: true, products: true, createdAt: true },
+  });
+}

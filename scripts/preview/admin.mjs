@@ -2,6 +2,7 @@
 // against the local test database (seeded by seed.mjs), and screenshots it.
 //
 //   node scripts/preview/admin.mjs /app/recordings out/recordings.png [--width 1280]
+//   node scripts/preview/admin.mjs "/app/exports?section=flagged" out/flagged.md   (a download: its body)
 //
 // App Bridge and the admin session are stood in for (stubs/); everything
 // else is the app's own code, loaded through Vite so the JSX and the
@@ -42,7 +43,7 @@ const vite = await createServer({
   }],
 });
 try {
-  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx" }[routePath.split("?")[0]];
+  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx", "/app/exports": "app/routes/app.exports.jsx" }[routePath.split("?")[0]];
   if (!file) throw new Error(`no route file for ${routePath}`);
   const mod = await vite.ssrLoadModule(path.join(root, file));
   const { rr, polaris, React, renderToString } = await vite.ssrLoadModule(path.join(root, "scripts/preview/libs.js"));
@@ -52,6 +53,15 @@ try {
     children: [{ path: routePath.split("?")[0].replace(/^\/app\/?/, ""), index: routePath.split("?")[0] === "/app", loader: mod.loader, action: mod.action, Component: mod.default }],
   }];
   const handler = rr.createStaticHandler(routes);
+  // A download (the exports route): its body is written to `out` as is.
+  if (!out.endsWith(".png")) {
+    const res = await handler.queryRoute(new Request(`http://localhost${routePath}`));
+    if (!(res instanceof Response)) throw new Error("the route gave data, not a file");
+    if (!res.ok) throw new Error(`the export answered ${res.status}: ${await res.text()}`);
+    fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+    fs.writeFileSync(out, await res.text());
+    console.log(`${out} (${res.headers.get("Content-Disposition") || res.headers.get("Content-Type")})`);
+  } else {
   const context = await handler.query(new Request(`http://localhost${routePath}`));
   if (context instanceof Response) throw new Error(`the loader answered ${context.status}`);
   if (context.errors) throw Object.values(context.errors)[0];
@@ -70,6 +80,7 @@ try {
   const h = await bp.evaluate(() => document.documentElement.scrollHeight);
   await browser.close();
   console.log(`${out} (${width}×${h})`);
+  }
 } catch (err) {
   console.error(err?.stack || err);
   process.exitCode = 1;

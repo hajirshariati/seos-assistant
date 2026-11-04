@@ -23,3 +23,10 @@ export function staffAccess(session, config) {
   if (!e || u?.account_owner === true) return "full";
   return parseSupportStaff(config?.supportStaff).includes(e) ? "support" : "full";
 }
+
+// Who this admin session is, for the record: their name, else their email.
+export function staffName(session) {
+  const u = session?.onlineAccessInfo?.associated_user;
+  const name = [u?.first_name, u?.last_name].map((v) => String(v || "").trim()).filter(Boolean).join(" ");
+  return (name || email(u?.email)).slice(0, 120);
+}

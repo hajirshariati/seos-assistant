@@ -22,7 +22,9 @@ import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { RATINGS_CSS, RankList, useCsvExport } from "../components/Ratings";
 import { getShopConfig } from "../models/ShopConfig.server";
 import { listRecordings } from "../models/ChatRecording.server";
-import { listFlags, setFlag, clearFlag } from "../models/ChatFlag.server";
+import { listFlags, setFlag, noteFlag, clearFlag } from "../models/ChatFlag.server";
+import { FLAG_NOTE_MAX } from "../lib/chat-flags.js";
+import { staffName } from "../lib/staff-access.js";
 import { unlockGuardSession, getGuardStates, sessionKey } from "../models/ChatGuard.server";
 import { recordingState, groupSessions, recordingLabels } from "../lib/chat-recording.js";
 import { guardTurnLabel, guardMode } from "../lib/chat-guard.js";
@@ -96,7 +98,7 @@ export const loader = async ({ request }) => {
         failed: s.failed,
         down: sv.filter((v) => v === "down").length,
         up: sv.filter((v) => v === "up").length,
-        flag: f ? { kind: f.kind, note: f.note, at: L.dateTime(f.createdAt) } : null,
+        flag: f ? { kind: f.kind, note: f.note, by: f.flaggedBy || "", at: L.dateTime(f.kind === "manual" ? f.updatedAt : f.createdAt) } : null,
         lockedUntil: lockedUntil ? L.time(lockedUntil) : null,
         day: L.day(s.startedAt),
         time: L.time(s.startedAt),
@@ -135,7 +137,12 @@ export const action = async ({ request }) => {
   const form = await request.formData();
   const intent = form.get("intent");
   if (intent === "flag_session") {
-    await setFlag(session.shop, form.get("sessionId"), { kind: "manual" });
+    await setFlag(session.shop, form.get("sessionId"), { kind: "manual", by: staffName(session) });
+    return { flagged: true };
+  }
+  // The team's comment on a flagged chat (flags it when it isn't yet).
+  if (intent === "flag_note") {
+    await noteFlag(session.shop, form.get("sessionId"), { note: form.get("note"), by: staffName(session) });
     return { flagged: true };
   }
   if (intent === "unflag_session") {
@@ -205,6 +212,9 @@ const REC_CSS = `
   .rd-row__who.is-tester { color: #245a86; }
   .rd-row__q { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .rd-row__sub { font-size: 12px; color: #8a8a8a; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .rd-row__q { flex: 0 1 auto; }
+  .rd-row__sub { flex: 0 1 auto; max-width: 50%; }
+  .rd-row__sub.is-note { color: #1f4d39; }
   .rd-row__meta { display: flex; align-items: center; justify-content: flex-end; gap: 5px; white-space: nowrap; }
   .rd-n { font-size: 11.5px; color: #8a8a8a; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
   .rd-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; white-space: nowrap; color: #4a4a4a; background: rgba(26,46,38,0.07); }
@@ -233,8 +243,22 @@ const REC_CSS = `
   .rd-nav, .rd-x { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: #4a4a4a; background: rgba(26,46,38,0.06); flex: none; }
   .rd-nav[disabled] { opacity: 0.35; cursor: default; }
   .rd-nav .Polaris-Icon, .rd-x .Polaris-Icon { margin: 0; }
-  .rd-drawer__note { margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 18px; color: #303030; background: #fbf3e4; }
+  .rd-drawer__note { margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; display: grid; gap: 3px; font-size: 12.5px; line-height: 18px; color: #303030; background: #fbf3e4; }
   .rd-drawer__note.is-manual { background: rgba(45,107,79,0.08); }
+  .rd-drawer__note-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  .rd-drawer__note-top b { color: #1a1a1a; }
+  .rd-drawer__note-top .rd-n { margin-left: auto; }
+  .rd-drawer__note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .rd-drawer__note-text.is-empty { color: #616161; font-style: italic; }
+  .rd-drawer__note-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-top: 2px; }
+  .rd-link { all: unset; cursor: pointer; font-size: 12px; line-height: 16px; font-weight: 600; color: #1f4d39; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(31,77,57,0.4); }
+  .rd-link:hover { text-decoration-color: currentColor; }
+  .rd-link:focus-visible { outline: 2px solid var(--rd-green); outline-offset: 2px; border-radius: 3px; }
+  .rd-link.is-quiet { color: #616161; }
+  .rd-drawer__edit { margin: 10px 14px 0; padding: 10px; border-radius: 10px; display: grid; gap: 8px; background: rgba(45,107,79,0.06); border: 1px solid rgba(45,107,79,0.18); }
+  .rd-drawer__edit-label { font-size: 12.5px; line-height: 18px; font-weight: 650; color: #1a1a1a; }
+  .rd-drawer__edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .rd-drawer__edit-actions .rd-n { margin-left: auto; }
   .rd-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 14px; display: grid; gap: 12px; align-content: start; }
   .rd-drawer__flag { display: inline-flex; align-items: center; gap: 6px; flex: none; }
   .rd-votes { display: grid; gap: 8px; }
@@ -392,11 +416,27 @@ export default function Recordings() {
   }, [shopify]);
 
   // Flags apply at once: the row shows its new state while the save runs.
+  // Flagging opens the comment box; a flagged chat's button edits it.
   const [flagEdits, setFlagEdits] = useState({});
+  const [noteEditing, setNoteEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const openNote = (s) => { setNoteDraft(s.flag?.kind === "manual" ? s.flag.note || "" : ""); setNoteEditing(true); };
   const flagChat = (s) => {
-    const next = !(flagEdits[s.sessionId] ?? Boolean(s.flag));
-    setFlagEdits((o) => ({ ...o, [s.sessionId]: next }));
-    flagFetcher.submit({ intent: next ? "flag_session" : "unflag_session", sessionId: s.sessionId }, { method: "post" });
+    if (s.flag) { openNote(s); return; }
+    setFlagEdits((o) => ({ ...o, [s.sessionId]: { on: true } }));
+    flagFetcher.submit({ intent: "flag_session", sessionId: s.sessionId }, { method: "post" });
+    openNote({ flag: null });
+  };
+  const unflagChat = (s) => {
+    setNoteEditing(false);
+    setFlagEdits((o) => ({ ...o, [s.sessionId]: { on: false } }));
+    flagFetcher.submit({ intent: "unflag_session", sessionId: s.sessionId }, { method: "post" });
+  };
+  const saveNote = (s) => {
+    const note = noteDraft.trim().slice(0, FLAG_NOTE_MAX);
+    setFlagEdits((o) => ({ ...o, [s.sessionId]: { on: true, note } }));
+    flagFetcher.submit({ intent: "flag_note", sessionId: s.sessionId, note }, { method: "post" });
+    setNoteEditing(false);
   };
   const unlockChat = (s) => {
     flagFetcher.submit({ intent: "unlock_session", sessionId: s.sessionId }, { method: "post" });
@@ -406,7 +446,9 @@ export default function Recordings() {
   const shown = useMemo(() => sessions.map((s) => {
     const e = flagEdits[s.sessionId];
     if (e === undefined) return s;
-    return { ...s, flag: e ? (s.flag || { kind: "manual", note: "", at: "just now" }) : null };
+    if (!e.on) return { ...s, flag: null };
+    const base = s.flag || { kind: "manual", note: "", by: "", at: "just now" };
+    return { ...s, flag: e.note === undefined ? base : { ...base, kind: "manual", note: e.note, by: "you", at: "just now" } };
   }), [sessions, flagEdits]);
   const setWindow = (d) => { setPage(1); setSearchParams(d === 7 ? {} : { days: String(d) }); };
 
@@ -463,6 +505,7 @@ export default function Recordings() {
   const currentVote = selected?.kind === "vote" ? votes.find((v) => v.id === selected.id) || null : null;
   const open = Boolean(current || currentVote);
   useEffect(() => { if (selected?.kind === "chat" && !bySession.has(selected.id)) setSelected(null); }, [selected, bySession]);
+  useEffect(() => { setNoteEditing(false); }, [selected]);
   const pick = (s) => { lastRowRef.current = document.activeElement; setSelected({ kind: "chat", id: s.sessionId }); };
   const pickVote = (v) => { lastRowRef.current = document.activeElement; setSelected(v.sessionId && bySession.has(v.sessionId) ? { kind: "chat", id: v.sessionId } : { kind: "vote", id: v.id }); };
   const close = () => { setSelected(null); const el = lastRowRef.current; if (el && typeof el.focus === "function") requestAnimationFrame(() => el.focus()); };
@@ -525,7 +568,7 @@ export default function Recordings() {
       <span className="rd-row__text">
         <span className={`rd-row__who${s.tester ? " is-tester" : ""}`}>{s.tester ? `Test · ${s.tester}` : "Shopper"}</span>
         <span className="rd-row__q">{s.turns[0]?.message || "(nothing typed)"}</span>
-        {s.turns.length > 1 && <span className="rd-row__sub">{`↳ ${s.turns[s.turns.length - 1].message}`}</span>}
+        {s.flag?.note && s.flag.kind === "manual" ? <span className="rd-row__sub is-note" title={s.flag.note}>{`✎ ${s.flag.note}`}</span> : s.turns.length > 1 && <span className="rd-row__sub">{`↳ ${s.turns[s.turns.length - 1].message}`}</span>}
       </span>
       <span className="rd-row__meta">
         {s.flag && <span className={`rd-pill rd-pill--${s.flag.kind}`}>{FLAG_WORDS[s.flag.kind] || "Flagged"}</span>}
@@ -573,6 +616,7 @@ export default function Recordings() {
                   items={[
                     { content: exporting ? "Exporting…" : "Export chats (CSV)", onAction: () => { setMenuOpen(false); exportCsv(); }, disabled: exporting },
                     { content: "Export thumbs down (CSV)", onAction: () => { setMenuOpen(false); exportVotes("conversations", { vote: "down" }); }, disabled: Boolean(voteExporting) || totals.down === 0 },
+                    { content: voteExporting === "flagged" ? "Exporting…" : "Export flagged chats for review", helpText: "Every flagged chat with the team's comments, votes and the full transcript — one file to hand over.", onAction: () => { setMenuOpen(false); exportVotes("flagged"); }, disabled: Boolean(voteExporting) || totals.flagged === 0 },
                     { content: "Settings → Recording", onAction: () => { setMenuOpen(false); navigate("/app/api-keys#testing"); } },
                   ]}
                 />
@@ -728,7 +772,7 @@ export default function Recordings() {
               </div>
               {current && (
                 <span className="rd-drawer__flag">
-                  <Button size="slim" variant={current.flag ? "secondary" : "primary"} pressed={Boolean(current.flag)} onClick={() => flagChat(current)} accessibilityLabel={current.flag ? "Remove the flag from this chat" : "Flag this chat"}>{current.flag ? "Flagged ✓" : "Flag chat"}</Button>
+                  <Button size="slim" variant={current.flag ? "secondary" : "primary"} pressed={Boolean(current.flag)} onClick={() => flagChat(current)} accessibilityLabel={current.flag ? "Flagged — edit the team's comment" : "Flag this chat and leave a comment"}>{current.flag ? "Flagged ✓" : "Flag chat"}</Button>
                   {current.lockedUntil && <Button size="slim" onClick={() => unlockChat(current)}>Unlock now</Button>}
                 </span>
               )}
@@ -736,9 +780,31 @@ export default function Recordings() {
               <button type="button" className="rd-nav" onClick={() => step(1)} disabled={at < 0 || at >= list.length - 1} aria-label="Next"><Icon source={ChevronDownIcon} /></button>
               <button type="button" className="rd-x" ref={closeRef} onClick={close} aria-label="Close"><Icon source={XIcon} /></button>
             </div>
-            {current && current.flag && (current.flag.note || current.flag.kind === "manual") && (
+            {current && noteEditing && (
+              <div className="rd-drawer__edit">
+                <label className="rd-drawer__edit-label" htmlFor="rd-note">What should AVA have done better here?</label>
+                <TextField id="rd-note" label="The team's comment" labelHidden multiline={3} focused value={noteDraft} onChange={setNoteDraft} maxLength={FLAG_NOTE_MAX} placeholder="Say what was wrong or missing, and what the right answer was. Your comment goes into the review export." autoComplete="off" />
+                <div className="rd-drawer__edit-actions">
+                  <Button size="slim" variant="primary" onClick={() => saveNote(current)}>Save comment</Button>
+                  <Button size="slim" onClick={() => setNoteEditing(false)}>Cancel</Button>
+                  <span className="rd-n">{`${noteDraft.length}/${FLAG_NOTE_MAX}`}</span>
+                </div>
+              </div>
+            )}
+            {current && current.flag && !noteEditing && (
               <div className={`rd-drawer__note${current.flag.kind === "manual" ? " is-manual" : ""}`}>
-                <b>{FLAG_WORDS[current.flag.kind] || "Flagged"}</b>{current.flag.note ? ` — ${current.flag.note}` : ""}{current.flag.kind === "manual" ? ` (${current.flag.at})` : ""}
+                <div className="rd-drawer__note-top">
+                  <b>{current.flag.kind === "manual" ? "Team comment" : FLAG_WORDS[current.flag.kind] || "Flagged"}</b>
+                  {current.flag.kind === "manual" && current.flag.by && <span>{`by ${current.flag.by}`}</span>}
+                  <span className="rd-n">{current.flag.at}</span>
+                </div>
+                {current.flag.kind === "manual"
+                  ? <div className={`rd-drawer__note-text${current.flag.note ? "" : " is-empty"}`}>{current.flag.note || "No comment yet — say what should have gone better, so the review has it."}</div>
+                  : current.flag.note && <div className="rd-drawer__note-text">{current.flag.note}</div>}
+                <div className="rd-drawer__note-actions">
+                  <button type="button" className="rd-link" onClick={() => openNote(current)}>{current.flag.kind === "manual" && current.flag.note ? "Edit comment" : "Add a comment"}</button>
+                  <button type="button" className="rd-link is-quiet" onClick={() => unflagChat(current)}>Remove flag</button>
+                </div>
               </div>
             )}
             <div className="rd-drawer__body">

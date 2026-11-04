@@ -6,9 +6,13 @@ import { getFeedbackSummary } from "../models/ChatFeedback.server";
 import { getTopProducts, getProductsByTool } from "../models/ChatProductMention.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { FEEDBACK_REASONS, FEEDBACK_MOMENTS } from "../lib/chat-rating.js";
-import { toCsv, csvResponse } from "../lib/csv-export.server";
+import { toCsv, csvResponse, fileResponse } from "../lib/csv-export.server";
 import { listRecordings } from "../models/ChatRecording.server";
 import { listFlags } from "../models/ChatFlag.server";
+import { votesForSessions } from "../models/ChatFeedback.server";
+import { findingsForSessions } from "../lib/chat-review.server";
+import { groupSessions } from "../lib/chat-recording.js";
+import { flaggedChatsReport } from "../lib/flag-export.js";
 import { listInteractions, listDisclosures } from "../models/ChatInteraction.server";
 import { yearlySummary, interactionRow, INTERACTION_HEADERS, SUMMARY_HEADERS, summaryRow } from "../lib/service-log.js";
 import { getConversionSummary } from "../models/ChatConversion.server";
@@ -175,6 +179,34 @@ async function buildCsv(shop, section, rangeArg, vote = "", timeZone = "") {
   return null;
 }
 
+async function flaggedReport(shop, timeZone) {
+  const flags = await listFlags(shop);
+  const ids = flags.map((f) => f.sessionId);
+  const [rows, votes, findings] = await Promise.all([
+    ids.length ? listRecordings(shop, { sessionIds: ids, take: 200000 }) : [],
+    votesForSessions(shop, ids),
+    findingsForSessions(shop, ids),
+  ]);
+  const grouped = new Map(groupSessions(rows).map((s) => [s.sessionId, s]));
+  const by = (list) => { const m = new Map(); for (const r of list) { if (!m.has(r.sessionId)) m.set(r.sessionId, []); m.get(r.sessionId).push(r); } return m; };
+  const votesBy = by(votes);
+  const findingsBy = by(findings);
+  const chats = flags.map((f) => {
+    const s = grouped.get(f.sessionId);
+    return {
+      sessionId: f.sessionId,
+      tester: s?.tester || "",
+      page: s?.page || "",
+      startedAt: s?.startedAt || f.createdAt,
+      flag: { kind: f.kind, note: f.note, by: f.flaggedBy, at: f.kind === "manual" ? f.updatedAt : f.createdAt },
+      turns: (s?.turns || []).map((t) => ({ at: t.createdAt, message: t.message, reply: t.reply, products: t.products || [], extras: t.extras, ok: t.ok, guard: t.guard })),
+      votes: (votesBy.get(f.sessionId) || []).map((v) => ({ at: v.createdAt, vote: v.vote, kind: v.kind, reason: v.reason, moment: v.moment, comment: v.comment, response: v.botResponse })),
+      findings: (findingsBy.get(f.sessionId) || []).map((g) => ({ at: g.at, subject: g.subject, problem: g.problem, note: g.note, better: g.better, reply: g.reply })),
+    };
+  });
+  return flaggedChatsReport({ shop, exportedAt: new Date(), timeZone, chats });
+}
+
 // Resource route — only exports a loader, no default component. React Router
 // serves the loader's Response directly without trying to render a page,
 // which is the pattern for file downloads. This avoids the bug where
@@ -185,12 +217,17 @@ export const loader = async ({ request }) => {
   const { session, admin, access } = await adminWithAccess(request);
   // The customer service team downloads the votes and the chats, nothing else.
   const wanted = new URL(request.url).searchParams.get("section") || "";
-  if (access === "support" && !["conversations", "recordings"].includes(wanted)) return new Response("Forbidden", { status: 403 });
+  if (access === "support" && !["conversations", "recordings", "flagged"].includes(wanted)) return new Response("Forbidden", { status: 403 });
   const url = new URL(request.url);
 
   const section = url.searchParams.get("section");
   if (!section) {
     return new Response("Missing 'section' query parameter", { status: 400 });
+  }
+  // The flagged chats with the team's comments, for review (Markdown).
+  if (section === "flagged") {
+    const text = await flaggedReport(session.shop, await getShopTimeZone(admin, session.shop).catch(() => ""));
+    return fileResponse(`flagged-chats_${new Date().toISOString().slice(0, 10)}.md`, text, "text/markdown; charset=utf-8");
   }
 
   const planForRetention = await getShopPlan(session.shop);
