@@ -46,7 +46,7 @@ export const loader = async ({ request }) => {
   const windowDays = windowOf(url.searchParams.get("days"));
   const days = windowDays || st.keepDays;
   const focus = String(url.searchParams.get("chat") || "").slice(0, 80);
-  const tab = ["chats", "down", "up", "issues"].includes(url.searchParams.get("tab")) ? url.searchParams.get("tab") : "chats";
+  const tab = ["chats", "down", "up", "flagged", "failed", "guard", "issues"].includes(url.searchParams.get("tab")) ? url.searchParams.get("tab") : "chats";
   // The shoppers' votes over the same window (everything kept: a year).
   const voteDays = days || 365;
   const [rows, flags, timeZone, votes] = await Promise.all([
@@ -169,29 +169,22 @@ const REC_CSS = `
   .rd-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(26,46,38,0.06); }
   .rd-seg button { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; padding: 4px 10px; border-radius: 7px; font-size: 12.5px; line-height: 18px; font-weight: 550; color: #4a4a4a; }
   .rd-seg button[aria-pressed="true"] { background: #fff; color: #1a1a1a; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.05); }
-  .rd-seg button:focus-visible, .rd-stat:focus-visible, .rd-tab:focus-visible, .rd-row:focus-visible, .rd-chip:focus-visible, .rd-pager button:focus-visible, .rd-x:focus-visible, .rd-nav:focus-visible { outline: 2px solid var(--rd-green); outline-offset: -2px; }
+  .rd-seg button:focus-visible, .rd-stat:focus-visible, .rd-row:focus-visible, .rd-chip:focus-visible, .rd-pager button:focus-visible, .rd-x:focus-visible, .rd-nav:focus-visible { outline: 2px solid var(--rd-green); outline-offset: -2px; }
   /* The numbers: one strip, each a filter. */
-  .rd-strip { display: flex; overflow-x: auto; scrollbar-width: none; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+  .rd-strip { display: flex; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--rd-line); }
   .rd-strip::-webkit-scrollbar { display: none; }
-  .rd-stat { all: unset; box-sizing: border-box; flex: 1 1 0; min-width: 118px; display: flex; flex-direction: column; gap: 0; padding: 9px 14px 8px; color: #1a1a1a; border-left: 1px solid var(--rd-line); }
-  .rd-stat:first-child { border-left: 0; border-radius: 12px 0 0 12px; }
-  .rd-stat:last-child { border-radius: 0 12px 12px 0; }
-  .rd-stat[data-filter] { cursor: pointer; }
-  .rd-stat[data-filter]:hover { background: rgba(26,46,38,0.03); }
-  .rd-stat[aria-pressed="true"] { background: rgba(45,107,79,0.08); box-shadow: inset 0 -2px 0 var(--rd-green); }
+  .rd-stat { all: unset; box-sizing: border-box; flex: 1 1 0; min-width: 112px; display: flex; flex-direction: column; gap: 0; padding: 10px 14px 9px; color: #1a1a1a; border-left: 1px solid var(--rd-line); border-bottom: 3px solid transparent; cursor: pointer; transition: background .12s ease; }
+  .rd-stat:first-child { border-left: 0; border-top-left-radius: 12px; }
+  .rd-stat:last-child { border-top-right-radius: 12px; }
+  .rd-stat:hover { background: rgba(26,46,38,0.035); }
+  .rd-stat[aria-selected="true"] { background: rgba(45,107,79,0.07); border-bottom-color: var(--rd-green); }
+  .rd-stat[aria-selected="true"] .rd-stat__label { color: #1f4d39; }
   .rd-stat__value { font-size: 19px; line-height: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .rd-stat__label { font-size: 11.5px; line-height: 15px; font-weight: 600; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rd-stat.is-bad .rd-stat__value { color: var(--rd-red); }
   .rd-stat.is-warn .rd-stat__value { color: #7a5412; }
+  .rd-stat.is-good .rd-stat__value { color: #1f4d39; }
   .rd-stat.is-zero .rd-stat__value { color: #9a9a9a; }
-  .rd-tabs { display: flex; gap: 2px; padding: 4px 8px 0; border-bottom: 1px solid var(--rd-line); overflow-x: auto; scrollbar-width: none; }
-  .rd-tabs::-webkit-scrollbar { display: none; }
-  .rd-tab { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px 9px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; font-size: 13px; line-height: 18px; font-weight: 600; color: #616161; }
-  .rd-tab:hover { color: #1a1a1a; }
-  .rd-tab[aria-selected="true"] { color: #1a1a1a; border-bottom-color: var(--rd-green); }
-  .rd-tab__n { padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 650; color: #4a4a4a; background: rgba(26,46,38,0.08); font-variant-numeric: tabular-nums; }
-  .rd-tab__n.is-bad { color: var(--rd-red); background: rgba(185,90,90,0.13); }
-  .rd-tab__n.is-good { color: #1f4d39; background: rgba(45,107,79,0.12); }
   .rd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-bottom: 1px solid var(--rd-line); }
   .rd-search { flex: 1 1 200px; min-width: 0; }
   .rd-tester { width: 150px; }
@@ -289,8 +282,6 @@ const REC_CSS = `
 const plural = (n, one, many) => `${Number(n || 0).toLocaleString()} ${n === 1 ? one : many}`;
 const PER_PAGE = 25;
 const FLAG_WORDS = { manual: "Flagged", guard: "Ended by guard", watch: "Would have ended" };
-const TABS = [["chats", "Chats"], ["down", "Not helpful"], ["up", "Helpful"], ["issues", "Top issues"]];
-const ONLY_WORDS = { down: "Not helpful", flagged: "Flagged", failed: "Failed replies", guard: "Guard" };
 const FEEDBACK_MOMENTS_WORDS = { cart: "after an add to cart", buy_now: "back from checkout", replies: "after a few replies", order: "about an order" };
 
 function Transcript({ turns }) {
@@ -349,10 +340,13 @@ export default function Recordings() {
   const concernFetcher = useFetcher();
   const revalidator = useRevalidator();
   const shopify = useAppBridge();
-  const [tab, setTab] = useState(tabParam);
+  // What the table shows: every chat, or one of the blocks on top.
+  const [view, setView] = useState(tabParam);
+  const tab = view === "down" || view === "up" || view === "issues" ? view : "chats";
+  const only = view === "flagged" || view === "failed" || view === "guard" ? view : "";
+  const setTab = setView;
   const [query, setQuery] = useState("");
   const [tester, setTester] = useState("");
-  const [only, setOnly] = useState(""); // flagged | failed | down | guard
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -506,21 +500,19 @@ export default function Recordings() {
     setTheme(t ? { id: t.id, title: t.title, ids: t.sessionIds } : null);
     if (t) setTab("chats");
   };
-  const toggleOnly = (key) => { setTab("chats"); setOnly((v) => (v === key ? "" : key)); };
   const currentVotes = current ? votes.filter((v) => v.sessionId === current.sessionId) : [];
   const keepWords = recording.keepDays === 365 ? "a year" : recording.keepDays === 180 ? "6 months" : recording.keepDays === 90 ? "3 months" : `${recording.keepDays} days`;
   const windowWords = windowDays === 1 ? "the last 24 hours" : windowDays ? `the last ${windowDays} days` : "everything kept";
 
-  const stat = (label, value, { filter, tone } = {}) => (
+  const stat = (key, label, value, tone) => (
     <button
       type="button"
+      role="tab"
+      id={`rd-tab-${key}`}
+      aria-selected={view === key}
+      aria-controls="rd-panel"
       className={`rd-stat${tone && value > 0 ? ` is-${tone}` : ""}${value === 0 ? " is-zero" : ""}`}
-      data-filter={filter || undefined}
-      aria-pressed={filter ? only === filter && tab === "chats" : undefined}
-      onClick={filter ? () => toggleOnly(filter) : undefined}
-      disabled={!filter}
-      style={filter ? undefined : { cursor: "default" }}
-      title={filter ? `Show only ${label.toLowerCase()}` : undefined}
+      onClick={() => setView(key)}
     >
       <span className="rd-stat__value">{Number(value).toLocaleString()}</span>
       <span className="rd-stat__label">{label}</span>
@@ -588,39 +580,22 @@ export default function Recordings() {
             </div>
           </div>
 
-          <div className="rd-strip" role="group" aria-label={`Numbers for ${windowWords}`}>
-            {stat("Chats", totals.chats)}
-            {stat("Messages", totals.messages)}
-            {stat("Not helpful", totals.down, { filter: "down", tone: "bad" })}
-            {stat("Flagged", totals.flagged, { filter: "flagged" })}
-            {stat("Failed replies", totals.failed, { filter: "failed", tone: "bad" })}
-            {stat(recording.guard === "watch" ? "Guard would end" : "Ended by guard", totals.guard, { filter: "guard", tone: "warn" })}
-          </div>
-
           <Card padding="0">
-            <div className="rd-tabs" role="tablist" aria-label="What to list">
-              {TABS.map(([id, label]) => {
-                const n = id === "chats" ? visible.length : id === "down" ? totals.down : id === "up" ? totals.up : (concerns.top?.length || 0) + (concerns.more?.length || 0);
-                return (
-                  <button key={id} type="button" role="tab" className="rd-tab" aria-selected={tab === id} id={`rd-tab-${id}`} aria-controls="rd-panel" onClick={() => setTab(id)}>
-                    {label}
-                    {(id !== "issues" || n > 0) && <span className={`rd-tab__n${id === "down" && n > 0 ? " is-bad" : id === "up" && n > 0 ? " is-good" : ""}`}>{n.toLocaleString()}</span>}
-                  </button>
-                );
-              })}
+            <div className="rd-strip" role="tablist" aria-label={`What to show, from ${windowWords}`}>
+              {stat("chats", "Chats", totals.chats)}
+              {stat("down", "Not helpful", totals.down, "bad")}
+              {stat("up", "Helpful", totals.up, "good")}
+              {stat("flagged", "Flagged", totals.flagged)}
+              {stat("failed", "Failed replies", totals.failed, "bad")}
+              {stat("guard", recording.guard === "watch" ? "Guard would end" : "Ended by guard", totals.guard, "warn")}
+              {stat("issues", "Top issues", (concerns.top?.length || 0) + (concerns.more?.length || 0))}
             </div>
-            <div id="rd-panel" role="tabpanel" aria-labelledby={`rd-tab-${tab}`}>
+            <div id="rd-panel" role="tabpanel" aria-labelledby={`rd-tab-${view}`}>
               {tab !== "issues" && (
                 <div className="rd-tools">
                   {theme && tab === "chats" && (
                     <button type="button" className="rd-chip" onClick={() => setTheme(null)} aria-label={`Showing chats about ${theme.title}. Show all chats`}>
                       <span className="rd-chip__label">{theme.title}</span>
-                      <span aria-hidden="true">✕</span>
-                    </button>
-                  )}
-                  {only && tab === "chats" && (
-                    <button type="button" className="rd-chip" onClick={() => setOnly("")} aria-label="Show every chat">
-                      <span className="rd-chip__label">{ONLY_WORDS[only]}</span>
                       <span aria-hidden="true">✕</span>
                     </button>
                   )}
@@ -643,7 +618,7 @@ export default function Recordings() {
                       <Select label="Who" labelHidden options={[{ label: "Everyone", value: "" }, ...testers.map((t) => ({ label: t, value: t }))]} value={tester} onChange={setTester} />
                     </div>
                   )}
-                  <span className="rd-count">{tab === "chats" ? `${plural(list.length, "chat", "chats")}${filtering ? " match" : ""}` : plural(list.length, "vote", "votes")}</span>
+                  <span className="rd-count">{tab === "chats" ? (filtering ? `${plural(list.length, "chat", "chats")} match` : `${plural(list.length, "chat", "chats")} · ${plural(totals.messages, "message", "messages")}`) : plural(list.length, "vote", "votes")}</span>
                 </div>
               )}
 
