@@ -545,14 +545,17 @@ function peakTilesHtml(blocks){
 function peakWordsHtml(w){
   if(!w||typeof w!=='object')return '';
   var at=/^(center|left|right|top|bottom|top left|top right|bottom left|bottom right)$/.test(String(w.at))?String(w.at):'bottom left';
-  var al=/^(left|center|right)$/.test(String(w.align))?String(w.align):(/right/.test(at)?'right':/left/.test(at)?'left':'center');
+  var own=/right/.test(at)?'right':/left/.test(at)?'left':'center';
+  var al=/^(left|center|right)$/.test(String(w.align))?String(w.align):own;
   var p='';
   if(w.eyebrow)p+='<span class="ai-chat-peak__eyebrow">'+esc(w.eyebrow)+'</span>';
   if(w.heading)p+='<span class="ai-chat-peak__heading">'+esc(w.heading)+'</span>';
   if(w.text)p+='<span class="ai-chat-peak__text">'+esc(w.text)+'</span>';
   if(w.cta)p+='<span class="ai-chat-peak__cta">'+esc(w.cta)+'</span>';
   if(!p)return '';
-  return '<span class="ai-chat-peak__words is-'+al+(w.ink==='dark'?' is-dark':'')+'" data-at="'+at.replace(' ','-')+'" aria-hidden="true">'+p+'</span>';
+  /* The spot places the group; the alignment lines the group's lines up with each other. */
+  /* Lines aligned differently from the spot (centred at the right, say): the group is boxed — narrower than the picture — so it can sit at the spot. */
+  return '<span class="ai-chat-peak__words is-'+al+(al!==own?' is-boxed':'')+(w.ink==='dark'?' is-dark':'')+'" data-at="'+at.replace(' ','-')+'" aria-hidden="true"><span class="ai-chat-peak__group">'+p+'</span></span>';
 }
 /* The tiles' videos play only while in view (the home open, the tile on
    screen): off screen, minimized or behind a chat, they pause. */

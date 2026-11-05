@@ -7731,7 +7731,7 @@ button.ai-chat-launcher__text {
 /* The wide card (Foot pain, everywhere but the smallest phones): the drawing fills its left side, the words beside it. */
 .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain { --sc-h: 96px; }
 .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain .ai-chat-focus__card-ico { top: 50%; transform: translateY(-50%); left: -4px; }
-.ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain .ai-chat-focus__card-text { justify-content: center; padding-left: calc(var(--sc-h) * var(--sc-r) - 2px); }
+.ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain .ai-chat-focus__card-text { justify-content: center; align-items: center; text-align: center; padding-left: calc(var(--sc-h) * var(--sc-r) - 2px); }
 .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain .ai-chat-focus__card-title { font-size: 17px; line-height: 21px; }
 /* On a computer the wide card is 220 or so across: the drawing a size down, so the name sits on one line beside it. */
 @container (min-width: 440px) {
@@ -7747,7 +7747,7 @@ button.ai-chat-launcher__text {
 @container (max-width: 339px) {
   .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { --sc-h: 80px; min-height: 112px; }
   .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { top: 50%; transform: translateY(-50%); }
-  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { justify-content: center; padding-left: calc(var(--sc-h) * var(--sc-r) - 2px); }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { justify-content: center; align-items: center; text-align: center; padding-left: calc(var(--sc-h) * var(--sc-r) - 2px); }
 }
 /* The cards' colours (Settings → the cards' colours): soft grey as the chat
    (the default, light or dark with the theme), white with a hairline,
@@ -7906,8 +7906,15 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-peak__words[data-at^="top"]::before { background: linear-gradient(to bottom, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.22) 50%, rgba(0, 0, 0, 0) 100%); }
 .ai-chat-panel .ai-chat-peak__words[data-at="left"], .ai-chat-panel .ai-chat-peak__words[data-at="center"], .ai-chat-panel .ai-chat-peak__words[data-at="right"] { justify-content: center; }
 .ai-chat-panel .ai-chat-peak__words[data-at="left"]::before, .ai-chat-panel .ai-chat-peak__words[data-at="center"]::before, .ai-chat-panel .ai-chat-peak__words[data-at="right"]::before { background: rgba(0, 0, 0, 0.3); }
-.ai-chat-panel .ai-chat-peak__words.is-center { align-items: center; text-align: center; }
-.ai-chat-panel .ai-chat-peak__words.is-right { align-items: flex-end; text-align: right; }
+/* The spot places the group of lines (left, middle or right of the picture); the alignment lines them up with each other inside the group. */
+.ai-chat-panel .ai-chat-peak__words[data-at="top"], .ai-chat-panel .ai-chat-peak__words[data-at="center"], .ai-chat-panel .ai-chat-peak__words[data-at="bottom"] { align-items: center; }
+.ai-chat-panel .ai-chat-peak__words[data-at="right"], .ai-chat-panel .ai-chat-peak__words[data-at$="-right"] { align-items: flex-end; }
+.ai-chat-panel .ai-chat-peak__group { display: flex; flex-direction: column; align-items: flex-start; gap: inherit; max-width: 100%; text-align: left; }
+.ai-chat-panel .ai-chat-peak__words.is-center .ai-chat-peak__group { align-items: center; text-align: center; }
+.ai-chat-panel .ai-chat-peak__words.is-right .ai-chat-peak__group { align-items: flex-end; text-align: right; }
+/* Lines aligned differently from the spot (centred at the right, say): the group is boxed so it sits at the spot instead of stretching across the picture. */
+.ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__group { max-width: 68%; }
+.ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__heading, .ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__text { max-width: 100%; }
 .ai-chat-panel .ai-chat-peak__words.is-dark { color: #111; text-shadow: none; }
 .ai-chat-panel .ai-chat-peak__words.is-dark::before { background: linear-gradient(to top, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%); }
 .ai-chat-panel .ai-chat-peak__words.is-dark[data-at^="top"]::before { background: linear-gradient(to bottom, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%); }

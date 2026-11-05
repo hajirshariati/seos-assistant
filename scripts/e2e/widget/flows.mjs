@@ -3807,7 +3807,8 @@ for (const coop of ["1", "2"]) {
             const w = t.querySelector(".ai-chat-peak__words"); if (!w) return { label: t.getAttribute("aria-label"), words: null };
             const tr = t.getBoundingClientRect(); const wr = w.getBoundingClientRect(); const cs = getComputedStyle(w);
             const part = (c) => { const el = w.querySelector(c); if (!el) return null; const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return { text: el.textContent, l: Math.round(r.left - tr.left), r: Math.round(tr.right - r.right), t: Math.round(r.top - tr.top), b: Math.round(tr.bottom - r.bottom), color: s.color, bg: s.backgroundColor, radius: s.borderRadius }; };
-            return { label: t.getAttribute("aria-label"), words: { covers: Math.abs(wr.width - tr.width) <= 1 && Math.abs(wr.height - tr.height) <= 1, hidden: w.getAttribute("aria-hidden"), align: cs.textAlign, color: cs.color, at: w.getAttribute("data-at"), shade: `${getComputedStyle(w, "::before").backgroundImage}|${getComputedStyle(w, "::before").backgroundColor}`, eyebrow: part(".ai-chat-peak__eyebrow"), heading: part(".ai-chat-peak__heading"), text: part(".ai-chat-peak__text"), cta: part(".ai-chat-peak__cta"), nested: t.querySelectorAll("button, a").length } };
+            const g = w.querySelector(".ai-chat-peak__group"); const gr = g.getBoundingClientRect();
+            return { label: t.getAttribute("aria-label"), words: { covers: Math.abs(wr.width - tr.width) <= 1 && Math.abs(wr.height - tr.height) <= 1, hidden: w.getAttribute("aria-hidden"), align: getComputedStyle(g).textAlign, group: { l: Math.round(gr.left - tr.left), r: Math.round(tr.right - gr.right), w: Math.round(gr.width), mid: Math.round((gr.left + gr.right) / 2 - tr.left), tileMid: Math.round(tr.width / 2) }, color: cs.color, at: w.getAttribute("data-at"), shade: `${getComputedStyle(w, "::before").backgroundImage}|${getComputedStyle(w, "::before").backgroundColor}`, eyebrow: part(".ai-chat-peak__eyebrow"), heading: part(".ai-chat-peak__heading"), text: part(".ai-chat-peak__text"), cta: part(".ai-chat-peak__cta"), nested: t.querySelectorAll("button, a").length } };
           });
         });
         const wg = await open("/full?home=focus&pk=1&pkw=1");
@@ -3827,6 +3828,13 @@ for (const coop of ["1", "2"]) {
         const p = w3[0]?.words;
         check("peak words (phone): the same lines on the first picture, a size down, still inside the tile", !!p && p.at === "bottom-left" && p.heading?.text === "Find the perfect gift" && p.heading.l >= 8 && p.heading.r > 20 && p.cta?.b >= 6 && p.cta.b <= 22, JSON.stringify(w3[0]));
         await wp.ctx.close();
+        // The spot and the alignment are two things: at the middle right with the lines centred, the group sits at the right and each line is centred on the group — not on the picture.
+        const wr = await open("/full?home=focus&pk=1&pkw=2");
+        const w4 = await readWords(wr.page);
+        const q = w4[0]?.words, qh = q?.heading, qc = q?.cta;
+        const centredOnGroup = (p) => !!p && Math.abs(((p.l + (q.group.tileMid * 2 - p.r)) / 2) - q.group.mid) <= 3;
+        check("peak words (middle right, lines centred): the words sit at the right of the picture, each line centred on the others — the small line, the title and the button share one middle — not spread across the picture", !!q && q.at === "right" && q.align === "center" && q.group.r <= 24 && q.group.w <= q.group.tileMid * 2 * 0.72 && q.group.l > q.group.r + 20 && centredOnGroup(qh) && centredOnGroup(qc) && Math.abs(qh.t - qh.b) <= 40, JSON.stringify(w4[0]));
+        await wr.ctx.close();
       }
       const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
       const tagged = await readPeak(vip.page);

@@ -31,7 +31,10 @@ function peakFor(referer) {
   const withSizes = /[?&]pks=1/.test(referer) ? blocks.map((b, i) => (i ? b : { ...b, image: "/apps/hajirai/peak-image?b=b1&v=abc", srcset: "/apps/hajirai/peak-image?b=b1&v=abc&w=400 400w, /apps/hajirai/peak-image?b=b1&v=abc&w=800 800w, /apps/hajirai/peak-image?b=b1&v=abc 1600w" })) : blocks;
   // ?pkw=1: words on the first two pictures — the first's at the bottom left (the small line, the title, a button; white), the second's centred (the title and a line of text; black).
   const PEAK_WORDS = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift", cta: "Shop gift ideas", at: "bottom left", align: "auto", ink: "light" }, b2: { heading: "An extra 10% for members", text: "Just for signing in.", at: "center", align: "center", ink: "dark" } };
-  const worded = /[?&]pkw=1/.test(referer) ? withSizes.map((b) => (PEAK_WORDS[b.id] ? { ...b, words: PEAK_WORDS[b.id] } : b)) : withSizes;
+  // ?pkw=2: the first picture's words at the middle right, the lines centred on each other (white).
+  const PEAK_WORDS_RIGHT = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift", cta: "Shop gift ideas", at: "right", align: "center", ink: "light" } };
+  const worded = /[?&]pkw=1/.test(referer) ? withSizes.map((b) => (PEAK_WORDS[b.id] ? { ...b, words: PEAK_WORDS[b.id] } : b))
+    : /[?&]pkw=2/.test(referer) ? withSizes.map((b) => (PEAK_WORDS_RIGHT[b.id] ? { ...b, words: PEAK_WORDS_RIGHT[b.id] } : b)) : withSizes;
   return { ...PEAK_HOME, layout, decor, tint, cards, cardTone, cardBg: "", cardInk: "", blocks: worded };
 }
 // Settings → Focus home → Her look (every other day): ?look=1 — the winter colours and a regular ring;
