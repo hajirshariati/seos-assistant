@@ -651,6 +651,7 @@ export async function runLeanTurn({
   const calledTools = new Set(); // every tool used this turn, for the hand-off check
   let compared = []; // handles in this reply's comparison table
   let soldOut = []; // sizes the customer asked for that aren't in stock
+  const restockAnswers = []; // what back_in_stock_alert said this turn, in a word each
   const events = [];
   // Facts the reply may quote: store info, promotions, order/recommender output.
   let knowledgeText = String(extraSystem || "");
@@ -809,6 +810,8 @@ export async function runLeanTurn({
       const { _events, ...r } = restockCheck(p, input.options, live, siblings);
       if (Array.isArray(_events)) events.push(..._events);
       if (p) { markSeen([p.handle, ...(r.other_colors || []).map((o) => o.handle)]); topic("product", p.title); topic("tool", name); }
+      const said = r.error ? "error" : r.carried === false ? "not carried" : r.needs_options ? "needs options" : r.in_stock ? "in stock" : r.alert === "offered" ? "offered" : "unavailable";
+      restockAnswers.push(said);
       log(`[lean] restock ${handle} ${JSON.stringify(input.options || {})} → ${r.error ? `error: ${r.error}` : r.carried === false ? "not carried" : r.needs_options ? "needs options" : r.in_stock ? "in stock" : `sold out, alert ${r.alert}`}`);
       return r;
     }
@@ -1018,6 +1021,8 @@ export async function runLeanTurn({
       called: [...calledTools],
       available: tools.map((t) => t.name),
       soldOut,
+      cardShown: events.some((ev) => ev?.type === "restock_cta"),
+      answers: restockAnswers,
     }));
     // "That offer ended" / "that style was discontinued" with no record
     // behind it: only the store's memory may say so.

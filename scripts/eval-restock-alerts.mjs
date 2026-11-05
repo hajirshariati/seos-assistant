@@ -16,7 +16,7 @@ const HOOK = `export async function resolve(spec, ctx, next) {
   }
 }`;
 register("data:text/javascript," + encodeURIComponent(HOOK));
-const { restockCheck, restockIssues, RESTOCK_ASK, RESTOCK_TOOL, RESTOCK_TOOL_DEF } = await import("../app/lib/lean/restock.js");
+const { restockCheck, restockIssues, RESTOCK_ASK, RESTOCK_TOOL, RESTOCK_TOOL_DEF, CARD_PROMISED } = await import("../app/lib/lean/restock.js");
 const { buildLeanCatalog } = await import("../app/lib/lean/catalog.js");
 const { buildLeanTools } = await import("../app/lib/lean/tools.js");
 const { buildLeanSystemPrompt } = await import("../app/lib/lean/prompt.js");
@@ -112,7 +112,7 @@ await test("a size this color doesn't come in, carried by the style's other colo
     { handle: "miles-black-am260m", title: "Miles Arch Support Sneaker - Black", in_stock: false },
     { handle: "miles-navy-am265m", title: "Miles Arch Support Sneaker - Navy", in_stock: true },
   ]);
-  assert.match(r.note, /doesn't come in 13\.5 — that isn't a size the store carries for this color/);
+  assert.match(r.note, /doesn't come in 13\.5 — that isn't a size or width the store carries for this color/);
   assert.match(r.note, /in stock now: Miles Arch Support Sneaker - Navy/);
   assert.match(r.note, /sold out right now: Miles Arch Support Sneaker - Black/);
   assert.match(r.note, /show the in-stock ones with show_products/);
@@ -122,6 +122,35 @@ await test("a size this color doesn't come in, carried by the style's other colo
   const black = restockCheck(byH["miles-black-am260m"], { size: "13.5" }, null, siblings);
   assert.equal(black.alert, "offered");
   assert.equal(black._events[0].variant, "51133383639353");
+});
+await test("a width the product doesn't come in is never dropped: no alert, said plainly", () => {
+  // The Vera in 7 wide, as it happened: Medium only — the old answer was "7 is in stock", the width lost on the way.
+  const vera = { handle: "vera-black", title: "Vera Mary Jane - Black", productType: "Footwear", status: "ACTIVE", attributesJson: { category_for_filter: "Flats", gender: "women" },
+    variants: [["7 US", "Medium", 4, "11"], ["8 US", "Medium", 0, "12"]].map(([size, width, qty, id]) => ({ shopifyId: id, price: "129.95", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: width }]) })) };
+  const veraTan = { ...vera, handle: "vera-tan", title: "Vera Mary Jane - Tan", variants: [["7 US", "Wide", 0, "13"]].map(([size, width, qty, id]) => ({ shopifyId: id, price: "129.95", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: width }]) })) };
+  const c = buildLeanCatalog([vera, veraTan, miles], { shop: "s.myshopify.com" });
+  const V = Object.fromEntries(c.products.map((p) => [p.handle, p]));
+  const r = restockCheck(V["vera-black"], { size: "7", width: "wide" });
+  assert.equal(r.carried, false);
+  assert.equal(r.in_stock, undefined);
+  assert.equal(r._events, undefined);
+  assert.deepEqual(r.comes_in, { Size: ["7 US", "8 US"], Width: ["Medium"] });
+  assert.match(r.note, /doesn't come in wide — that isn't a size or width the store carries for this color/);
+  assert.match(r.note, /no alert for it; never point to a card or an email box/);
+  // A style sold in one width (no width choice at all) doesn't come in wide either.
+  const one = restockCheck(P["miles-black-am260m"], { size: "10.5", width: "wide" });
+  assert.equal(one.carried, false);
+  assert.deepEqual(one.comes_in, { Size: ["8 US", "10.5 US", "13.5 - 14 US"] });
+  assert.match(one.note, /doesn't come in wide/);
+  // The other color that does come in 7 wide is named — sold out there, so an alert can be offered for it.
+  const sib = restockCheck(V["vera-black"], { size: "7", width: "wide" }, null, [V["vera-tan"]]);
+  assert.deepEqual(sib.other_colors, [{ handle: "vera-tan", title: "Vera Mary Jane - Tan", in_stock: false }]);
+  assert.match(sib.note, /sold out right now: Vera Mary Jane - Tan/);
+  // The tan in 7 medium: a width it doesn't come in, so a sibling with it isn't claimed either way.
+  assert.deepEqual(restockCheck(V["vera-tan"], { size: "7", width: "medium" }, null, [V["vera-black"]]).other_colors, [{ handle: "vera-black", title: "Vera Mary Jane - Black", in_stock: true }]);
+  // The width it does come in answers as before.
+  assert.equal(restockCheck(V["vera-black"], { size: "7", width: "medium" }).in_stock, true);
+  assert.equal(restockCheck(V["vera-black"], { size: "8", width: "medium" }).alert, "offered");
 });
 await test("no size given, or only the size of a sized-and-widthed style: ask, don't guess", () => {
   const none = restockCheck(P["miles-black-am260m"], undefined);
@@ -178,7 +207,7 @@ await test("a restock question handed to customer service, or closed without a q
 });
 await test("asking back which product or size, or after the check, is fine", () => {
   assert.deepEqual(restockIssues({ ...base, latestUserMessage: "when will the Miles be back?", text: "Happy to check — which size are you after? <<8 US>><<10.5 US>>" }), []);
-  assert.deepEqual(restockIssues({ ...base, called: ["search_products", RESTOCK_TOOL], latestUserMessage: "when will the Miles be back in 13.5?", text: "Sold out in 13.5 - 14 right now. Pop your email in below.", supportOffered: true }), []);
+  assert.deepEqual(restockIssues({ ...base, called: ["search_products", RESTOCK_TOOL], answers: ["offered"], cardShown: true, latestUserMessage: "when will the Miles be back in 13.5?", text: "Sold out in 13.5 - 14 right now. Pop your email in below.", supportOffered: true }), []);
   assert.deepEqual(restockIssues({ available: ["search_products", "contact_support"], called: [], latestUserMessage: "when will the Miles be back in 13.5?", text: "No restock date, sorry.", supportOffered: true }), [], "a store without alerts");
   assert.deepEqual(restockIssues({ ...base, latestUserMessage: "when is it back? I want to talk to a person", text: "Of course — here's customer service.", supportOffered: true }), [], "they asked for a person");
 });
@@ -191,6 +220,35 @@ await test("a sold-out size picked for a card: the alert is offered too", () => 
 });
 
 console.log("\ngating on the store's Klaviyo setup");
+await test("a card promised with no card under the reply: sent back, with what the check found", () => {
+  // The Vera in 7 wide: the check said wide isn't carried — no card — and the reply still pointed to one.
+  const promised = restockIssues({ ...base, called: ["search_products", RESTOCK_TOOL], answers: ["not carried"], latestUserMessage: "i am size 7 wide", text: "The Vera comes in 7 but medium only. I'd suggest popping your email into the notify-me card below and we'll reach out if a wide version ever becomes available." });
+  assert.equal(promised.length, 1);
+  assert.equal(promised[0].code, "restock_card_promised");
+  assert.match(promised[0].detail, /there is no card there — it said the size or width they want isn't one this product comes in/);
+  assert.match(promised[0].detail, /Rewrite without any card, box or form/);
+  assert.match(promised[0].detail, /never ask for their email in the chat/);
+  // Said without running the check at all: run it first.
+  const unchecked = restockIssues({ ...base, latestUserMessage: "do you have the Miles in 13.5?", text: "The Miles is sold out in 13.5 — pop your email in below and we'll let you know." });
+  assert.equal(unchecked.length, 1);
+  assert.equal(unchecked[0].code, "restock_card_promised");
+  assert.match(unchecked[0].detail, new RegExp(`you didn't run ${RESTOCK_TOOL}`));
+  assert.match(unchecked[0].detail, new RegExp(`Run ${RESTOCK_TOOL} first`));
+  // An alert the store can't set, and the other wordings a reply reaches for.
+  const cant = restockIssues({ ...base, called: [RESTOCK_TOOL], answers: ["unavailable"], latestUserMessage: "when is it back", text: "Sold out for now — enter your email in the box below and we'll notify you." });
+  assert.match(cant[0]?.detail || "", /it said an alert can't be set for that size here/);
+  for (const line of ["Drop your email into the form below.", "Use the back in stock form under this message.", "Leave your address here and we'll email you.", "Sign up below to get notified when it's back."]) {
+    assert.ok(CARD_PROMISED.test(line), line);
+  }
+  // With the card there, the same words are right; without the words, nothing is said.
+  assert.deepEqual(restockIssues({ ...base, called: [RESTOCK_TOOL], answers: ["offered"], cardShown: true, latestUserMessage: "i am size 7 wide", text: "Sold out in 7 wide right now. Pop your email in below and we'll email you the moment it's back." }), []);
+  assert.deepEqual(restockIssues({ ...base, called: [RESTOCK_TOOL], answers: ["not carried"], latestUserMessage: "i am size 7 wide", text: "The Vera comes in medium only, so it won't be restocked in wide. The Jillian comes in 7 wide — want to see it?" }), []);
+  for (const line of ["I'll email you the details.", "Check your email for the order confirmation.", "The card shows the sizes in stock.", "Add it to your cart below."]) {
+    assert.ok(!CARD_PROMISED.test(line), line);
+  }
+  // A store without alerts never gets this check.
+  assert.deepEqual(restockIssues({ available: ["search_products", "contact_support"], called: [], latestUserMessage: "when is it back", text: "Pop your email in below." }), []);
+});
 await test("the tool exists only with a Klaviyo company id, right before contact_support", () => {
   const off = buildLeanTools(catalog.vocab, {});
   assert.ok(!off.some((t) => t.name === RESTOCK_TOOL));
@@ -209,6 +267,8 @@ await test("the prompt rule reads only for those stores; other stores' prompts r
   assert.match(withAlerts, /check that exact size with back_in_stock_alert/);
   assert.match(withAlerts, /never guess one, and never send a restock question to customer service/);
   assert.match(withAlerts, /don't ask for their email in the chat; the card takes it/);
+  assert.match(withAlerts, /Only when it answers alert "offered" is there a Notify-me card under your reply/);
+  assert.match(withAlerts, /there is no card: say so plainly — it won't be restocked in a size it doesn't come in — offer the closest size or width it does come in, another color that has it, or another style, and never mention a card, a form or an email box/);
   assert.equal(withAlerts.replace(/\n- Sold out, or coming back:[^\n]*/, ""), plain, "one added line, nothing else changed");
 });
 

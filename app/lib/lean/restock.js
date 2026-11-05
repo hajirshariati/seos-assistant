@@ -46,12 +46,37 @@ function matching(product, pre) {
   });
 }
 
+// The values the customer named that this product doesn't come in: a
+// width this color has no variant of, a width on a style sold in one width,
+// a size outside its run. resolvePreselect drops those on the quiet (a card
+// can still be shown in the size alone); an alert can't — the customer
+// asked for that exact variant, and there is none.
+function missedValues(product, wanted, pre) {
+  if (!wanted || typeof wanted !== "object") return [];
+  const names = Object.keys(product?.options || {});
+  return Object.entries(wanted).filter(([k, v]) => {
+    const key = String(k).toLowerCase().trim();
+    const val = String(v ?? "").trim();
+    if (!val) return false;
+    const name = names.find((n) => n.toLowerCase() === key);
+    if (name) return !(pre && name in pre);
+    return key === "width" || key === "size";
+  }).map(([, v]) => String(v).trim());
+}
+
+// The chosen values, only when every size and width named is one the
+// product comes in.
+function resolveAll(product, wanted) {
+  const pre = resolvePreselect(product, wanted);
+  return pre && !missedValues(product, wanted, pre).length ? pre : null;
+}
+
 // The style's other colorways that come in the options asked for, and
 // whether each has them in stock (the synced catalog's stock).
 function colorwaysWith(siblings, wanted) {
   const out = [];
   for (const s of siblings || []) {
-    const pre = s && resolvePreselect(s, wanted);
+    const pre = s && resolveAll(s, wanted);
     if (!pre) continue;
     out.push({ handle: s.handle, title: s.title, in_stock: preselectAvailable(s.stock, pre) });
   }
@@ -70,9 +95,10 @@ export function restockCheck(product, options, live = null, siblings = []) {
   const stock = Array.isArray(live) ? live : product.stock;
   const wanted = options && typeof options === "object" ? options : null;
   const pre = wanted ? resolvePreselect(product, wanted) : null;
+  const missed = optionNames.length ? missedValues(product, wanted, pre) : [];
 
-  if (optionNames.length && !pre) {
-    const named = wanted ? Object.values(wanted).map((v) => String(v).trim()).filter(Boolean) : [];
+  if (optionNames.length && (!pre || missed.length)) {
+    const named = pre ? missed : wanted ? Object.values(wanted).map((v) => String(v).trim()).filter(Boolean) : [];
     if (named.length) {
       const size = named.join(" / ");
       const others = colorwaysWith(siblings, wanted);
@@ -84,7 +110,7 @@ export function restockCheck(product, options, live = null, siblings = []) {
         title,
         comes_in: Object.fromEntries(optionNames.map((n) => [n, listed(product.options[n])])),
         ...(others.length ? { other_colors: others } : {}),
-        note: `${title} doesn't come in ${size} — that isn't a size the store carries for this color, so it won't be restocked in it (no alert for it). ` +
+        note: `${title} doesn't come in ${size} — that isn't a size or width the store carries for this color, so it won't be restocked in it (no alert for it; never point to a card or an email box). ` +
           (others.length
             ? `The same style does come in ${size} in other colors (\`other_colors\`)${inStock.length ? ` — in stock now: ${names(inStock)}` : ""}${soldOut.length ? `${inStock.length ? ";" : " —"} sold out right now: ${names(soldOut)}` : ""}. Say so, ${inStock.length ? "show the in-stock ones with show_products with their size" : ""}${inStock.length && soldOut.length ? ", and " : ""}${soldOut.length ? `offer an email for a sold-out one by calling ${RESTOCK_TOOL} with that color's handle` : ""}. Never say the style doesn't come in ${size} — this color doesn't.`
             : `Say so plainly and offer the closest size it does come in (\`comes_in\`), or another style in their size.`),
@@ -158,15 +184,44 @@ export function restockCheck(product, options, live = null, siblings = []) {
 
 const WANTS_PERSON = /\b(human|real person|a person|an agent|representative|someone|somebody|talk to|speak (?:to|with)|call (?:you|someone)|phone number|manager)\b/i;
 
+// A reply pointing the customer to a Notify-me card, an email box or a
+// sign-up form under it ("pop your email in below", "the notify-me card
+// below", "enter your email in the box").
+export const CARD_PROMISED = /\b(?:notify[- ]me (?:card|box|form|field|alert)|back[- ]in[- ]stock (?:card|box|form|field)|(?:card|box|form|field) (?:below|beneath|under(?:neath)?|here)|pop(?:ping)? your (?:e-?mail|address) (?:in|into)|(?:enter|type|drop|leave|put|add|submit) your (?:e-?mail(?: address)?|address) (?:in|into|below|here)|(?:e-?mail|sign[- ]up) (?:box|form|field)|(?:below|under(?:neath)?) (?:to|and) (?:get|be) (?:notified|emailed|alerted))\b/i;
+
+// What the tool answered this turn, in a word, for the rewrite's note.
+const CARD_WHY = {
+  "not carried": "it said the size or width they want isn't one this product comes in, so there's no alert for it",
+  unavailable: "it said an alert can't be set for that size here",
+  "in stock": "it said that size is in stock right now",
+  "needs options": "it asked which size they want first",
+  error: "it didn't find the product",
+};
+
 // Fact-check issues for a reply, when the store has alerts (the tool is
-// available) and this reply didn't use it:
+// available):
+//  - the reply points to a Notify-me card (an email box, a form) that isn't
+//    there: the check wasn't run, or it answered that the size isn't carried
+//    or can't be alerted — no card goes under the reply then;
+// and, when this reply didn't use the tool:
 //  - the customer asked about a restock, and the reply hands them to
 //    customer service or just closes the door (no question back to them);
 //  - a size the reply picked for a card is sold out (show_products).
-export function restockIssues({ latestUserMessage = "", text = "", supportOffered = false, called = [], available = [], soldOut = [] } = {}) {
-  if (!available.includes(RESTOCK_TOOL) || called.includes(RESTOCK_TOOL)) return [];
-  const msg = String(latestUserMessage || "");
+export function restockIssues({ latestUserMessage = "", text = "", supportOffered = false, called = [], available = [], soldOut = [], cardShown = false, answers = [] } = {}) {
+  if (!available.includes(RESTOCK_TOOL)) return [];
   const issues = [];
+  if (!cardShown && CARD_PROMISED.test(String(text || ""))) {
+    const ran = called.includes(RESTOCK_TOOL);
+    const why = ran ? (answers.map((a) => CARD_WHY[a]).filter(Boolean).join("; ") || "it didn't offer one") : `you didn't run ${RESTOCK_TOOL} for that product and size`;
+    issues.push({
+      code: "restock_card_promised",
+      detail: `You're pointing the customer to a Notify-me card (an email box) under your reply, but there is no card there — ${why}. A card is under your reply only when ${RESTOCK_TOOL} answers alert "offered". ${ran
+        ? "Rewrite without any card, box or form: say plainly what the check found — a size or width it doesn't come in isn't going to be restocked in it, so say so and offer the closest size or width it does come in (`comes_in`), another color that has it (`other_colors`), or another style — and never ask for their email in the chat."
+        : `Run ${RESTOCK_TOOL} first (the handle and their size): if it answers alert "offered", point to the card; if it says the size isn't carried or can't be alerted, say so plainly with no card and offer what it does come in.`}`,
+    });
+  }
+  if (called.includes(RESTOCK_TOOL)) return issues;
+  const msg = String(latestUserMessage || "");
   if (RESTOCK_ASK.test(msg) && !WANTS_PERSON.test(msg) && (supportOffered || !/\?/.test(String(text || "")))) {
     issues.push({
       code: "restock_not_checked",

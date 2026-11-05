@@ -1146,6 +1146,30 @@ await test("the orthotic-chat check only fires on a short answer that switches t
     assert.deepEqual(r.events.filter((e) => e.type === "restock_cta"), [card]);
     assert.equal(r.retried, false);
   });
+  await test("a width this product doesn't come in: a reply pointing to a Notify-me card is sent back — no card, said plainly", async () => {
+    // The Vera in 7 wide, as it happened: Medium only, so the check says wide isn't carried (no card) — and the reply still said "the notify-me card below".
+    const vera = row("Vera Mary Jane - Black", { cat: "Flats", price: "129.95" });
+    vera.variants = [["7 US", "Medium", 4, "61"], ["8 US", "Medium", 0, "62"]].map(([size, width, qty, id]) => ({ shopifyId: id, price: "129.95", inventoryQty: qty, optionsJson: JSON.stringify([{ name: "Size", value: size }, { name: "Width", value: width }]) }));
+    const cat6 = buildLeanCatalog([...ROWS, vera], { shop: "s.myshopify.com" });
+    const vh = cat6.products.find((p) => p.title.startsWith("Vera")).handle;
+    const s = scripted([
+      { stop_reason: "tool_use", content: [tu("t1", "back_in_stock_alert", { handle: vh, options: { size: "7", width: "wide" } })] },
+      { stop_reason: "end_turn", content: [txt("The Vera in Black comes in 7 US but medium only. I'd suggest popping your email into the notify-me card below and we'll reach out if a wide version ever becomes available.")] },
+      { stop_reason: "end_turn", content: [txt("The Vera in Black comes in medium only, so it won't be restocked in a wide — sorry about that. It has a roomy toe box, and I can show you styles that come in 7 wide if you'd like.")] },
+    ]);
+    const logs = [];
+    const r = await runLeanTurn({ catalog: cat6, config, model: "m", messages: [{ role: "user", content: "i am size 7 wide" }], latestUserMessage: "i am size 7 wide", viewingHandle: vh, callModel: s.callModel, log: (l) => logs.push(l) });
+    const answer = JSON.stringify(s.requests[1].messages.at(-1));
+    assert.match(answer, /carried\\?":false/);
+    assert.match(answer, /doesn't come in wide/);
+    assert.doesNotMatch(answer, /in_stock\\?":true/, "the width isn't dropped to answer for the size alone");
+    assert.equal(r.retried, true);
+    assert.ok(logs.some((l) => /rewrite: .*restock_card_promised/.test(l)), logs.join("\n"));
+    assert.match(JSON.stringify(s.requests[2].messages.at(-1)), /there is no card there — it said the size or width they want isn't one this product comes in/);
+    assert.deepEqual(r.events.filter((e) => e.type === "restock_cta"), []);
+    assert.match(r.text, /medium only, so it won't be restocked in a wide/);
+    assert.doesNotMatch(r.text, /card|email/i);
+  });
   await test("live stock is asked before the alert: back in stock since the sync → no card, show it", async () => {
     const s = scripted([
       { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },

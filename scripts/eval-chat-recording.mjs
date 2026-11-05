@@ -61,6 +61,8 @@ test("what came with a reply is listed in one line", () => {
   assert.equal(describeExtras([{ type: "form_cta", form: "ojyWbTvZ", label: "Identify my orthotic" }]), "quiz button: Identify my orthotic");
   const line = describeExtras([{ type: "support_cta" }, { type: "visualize_cta" }, { type: "fitfinder_fit", key: "D" }, { type: "suggestions", questions: ["Wide?", "Returns?"] }, { type: "nonsense" }]);
   assert.equal(line, "support button · See It Styled · FIT D · suggested: Wide? | Returns?");
+  assert.equal(describeExtras([{ type: "restock_cta", handle: "vera-black", title: "Vera Mary Jane - Black", variant: "1", choice: "7 US / Medium" }]), "Notify-me card: Vera Mary Jane - Black in 7 US / Medium");
+  assert.equal(describeExtras([{ type: "restock_cta", handle: "vera-black", title: "Vera Mary Jane - Black", variant: "1", choice: "" }]), "Notify-me card: Vera Mary Jane - Black");
 });
 test("turns group into chats, newest chat first, turns in order", () => {
   const t = (id, s, mins, ok = true) => ({ id, sessionId: s, tester: s === "a" ? "Ann" : "", createdAt: new Date(now.getTime() + mins * 60000), ok, message: id, reply: id });
