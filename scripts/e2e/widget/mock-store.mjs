@@ -22,20 +22,20 @@ function peakFor(referer) {
   const n = Number((referer.match(/[?&]pkn=(\d)/) || [])[1] || 0);
   const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
   const decor = /[?&]pkd=off/.test(referer) ? "off" : PEAK_HOME.decor;
-  // ?pkt=0: the tint off (the header's grey line stays); ?pkm=1: the three cards above the bar while minimized.
+  // ?pkt=0: the tint off (the header's grey line stays); ?pkc=simple: the three cards simple.
   const tint = /[?&]pkt=0/.test(referer) ? false : PEAK_HOME.tint;
-  const mini = /[?&]pkm=1/.test(referer);
+  const cards = /[?&]pkc=simple/.test(referer) ? "simple" : "full";
   // ?pks=1: the first picture an upload with smaller copies — the app's picture route, candidates by width.
   const withSizes = /[?&]pks=1/.test(referer) ? blocks.map((b, i) => (i ? b : { ...b, image: "/apps/hajirai/peak-image?b=b1&v=abc", srcset: "/apps/hajirai/peak-image?b=b1&v=abc&w=400 400w, /apps/hajirai/peak-image?b=b1&v=abc&w=800 800w, /apps/hajirai/peak-image?b=b1&v=abc 1600w" })) : blocks;
-  return { ...PEAK_HOME, layout, decor, tint, mini, blocks: withSizes };
+  return { ...PEAK_HOME, layout, decor, tint, cards, blocks: withSizes };
 }
 // Settings → Focus home → Her look (every other day): ?look=1 — the winter colours and a regular ring;
-// &lkd=1 adds the lights, &lkt=1 the tint, &mini=1 the three cards above the bar while minimized.
-// ?mini=1 alone: only the mini home, her usual colours.
+// &lkd=1 adds the lights, &lkt=1 the tint, &cards=simple the simple cards.
+// ?cards=simple alone: only the simple cards, her usual colours.
 function homeLookFor(referer) {
-  if (!/[?&](look=1|mini=1)/.test(referer)) return null;
+  if (!/[?&](look=1|cards=simple)/.test(referer)) return null;
   const look = /[?&]look=1/.test(referer);
-  return { colors: look ? ["#8fd3ff", "#5b8def", "#e6f4ff", "#a7b8ff"] : [], ring: look ? "regular" : "fine", decor: /[?&]lkd=1/.test(referer) ? "lights" : "off", tint: /[?&]lkt=1/.test(referer), mini: /[?&]mini=1/.test(referer) };
+  return { colors: look ? ["#8fd3ff", "#5b8def", "#e6f4ff", "#a7b8ff"] : [], ring: look ? "regular" : "fine", decor: /[?&]lkd=1/.test(referer) ? "lights" : "off", tint: /[?&]lkt=1/.test(referer), cards: /[?&]cards=simple/.test(referer) ? "simple" : "full" };
 }
 export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], ring: "bold", decor: "lights", tint: true, blocks: [
   { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", focus: "right", audience: "all", tag: "" },
@@ -436,7 +436,7 @@ export function start(port) {
           // …or the preview token the page carried (Settings → Peak Mode → Preview), whatever the switch says.
           // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone; ?pkd=off leaves the points of light out; ?pks=1 gives the first picture sizes to choose from.
           peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? peakFor(String(req.headers.referer || "")) : null,
-          // ?look=1 / ?mini=1: Settings → Focus home → Her look on every other day.
+          // ?look=1 / ?cards=simple: Settings → Focus home → Her look on every other day.
           homeLook: homeLookFor(String(req.headers.referer || "")),
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),

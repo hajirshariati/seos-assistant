@@ -3845,70 +3845,46 @@ for (const coop of ["1", "2"]) {
       check("her look: remembered for the next page — the ring and the colours are there from the first paint", early.k === "1.8" && early.glow === "#8fd3ff" && /8fd3ff/.test(early.kept || ""), JSON.stringify(early));
       await rm.ctx.close();
     }
-    // The mini home (Settings → Focus home / Peak Mode → Show the three cards while the chat is minimized): the three cards as a row above the chat bar, the bar's width, each opening the chat on its sheet; gone with the bubble; back when the chat closes; none without the setting.
+    // Settings → Focus home → Her look → The three cards: simple — three boxes of one size in a row at every width, each a line drawing, the small line and the name; no pictures, no line under the name, no button; the Foot pain card its short name; each still opening its sheet. The Peak Mode editor has the same choice for peak days. Without it, the cards are as they were.
     {
-      const readMini = (page) => page.evaluate(() => {
-        const l = document.querySelector(".ai-chat-launcher"); const m = l.querySelector(".ai-chat-mini"); const lr = l.getBoundingClientRect();
-        const tiles = m ? [...m.querySelectorAll(".ai-chat-mini__tile")] : [];
-        const mr = m ? m.getBoundingClientRect() : null; const cs = m ? getComputedStyle(m) : null;
-        return { has: !!m, shown: !!m && cs.display !== "none" && cs.visibility !== "hidden" && parseFloat(getComputedStyle(l).opacity) > 0.5 && mr.height > 0, n: tiles.length,
-          labels: tiles.map((t) => t.getAttribute("aria-label")), kinds: tiles.map((t) => t.getAttribute("data-mini")), titles: tiles.map((t) => t.querySelector(".ai-chat-mini__title").textContent), eyebrowShown: tiles.map((t) => getComputedStyle(t.querySelector(".ai-chat-mini__eyebrow")).display !== "none"),
-          oneRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().top))).size <= 1, buttons: tiles.every((t) => t.tagName === "BUTTON" && t.getAttribute("aria-haspopup") === "dialog"),
-          aligned: !!mr && Math.abs(mr.left - lr.left) <= 1 && Math.abs(mr.right - lr.right) <= 1, above: !!mr && mr.bottom < lr.top && lr.top - mr.bottom >= 8 && lr.top - mr.bottom <= 14, inside: !!mr && mr.left >= 0 && mr.right <= window.innerWidth && mr.top >= 0,
-          pics: tiles.map((t) => !!t.querySelector(".ai-chat-mini__ico img")), icons: tiles.map((t) => !!t.querySelector(".ai-chat-mini__ico svg")), bubble: l.classList.contains("is-bubble"), open: document.querySelector(".ai-chat-panel").classList.contains("open") };
+      const readCards = (page) => page.evaluate(() => {
+        const box = document.querySelector(".ai-chat-focus__cards"); const cards = [...box.querySelectorAll(".ai-chat-focus__card")]; const rs = cards.map((c) => c.getBoundingClientRect());
+        const shown = (el) => !!el && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().height > 0;
+        return { simple: box.classList.contains("is-simple"), n: cards.length, kinds: cards.map((c) => c.getAttribute("data-focus-sheet")), oneRow: new Set(rs.map((r) => Math.round(r.top))).size === 1,
+          sameSize: Math.max(...rs.map((r) => r.width)) - Math.min(...rs.map((r) => r.width)) <= 1 && Math.max(...rs.map((r) => r.height)) - Math.min(...rs.map((r) => r.height)) <= 1,
+          widths: rs.map((r) => Math.round(r.width)), inside: rs.every((r) => r.left >= box.getBoundingClientRect().left - 1 && r.right <= box.getBoundingClientRect().right + 1),
+          imgs: cards.map((c) => c.querySelectorAll("img").length), svgs: cards.map((c) => c.querySelectorAll(".ai-chat-focus__card-ico svg").length),
+          eyebrows: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-eyebrow")) ? c.querySelector(".ai-chat-focus__card-eyebrow").textContent : ""), titles: cards.map((c) => c.querySelector(".ai-chat-focus__card-title").textContent),
+          subs: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-sub"))), ctas: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-cta"))),
+          centred: cards.every((c) => { const r = c.getBoundingClientRect(); const t = c.querySelector(".ai-chat-focus__card-title").getBoundingClientRect(); return Math.abs((t.left + t.right) / 2 - (r.left + r.right) / 2) <= 3; }),
+          buttons: cards.every((c) => c.tagName === "BUTTON" && c.getAttribute("aria-haspopup") === "dialog") };
       });
-      const mk = async (url, opts = {}) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, ...opts }); const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message)); await page.goto("http://localhost:4789" + url); await page.waitForFunction(() => !!document.querySelector(".ai-chat-launcher .ai-chat-mini"), null, { timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); return { ctx, page, errors }; };
-      const mn = await mk("/full?home=focus&mini=1&pics=1&texts=home");
-      const m1 = await readMini(mn.page);
-      check("mini home (computer): the three cards as one row above the chat bar — the bar's width, a little over it, inside the screen — each a button with its picture, its small line and its name in the store's words, read out as one line", m1.shown && m1.n === 3 && m1.kinds.join() === "pain,footwear,orthotics" && m1.oneRow && m1.buttons && m1.aligned && m1.above && m1.inside && m1.titles.join("|") === "Pain help|Shoes|Orthotics" && m1.labels[0] === "Sore feet? Pain help" && m1.eyebrowShown.every(Boolean) && m1.pics.every(Boolean) && !m1.bubble && !m1.open, JSON.stringify(m1));
-      // A tap on Footwear: the chat opens on the Footwear sheet, the row away with the bar.
-      await mn.page.click('.ai-chat-mini__tile[data-mini="footwear"]');
-      await mn.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
-      await mn.page.waitForTimeout(900);
-      const m2 = await mn.page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const sh = document.querySelector(".ai-chat-focus-sheet"); return { open: document.querySelector(".ai-chat-panel").classList.contains("open"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), sheet: sh ? sh.getAttribute("data-kind") : "", sheetOpen: !!sh && sh.classList.contains("is-open"), barHidden: l.classList.contains("hidden") && parseFloat(getComputedStyle(l).opacity) < 0.05, inert: l.inert === true, focusIn: !!sh && sh.contains(document.activeElement) }; });
-      check("mini home: a tap on Footwear opens the chat at home with the Footwear sheet up, the focus in the sheet (not stolen by the message box), the bar and its row gone while the chat is open", m2.open && m2.home && m2.sheet === "footwear" && m2.sheetOpen && m2.barHidden && m2.inert && m2.focusIn, JSON.stringify(m2));
-      await mn.page.click(".ai-chat-focus-sheet__close");
-      await mn.page.waitForTimeout(400);
-      await mn.page.click(".ai-chat-close-btn");
-      await mn.page.waitForTimeout(700);
-      const m3 = await readMini(mn.page);
-      check("mini home: the chat closed, the row is back above the bar", m3.shown && m3.n === 3 && !m3.open, JSON.stringify(m3));
-      // The × folds the bar into the bubble: the row goes with it; the bubble tapped, the chat opens as always.
-      await mn.page.click(".ai-chat-launcher__close");
-      await mn.page.waitForTimeout(900);
-      const m4 = await readMini(mn.page);
-      check("mini home: folded into the bubble, the row is gone", m4.bubble && !m4.shown, JSON.stringify(m4));
-      check("mini home: no JS errors", mn.errors.length === 0, mn.errors.join(" | "));
-      await mn.ctx.close();
-      // Keyboard: Tab reaches the cards; Enter on one opens its sheet (and doesn't also open the chat twice).
-      const kb = await mk("/full?home=focus&mini=1");
-      await kb.page.focus('.ai-chat-mini__tile[data-mini="orthotics"]');
-      await kb.page.keyboard.press("Enter");
-      await kb.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
-      await kb.page.waitForTimeout(600);
-      const k1 = await kb.page.evaluate(() => ({ open: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: document.querySelector(".ai-chat-focus-sheet")?.getAttribute("data-kind") || "", sheets: document.querySelectorAll(".ai-chat-focus-sheet").length }));
-      check("mini home (keyboard): Enter on a card opens the chat on that card's sheet, once", k1.open && k1.sheet === "orthotics" && k1.sheets === 1, JSON.stringify(k1));
-      await kb.ctx.close();
-      // Without the setting: no row. With Peak Mode's own switch: the row on peak days.
-      const no = await mk("/full?home=focus&look=1");
-      const m5 = await readMini(no.page);
-      check("mini home: none without the setting (her look alone doesn't bring it)", !m5.has, JSON.stringify(m5));
-      await no.ctx.close();
-      const pk = await mk("/full?home=focus&pk=1&pkm=1");
-      const m6 = await readMini(pk.page);
-      check("mini home (peak days): the Peak Mode switch brings the row — the built-in heel picture on Foot pain, line drawings where the other cards have no pictures", m6.shown && m6.n === 3 && m6.pics.join() === "true,false,false" && m6.icons.join() === "false,true,true" && m6.titles.join("|") === "Foot pain|Footwear|Orthotics", JSON.stringify(m6));
+      const sc = await open("/full?home=focus&cards=simple&pics=1&texts=home");
+      const c1 = await readCards(sc.page);
+      check("simple cards (computer): three boxes of one size in one row — a line drawing (no pictures, even with pictures set), the small line and the name centred, no line under the name, no button; Foot pain by its short name, in the store's words", c1.simple && c1.n === 3 && c1.kinds.join() === "pain,footwear,orthotics" && c1.oneRow && c1.sameSize && c1.inside && c1.imgs.every((n) => n === 0) && c1.svgs.every((n) => n === 1) && c1.eyebrows.join("|") === "Sore feet?|Help me find|Help me find" && c1.titles.join("|") === "Pain help|Shoes|Orthotics" && c1.subs.every((x) => !x) && c1.ctas.every((x) => !x) && c1.centred && c1.buttons, JSON.stringify(c1));
+      await sc.page.click('[data-focus-sheet="footwear"]');
+      await sc.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
+      await sc.page.waitForTimeout(400);
+      const c2 = await sc.page.evaluate(() => ({ sheet: document.querySelector(".ai-chat-focus-sheet")?.getAttribute("data-kind") || "", open: !!document.querySelector(".ai-chat-focus-sheet.is-open") }));
+      check("simple cards: a tap on Footwear opens the Footwear sheet as before", c2.sheet === "footwear" && c2.open, JSON.stringify(c2));
+      check("simple cards: no JS errors", sc.errors.length === 0, sc.errors.join(" | "));
+      await sc.ctx.close();
+      const sp = await open("/full?home=focus&cards=simple&pics=1", { viewport: { width: 390, height: 760 } });
+      const c3 = await readCards(sp.page);
+      check("simple cards (phone): still three of one size in one row, inside the home, the name under the drawing", c3.simple && c3.n === 3 && c3.oneRow && c3.sameSize && c3.inside && c3.widths.every((w) => w >= 100) && c3.imgs.every((n) => n === 0) && c3.titles.join("|") === "Foot pain|Footwear|Orthotics" && c3.subs.every((x) => !x) && c3.ctas.every((x) => !x), JSON.stringify(c3));
+      await sp.ctx.close();
+      const sn = await open("/full?home=focus&cards=simple", { viewport: { width: 320, height: 700 } });
+      const c4 = await readCards(sn.page);
+      check("simple cards (small phone): three in one row still, nothing cut off", c4.simple && c4.n === 3 && c4.oneRow && c4.sameSize && c4.inside && c4.widths.every((w) => w >= 80), JSON.stringify(c4));
+      await sn.ctx.close();
+      const pk = await open("/full?home=focus&pk=1&pkc=simple&login=Ann&tags=vip");
+      const c5 = await readCards(pk.page);
+      check("simple cards (peak days): the Peak Mode editor's own choice — the three simple boxes under the peak pictures", c5.simple && c5.n === 3 && c5.oneRow && c5.sameSize && c5.imgs.every((n) => n === 0), JSON.stringify(c5));
       await pk.ctx.close();
-      // Phones: the three side by side, picture over name (no small line), the bar's full width, inside the screen.
-      const ph = await mk("/full?home=focus&mini=1&pics=1", { viewport: { width: 390, height: 760 } });
-      const m7 = await readMini(ph.page);
-      const phw = await ph.page.evaluate(() => { const m = document.querySelector(".ai-chat-mini").getBoundingClientRect(); const t = [...document.querySelectorAll(".ai-chat-mini__tile")].map((x) => x.getBoundingClientRect()); return { w: m.width, vw: window.innerWidth, tiles: t.map((r) => Math.round(r.width)), stacked: t.every((r) => r.height > 50) }; });
-      check("mini home (phone): three side by side across the bar's width, inside the screen, picture over name, no small line", m7.shown && m7.n === 3 && m7.oneRow && m7.aligned && m7.inside && m7.eyebrowShown.every((x) => !x) && phw.w >= phw.vw - 26 && phw.tiles.every((w) => w > 100) && phw.stacked, JSON.stringify({ m7, phw }));
-      await ph.page.click('.ai-chat-mini__tile[data-mini="pain"]');
-      await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
-      await ph.page.waitForTimeout(700);
-      const m8 = await ph.page.evaluate(() => ({ open: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: document.querySelector(".ai-chat-focus-sheet")?.getAttribute("data-kind") || "" }));
-      check("mini home (phone): a tap on Foot pain opens the chat on the Foot pain sheet", m8.open && m8.sheet === "pain", JSON.stringify(m8));
-      await ph.ctx.close();
+      const fu = await open("/full?home=focus&look=1&pics=1");
+      const c6 = await readCards(fu.page);
+      check("the cards as they were: her look alone leaves them whole — pictures, the line under the name, the button; Foot pain the wide one", !c6.simple && c6.n === 3 && c6.imgs.every((n) => n === 1) && c6.subs.every(Boolean) && c6.ctas.every(Boolean) && !c6.sameSize, JSON.stringify(c6));
+      await fu.ctx.close();
     }
     // Settings → Chat text → Welcome greeting on phones: phones show it in the header at home; computers keep the greeting; a signed-in shopper's greeting still wins on both.
     {

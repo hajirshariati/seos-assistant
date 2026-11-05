@@ -24,7 +24,6 @@ import {
   Icon,
   Modal,
   Spinner,
-  Checkbox,
 } from "@shopify/polaris";
 import {
   MagicIcon,
@@ -58,7 +57,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, parseHomeLook, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, parseHomeLook, HOME_CARDS as HOME_CARD_STYLES, HOME_CARD_WORDS, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -221,7 +220,7 @@ export const loader = async ({ request }) => {
     peakPauseSync: config.peakPauseSync !== false,
     // The home on peak days (promotion blocks, the peak picture).
     peakHome: parsePeakHome(config.peakHome),
-    // Her look on every other day (Focus home): colours, ring, lights, tint, the mini home.
+    // Her look on every other day (Focus home): colours, ring, lights, tint, the cards' style.
     homeLook: parseHomeLook(config.homeLook),
     peakPreviewUrl: previewUrl(storeUrl, session.shop),
     supportStaff: parseSupportStaff(config.supportStaff),
@@ -1554,9 +1553,8 @@ function AnchorPicker({ image, video, shape, value, onChange }) {
   );
 }
 // Her look — on peak days (the Peak Mode editor) or every other day (Focus
-// home): the colours, the ring, the lights, the tint, and the mini home (the
-// three cards above the chat bar while the chat is minimized). `value` is the
-// whole saved object; the editor hands back the same object with its part
+// home): the colours, the ring, the lights, the tint, and the three cards'
+// style. `value` is the whole saved object; the editor hands back the same object with its part
 // changed, so the peak editor's pictures ride along untouched.
 function LookEditor({ value, onChange, peak = false }) {
   const v = value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -1602,7 +1600,7 @@ function LookEditor({ value, onChange, peak = false }) {
         <Select label="Under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="A few small points of the set's third colour in the open space at the right of the header, drifting and twinkling slowly. None on phones, where the header has no room." />
         <Select label="Tint behind the header" options={[{ value: "off", label: "Off — the grey line stays" }, { value: "on", label: "On — no grey line" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot. With it on, the straight grey line under the header goes at home; off, the line stays as usual." />
       </div>
-      <Checkbox label="Show the three cards while the chat is minimized" checked={v.mini === true} onChange={(x) => up({ mini: x })} helpText="Foot pain, Footwear and Orthotics as a small row above the chat bar on every page, each opening the chat on that card. Gone once the bar is folded into the bubble." />
+      <Select label="The three cards" options={HOME_CARD_STYLES.map((k) => ({ value: k, label: HOME_CARD_WORDS[k] }))} value={HOME_CARD_STYLES.includes(v.cards) ? v.cards : "full"} onChange={(x) => up({ cards: x })} helpText="Simple: Foot pain, Footwear and Orthotics as three boxes of one size in a row — a line drawing, the small line and the name, nothing else — on every screen. The pictures, the lines under the names and the buttons stay out of it." />
     </BlockStack>
   );
 }

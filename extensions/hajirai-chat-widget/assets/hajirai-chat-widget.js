@@ -90,7 +90,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   if(JSON.stringify(_pk)!==_pkWas){PEAK=_pk;applyPeakColors();setAvatar(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar)?PEAK.avatar:AVATAR_USUAL);if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
   var _hl=d.homeLook&&typeof d.homeLook==='object'?d.homeLook:null,_hlWas=JSON.stringify(HOME_LOOK);
   try{if(_hl)localStorage.setItem(LOOK_KEY,JSON.stringify(_hl));else localStorage.removeItem(LOOK_KEY)}catch(e){}
-  if(JSON.stringify(_hl)!==_hlWas){HOME_LOOK=_hl;applyPeakColors()}
+  if(JSON.stringify(_hl)!==_hlWas){HOME_LOOK=_hl;applyPeakColors();if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -184,10 +184,9 @@ var AVATAR=C.avatarUrl||'';
 var PEAK_KEY='hajirai_peak',PEAK=null;
 try{PEAK=JSON.parse(sessionStorage.getItem(PEAK_KEY)||'null');if(PEAK&&typeof PEAK!=='object')PEAK=null}catch(e){PEAK=null}
 /* Her look on every other day (Settings → Focus home → Her look): the
-   colours, ring, lights and tint as peak days have them, and the mini home
-   (the three cards above the bar while the chat is minimized) — kept across
-   pages so a page starts with them. On peak days the peak look stands in
-   as a whole. */
+   colours, ring, lights and tint as peak days have them, and the three
+   cards' style — kept across pages so a page starts with them. On peak
+   days the peak look stands in as a whole. */
 var LOOK_KEY='hajirai_look',HOME_LOOK=null;
 try{HOME_LOOK=JSON.parse(localStorage.getItem(LOOK_KEY)||'null');if(HOME_LOOK&&typeof HOME_LOOK!=='object')HOME_LOOK=null}catch(e){HOME_LOOK=null}
 function homeLook(){return PEAK||HOME_LOOK}
@@ -591,7 +590,7 @@ function applyPeakColors(){
   var stops=document.querySelectorAll('#ai-chat-band-g stop');for(var j=0;j<stops.length;j++)stops[j].setAttribute('stop-color',g[j%4]);
   /* Her look: the panel marked on peak days, the ring's weight (a
      multiplier on its strokes), the lights, the tint behind the header
-     (which takes the header's grey line with it at home), the mini home. */
+     (which takes the header's grey line with it at home). */
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
   var L=homeLook();
   if(PEAK)p.setAttribute('data-peak','1');else p.removeAttribute('data-peak');
@@ -599,7 +598,6 @@ function applyPeakColors(){
   if(ring!==1)p.style.setProperty('--ai-ring-k',String(ring));else p.style.removeProperty('--ai-ring-k');
   if(L&&L.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
   peakDecoRender();
-  miniRender();
 }
 /* A few points of light (Settings → Peak Mode or Focus home → Under the
    header): small soft dots of the set's third colour in the open space at
@@ -1287,13 +1285,6 @@ function inConsentUi(el){for(var a=el;a&&a!==document.body;a=a.parentElement){if
    CSS translate property, so the scripts that place them keep working. */
 var PHONE_BAR=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
 function phoneBar(){return !!(PHONE_BAR&&PHONE_BAR.matches)&&!launcher.classList.contains('is-bubble')}
-/* The bar's footprint — with the mini home's row above it, when shown. */
-function launcherRect(){
-  var r=launcher.getBoundingClientRect(),m=$('.ai-chat-mini',launcher),mr=m&&!launcher.classList.contains('is-bubble')?m.getBoundingClientRect():null;
-  if(!mr||!mr.height)return r;
-  var left=Math.min(r.left,mr.left),right=Math.max(r.right,mr.right),top=Math.min(r.top,mr.top);
-  return {left:left,right:right,top:top,bottom:r.bottom,width:right-left,height:r.bottom-top};
-}
 function placeLauncher(){
   /* Behind a drawer or pop-up: stay put (its rows aren't buttons to clear). */
   if(underLayer)return;
@@ -1301,7 +1292,7 @@ function placeLauncher(){
   if(launcher.classList.contains('hidden')){liftFloaters(false);return}
   var phone=phoneBar(),vw=window.innerWidth;
   for(var pass=0;pass<4;pass++){
-    var r=launcherRect();
+    var r=launcher.getBoundingClientRect();
     var hits=[].concat(floatingNear(r),floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
     if(phone)hits=hits.filter(function(h){return h.width>=vw*0.6&&!isLifted(h)});
     if(!hits.length)break;
@@ -1329,7 +1320,7 @@ function dropLift(rec){
 function liftFloaters(on){
   var keep=[];
   if(on){
-    var b=launcherRect(),vw=window.innerWidth,vh=window.innerHeight,line=b.top-10;
+    var b=launcher.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight,line=b.top-10;
     var cands=[].slice.call(document.body.children).concat([].slice.call(document.querySelectorAll('iframe')));
     for(var i=0;i<cands.length;i++){
       var el=cands[i];
@@ -1881,13 +1872,12 @@ function refreshTexts(inWas){
   var fq=panel.querySelectorAll('[data-fitq]');
   for(var i=0;i<fq.length;i++){var fc=fq[i].closest('.ai-chat-product-card');fq[i].innerHTML=fitqLabel();fq[i].setAttribute('aria-label',fitqName(fc?fc.getAttribute('data-title')||'':''))}
   if(FOCUS){
-    var fcs=$('.ai-chat-focus__cards',panel);if(fcs)fcs.innerHTML=focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics');
+    var fcs=$('.ai-chat-focus__cards',panel);if(fcs){fcs.classList.toggle('is-simple',focusSimple());fcs.innerHTML=focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')}
     var fls=$('.ai-chat-focus__links',panel);if(fls)fls.innerHTML=focusLinksHtml();
   }
   var ft=$('.ai-chat-footer',panel),fth=esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a>';
   if(ft&&DISCL)ft.innerHTML=fth;
   else if(!ft&&DISCL){var ia=$('.ai-chat-input-area',panel);if(ia)ia.insertAdjacentHTML('afterend','<div class="ai-chat-footer">'+fth+'</div>')}
-  miniRender();
 }
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
@@ -1987,14 +1977,19 @@ var FOCUS_PICS_KEY='hajirai_focus_pics',FOCUS_PICS={pain:'',footwear:'',orthotic
 try{var _fpics=JSON.parse(localStorage.getItem(FOCUS_PICS_KEY)||'null');if(_fpics&&typeof _fpics==='object')FOCUS_PICS={pain:safeUrl(_fpics.pain),footwear:safeUrl(_fpics.footwear),orthotics:safeUrl(_fpics.orthotics)}}catch(e){}
 /* The store's picture for the card (Settings → Focus home); Foot pain falls back to the heel picture built in. */
 function focusPicOf(kind){return FOCUS_PICS[kind]||(kind==='pain'?safeUrl(FOCUS_PAIN_IMG.heel||''):'')}
+function focusLineDrawing(kind,size){return (kind==='footwear'?WI.shoe:kind==='pain'?WI.foot:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"')}
 function focusLineIcon(kind,size){
   var pic=focusPicOf(kind);
-  return pic?'<img src="'+pic+'" alt="" decoding="async">':(kind==='footwear'?WI.shoe:kind==='pain'?WI.foot:WI.insole).replace(/(width|height)="\d+"/g,'$1="'+size+'"');
+  return pic?'<img src="'+pic+'" alt="" decoding="async">':focusLineDrawing(kind,size);
 }
+/* The cards' style (Settings → Focus home → Her look, or Peak Mode on peak
+   days): simple is three boxes of one size in a row, each a line drawing,
+   the small line and the name — no pictures, no line under the name, no
+   button. */
+function focusSimple(){var L=homeLook();return !!(L&&L.cards==='simple')}
 function focusRefreshPics(){
   var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
   for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!focusPicOf(k))}
-  miniRender();
 }
 function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(focusPicOf(kind)?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
 function focusFtKey(kind){return kind==='pain'?'homePain':kind==='footwear'?'homeFootwear':'homeOrthotics'}
@@ -2009,6 +2004,7 @@ var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stro
    in the middle of the row (the short one on phones, and in its sheet). */
 function focusCardHtml(kind){
   var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+esc(FT.homePainTitleWide)+'</span>':w[1];
+  if(focusSimple())return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico is-line" aria-hidden="true">'+focusLineDrawing(kind,22)+'</span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span></span></button>';
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 /* The three links above the message box: what each says, what it sends. */
@@ -2016,49 +2012,13 @@ function focusCardHtml(kind){
    (instant cards, no AI), then the store's own links (Settings) — minus a
    returns one when the card stands in for it. */
 function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l))&&!(DEALS&&/deal|sale|promo|offer/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}if(DEALS)h+='<button type="button" data-deals-open="1">'+esc(DEALS.label||'Deals')+'</button>';return h}
-/* The mini home (Settings → Focus home or Peak Mode → Show the three cards
-   while the chat is minimized): Foot pain, Footwear and Orthotics as a
-   small row above the chat bar — each its picture (or line drawing), its
-   small line and its name — opening the chat on that card's sheet. Part of
-   the bar, so it goes wherever the bar goes: lifted over other apps'
-   buttons, behind the theme's drawers, away with the bar when the chat
-   opens, folded away with the bubble. Phones get the three side by side,
-   picture over name. Only on the Focus home. */
-function miniOn(){var L=homeLook();return FOCUS&&!!(L&&L.mini===true)}
-function miniHtml(){
-  var kinds=['pain','footwear','orthotics'],h='';
-  for(var i=0;i<kinds.length;i++){var k=kinds[i],w=focusCardWords(k);
-    h+='<button type="button" class="ai-chat-mini__tile ai-chat-mini__tile--'+k+'" data-mini="'+k+'" aria-haspopup="dialog" aria-label="'+w[0]+' '+w[1]+'"><span class="ai-chat-mini__ico'+(focusPicOf(k)?' has-pic':'')+'" aria-hidden="true">'+focusLineIcon(k,20)+'</span><span class="ai-chat-mini__text" aria-hidden="true"><span class="ai-chat-mini__eyebrow">'+w[0]+'</span><span class="ai-chat-mini__title">'+w[1]+'</span></span></button>'}
-  return h;
-}
-/* Draws the row to match the setting (or takes it away); fresh words and
-   pictures go in when they arrive. Waits until the home's parts exist. */
-function miniRender(){
-  if(typeof launcher==='undefined'||!launcher||typeof FOCUS_PICS==='undefined'||!FOCUS_PICS||typeof WI==='undefined'||!WI)return;
-  var box=$('.ai-chat-mini',launcher),want=miniOn()&&!HIDDEN_BY_URL;
-  if(!want){if(box){box.remove();launcher.classList.remove('has-mini');placeLauncher()}return}
-  if(!box){box=el('div','ai-chat-mini');box.setAttribute('role','group');box.setAttribute('aria-label','Start with');launcher.insertBefore(box,launcher.firstChild)}
-  var html=miniHtml();if(box.innerHTML!==html)box.innerHTML=html;
-  if(!launcher.classList.contains('has-mini')){launcher.classList.add('has-mini');placeLauncher()}
-}
-/* A tap on one of its cards: the chat opens on that card's sheet. */
-function miniOpen(kind){
-  if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
-  toggle(true);
-  if(!isOpen)return;
-  openFocusSheet(kind,$('.ai-chat-focus__card--'+kind,panel));
-  /* The sheet took focus while the panel was still opening: once it's
-     up, the focus is put on the sheet's close button if it slipped. */
-  var sh=focusSheetEl,again=function(){if(focusSheetEl!==sh||!sh.isConnected||sh.contains(document.activeElement))return;var c=$('.ai-chat-focus-sheet__close',sh);if(c)try{c.focus({preventScroll:true})}catch(e){}};
-  setTimeout(again,150);setTimeout(again,520);
-}
 function buildFocusHome(){
   var pk=peakBlocks(),banner=!pk.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+(pk.length?' has-peak':'')+'">';
   h+='<div class="ai-chat-focus__greet"></div>';
   if(pk.length)h+=peakTilesHtml(pk);
   else if(banner)h+='<div class="ai-chat-welcome__banner"><img src="'+safeUrl(BANNER)+'" alt=""></div>';
-  h+='<div class="ai-chat-focus__cards">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
+  h+='<div class="ai-chat-focus__cards'+(focusSimple()?' is-simple':'')+'">'+focusCardHtml('pain')+focusCardHtml('footwear')+focusCardHtml('orthotics')+'</div>';
   h+='<div class="ai-chat-focus__links">'+focusLinksHtml()+'</div>';
   h+='</div>';
   msgsEl.innerHTML=h;
@@ -7569,14 +7529,11 @@ sendBtn.disabled=false;
 /* Events */
 launcher.addEventListener('click',function(e){
 if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true,true);return}
-var mt=e.target.closest('.ai-chat-mini__tile');
-if(mt){e.stopPropagation();miniOpen(mt.getAttribute('data-mini'));return}
 if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
 toggle(true);
 });
 closeBtn.addEventListener('click',function(){toggle(false)});
-launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')&&!e.target.closest('.ai-chat-mini')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
-miniRender();
+launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
 overlay.addEventListener('click',function(){if(Date.now()-focusSheetShut<600)return;toggle(false)});
 sendBtn.addEventListener('click',function(){if(listening){stopVoice();return}sendMessage()});
 /* Talk instead of typing. The mic (in Send's place while the box is empty) listens with the browser's own
