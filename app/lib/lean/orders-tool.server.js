@@ -15,7 +15,8 @@ const IN_CHAT_RETURNS =
 // The store has returns in the chat turned off: the card's button opens the
 // store's returns page with the order filled in.
 const PAGE_RETURNS =
-    "Returns and exchanges aren't started in this chat: tell them to tap \"Start a return\" on the order, which opens the store's returns page with their order filled in (exchanges are chosen there too). " +
+    "Returns aren't started in this chat: tell them to tap \"Start a return\" on the order, which opens the store's returns page with their order filled in. " +
+    "The returns page does refunds only — there is no exchange option. An exchange (a different size, width, color or style) is a return of the item on that page, then a new order for the one they want; say so plainly when they ask to exchange, and offer to find the new one now so it's ready to add to their cart. " +
     "If there's no such button (has_returns_page false), point them to customer service. Never promise a refund amount or timing.";
 
 // The store's tracking / returns page, when it's a real https link.

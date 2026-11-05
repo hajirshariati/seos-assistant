@@ -487,7 +487,7 @@ export function viewingNote(p) {
   const price = Number.isFinite(p.price) ? ` — $${p.price.toFixed(2)}${Number.isFinite(p.maxPrice) && p.maxPrice > p.price ? `–$${p.maxPrice.toFixed(2)}` : ""}` : "";
   const sizeKey = Object.keys(p.options || {}).find((k) => /^size$/i.test(k));
   const sizes = sizeKey && p.options[sizeKey].length ? ` Sizes listed: ${p.options[sizeKey].slice(0, 30).join(", ")}.` : "";
-  return `THE PAGE THE CUSTOMER IS ON\nThey're looking at this product's page right now: ${p.title} (handle: ${p.handle})${price}.${sizes} When they say "this", "these", "it" or "this shoe" without naming a product, they most likely mean this one. They can already see its page, so you don't need to show its card unless it helps; use get_product_details for anything more (stock by size, details). Don't assume they want it if they ask about something else.`;
+  return `THE PAGE THE CUSTOMER IS ON\nThey're looking at this product's page right now: ${p.title} (handle: ${p.handle})${price}.${sizes} When they say "this", "these", "it" or "this shoe" without naming a product, they most likely mean this one. They can already see its page, so you don't need to show its card unless it helps; use get_product_details for anything more (stock by size, details). Don't assume they want it if they ask about something else. A question about a kind of shoe or about shoes in general ("which tennis shoes run narrow?", "what's good for wide feet?", "do you have waterproof boots?") is about the catalog, not this page: search it and answer across styles, bringing this one in only if it qualifies.`;
 }
 
 export async function runLeanTurn({
