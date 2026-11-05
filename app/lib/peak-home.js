@@ -64,8 +64,8 @@ export const PEAK_FOCUS = ["center", "left", "right", "top", "bottom", "top left
 // line on the home; and a faint tint of the first colour behind the header.
 export const PEAK_RINGS = ["fine", "regular", "bold"];
 export const PEAK_RING_WORDS = { fine: "Fine — as usual", regular: "Regular", bold: "Bold" };
-export const PEAK_DECORS = ["off", "line"];
-export const PEAK_DECOR_WORDS = { off: "Nothing", line: "A curved line of gold, glowing" };
+export const PEAK_DECORS = ["off", "lights"];
+export const PEAK_DECOR_WORDS = { off: "Nothing", lights: "A few points of light" };
 const HEX = /^#[0-9a-f]{6}$/i;
 // Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
 export function cleanPeakColors(list) {
@@ -94,8 +94,8 @@ export function parsePeakHome(raw) {
   out.shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, o.shape) ? o.shape : "wide";
   out.colors = cleanPeakColors(o.colors);
   out.ring = PEAK_RINGS.includes(o.ring) ? o.ring : "fine";
-  // The ornaments of an earlier day ("header", "both") are read as the line, so a store that had them keeps a line of gold.
-  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : /^(header|both)$/.test(String(o.decor || "")) ? "line" : "off";
+  // Earlier days' choices (the ornaments "header"/"both", the "line") read as the lights, so a store that had them keeps a touch of gold.
+  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : /^(header|both|line)$/.test(String(o.decor || "")) ? "lights" : "off";
   out.tint = o.tint === true;
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {

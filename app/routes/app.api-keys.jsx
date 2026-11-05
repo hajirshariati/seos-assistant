@@ -1593,7 +1593,7 @@ function PeakHomeEditor({ value, onChange }) {
       </div>
       <div className="set-grid set-grid--3">
         <Select label="The ring around her face" options={PEAK_RINGS.map((k) => ({ value: k, label: PEAK_RING_WORDS[k] }))} value={PEAK_RINGS.includes(v.ring) ? v.ring : "fine"} onChange={(x) => up({ ring: x })} helpText="Heavier reads as a band of colour; the glow follows." />
-        <Select label="The line under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="On peak days the straight grey line under the header is gone at home. This adds, in its place, a curved line of the set's third colour at the right, with a soft glow and a slow shimmer. It covers nothing." />
+        <Select label="Under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="On peak days the straight grey line under the header is gone at home. This adds, in the open space at the right of the header, a few small points of the set's third colour, drifting and twinkling slowly — over nothing. Not on phones." />
         <Select label="Tint behind the header" options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot." />
       </div>
       <div className="set-grid">

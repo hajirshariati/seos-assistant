@@ -7778,19 +7778,23 @@ button.ai-chat-launcher__text {
    and then. It sits under the header's controls and never takes a tap. */
 .ai-chat-panel .ai-chat-deco { position: absolute; pointer-events: none; }
 .ai-chat-panel .ai-chat-deco svg { display: block; overflow: visible; width: 100%; height: 100%; }
-.ai-chat-panel .ai-chat-deco .d-gold-stop { stop-color: var(--ai-glow-3, #3d7bff); }
 .ai-chat-panel[data-peak-decor] .ai-chat-header { position: relative; isolation: isolate; }
-/* Its box reaches under the header's foot to the greeting's row (the line
-   starts there, at the right, past the words — where nothing sits) and
-   ends at the header's right edge; the widget sets left from a measure of
-   the words. */
-.ai-chat-panel .ai-chat-deco--line { left: 38%; right: 0; bottom: -30px; height: 56px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
-.ai-chat-panel:not(.is-home) .ai-chat-deco--line { opacity: 0; }
+/* The lights' box: from past the header's words to its right edge, the
+   band under the controls down to a little under the header's foot (the
+   widget sets left from a measure of the words). Each light breathes and
+   drifts up a touch to its own time; none on phones, none in a chat. */
+.ai-chat-panel .ai-chat-deco--lights { left: 40%; right: 0; bottom: -26px; height: 60px; z-index: -1; opacity: 1; transition: opacity 0.4s ease; }
+.ai-chat-panel:not(.is-home) .ai-chat-deco--lights { opacity: 0; }
+.ai-chat-panel .ai-chat-deco .d-light__dot { fill: var(--ai-glow-3, #3d7bff); }
+.ai-chat-panel .ai-chat-deco .d-light__halo { fill: var(--ai-glow-3, #3d7bff); opacity: 0.1; }
+.ai-chat-panel .ai-chat-deco .d-light { opacity: 0.2; transform-box: fill-box; transform-origin: center; animation: aiDecoLight var(--t, 7s) ease-in-out var(--d, 0s) infinite; }
+@keyframes aiDecoLight { 0%, 100% { opacity: 0.18; transform: translateY(0); } 50% { opacity: 0.95; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco .d-light { animation: none; opacity: 0.6; } }
 /* On peak days the header's straight grey line is gone at home — with or
-   without the line of gold (important, as the dark theme's border is). */
+   without the lights (important, as the dark theme's border is). */
 .ai-chat-panel[data-peak].is-home .ai-chat-header { border-bottom-color: transparent !important; }
-/* No line on phones: the header has no room for it there. */
-@media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--line { display: none !important; } }
+/* No lights on phones: the header has no room for them there. */
+@media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--lights { display: none !important; } }
 /* The tint is painted once, over the whole box: repeated, its first row
    would show again in the header's border row as a straight line. */
 .ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%) !important; background-repeat: no-repeat !important; background-origin: border-box !important; background-size: 100% 100% !important; }

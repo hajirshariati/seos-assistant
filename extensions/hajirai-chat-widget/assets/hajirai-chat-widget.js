@@ -585,82 +585,55 @@ function applyPeakColors(){
   if(PEAK&&PEAK.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
   peakDecoRender();
 }
-/* The line under the header on peak days (Settings → Peak Mode → The line
-   under the header): a curved line of the set's gold at the right, where
-   the header's grey line was — so it covers nothing — with a soft glow
-   and a highlight that drifts along it now and then. Drawn here, so it
-   fits any width. */
-function decoLineHtml(){
-  return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 100 50" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".06" class="d-gold-stop" stop-opacity=".95"/><stop offset=".5" class="d-gold-stop" stop-opacity="1"/><stop offset=".94" class="d-gold-stop" stop-opacity=".95"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
-    '</defs>'+
-    '<path class="d-gold-s d-gold-s--glow2" d="M0 0" fill="url(#ai-deco-gold)" opacity=".07"/>'+
-    '<path class="d-gold-s d-gold-s--glow1" d="M0 0" fill="url(#ai-deco-gold)" opacity=".14"/>'+
-    '<path class="d-gold-s d-gold-s--body" d="M0 0" fill="url(#ai-deco-gold)"/>'+
-  '</svg></div>';
+/* A few points of light on peak days (Settings → Peak Mode → Under the
+   header): small soft dots of the set's third colour in the open space at
+   the right of the header — past the words, under the controls, over
+   nothing — drifting up a little and twinkling slowly, each to its own
+   time. Drawn here and placed to the header, so they fit any width; none
+   on phones; never in the way of a tap. */
+var DECO_LIGHTS=[[0.05,0.78,1.9,0,7.4],[0.17,0.22,1.2,1.7,6.2],[0.3,0.92,2.3,3.1,8.1],[0.44,0.4,1.4,0.9,6.8],[0.55,0.7,2.1,2.3,7.7],[0.68,0.12,1.1,4.1,6.4],[0.8,0.58,2.4,1.2,8.6],[0.93,0.86,1.5,3.4,7.1]];
+function decoLightsHtml(){
+  var h='<div class="ai-chat-deco ai-chat-deco--lights" aria-hidden="true"><svg viewBox="0 0 100 40">';
+  for(var i=0;i<DECO_LIGHTS.length;i++){var L=DECO_LIGHTS[i];h+='<g class="d-light" style="--d:-'+L[3]+'s;--t:'+L[4]+'s"><circle class="d-light__halo" cx="0" cy="0" r="'+(L[2]*3)+'"/><circle class="d-light__dot" cx="0" cy="0" r="'+L[2]+'"/></g>'}
+  return h+'</svg></div>';
 }
-/* Draws (or removes) the line to match the setting. */
+/* Draws (or removes) the lights to match the setting. */
 function peakDecoRender(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
-  var want=PEAK&&PEAK.decor==='line';
-  var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--line'):null;
-  if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLineHtml());peakDecoFit.greet=0;
-    /* Measured again once the panel or header finishes moving (opening
-       animates the header's words), so the line sits by the words at rest. */
+  var want=PEAK&&PEAK.decor==='lights';
+  var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--lights'):null;
+  if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLightsHtml());peakDecoFit.greet=0;
+    /* Placed again once the panel or header finishes moving (opening animates the header's words). */
     if(!peakDecoRender.bound){peakDecoRender.bound=true;var fit=function(ev){if(ev.target===p||hdr.contains(ev.target))peakDecoFit()};p.addEventListener('transitionend',fit);p.addEventListener('animationend',fit)}}}
   else if(old)old.remove();
-  if(want)p.setAttribute('data-peak-decor','line');else p.removeAttribute('data-peak-decor');
+  if(want)p.setAttribute('data-peak-decor','lights');else p.removeAttribute('data-peak-decor');
   peakDecoFit();
 }
-/* Where the line starts: just past the end of the header's words (the
-   greeting at home), measured — so it runs under nothing at any width or
-   wording, only under the controls. Measured again whenever the header is
-   (opening, resize, new words). */
+/* Where the lights sit: from just past the header's words (and the
+   greeting's, which they reach down to) to the header's right edge, in
+   the band under the controls — measured, and measured again whenever the
+   header is (opening, resize, new words). */
 function peakDecoFit(){
-  var p=typeof panel!=='undefined'?panel:null,hdr=p&&p.querySelector('.ai-chat-header'),line=hdr&&hdr.querySelector('.ai-chat-deco--line');
-  if(!line)return;
+  var p=typeof panel!=='undefined'?panel:null,hdr=p&&p.querySelector('.ai-chat-header'),box=hdr&&hdr.querySelector('.ai-chat-deco--lights');
+  if(!box)return;
   var hr=hdr.getBoundingClientRect(),W=hdr.clientWidth;if(!hr.width||!W)return;
   var k=W/hr.width;/* a measure taken while the panel is still scaling open comes out right as a share of the header's width */
   var t=hdr.querySelector('.ai-chat-header__title--home')||hdr.querySelector('.ai-chat-header__name'),right=hr.left;
   if(t&&t.firstChild){try{var r=document.createRange();r.selectNodeContents(t);var tr=r.getBoundingClientRect();right=tr.width?tr.right:t.getBoundingClientRect().right}catch(e){right=t.getBoundingClientRect().right}}
-  /* The greeting's words too (the line runs at their height): the one
-     showing now — and the widest seen, so the start never jumps back as
-     the greeting changes. */
   var g=p.querySelector('.ai-chat-focus__greet .ai-chat-greet__item.is-in')||p.querySelector('.ai-chat-focus__greet');
   if(g&&g.firstChild){try{var rg=document.createRange();rg.selectNodeContents(g);var gr=rg.getBoundingClientRect();if(gr.width){var gx=(gr.right-hr.left)*k;peakDecoFit.greet=Math.max(peakDecoFit.greet||0,gx)}}catch(e){}}
-  var left=Math.max(0,Math.round(Math.max((right-hr.left)*k,peakDecoFit.greet||0)+10)),least=Math.min(140,W*0.3);
+  var left=Math.max(0,Math.round(Math.max((right-hr.left)*k,peakDecoFit.greet||0)+14)),least=Math.min(120,W*0.25);
   if(W-left<least)left=Math.max(0,Math.round(W-least));
-  line.style.left=left+'px';
-  /* The line as it was drawn: it leaves the words at the height of the
-     greeting's second row, below the header's foot; rises to its crest
-     about a third of the way along, a little under the controls (12px
-     below them); and eases down to the header's right edge, ending just
-     under the foot. A ribbon, not a stroke: about 1px at its ends and
-     2.6px at its fullest, around the crest, with only a faint halo. Fixed to the header, so it sits
-     the same whatever the width; only a very short stretch flattens it.
-     On phones there is no line. */
-  var Wb=W-left,H=line.clientHeight||56,F=H-30,m=Math.min(1,Math.max(0,(Wb-80)/260)),f=function(n){return Math.round(n*10)/10};
-  line.style.display=Wb<120?'none':'';
-  var act=hdr.querySelector('.ai-chat-header__actions'),ab=act?(act.getBoundingClientRect().bottom-hr.bottom)*k+F:F-32;
-  var y0=F+23*m,y1=F+13*m,xc=Wb*0.38,yc=Math.min(Math.max(ab+12,F-30),y0-12);
-  yc=y0-(y0-yc)*m;
-  /* The centre line: two cubics — a gentle rise from the start to the crest (level there), then the long ease down (its end tipping a little). */
-  var P=[[0,y0],[xc*0.3,y0-(y0-yc)*0.12],[xc*0.62,yc],[xc,yc],[xc+(Wb-xc)*0.45,yc],[xc+(Wb-xc)*0.8,y1-1.5*m],[Wb,y1]];
-  var bez=function(p0,p1,p2,p3,t){var u=1-t;return [u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]]};
-  var N=64,pts=[];
-  for(var i=0;i<=N;i++){var tt=i/N,q=tt<0.5?bez(P[0],P[1],P[2],P[3],tt*2):bez(P[3],P[4],P[5],P[6],(tt-0.5)*2);pts.push(q)}
-  /* A ribbon around it: the width at each point, half of it either side along the normal. */
-  var ribbon=function(wmin,wmax){
-    var up=[],dn=[];
-    for(var j=0;j<=N;j++){var tj=j/N,a=pts[Math.max(0,j-1)],c=pts[Math.min(N,j+1)],dx=c[0]-a[0],dy=c[1]-a[1],L=Math.sqrt(dx*dx+dy*dy)||1,nx=-dy/L,ny=dx/L;
-      var w=wmin+(wmax-wmin)*Math.pow(Math.sin(Math.PI*tj),0.8),h=w/2;up.push(f(pts[j][0]+nx*h)+' '+f(pts[j][1]+ny*h));dn.push(f(pts[j][0]-nx*h)+' '+f(pts[j][1]-ny*h))}
-    return 'M'+up.join(' L ')+' L '+dn.reverse().join(' L ')+' Z';
-  };
-  var svg=line.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
-  svg.querySelector('.d-gold-s--body').setAttribute('d',ribbon(1,2.6));
-  svg.querySelector('.d-gold-s--glow1').setAttribute('d',ribbon(2.5,5));
-  svg.querySelector('.d-gold-s--glow2').setAttribute('d',ribbon(5,9));
-  return;
+  box.style.left=left+'px';
+  var Wb=W-left,H=box.clientHeight||58;
+  box.style.display=Wb<90?'none':'';
+  /* The band they may sit in: below the controls (8px clear), above the box's foot. */
+  var act=hdr.querySelector('.ai-chat-header__actions'),top=4,br=box.getBoundingClientRect();
+  if(act&&br.height){var ab=(act.getBoundingClientRect().bottom-br.top)*k;top=Math.max(top,ab+8)}
+  var svg=box.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
+  var gs=svg.querySelectorAll('.d-light'),f=function(n){return Math.round(n*10)/10};
+  for(var i=0;i<gs.length;i++){var L=DECO_LIGHTS[i],cx=f(8+L[0]*(Wb-16)),cy=f(top+L[1]*Math.max(0,H-6-top)),cs=gs[i].querySelectorAll('circle');
+    for(var j=0;j<cs.length;j++){cs[j].setAttribute('cx',cx);cs[j].setAttribute('cy',cy)}}
 }
 try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){peakDecoFit()})}catch(e){}
 

@@ -26,7 +26,7 @@ function peakFor(referer) {
   const withSizes = /[?&]pks=1/.test(referer) ? blocks.map((b, i) => (i ? b : { ...b, image: "/apps/hajirai/peak-image?b=b1&v=abc", srcset: "/apps/hajirai/peak-image?b=b1&v=abc&w=400 400w, /apps/hajirai/peak-image?b=b1&v=abc&w=800 800w, /apps/hajirai/peak-image?b=b1&v=abc 1600w" })) : blocks;
   return { ...PEAK_HOME, layout, decor, blocks: withSizes };
 }
-export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], ring: "bold", decor: "line", tint: true, blocks: [
+export const PEAK_HOME = { avatar: "/pic-orthotics.svg", layout: "rail", shape: "wide", colors: ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], ring: "bold", decor: "lights", tint: true, blocks: [
   { id: "b1", title: "Black Friday: 30% off everything", url: "https://www.example.com/collections/sale", image: "/pic-footwear.svg", focus: "right", audience: "all", tag: "" },
   { id: "b2", title: "An extra 10% for members", message: "What is my member offer today?", image: "/pic-orthotics.svg", audience: "signed", tag: "" },
   { id: "b3", title: "Early access to the winter styles", message: "Show me the VIP early-access styles", image: "/pic-pain.svg", video: "/peak.webm", audience: "tag", tag: "VIP" },
@@ -423,7 +423,7 @@ export function start(port) {
           human: /[?&]hh=1/.test(String(req.headers.referer || "")) ? HUMAN_HELP : null,
           // ?pk=1: Peak Mode on, with the home's promotion blocks and the peak picture (Settings → Peak Mode).
           // …or the preview token the page carried (Settings → Peak Mode → Preview), whatever the switch says.
-          // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone; ?pkd=off leaves the line of gold out; ?pks=1 gives the first picture sizes to choose from.
+          // ?pkl=mosaic|grid picks the layout; ?pkn=6 shows six pictures to everyone; ?pkd=off leaves the points of light out; ?pks=1 gives the first picture sizes to choose from.
           peak: /[?&]pk=1/.test(String(req.headers.referer || "")) || u.searchParams.get("preview") === "0123456789abcdef0123456789abcdef" ? peakFor(String(req.headers.referer || "")) : null,
           // ?cl=0: Settings → Focus home → Collections off.
           focusCollections: !/[?&]cl=0/.test(String(req.headers.referer || "")),
