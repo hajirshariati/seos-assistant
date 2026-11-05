@@ -6,6 +6,7 @@
 import prisma from "../db.server.js";
 import { buildOrthoticCatalog, catalogForConversation, describeLine, lineAllowed, lineRulesOf, pickOrthotic, productFromNode, ruleNote, shoeSupport } from "./orthotic-finder.js";
 import { getDecisionTreeByIntent, incrementCompletedCount, saveDecisionTree } from "../models/DecisionTree.server.js";
+import { fitFinderNativeNote } from "./lean/fit-finder.js";
 
 export const FINDER_KIND = "catalog_finder";
 
@@ -155,6 +156,7 @@ export function finderToolDef(tree, { fitfinder = null, shopperText = "" } = {})
       "The shoe's features are not the customer's answers: still ask who it's for and the shoes they'll wear it in, and their arch type if they want to tell you (otherwise not_sure). Never call the result their FIT.\n\n" +
       "Orthotic inserts can't be worn in sandals or other open shoes. Never suggest, offer or pair an orthotic with sandals; when the customer asks for one, say so kindly and offer sandals with built-in arch support instead. When you're showing sandals, don't bring up orthotics at all." +
       fitSection(fitfinder) +
+      (fitfinder?.native === true && fitfinder.fits?.length ? fitFinderNativeNote(fitfinder.questions?.length || 2) : "") +
       (leads.length ? `\n\nThe store team leads with ${leads.join(" and ")}: when it suits the customer as well as another line, recommend it first.` : "") +
       "\n\nLines in this store (only these may be recommended):\n" + lines.map((l) => `- ${describeLine(l)}${ruleNote(rules[l.id])}`).join("\n"),
     input_schema: {

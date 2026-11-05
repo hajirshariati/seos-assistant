@@ -45,6 +45,7 @@ export function describeExtras(events = []) {
     else if (e.type === "fitfinder_fit") out.push(`FIT ${e.key}`);
     else if (e.type === "fit_report") out.push(`fit report ${e.recommendedSize || ""}`.trim());
     else if (e.type === "klaviyo_form") out.push("sign-up form");
+    else if (e.type === "fitfinder_cta") out.push("FITFinder card");
     else if (e.type === "restock_cta") out.push(`Notify-me card: ${e.title || ""}${e.choice ? ` in ${e.choice}` : ""}`.trim());
     else if (e.type === "map_cta") out.push(`store map button: ${e.label || "Find a store near you"}`);
     else if (e.type === "form_cta") out.push(`quiz button: ${e.label || "Identify my orthotic"}`);

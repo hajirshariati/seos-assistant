@@ -190,6 +190,17 @@ test("Claude's tool knows the FITs, the store's questions and the saved FIT", ()
   const plain = finderToolDef(tree);
   assert.ok(!/FIT D/.test(plain.description) && !plain.input_schema.properties.fit, "no FIT talk without FITFinder");
 });
+test("the finder in the chat: the payload says so, and the tool's text sends the two questions to the finder's card", () => {
+  assert.deepEqual([FF.native, FF.offered], [false, false], "a widget that can't run the finder says nothing");
+  const nat = sanitizeFitfinder({ fits: [{ key: "A", label: "FIT A", code: "20" }], native: true, offered: "yes" });
+  assert.deepEqual([nat.native, nat.offered], [true, false], "only a true says so");
+  const tree = { intent: "orthotic", definition: { finder: catalog } };
+  const def = finderToolDef(tree, { fitfinder: { ...FF, native: true } });
+  assert.match(def.description, /The FIT finder in the chat: this store's own FIT finder \(1 quick tap — flat feet\? ball-of-foot pain\?\) runs right inside the chat/);
+  assert.match(def.description, /don't ask those questions — call open_fit_finder/);
+  assert.match(def.description, /If they answer in words instead of tapping, carry on with the questions here/);
+  assert.doesNotMatch(finderToolDef(tree, { fitfinder: FF }).description, /open_fit_finder/, "without the finder in the chat, the questions are asked as before");
+});
 
 console.log("\nthe store team's line rules (Active never, Conform only for diabetes/neuropathy, Premium Memory Foam leads)");
 const ruled = { intent: "orthotic", definition: { kind: "catalog_finder", finder: catalog } };

@@ -671,6 +671,23 @@ export function start(port) {
             w({ type: "done" });
             return resp.end();
           }
+          // "which orthotic should I get": the assistant explains the finder in a sentence and puts its card under the reply (open_fit_finder).
+          if (/which orthotic/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            resp.write(`data: ${JSON.stringify({ type: "text", text: "Happy to help you pick. The quickest way is our FIT finder: two quick taps and it works out the support your feet need — or just tell me here and we'll go step by step." })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "products", products: [] })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "fitfinder_cta" })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+            return resp.end();
+          }
+          // After Submit in the finder: the chat carries on with the next question.
+          if (/^My FIT is /i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            resp.write(`data: ${JSON.stringify({ type: "text", text: `Going by your ${(parsed.message.match(/FIT [A-D]/) || ["FIT"])[0]}, you're set for cushioned support — which shoes will you wear them in?` })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "products", products: [] })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+            return resp.end();
+          }
           if (/fit/i.test(parsed.message || "")) {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });
             resp.write(`data: ${JSON.stringify({ type: "text", text: "Flat feet plus ball-of-foot pain — that's FIT D." })}\n\n`);

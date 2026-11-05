@@ -1170,6 +1170,33 @@ await test("the orthotic-chat check only fires on a short answer that switches t
     assert.match(r.text, /medium only, so it won't be restocked in a wide/);
     assert.doesNotMatch(r.text, /card|email/i);
   });
+  // FITFinder in the chat: a reply that asks the flat-feet question in words,
+  // with the finder's tool there and the customer without a FIT, is sent
+  // back; the rewrite calls open_fit_finder and the card goes under it.
+  await test("the arch question asked in words while the FIT finder could take it: sent back; the rewrite puts the finder's card under the reply", async () => {
+    const { FIT_FINDER_TOOL_DEF, fitFinderToolResult } = await import("../app/lib/lean/fit-finder.js");
+    const finder = { definition: FIT_FINDER_TOOL_DEF, run: async () => fitFinderToolResult(2) };
+    const ff = { fits: [{ key: "A", label: "FIT A", code: "20" }], questions: [{ text: "Do you have flat feet?" }], saved: null, native: true, offered: false };
+    const ask = "which orthotic should I get for running?";
+    const s = scripted([
+      { stop_reason: "end_turn", content: [txt("Happy to help! Running shoes it is. First, do you have flat feet? <<Yes>><<No>>")] },
+      { stop_reason: "tool_use", content: [tu("t1", "open_fit_finder", {})] },
+      { stop_reason: "end_turn", content: [txt("Happy to help! Running shoes it is. The quickest way is our FIT finder below — two quick taps and it works out the support you need; or just tell me here.")] },
+    ]);
+    const logs = [];
+    const r = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, extraTools: [finder], fitfinder: ff, callModel: s.callModel, log: (l) => logs.push(l) });
+    assert.ok(s.requests[0].tools.some((t) => t.name === "open_fit_finder"), "the tool is offered");
+    assert.equal(r.retried, true);
+    assert.ok(logs.some((l) => /rewrite: .*fit_finder_not_offered/.test(l)), logs.join("\n"));
+    assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /FIT finder answers both right here in the chat/);
+    assert.deepEqual(r.events.filter((e) => e.type === "fitfinder_cta"), [{ type: "fitfinder_cta" }]);
+    assert.match(r.text, /FIT finder below/);
+    // Offered already in this chat: the same words stand — they'd rather type.
+    const s2 = scripted([{ stop_reason: "end_turn", content: [txt("Sure — do you have flat feet? <<Yes>><<No>>")] }]);
+    const r2 = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, extraTools: [finder], fitfinder: { ...ff, offered: true }, callModel: s2.callModel, log: quiet });
+    assert.equal(r2.retried, false);
+    assert.equal(r2.events.some((e) => e.type === "fitfinder_cta"), false);
+  });
   await test("live stock is asked before the alert: back in stock since the sync → no card, show it", async () => {
     const s = scripted([
       { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },

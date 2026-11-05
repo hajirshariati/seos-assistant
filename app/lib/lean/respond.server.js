@@ -224,6 +224,7 @@ export function leanChatResponse({
           memoryTz: extras.memoryTz || "",
           featured,
           liveStock: makeLiveStock({ shop, accessToken }),
+          fitfinder,
           viewingHandle,
           askYesNo,
           // Each model call streams: the words reach the widget as they are

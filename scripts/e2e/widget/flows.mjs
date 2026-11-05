@@ -1201,6 +1201,61 @@ for (const [vp, tag] of [[{ width: 390, height: 844 }, "phone"], [{ width: 1280,
   check("Orthotics sheet (feedback button): no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// FITFinder from the chat (open_fit_finder): the assistant's reply carries the
+// finder's card; a tap opens the store's questions in the sheet with a Submit
+// in place of the result; Submit closes the sheet, puts the FIT in the chat as
+// a card and sends the shopper's word, and the assistant carries on. The
+// card comes back after a reload; the next message says the finder was
+// offered and carries the saved FIT. Computer and phone.
+for (const [label, viewport] of [["computer", { width: 1280, height: 860 }], ["phone", { width: 390, height: 844, isMobile: true, hasTouch: true }]]) {
+  const ctx = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, ...(viewport.isMobile ? { isMobile: true, hasTouch: true } : {}) });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(400);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "which orthotic should I get for running?");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg--assistant .ai-chat-ffcta", { timeout: 8000 });
+  await page.waitForTimeout(300);
+  const sent1 = chatBodies.at(-1);
+  const cta = await page.evaluate(() => {
+    const b = document.querySelector(".ai-chat-ffcta"); const bub = b.closest(".ai-chat-msg-bubble"); const r = b.getBoundingClientRect(); const br = bub.getBoundingClientRect();
+    return { tag: b.tagName, popup: b.getAttribute("aria-haspopup"), mark: b.querySelector(".ai-chat-ffcta__mark")?.textContent, title: b.querySelector(".ai-chat-ffcta__title")?.textContent, sub: b.querySelector(".ai-chat-ffcta__sub")?.textContent, inside: r.left >= br.left - 1 && r.right <= br.right + 1, wide: r.width >= br.width * 0.8, h: Math.round(r.height), text: bub.querySelector("p")?.textContent || "", sheet: !!document.querySelector(".ai-chat-fbsheet.is-open") };
+  });
+  check(`FIT finder from the chat (${label}): the reply explains the finder in a sentence and carries its card — the FITFINDER mark, the store's line, '2 quick questions', a tap target the width of the reply; the message said the finder runs here and hasn't been offered yet`, cta.tag === "BUTTON" && cta.popup === "dialog" && cta.mark === "FITFINDER" && cta.title === "Help me find my Fit" && cta.sub === "2 quick questions · your FIT in a moment" && cta.inside && cta.wide && cta.h >= 44 && /FIT finder/.test(cta.text) && !cta.sheet && sent1?.fitfinder?.native === true && sent1.fitfinder.offered === false, JSON.stringify({ cta, ff: sent1?.fitfinder && { native: sent1.fitfinder.native, offered: sent1.fitfinder.offered, saved: sent1.fitfinder.saved } }));
+  await page.click(".ai-chat-ffcta");
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  await page.waitForTimeout(300);
+  const opened = await page.evaluate(() => ({ qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length, pressed: document.querySelectorAll('.ai-chat-fbsheet [aria-pressed="true"]').length, submit: !!document.querySelector('.ai-chat-fbsheet [data-ffs="submit"]'), rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"), title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent }));
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="b"]');
+  await page.waitForTimeout(150);
+  const one = await page.evaluate(() => ({ submit: !!document.querySelector('.ai-chat-fbsheet [data-ffs="submit"]'), rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec") }));
+  await page.click('.ai-chat-fbsheet [data-ffs="opt"][data-o="d"]');
+  await page.waitForTimeout(250);
+  const both = await page.evaluate(() => { const s = document.querySelector('.ai-chat-fbsheet [data-ffs="submit"]'); const sh = document.querySelector(".ai-chat-fbsheet"); const r = s?.getBoundingClientRect(); return { submit: s?.textContent, primary: s?.classList.contains("is-primary"), rec: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__rec"), save: !!document.querySelector(".ai-chat-fbsheet .ai-ffs__savetitle"), note: document.querySelector(".ai-chat-fbsheet .ai-ffs__submitnote")?.textContent, clear: !!document.querySelector('.ai-chat-fbsheet [data-ffs="clear"]'), inView: !!r && r.bottom <= sh.getBoundingClientRect().bottom + 1 && r.top >= 0 }; });
+  check(`FIT finder from the chat (${label}): the sheet opens on the store's two questions, nothing picked, no Submit and no result yet; after one answer still no Submit; after both, a Submit (the only step — no result card, no save question) with 'Your FIT shows in the chat…', Start over beside it, all in view`, opened.qs === 2 && opened.pressed === 0 && !opened.submit && !opened.rec && opened.title === "Help me find my Fit" && !one.submit && !one.rec && both.submit === "Submit" && both.primary && !both.rec && !both.save && /Your FIT shows in the chat/.test(both.note || "") && both.clear && both.inView, JSON.stringify({ opened, one, both }));
+  const nBodies = chatBodies.length;
+  await page.click('.ai-chat-fbsheet [data-ffs="submit"]');
+  await page.waitForFunction(() => /which shoes will you wear them in/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => {
+    const msgs = [...document.querySelectorAll(".ai-chat-msg")];
+    const fit = document.querySelector(".ai-chat-msg--assistant .ai-chat-fit-result");
+    const users = msgs.filter((m) => m.classList.contains("ai-chat-msg--user")).map((m) => m.querySelector(".ai-chat-msg-bubble")?.textContent.trim());
+    const last = msgs.at(-1);
+    return { sheet: !!document.querySelector(".ai-chat-fbsheet.is-open"), fit: fit ? { badge: fit.querySelector(".ai-chat-fit-result__badge")?.textContent, name: fit.querySelector(".ai-chat-fit-result__name")?.textContent, eyebrow: fit.querySelector(".ai-chat-fit-result__eyebrow")?.textContent } : null, fitBefore: fit ? msgs.indexOf(fit.closest(".ai-chat-msg")) < msgs.length - 2 : false, users, lastRole: last?.classList.contains("ai-chat-msg--assistant"), lastText: last?.querySelector(".ai-chat-msg-bubble p")?.textContent || "", stored: (() => { try { return JSON.parse(sessionStorage.getItem("fitfinder_fit") || "null")?.key; } catch { return null; } })() };
+  });
+  const sent2 = chatBodies.at(-1);
+  check(`FIT finder from the chat (${label}): Submit closes the sheet, the FIT comes into the chat as its card (Your FIT · FITFinder — FIT B Cushioned Support), the shopper's word 'My FIT is FIT B.' goes to the assistant, which carries on with the next question; the message carried the saved FIT and that the finder was offered; the FIT saved where FITFinder reads it`, !after.sheet && after.fit?.badge === "FIT B" && after.fit.name === "Cushioned Support" && /Your FIT/.test(after.fit.eyebrow || "") && after.fitBefore && after.users.at(-1) === "My FIT is FIT B." && after.lastRole && /Going by your FIT B/.test(after.lastText) && /which shoes will you wear them in/.test(after.lastText) && chatBodies.length === nBodies + 1 && sent2?.fitfinder?.saved?.key === "B" && sent2.fitfinder.offered === true && after.stored === "B", JSON.stringify({ after, ff: sent2?.fitfinder && { saved: sent2.fitfinder.saved, offered: sent2.fitfinder.offered } }));
+  await page.reload();
+  await page.waitForTimeout(900);
+  const back = await page.evaluate(() => ({ open: !!document.querySelector(".ai-chat-panel.is-open"), ctas: document.querySelectorAll(".ai-chat-ffcta").length, fit: document.querySelector(".ai-chat-fit-result .ai-chat-fit-result__badge")?.textContent, order: [...document.querySelectorAll(".ai-chat-msg")].map((m) => (m.classList.contains("ai-chat-msg--user") ? "u" : m.querySelector(".ai-chat-ffcta") ? "cta" : m.querySelector(".ai-chat-fit-result") ? "fit" : "a")).join(",") }));
+  check(`FIT finder from the chat (${label}): after a reload the chat reads the same — the finder's card under the first reply, the FIT card, the word, the reply`, back.open && back.ctas === 1 && back.fit === "FIT B" && back.order === "u,cta,fit,u,a", JSON.stringify(back));
+  check(`FIT finder from the chat (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
 // FITFinder in the sheet, signed out: the card asks to save (sign in) or carry
 // on as a guest; the in-store scan asks to sign in first. Signed in: the scan
 // comes back and can be used. Phone and desktop.

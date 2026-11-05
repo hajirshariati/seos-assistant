@@ -21,6 +21,7 @@ import { getRetiredProducts } from "../../models/RetiredProduct.server.js";
 import { matchOffers, pastOffersResult, promoMemoryDays, styleMemoryDays, MEMORY_TZ } from "../memory.js";
 import { promoPageBlock, nowNote } from "../promo-page.js";
 import { savedFitNote } from "../orthotic-finder.server.js";
+import { FIT_FINDER_TOOL_DEF, fitFinderToolResult } from "./fit-finder.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
@@ -363,6 +364,13 @@ export async function buildLeanStoreExtras({
   // The orthotic finder's tool reads the same for every shopper; their saved
   // FIT (if any) is told alongside.
   const fitNote = (rec.tools || []).some((d) => d?.input_schema?.properties?.fit) ? savedFitNote(fitfinder) : "";
+  // FITFinder in the chat: with the orthotic finder on and the widget able
+  // to run the store's own FIT questions, the assistant can put the finder's
+  // card under a reply instead of asking them (fit-finder.js). Offered to
+  // every shopper of the store alike — one with a FIT is told not to use it.
+  if ((rec.tools || []).some((d) => d?.input_schema?.properties?.fit) && fitfinder?.native === true) {
+    wrap(FIT_FINDER_TOOL_DEF, async () => fitFinderToolResult(fitfinder.questions?.length || 2));
+  }
 
   log(
     `[lean] store extras: tools=[${tools.map((t) => t.definition.name).join(",") || "-"}] ` +
