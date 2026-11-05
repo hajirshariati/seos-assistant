@@ -71,12 +71,17 @@ export const PEAK_DECOR_WORDS = { off: "Nothing", lights: "A few points of light
 // boxes, all one size, each just a line drawing, the small line and the
 // name.
 export const HOME_CARDS = ["full", "simple"];
-export const HOME_CARD_WORDS = { full: "As they are — picture, name, line and button", simple: "Simple — icon and name only, three alike" };
+export const HOME_CARD_WORDS = { full: "As they are — picture, name, line and button", simple: "Simple — a faded line drawing, the small line and the name" };
+// The simple cards' colours: soft grey as the chat (the default), white
+// with a hairline, charcoal, a breath of her first colour, or two of the
+// store's own (the box, and the words and drawing).
+export const HOME_CARD_TONES = ["soft", "white", "dark", "tint", "custom"];
+export const HOME_CARD_TONE_WORDS = { soft: "Soft grey — as the chat", white: "White, a hairline round it", dark: "Charcoal, white words", tint: "A breath of her first colour", custom: "Your own two colours" };
 // Her look on every other day (Settings → Focus home → Her look): the same
 // colours, ring, lights and tint as peak days have, and the cards' style.
 // Stored as one JSON; nothing set → null for the widget (its built-in look).
 // On peak days the peak look stands in as a whole.
-export const HOME_LOOK_DEFAULT = { colors: [], ring: "fine", decor: "off", tint: false, cards: "full" };
+export const HOME_LOOK_DEFAULT = { colors: [], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "" };
 export function parseHomeLook(raw) {
   const o = parseJson(raw);
   const out = { ...HOME_LOOK_DEFAULT, colors: [] };
@@ -86,15 +91,22 @@ export function parseHomeLook(raw) {
   out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : "off";
   out.tint = o.tint === true;
   out.cards = HOME_CARDS.includes(o.cards) ? o.cards : "full";
+  out.cardTone = HOME_CARD_TONES.includes(o.cardTone) ? o.cardTone : "soft";
+  out.cardBg = cleanHex(o.cardBg);
+  out.cardInk = cleanHex(o.cardInk);
   return out;
 }
 // For widget-config: the look when anything in it is set, else null.
 export function homeLookConfig(config = {}) {
   const look = parseHomeLook(config.homeLook);
-  if (!look.colors.length && look.ring === "fine" && look.decor === "off" && !look.tint && look.cards === "full") return null;
+  if (!look.colors.length && look.ring === "fine" && look.decor === "off" && !look.tint && look.cards === "full" && look.cardTone === "soft" && !look.cardBg && !look.cardInk) return null;
   return look;
 }
 const HEX = /^#[0-9a-f]{6}$/i;
+// One colour as a 6-digit hex (lowercase), or "".
+function cleanHex(v) {
+  return HEX.test(String(v || "")) ? String(v).toLowerCase() : "";
+}
 // Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
 export function cleanPeakColors(list) {
   const out = [];
@@ -115,7 +127,7 @@ const picture = (v) => appImageValue(v);
 // without a picture are dropped; the name is only for screen readers.
 export function parsePeakHome(raw) {
   const o = parseJson(raw);
-  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, cards: "full", blocks: [] };
+  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "", blocks: [] };
   if (!o || typeof o !== "object") return out;
   out.avatar = picture(o.avatar);
   out.layout = PEAK_LAYOUTS.includes(o.layout) ? o.layout : "rail";
@@ -125,8 +137,11 @@ export function parsePeakHome(raw) {
   // Earlier days' choices (the ornaments "header"/"both", the "line") read as the lights, so a store that had them keeps a touch of gold.
   out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : /^(header|both|line)$/.test(String(o.decor || "")) ? "lights" : "off";
   out.tint = o.tint === true;
-  // The three cards' style on peak days.
+  // The three cards' style on peak days, and the simple cards' colours.
   out.cards = HOME_CARDS.includes(o.cards) ? o.cards : "full";
+  out.cardTone = HOME_CARD_TONES.includes(o.cardTone) ? o.cardTone : "soft";
+  out.cardBg = cleanHex(o.cardBg);
+  out.cardInk = cleanHex(o.cardInk);
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
     if (!b || typeof b !== "object") continue;
@@ -201,9 +216,9 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
     ...(b.focus !== "center" ? { focus: b.focus } : {}),
     audience: b.audience, tag: b.tag,
   }));
-  const look = home.ring !== "fine" || home.decor !== "off" || home.tint || home.cards !== "full";
+  const look = home.ring !== "fine" || home.decor !== "off" || home.tint || home.cards !== "full" || home.cardTone !== "soft" || home.cardBg || home.cardInk;
   if (!blocks.length && !home.avatar && !home.colors.length && !look) return null;
-  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, cards: home.cards, blocks };
+  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, cards: home.cards, cardTone: home.cardTone, cardBg: home.cardBg, cardInk: home.cardInk, blocks };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.

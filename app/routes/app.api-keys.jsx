@@ -56,7 +56,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, parseHomeLook, HOME_CARDS as HOME_CARD_STYLES, HOME_CARD_WORDS, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, parseHomeLook, HOME_CARDS as HOME_CARD_STYLES, HOME_CARD_WORDS, HOME_CARD_TONES, HOME_CARD_TONE_WORDS, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -1599,7 +1599,35 @@ function LookEditor({ value, onChange, peak = false }) {
         <Select label="Under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="A few small points of the set's third colour in the open space at the right of the header, drifting and twinkling slowly. None on phones, where the header has no room." />
         <Select label="Tint behind the header" options={[{ value: "off", label: "Off — the grey line stays" }, { value: "on", label: "On — no grey line" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot. With it on, the straight grey line under the header goes at home; off, the line stays as usual." />
       </div>
-      <Select label="The three cards" options={HOME_CARD_STYLES.map((k) => ({ value: k, label: HOME_CARD_WORDS[k] }))} value={HOME_CARD_STYLES.includes(v.cards) ? v.cards : "full"} onChange={(x) => up({ cards: x })} helpText="Simple: Foot pain, Footwear and Orthotics as three boxes of one size in a row — a line drawing, the small line and the name, nothing else — on every screen. The pictures, the lines under the names and the buttons stay out of it." />
+      <Select label="The three cards" options={HOME_CARD_STYLES.map((k) => ({ value: k, label: HOME_CARD_WORDS[k] }))} value={HOME_CARD_STYLES.includes(v.cards) ? v.cards : "full"} onChange={(x) => up({ cards: x })} helpText="Simple: the same three places and widths — on a computer Footwear, Foot pain (the wide one) and Orthotics in one row, on phones Foot pain across the top — each a flat box with a big faded line drawing in from its left edge, the small line and the name beside it. No pictures, no line under the name, no button." />
+      {v.cards === "simple" ? (
+        <div className="set-grid set-grid--3">
+          <Select label="The cards' colours" options={HOME_CARD_TONES.map((k) => ({ value: k, label: HOME_CARD_TONE_WORDS[k] }))} value={HOME_CARD_TONES.includes(v.cardTone) ? v.cardTone : "soft"} onChange={(x) => up({ cardTone: x })} helpText="The box, the words and the drawing together. Soft grey follows the chat's theme, light or dark; a breath of colour takes the first of her colours above." />
+          {v.cardTone === "custom" ? (
+            <>
+              <Swatch label="The box" value={v.cardBg || "#f4f4f5"} onChange={(hex) => up({ cardBg: hex })} />
+              <Swatch label="The words and drawing" value={v.cardInk || "#1a1a1a"} onChange={(hex) => up({ cardInk: hex })} />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </BlockStack>
+  );
+}
+
+// One colour to pick, named.
+function Swatch({ label, value, onChange }) {
+  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff";
+  return (
+    <BlockStack gap="100">
+      <Text as="span" variant="bodyMd">{label}</Text>
+      <div>
+        <label className="set-swatch">
+          <input type="color" value={hex} onChange={(e) => onChange(e.target.value)} aria-label={label} />
+          <span className="set-swatch__dot" style={{ background: hex }} aria-hidden="true" />
+          <span className="set-swatch__hex">{hex.toUpperCase()}</span>
+        </label>
+      </div>
     </BlockStack>
   );
 }

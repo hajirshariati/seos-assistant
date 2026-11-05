@@ -35,13 +35,16 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.equal(h.blocks[2].tag, "VIP");
   assert.equal(h.blocks[3].url, "", "an unsafe link is dropped");
   assert.deepEqual([h.blocks[4].kind, h.blocks[4].url, h.blocks[4].title], ["none", "", ""], "a picture that does nothing when tapped");
-  const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, cards: "full", blocks: [] };
+  const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "", blocks: [] };
   assert.deepEqual(parsePeakHome("{broken"), plain);
   assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
   const look = parsePeakHome({ ring: "bold", decor: "lights", tint: true });
   assert.deepEqual([look.ring, look.decor, look.tint, look.cards], ["bold", "lights", true, "full"]);
   assert.equal(parsePeakHome({ cards: "simple" }).cards, "simple", "the simple cards on peak days");
   assert.equal(parsePeakHome({ cards: "tiny" }).cards, "full");
+  const toned = parsePeakHome({ cards: "simple", cardTone: "custom", cardBg: "#ABCDEF", cardInk: "#101010" });
+  assert.deepEqual([toned.cardTone, toned.cardBg, toned.cardInk], ["custom", "#abcdef", "#101010"], "the simple cards' colours on peak days");
+  assert.deepEqual([parsePeakHome({ cardTone: "neon", cardBg: "red", cardInk: "#12345" }).cardTone, parsePeakHome({ cardTone: "neon", cardBg: "red" }).cardBg], ["soft", ""], "an unknown tone or a colour that isn't a hex fall back");
   assert.equal(parsePeakHome({ decor: "both" }).decor, "lights", "earlier days' choices read as the lights");
   assert.equal(parsePeakHome({ decor: "header" }).decor, "lights");
   assert.equal(parsePeakHome({ decor: "line" }).decor, "lights");
@@ -103,10 +106,11 @@ test("the home is handed over only while Peak Mode is on, pictures as fingerprin
   assert.equal(peakHomeConfig(sched, new Date("2026-11-26T12:00:00Z")), null, "not yet");
   assert.ok(peakHomeConfig(sched, new Date("2026-11-28T12:00:00Z")), "the day itself");
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: "{}" }), null, "nothing set: the usual home");
-  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, cards: "full", blocks: [] }, "colours alone are worth handing over");
+  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "", blocks: [] }, "colours alone are worth handing over");
   assert.deepEqual([on.ring, on.decor, on.tint, on.cards], ["fine", "off", false, "full"]);
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ decor: "lights" }) }).decor, "lights", "a look alone is worth handing over too");
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ cards: "simple" }) }).cards, "simple", "the cards' style alone is worth handing over too");
+  assert.deepEqual([peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ cardTone: "dark" }) }).cardTone, peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ cardBg: "#112233" }) }).cardBg], ["dark", "#112233"], "and the cards' colours alone");
   assert.equal(peakImage({ peakHome: saved }, "b1").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "avatar").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "nope"), null);
@@ -148,9 +152,12 @@ console.log("\nher look on every other day (Settings → Focus home → Her look
 test("the saved look comes back clean: up to four colours, the ring, the lights, the tint, the cards' style; unknown choices fall back; nothing saved → the defaults", () => {
   assert.deepEqual(HOME_CARDS, ["full", "simple"]);
   assert.deepEqual(parseHomeLook(""), HOME_LOOK_DEFAULT);
-  assert.deepEqual(parseHomeLook("{}"), { colors: [], ring: "fine", decor: "off", tint: false, cards: "full" });
+  assert.deepEqual(parseHomeLook("{}"), { colors: [], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "" });
+  assert.deepEqual(parseHomeLook({ cards: "simple", cardTone: "dark" }), { colors: [], ring: "fine", decor: "off", tint: false, cards: "simple", cardTone: "dark", cardBg: "", cardInk: "" });
+  assert.deepEqual(parseHomeLook({ cards: "simple", cardTone: "custom", cardBg: "#FFEEAA", cardInk: "#112233" }), { colors: [], ring: "fine", decor: "off", tint: false, cards: "simple", cardTone: "custom", cardBg: "#ffeeaa", cardInk: "#112233" });
+  assert.deepEqual(parseHomeLook({ cardTone: "neon", cardBg: "#ff", cardInk: "blue" }), HOME_LOOK_DEFAULT, "an unknown tone, colours that aren't a hex: the defaults");
   assert.deepEqual(parseHomeLook("not json"), HOME_LOOK_DEFAULT);
-  assert.deepEqual(parseHomeLook({ colors: ["#8FD3FF", "bad", "#5b8def"], ring: "regular", decor: "lights", tint: true, cards: "simple" }), { colors: ["#8fd3ff", "#5b8def"], ring: "regular", decor: "lights", tint: true, cards: "simple" });
+  assert.deepEqual(parseHomeLook({ colors: ["#8FD3FF", "bad", "#5b8def"], ring: "regular", decor: "lights", tint: true, cards: "simple" }), { colors: ["#8fd3ff", "#5b8def"], ring: "regular", decor: "lights", tint: true, cards: "simple", cardTone: "soft", cardBg: "", cardInk: "" });
   assert.deepEqual(parseHomeLook({ ring: "huge", decor: "bow", tint: "yes", cards: "mini" }), HOME_LOOK_DEFAULT, "unknown choices fall back");
   assert.deepEqual(parseHomeLook(JSON.stringify({ decor: "both" })).decor, "off", "the peak home's older names aren't read here");
 });
@@ -158,8 +165,9 @@ test("for the widget: null while nothing is set (the built-in look), the look on
   assert.equal(homeLookConfig({}), null);
   assert.equal(homeLookConfig({ homeLook: "{}" }), null);
   assert.equal(homeLookConfig({ homeLook: JSON.stringify({ colors: [], ring: "fine", decor: "off", tint: false, cards: "full" }) }), null);
-  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ cards: "simple" }) }), { colors: [], ring: "fine", decor: "off", tint: false, cards: "simple" });
-  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ tint: true }) }), { colors: [], ring: "fine", decor: "off", tint: true, cards: "full" });
+  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ cards: "simple" }) }), { colors: [], ring: "fine", decor: "off", tint: false, cards: "simple", cardTone: "soft", cardBg: "", cardInk: "" });
+  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ tint: true }) }), { colors: [], ring: "fine", decor: "off", tint: true, cards: "full", cardTone: "soft", cardBg: "", cardInk: "" });
+  assert.equal(homeLookConfig({ homeLook: JSON.stringify({ cardTone: "dark" }) })?.cardTone, "dark", "the cards' colours alone are handed over");
   assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ colors: ["#d42b3a"] }) }).colors, ["#d42b3a"]);
   assert.equal(homeLookConfig({ homeLook: JSON.stringify({ ring: "bold" }) }).ring, "bold");
   // Peak Mode doesn't change what the look says: the widget picks the peak look over it while Peak Mode is on.

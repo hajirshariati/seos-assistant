@@ -597,6 +597,11 @@ function applyPeakColors(){
   var ring={fine:1,regular:1.8,bold:2.8}[L&&L.ring]||1;
   if(ring!==1)p.style.setProperty('--ai-ring-k',String(ring));else p.style.removeProperty('--ai-ring-k');
   if(L&&L.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
+  /* The simple cards' colours: a word for the CSS, and the store's own two. */
+  var tone=L&&L.cards==='simple'?(/^(soft|white|dark|tint|custom)$/.test(L.cardTone||'')?L.cardTone:'soft'):'',hex=/^#[0-9a-f]{6}$/i;
+  if(tone)p.setAttribute('data-cards-tone',tone);else p.removeAttribute('data-cards-tone');
+  if(tone==='custom'&&hex.test(L.cardBg||''))p.style.setProperty('--ai-scard-bg',L.cardBg);else p.style.removeProperty('--ai-scard-bg');
+  if(tone==='custom'&&hex.test(L.cardInk||''))p.style.setProperty('--ai-scard-ink',L.cardInk);else p.style.removeProperty('--ai-scard-ink');
   peakDecoRender();
 }
 /* A few points of light (Settings → Peak Mode or Focus home → Under the
@@ -1983,9 +1988,9 @@ function focusLineIcon(kind,size){
   return pic?'<img src="'+pic+'" alt="" decoding="async">':focusLineDrawing(kind,size);
 }
 /* The cards' style (Settings → Focus home → Her look, or Peak Mode on peak
-   days): simple is three boxes of one size in a row, each a line drawing,
-   the small line and the name — no pictures, no line under the name, no
-   button. */
+   days): simple keeps the three cards' places and widths, each a flat box
+   with a big faded line drawing in from its left edge, the small line and
+   the name beside it — no pictures, no line under the name, no button. */
 function focusSimple(){var L=homeLook();return !!(L&&L.cards==='simple')}
 function focusRefreshPics(){
   var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
@@ -2004,7 +2009,7 @@ var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stro
    in the middle of the row (the short one on phones, and in its sheet). */
 function focusCardHtml(kind){
   var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+esc(FT.homePainTitleWide)+'</span>':w[1];
-  if(focusSimple())return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico is-line" aria-hidden="true">'+focusLineDrawing(kind,22)+'</span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span></span></button>';
+  if(focusSimple())return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico is-line" aria-hidden="true"></span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span></span></button>';
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 /* The three links above the message box: what each says, what it sends. */

@@ -3845,23 +3845,31 @@ for (const coop of ["1", "2"]) {
       check("her look: remembered for the next page — the ring and the colours are there from the first paint", early.k === "1.8" && early.glow === "#8fd3ff" && /8fd3ff/.test(early.kept || ""), JSON.stringify(early));
       await rm.ctx.close();
     }
-    // Settings → Focus home → Her look → The three cards: simple — three boxes of one size in a row at every width, each a line drawing, the small line and the name; no pictures, no line under the name, no button; the Foot pain card its short name; each still opening its sheet. The Peak Mode editor has the same choice for peak days. Without it, the cards are as they were.
+    // Settings → Focus home → Her look → The three cards: simple — the full cards' places and widths (on a computer Footwear, Foot pain the wide one, Orthotics in one row; on phones Foot pain across the top with the two under it; the smallest phones stacked), each a flat box with the store's line drawing big and faded in from its left edge, the small line and the name; no pictures, no line under the name, no button; each still opening its sheet. The cards' colours: soft grey (the chat's), white, charcoal, a breath of her first colour, or the store's own two. The Peak Mode editor has the same choices for peak days. Without the choice, the cards are as they were.
     {
       const readCards = (page) => page.evaluate(() => {
-        const box = document.querySelector(".ai-chat-focus__cards"); const cards = [...box.querySelectorAll(".ai-chat-focus__card")]; const rs = cards.map((c) => c.getBoundingClientRect());
+        const box = document.querySelector(".ai-chat-focus__cards"); const cards = [...box.querySelectorAll(".ai-chat-focus__card")]; const b = box.getBoundingClientRect();
         const shown = (el) => !!el && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().height > 0;
-        return { simple: box.classList.contains("is-simple"), n: cards.length, kinds: cards.map((c) => c.getAttribute("data-focus-sheet")), oneRow: new Set(rs.map((r) => Math.round(r.top))).size === 1,
-          sameSize: Math.max(...rs.map((r) => r.width)) - Math.min(...rs.map((r) => r.width)) <= 1 && Math.max(...rs.map((r) => r.height)) - Math.min(...rs.map((r) => r.height)) <= 1,
-          widths: rs.map((r) => Math.round(r.width)), inside: rs.every((r) => r.left >= box.getBoundingClientRect().left - 1 && r.right <= box.getBoundingClientRect().right + 1),
-          imgs: cards.map((c) => c.querySelectorAll("img").length), svgs: cards.map((c) => c.querySelectorAll(".ai-chat-focus__card-ico svg").length),
+        const by = Object.fromEntries(cards.map((c) => [c.getAttribute("data-focus-sheet"), c]));
+        const r = (k) => by[k].getBoundingClientRect();
+        const ico = (k) => by[k].querySelector(".ai-chat-focus__card-ico");
+        const rect = (k) => { const x = r(k); return { x: Math.round(x.left - b.left), y: Math.round(x.top - b.top), w: Math.round(x.width), h: Math.round(x.height) }; };
+        const drawing = (k) => { const i = ico(k); const ir = i.getBoundingClientRect(); const cs = getComputedStyle(i); const t = by[k].querySelector(".ai-chat-focus__card-title").getBoundingClientRect(); return { left: Math.round(ir.left - r(k).left), h: Math.round(ir.height), w: Math.round(ir.width), opacity: Number(cs.opacity), masked: /data:image\/png;base64/.test(cs.webkitMaskImage || cs.maskImage || ""), svgs: i.querySelectorAll("svg").length, imgs: by[k].querySelectorAll("img").length, titleX: Math.round(t.left - r(k).left), titleBottom: Math.round(r(k).bottom - t.bottom) }; };
+        return { simple: box.classList.contains("is-simple"), n: cards.length, kinds: cards.map((c) => c.getAttribute("data-focus-sheet")),
+          pain: rect("pain"), footwear: rect("footwear"), orthotics: rect("orthotics"), box: Math.round(b.width),
+          d: { pain: drawing("pain"), footwear: drawing("footwear"), orthotics: drawing("orthotics") },
           eyebrows: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-eyebrow")) ? c.querySelector(".ai-chat-focus__card-eyebrow").textContent : ""), titles: cards.map((c) => c.querySelector(".ai-chat-focus__card-title").textContent),
           subs: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-sub"))), ctas: cards.map((c) => shown(c.querySelector(".ai-chat-focus__card-cta"))),
-          centred: cards.every((c) => { const r = c.getBoundingClientRect(); const t = c.querySelector(".ai-chat-focus__card-title").getBoundingClientRect(); return Math.abs((t.left + t.right) / 2 - (r.left + r.right) / 2) <= 3; }),
+          bg: getComputedStyle(by.pain).backgroundColor, ink: getComputedStyle(by.pain.querySelector(".ai-chat-focus__card-title")).color, tone: document.querySelector(".ai-chat-panel").getAttribute("data-cards-tone"),
           buttons: cards.every((c) => c.tagName === "BUTTON" && c.getAttribute("aria-haspopup") === "dialog") };
       });
+      const drawn = (d) => d.masked && d.svgs === 0 && d.imgs === 0 && d.left <= 0 && d.opacity > 0.1 && d.opacity < 0.5 && d.h >= 60;
+      const sameRow = (a, c) => Math.abs(a.y - c.y) <= 1 && Math.abs(a.h - c.h) <= 1;
       const sc = await open("/full?home=focus&cards=simple&pics=1&texts=home");
       const c1 = await readCards(sc.page);
-      check("simple cards (computer): three boxes of one size in one row — a line drawing (no pictures, even with pictures set), the small line and the name centred, no line under the name, no button; Foot pain by its short name, in the store's words", c1.simple && c1.n === 3 && c1.kinds.join() === "pain,footwear,orthotics" && c1.oneRow && c1.sameSize && c1.inside && c1.imgs.every((n) => n === 0) && c1.svgs.every((n) => n === 1) && c1.eyebrows.join("|") === "Sore feet?|Help me find|Help me find" && c1.titles.join("|") === "Pain help|Shoes|Orthotics" && c1.subs.every((x) => !x) && c1.ctas.every((x) => !x) && c1.centred && c1.buttons, JSON.stringify(c1));
+      check("simple cards (computer): the full cards' row — Footwear, Foot pain twice as wide in the middle, Orthotics — one height; no pictures, no line under the name, no button; the store's words", c1.simple && c1.n === 3 && c1.kinds.join() === "pain,footwear,orthotics" && sameRow(c1.footwear, c1.pain) && sameRow(c1.pain, c1.orthotics) && c1.footwear.x < c1.pain.x && c1.pain.x < c1.orthotics.x && c1.pain.w / c1.footwear.w >= 1.85 && c1.pain.w / c1.footwear.w <= 2.15 && Math.abs(c1.footwear.w - c1.orthotics.w) <= 1 && c1.orthotics.x + c1.orthotics.w <= c1.box + 1 && c1.eyebrows.join("|") === "Sore feet?|Help me find|Help me find" && c1.titles.join("|") === "Pain help|Shoes|Orthotics" && c1.subs.every((x) => !x) && c1.ctas.every((x) => !x) && c1.buttons, JSON.stringify(c1));
+      check("simple cards (computer): each card's drawing is the store's own (a mask, no svg, no picture), big, faded and in from the left edge; the words over its tail — the two narrow cards' low at the left, the wide card's beside it", drawn(c1.d.pain) && drawn(c1.d.footwear) && drawn(c1.d.orthotics) && c1.d.footwear.titleX <= 20 && c1.d.footwear.titleBottom <= 20 && c1.d.pain.titleX >= c1.d.pain.w - 12 && c1.d.pain.h >= 80, JSON.stringify(c1.d));
+      check("simple cards (computer): soft grey as the chat by default, nothing else marked", c1.tone === "soft" && c1.bg === "rgb(35, 35, 41)", JSON.stringify([c1.tone, c1.bg]));
       await sc.page.click('[data-focus-sheet="footwear"]');
       await sc.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
       await sc.page.waitForTimeout(400);
@@ -3871,19 +3879,44 @@ for (const coop of ["1", "2"]) {
       await sc.ctx.close();
       const sp = await open("/full?home=focus&cards=simple&pics=1", { viewport: { width: 390, height: 760 } });
       const c3 = await readCards(sp.page);
-      check("simple cards (phone): still three of one size in one row, inside the home, the name under the drawing", c3.simple && c3.n === 3 && c3.oneRow && c3.sameSize && c3.inside && c3.widths.every((w) => w >= 100) && c3.imgs.every((n) => n === 0) && c3.titles.join("|") === "Foot pain|Footwear|Orthotics" && c3.subs.every((x) => !x) && c3.ctas.every((x) => !x), JSON.stringify(c3));
+      check("simple cards (phone): Foot pain across the top, Footwear and Orthotics side by side under it, alike — the drawings in from the left, no pictures, no button", c3.simple && c3.n === 3 && c3.pain.y < c3.footwear.y && Math.abs(c3.pain.w - c3.box) <= 1 && sameRow(c3.footwear, c3.orthotics) && Math.abs(c3.footwear.w - c3.orthotics.w) <= 1 && c3.footwear.x < c3.orthotics.x && drawn(c3.d.pain) && drawn(c3.d.footwear) && drawn(c3.d.orthotics) && c3.titles.join("|") === "Foot pain|Footwear|Orthotics" && c3.subs.every((x) => !x) && c3.ctas.every((x) => !x), JSON.stringify(c3));
       await sp.ctx.close();
       const sn = await open("/full?home=focus&cards=simple", { viewport: { width: 320, height: 700 } });
       const c4 = await readCards(sn.page);
-      check("simple cards (small phone): three in one row still, nothing cut off", c4.simple && c4.n === 3 && c4.oneRow && c4.sameSize && c4.inside && c4.widths.every((w) => w >= 80), JSON.stringify(c4));
+      check("simple cards (small phone): the three stacked full width, the words beside the drawing in each, nothing cut off", c4.simple && c4.n === 3 && [c4.pain, c4.footwear, c4.orthotics].every((x) => Math.abs(x.w - c4.box) <= 1) && c4.pain.y < c4.footwear.y && c4.footwear.y < c4.orthotics.y && drawn(c4.d.footwear) && c4.d.footwear.titleX >= c4.d.footwear.w - 12 && c4.d.orthotics.titleX >= c4.d.orthotics.w - 12, JSON.stringify(c4));
       await sn.ctx.close();
-      const pk = await open("/full?home=focus&pk=1&pkc=simple&login=Ann&tags=vip");
+      const pk = await open("/full?home=focus&pk=1&pkc=simple&pkct=dark&login=Ann&tags=vip");
       const c5 = await readCards(pk.page);
-      check("simple cards (peak days): the Peak Mode editor's own choice — the three simple boxes under the peak pictures", c5.simple && c5.n === 3 && c5.oneRow && c5.sameSize && c5.imgs.every((n) => n === 0), JSON.stringify(c5));
+      check("simple cards (peak days): the Peak Mode editor's own choice, with its colours — the three under the peak pictures, charcoal with white words", c5.simple && c5.n === 3 && sameRow(c5.footwear, c5.pain) && c5.footwear.x < c5.pain.x && c5.pain.x < c5.orthotics.x && drawn(c5.d.pain) && c5.tone === "dark" && c5.bg === "rgb(28, 28, 30)" && c5.ink === "rgb(255, 255, 255)", JSON.stringify([c5.tone, c5.bg, c5.ink, c5.pain, c5.footwear]));
       await pk.ctx.close();
+      // The cards' colours, light theme and dark: the words follow the box.
+      const light = { viewport: { width: 1280, height: 860 } };
+      const toLight = async (page) => { await page.click('.ai-chat-header [aria-label="Switch to light mode"]'); await page.waitForTimeout(350); };
+      const tw = await open("/full?home=focus&cards=simple&ctone=white", light);
+      await toLight(tw.page);
+      const c6 = await readCards(tw.page);
+      check("the cards' colours — white: white boxes with dark words, a hairline round each (light theme)", c6.tone === "white" && c6.bg === "rgb(255, 255, 255)" && c6.ink !== "rgb(255, 255, 255)" && /inset/.test(await tw.page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-focus__card--pain")).boxShadow)), JSON.stringify([c6.tone, c6.bg, c6.ink]));
+      await tw.ctx.close();
+      const td = await open("/full?home=focus&cards=simple&ctone=dark", light);
+      await toLight(td.page);
+      const c7 = await readCards(td.page);
+      check("the cards' colours — charcoal: dark boxes with white words even in the light theme", c7.tone === "dark" && c7.bg === "rgb(28, 28, 30)" && c7.ink === "rgb(255, 255, 255)", JSON.stringify([c7.tone, c7.bg, c7.ink]));
+      await td.ctx.close();
+      const tt = await open("/full?home=focus&look=1&cards=simple&ctone=tint", light);
+      await toLight(tt.page);
+      const c8 = await readCards(tt.page);
+      const tintDrawing = await tt.page.evaluate(() => { const i = document.querySelector(".ai-chat-focus__card--pain .ai-chat-focus__card-ico"); return { bg: getComputedStyle(i).backgroundColor, op: getComputedStyle(i).opacity }; });
+      check("the cards' colours — a breath of her first colour: the boxes tinted with it (her winter blue), the drawings in it", c8.tone === "tint" && c8.bg !== "rgb(245, 245, 247)" && c8.bg !== "rgb(255, 255, 255)" && tintDrawing.bg === "rgb(143, 211, 255)" && Number(tintDrawing.op) > 0.3, JSON.stringify([c8.tone, c8.bg, tintDrawing]));
+      await tt.ctx.close();
+      const tc = await open("/full?home=focus&cards=simple&ctone=custom&cbg=0f2b3a&cink=ffe9c4", light);
+      await toLight(tc.page);
+      const c9 = await readCards(tc.page);
+      const customDrawing = await tc.page.evaluate(() => getComputedStyle(document.querySelector(".ai-chat-focus__card--pain .ai-chat-focus__card-ico")).backgroundColor);
+      check("the cards' colours — the store's own two: the box in one, the words and the drawing in the other", c9.tone === "custom" && c9.bg === "rgb(15, 43, 58)" && c9.ink === "rgb(255, 233, 196)" && customDrawing === "rgb(255, 233, 196)", JSON.stringify([c9.tone, c9.bg, c9.ink, customDrawing]));
+      await tc.ctx.close();
       const fu = await open("/full?home=focus&look=1&pics=1");
-      const c6 = await readCards(fu.page);
-      check("the cards as they were: her look alone leaves them whole — pictures, the line under the name, the button; Foot pain the wide one", !c6.simple && c6.n === 3 && c6.imgs.every((n) => n === 1) && c6.subs.every(Boolean) && c6.ctas.every(Boolean) && !c6.sameSize, JSON.stringify(c6));
+      const c10 = await readCards(fu.page);
+      check("the cards as they were: her look alone leaves them whole — pictures, the line under the name, the button; no colours marked", !c10.simple && c10.n === 3 && c10.d.footwear.imgs === 1 && c10.d.pain.imgs === 1 && c10.subs.every(Boolean) && c10.ctas.every(Boolean) && c10.tone === null, JSON.stringify([c10.simple, c10.d.footwear.imgs, c10.subs, c10.ctas, c10.tone]));
       await fu.ctx.close();
     }
     // Settings → Chat text → Welcome greeting on phones: phones show it in the header at home; computers keep the greeting; a signed-in shopper's greeting still wins on both.
