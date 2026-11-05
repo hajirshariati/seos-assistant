@@ -593,11 +593,10 @@ function applyPeakColors(){
 function decoLineHtml(){
   return '<div class="ai-chat-deco ai-chat-deco--line" aria-hidden="true"><svg viewBox="0 0 100 50" preserveAspectRatio="none">'+
     '<defs><linearGradient id="ai-deco-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="d-gold-stop" stop-opacity="0"/><stop offset=".06" class="d-gold-stop" stop-opacity=".95"/><stop offset=".5" class="d-gold-stop" stop-opacity="1"/><stop offset=".94" class="d-gold-stop" stop-opacity=".95"/><stop offset="1" class="d-gold-stop" stop-opacity="0"/></linearGradient>'+
-    '<linearGradient id="ai-deco-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'+
-    '<path class="d-gold-s d-gold-s--glow2" d="M0 0" fill="url(#ai-deco-gold)" opacity=".09"/>'+
-    '<path class="d-gold-s d-gold-s--glow1" d="M0 0" fill="url(#ai-deco-gold)" opacity=".18"/>'+
+    '</defs>'+
+    '<path class="d-gold-s d-gold-s--glow2" d="M0 0" fill="url(#ai-deco-gold)" opacity=".07"/>'+
+    '<path class="d-gold-s d-gold-s--glow1" d="M0 0" fill="url(#ai-deco-gold)" opacity=".14"/>'+
     '<path class="d-gold-s d-gold-s--body" d="M0 0" fill="url(#ai-deco-gold)"/>'+
-    '<path class="ai-chat-deco__sheen" d="M0 0" fill="none" stroke="url(#ai-deco-sheen)" stroke-width="1.5" pathLength="100" stroke-dasharray="22 100"/>'+
   '</svg></div>';
 }
 /* Draws (or removes) the line to match the setting. */
@@ -636,8 +635,8 @@ function peakDecoFit(){
      greeting's second row, below the header's foot; rises to its crest
      about a third of the way along, a little under the controls (12px
      below them); and eases down to the header's right edge, ending just
-     under the foot. A ribbon, not a stroke: about 1.5px at its ends and
-     5px at its fullest, around the crest. Fixed to the header, so it sits
+     under the foot. A ribbon, not a stroke: about 1px at its ends and
+     2.6px at its fullest, around the crest, with only a faint halo. Fixed to the header, so it sits
      the same whatever the width; only a very short stretch flattens it.
      On phones there is no line. */
   var Wb=W-left,H=line.clientHeight||56,F=H-30,m=Math.min(1,Math.max(0,(Wb-80)/260)),f=function(n){return Math.round(n*10)/10};
@@ -657,12 +656,10 @@ function peakDecoFit(){
       var w=wmin+(wmax-wmin)*Math.pow(Math.sin(Math.PI*tj),0.8),h=w/2;up.push(f(pts[j][0]+nx*h)+' '+f(pts[j][1]+ny*h));dn.push(f(pts[j][0]-nx*h)+' '+f(pts[j][1]-ny*h))}
     return 'M'+up.join(' L ')+' L '+dn.reverse().join(' L ')+' Z';
   };
-  var centre='M'+pts.map(function(q){return f(q[0])+' '+f(q[1])}).join(' L ');
   var svg=line.querySelector('svg');svg.setAttribute('viewBox','0 0 '+Math.max(1,Wb)+' '+H);
-  svg.querySelector('.d-gold-s--body').setAttribute('d',ribbon(1.5,5));
-  svg.querySelector('.d-gold-s--glow1').setAttribute('d',ribbon(4,9));
-  svg.querySelector('.d-gold-s--glow2').setAttribute('d',ribbon(8,16));
-  svg.querySelector('.ai-chat-deco__sheen').setAttribute('d',centre);
+  svg.querySelector('.d-gold-s--body').setAttribute('d',ribbon(1,2.6));
+  svg.querySelector('.d-gold-s--glow1').setAttribute('d',ribbon(2.5,5));
+  svg.querySelector('.d-gold-s--glow2').setAttribute('d',ribbon(5,9));
   return;
 }
 try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){peakDecoFit()})}catch(e){}

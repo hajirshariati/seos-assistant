@@ -7789,16 +7789,13 @@ button.ai-chat-launcher__text {
 /* On peak days the header's straight grey line is gone at home — with or
    without the line of gold (important, as the dark theme's border is). */
 .ai-chat-panel[data-peak].is-home .ai-chat-header { border-bottom-color: transparent !important; }
-.ai-chat-panel .ai-chat-deco__sheen { stroke-dashoffset: 30; opacity: 0; animation: aiDecoSheen 9s ease-in-out infinite; }
-@keyframes aiDecoSheen { 0%, 55% { stroke-dashoffset: 30; opacity: 0; } 60% { opacity: 0.9; } 90% { stroke-dashoffset: -110; opacity: 0.9; } 92%, 100% { stroke-dashoffset: -110; opacity: 0; } }
 /* No line on phones: the header has no room for it there. */
 @media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--line { display: none !important; } }
 /* The tint is painted once, over the whole box: repeated, its first row
    would show again in the header's border row as a straight line. */
 .ai-chat-panel[data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 8%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 3%, transparent) 70%, transparent 100%) !important; background-repeat: no-repeat !important; background-origin: border-box !important; background-size: 100% 100% !important; }
 .ai-chat-panel[data-theme="dark"][data-peak-tint="1"] .ai-chat-header { background-image: linear-gradient(180deg, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 14%, transparent) 0%, color-mix(in srgb, var(--ai-glow-1, #ff4fa3) 5%, transparent) 70%, transparent 100%) !important; }
-@media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco__sheen { animation: none; } }
-/* ── Peak Mode's home: the day's pictures where the banner was ──
+@media (prefers-reduced-motion: reduce) { /* ── Peak Mode's home: the day's pictures where the banner was ──
    Each tile is just a picture (a link, a question, or nothing), the shape
    set in Settings (--ai-peak-ar). The tile presses in on a tap; the
    picture itself stays still. */
