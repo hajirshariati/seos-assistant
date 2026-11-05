@@ -3831,7 +3831,7 @@ for (const coop of ["1", "2"]) {
       await lk.ctx.close();
       const lt = await open("/full?home=focus&look=1&lkt=1");
       const ltl = await lt.page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); const hdr = document.querySelector(".ai-chat-header"); return { peak: p.getAttribute("data-peak"), tint: p.getAttribute("data-peak-tint"), hbg: getComputedStyle(hdr).backgroundImage, grey: getComputedStyle(hdr).borderBottomColor, decor: p.getAttribute("data-peak-decor"), home: p.classList.contains("is-home") }; });
-      check("her look (tint on): a breath of the first colour behind the header, and the straight grey line is gone at home — no lights unless asked", !ltl.peak && ltl.tint === "1" && ltl.hbg !== "none" && /143, 211, 255|0\.8\d* 0\.8\d* 1/.test(ltl.hbg) && /rgba\(.*, 0\)|transparent/.test(ltl.grey) && !ltl.decor && ltl.home, JSON.stringify(ltl));
+      check("her look (tint on): a breath of the first colour behind the header, and the straight grey line is gone at home — no lights unless asked", !ltl.peak && ltl.tint === "1" && ltl.hbg !== "none" && /143, 211, 255|0\.56\d* 0\.82\d* 1\b/.test(ltl.hbg) && /rgba\(.*, 0\)|transparent/.test(ltl.grey) && !ltl.decor && ltl.home, JSON.stringify(ltl));
       // Once a chat starts the page's look is the chat's own: the tint stays with the header, the home marking goes.
       await startChat(lt.page);
       await lt.page.waitForTimeout(1500);

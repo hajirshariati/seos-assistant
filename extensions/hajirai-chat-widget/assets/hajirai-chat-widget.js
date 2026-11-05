@@ -2047,6 +2047,10 @@ function miniOpen(kind){
   toggle(true);
   if(!isOpen)return;
   openFocusSheet(kind,$('.ai-chat-focus__card--'+kind,panel));
+  /* The sheet took focus while the panel was still opening: once it's
+     up, the focus is put on the sheet's close button if it slipped. */
+  var sh=focusSheetEl,again=function(){if(focusSheetEl!==sh||!sh.isConnected||sh.contains(document.activeElement))return;var c=$('.ai-chat-focus-sheet__close',sh);if(c)try{c.focus({preventScroll:true})}catch(e){}};
+  setTimeout(again,150);setTimeout(again,520);
 }
 function buildFocusHome(){
   var pk=peakBlocks(),banner=!pk.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
