@@ -3,7 +3,7 @@
 // right), and an iOS-style switch. Keeps the page short: each section shows
 // on its own, and a row's extra fields only appear once it's switched on.
 import { useId } from "react";
-import { Card, Text, Icon, BlockStack, InlineStack } from "@shopify/polaris";
+import { Card, Text, Icon, InlineStack } from "@shopify/polaris";
 
 export const SETTINGS_CSS = `
   .set-shell { display: grid; grid-template-columns: 212px minmax(0, 1fr); gap: 28px; align-items: start; }
@@ -87,7 +87,24 @@ export const SETTINGS_CSS = `
   .set-peak-mark .Polaris-Icon svg { fill: #2D6B4F; }
   .set-peak-mark--on { background: linear-gradient(135deg, #2D6B4F, #4c9a74); box-shadow: 0 4px 14px rgba(45,107,79,0.28); }
   .set-peak-mark--on .Polaris-Icon svg { fill: #fff; }
-  .set-peak-top { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-bottom: 1px solid rgba(30,27,51,0.07); }
+  .set-peak-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; }
+  .set-peak-words { min-width: 0; display: grid; gap: 1px; }
+  .set-peak-status { display: flex; align-items: center; gap: 7px; font-size: 12.5px; line-height: 18px; color: #616161; }
+  .set-peak-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #c9cccf; flex: none; }
+  .set-peak-status--on::before { background: #2D6B4F; box-shadow: 0 0 0 3px rgba(45,107,79,0.16); }
+  .set-peak-status--soon::before { background: #2f6fde; box-shadow: 0 0 0 3px rgba(47,111,222,0.14); }
+  .set-peak-when { padding: 0 16px 14px 70px; }
+  .set-peak-top + .set-row, .set-peak-when + .set-row { border-top: 1px solid rgba(30,27,51,0.07); }
+  .set-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: rgba(26,46,38,0.07); flex: none; }
+  .set-seg__btn { all: unset; box-sizing: border-box; padding: 5px 12px; border-radius: 8px; font-size: 13px; line-height: 18px; font-weight: 500; color: #4a4a4a; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+  .set-seg__btn:hover { color: #1a1a1a; }
+  .set-seg__btn[aria-checked="true"] { background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.04); }
+  .set-seg__btn:focus-visible { outline: 2px solid #2D6B4F; outline-offset: 1px; }
+  .set-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .set-stat { padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); min-width: 0; display: grid; gap: 2px; }
+  .set-stat__label { font-size: 12px; line-height: 16px; color: #616161; }
+  .set-stat__value { font-size: 20px; line-height: 24px; font-weight: 650; letter-spacing: -0.02em; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+  .set-stat__hint { font-size: 11.5px; line-height: 15px; color: #8a8a8a; }
   .set-limits { display: grid; grid-template-columns: minmax(96px, 150px) repeat(2, minmax(0, 170px)); gap: 8px 12px; align-items: center; }
   .set-save { display: flex; justify-content: flex-end; padding: 18px 0 40px; }
   @media (prefers-reduced-motion: reduce) { .set-switch, .set-switch::after { transition: none; } }
@@ -100,6 +117,12 @@ export const SETTINGS_CSS = `
     .set-grid, .set-grid--3, .set-grid--app { grid-template-columns: minmax(0, 1fr); }
     .set-limits { grid-template-columns: minmax(72px, 1fr) repeat(2, minmax(0, 1.1fr)); }
     .set-peak-top { padding: 14px; }
+    .set-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .set-peak-top { grid-template-columns: auto minmax(0, 1fr); }
+    .set-seg { grid-column: 1 / -1; justify-self: start; }
+    .set-peak-when { padding-left: 14px; }
   }
 `;
 
@@ -188,12 +211,30 @@ export function SettingsNav({ sections, current, onSelect }) {
 // A small labelled number for "right now" readouts.
 export function Stat({ label, value, hint }) {
   return (
-    <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(26,46,38,0.035)", minWidth: 0 }}>
-      <BlockStack gap="050">
-        <Text as="span" variant="bodySm" tone="subdued">{label}</Text>
-        <Text as="span" variant="headingLg">{value}</Text>
-        {hint ? <Text as="span" variant="bodySm" tone="subdued">{hint}</Text> : null}
-      </BlockStack>
+    <div className="set-stat">
+      <span className="set-stat__label">{label}</span>
+      <span className="set-stat__value">{value}</span>
+      {hint ? <span className="set-stat__hint">{hint}</span> : null}
+    </div>
+  );
+}
+
+// A segmented control (one of a few): a radio group with the arrow keys
+// moving the choice, as on iOS.
+export function Seg({ label, value, options, onChange }) {
+  const onKey = (e, i) => {
+    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const j = (i + d + options.length) % options.length;
+    onChange(options[j].value);
+    e.currentTarget.parentElement?.querySelectorAll("button")[j]?.focus();
+  };
+  return (
+    <div className="set-seg" role="radiogroup" aria-label={label}>
+      {options.map((o, i) => (
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} tabIndex={value === o.value ? 0 : -1} className="set-seg__btn" onClick={() => onChange(o.value)} onKeyDown={(e) => onKey(e, i)}>{o.label}</button>
+      ))}
     </div>
   );
 }

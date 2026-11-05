@@ -19,7 +19,6 @@ import {
   Banner,
   Text,
   Badge,
-  ButtonGroup,
   Box,
   Icon,
   Modal,
@@ -49,7 +48,7 @@ import BrandHeader from "../components/BrandHeader";
 import { DEFAULT_APP_NAME, appBrand } from "../lib/app-brand.js";
 import { OrbColorsCard } from "../components/AssistantLookCards";
 import { RecordingCard, ChatGuardCard } from "../components/RecordingCard";
-import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch } from "../components/SettingsUI";
+import { SETTINGS_CSS, Row, Group, SectionHead, SettingsNav, Stat, Switch, Seg } from "../components/SettingsUI";
 import { recordingState, keepDays, KEEP_DAYS_CHOICES } from "../lib/chat-recording.js";
 import { guardMode } from "../lib/chat-guard.js";
 import { parseOrbColors, serializeOrbColors, parseOrbBackground, serializeOrbBackground } from "../lib/orb-colors";
@@ -1941,11 +1940,14 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
   const limitText = (m, h) => `${m ? `${fmtNum(m)} a minute` : "no per-minute limit"} · ${h ? `${fmtNum(h)} an hour` : "no hourly limit"}`;
   const tight = p && perMin > 0 && p.busiestMinute >= perMin * 0.7;
 
-  const status = !mounted ? null
-    : draftPeak.active ? { tone: "success", text: draftPeak.mode === "on" ? "On now" : `On until ${draftPeak.endsAt ? fmtDay(draftPeak.endsAt, -1) : "you turn it off"}` }
-    : draftPeak.upcoming ? { tone: "info", text: `Starts ${fmtDay(draftPeak.startsAt)}` }
-    : draftPeak.ended ? { tone: undefined, text: "Schedule ended" }
-    : { tone: undefined, text: "Off" };
+  // The header's two lines: where the switch stands, and what that means
+  // right now (the section's name until the page has mounted).
+  const status = !mounted ? { kind: "off", title: "Peak Mode", text: "" }
+    : draftPeak.active ? { kind: "on", title: draftPeak.mode === "on" ? "On now" : `On until ${draftPeak.endsAt ? fmtDay(draftPeak.endsAt, -1) : "you turn it off"}`, text: "Higher chat limits, nothing heavy in the background." }
+    : draftPeak.upcoming ? { kind: "soon", title: `Starts ${fmtDay(draftPeak.startsAt)}`, text: draftPeak.endsAt ? `Until ${fmtDay(draftPeak.endsAt, -1)}.` : "Until you turn it off." }
+    : draftPeak.ended ? { kind: "off", title: "Schedule ended", text: "Pick new days, or Off." }
+    : values.peakMode === "scheduled" ? { kind: "off", title: "Schedule", text: "Pick the first and last day." }
+    : { kind: "off", title: "Off", text: "The everyday limits apply." };
 
   const chooseMode = (mode) => set("peakMode")(mode);
 
@@ -1956,23 +1958,20 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
       <Group>
         <div className="set-peak-top">
           <div className={`set-peak-mark${draftPeak.active ? " set-peak-mark--on" : ""}`} aria-hidden="true"><Icon source={GaugeIcon} /></div>
-          <BlockStack gap="300">
-            <InlineStack gap="300" blockAlign="center">
-              <ButtonGroup variant="segmented">
-                <Button pressed={values.peakMode === "off"} onClick={() => chooseMode("off")}>Off</Button>
-                <Button pressed={values.peakMode === "on"} onClick={() => chooseMode("on")}>On now</Button>
-                <Button pressed={values.peakMode === "scheduled"} onClick={() => chooseMode("scheduled")}>Schedule</Button>
-              </ButtonGroup>
-              {status && <Badge tone={status.tone}>{status.text}</Badge>}
-            </InlineStack>
-            {values.peakMode === "scheduled" && (
-              <div className="set-grid" style={{ maxWidth: 420 }}>
-                <TextField label="First day" type="date" value={mounted ? dayOf(values.peakStartsAt) : ""} onChange={(day) => set("peakStartsAt")(startOfDay(day))} autoComplete="off" />
-                <TextField label="Last day" type="date" value={mounted ? dayOf(values.peakEndsAt, -1) : ""} onChange={(day) => set("peakEndsAt")(startOfDay(day, 1))} autoComplete="off" helpText="Blank: until you turn it off." />
-              </div>
-            )}
-          </BlockStack>
+          <div className="set-peak-words">
+            <div className="set-row__title">{status.title}</div>
+            {status.text && <div className={`set-peak-status set-peak-status--${status.kind}`}>{status.text}</div>}
+          </div>
+          <Seg label="Peak Mode" value={values.peakMode} onChange={chooseMode} options={[{ value: "off", label: "Off" }, { value: "on", label: "On now" }, { value: "scheduled", label: "Schedule" }]} />
         </div>
+        {values.peakMode === "scheduled" && (
+          <div className="set-peak-when">
+            <div className="set-grid" style={{ maxWidth: 440 }}>
+              <TextField label="First day" type="date" value={mounted ? dayOf(values.peakStartsAt) : ""} onChange={(day) => set("peakStartsAt")(startOfDay(day))} autoComplete="off" />
+              <TextField label="Last day" type="date" value={mounted ? dayOf(values.peakEndsAt, -1) : ""} onChange={(day) => set("peakEndsAt")(startOfDay(day, 1))} autoComplete="off" helpText="Blank: until you turn it off." />
+            </div>
+          </div>
+        )}
         <Row title="Higher chat limits" help={`${limitText(peakMin, peakHour)} — set below.`} control={<span aria-label="Included"><Icon source={CheckCircleIcon} tone="success" /></span>} />
         <Row title="Lift the daily message cap" help={values.dailyCapEnabled ? "AVA never goes quiet on your busiest day." : "Only matters when the daily cap below is on."} toggle checked={values.peakLiftDailyCap} onChange={set("peakLiftDailyCap")} />
         <Row title="Pause the nightly catalog refresh" help="The full re-sync sits out. Product and stock changes still reach the chat live." toggle checked={values.peakPauseSync} onChange={set("peakPauseSync")} />
@@ -1982,7 +1981,7 @@ function PeakSection({ d, values, set, draftPeak, mounted, onRefresh, refreshing
         <Row stack>
           {p ? (
             <BlockStack gap="300">
-              <div className="set-grid set-grid--3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+              <div className="set-stats">
                 <Stat label="Last minute" value={fmtNum(p.lastMinute)} hint="messages" />
                 <Stat label="Last hour" value={fmtNum(p.lastHour)} hint="messages" />
                 <Stat label="Busiest minute" value={fmtNum(p.busiestMinute)} hint="past 7 days" />
