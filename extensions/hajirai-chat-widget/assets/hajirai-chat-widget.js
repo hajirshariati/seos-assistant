@@ -4355,7 +4355,7 @@ function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
 function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 /* A button under the reply that opens one of the store's Typeforms. */
-var pendingForm=null,pendingMap=null;
+var pendingForm=null,pendingMap=null,pendingFfCta=false;
 /* The back-in-stock card under a reply (the server's restock_cta): the
    shopper's email goes from here straight to the store's Klaviyo, for that
    one variant — never through the assistant. */
@@ -6571,8 +6571,9 @@ function ffPayload(){
   var local=ffStored();/* a save on this device is the newest choice */
   /* "Retake my FIT": this one message goes without the saved FIT, so the
      questions are asked again; the new answer is saved as usual. */
-  if(ffRetake){ffRetake=false;return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:''},retake:true}}
-  return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:(local&&local.key)||ff.saved||''}};
+  /* native: the finder's own flow runs here (the card can go under a reply); offered: its card is in this chat already. */
+  if(ffRetake){ffRetake=false;return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:''},retake:true,native:ffNative(),offered:ffOffered()}}
+  return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:(local&&local.key)||ff.saved||''},native:ffNative(),offered:ffOffered()};
 }
 /* The same consent rule FITFinder follows: remember across visits only when
    preference cookies are allowed (OneTrust group C0003 or Shopify's banner). */
@@ -6597,6 +6598,9 @@ function ffSave(key){
   /* They have a FIT now: earlier cards stop offering to find one. */
   var stale=msgsEl.querySelectorAll('.ai-chat-product-card [data-helper="fitfinder"]');
   for(var si=0;si<stale.length;si++){var row=stale[si].parentNode;row.removeChild(stale[si]);if(row.classList.contains('ai-tools'))toolsRelayout(row)}
+  /* …and the finder's card under an earlier reply goes too (Retake is on the home). */
+  var cards=msgsEl.querySelectorAll('.ai-chat-ffcta');
+  for(var ci=0;ci<cards.length;ci++)cards[ci].parentNode.removeChild(cards[ci]);
 }
 
 /* ── FITFinder, in the chat's own sheet ──
@@ -6609,7 +6613,7 @@ function ffSave(key){
 var FFS_PENDING='hajirai_ff_pending';
 var FFS_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 var FFS_RESTART='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
-var ffs={view:'quiz',a:{},scan:null,done:'',from:'quiz'};
+var ffs={view:'quiz',a:{},scan:null,done:'',from:'quiz',chat:false};
 /* The app's flow can run here: questions with ids, options with ids, a table. */
 function ffNative(){
   if(!ff||!ff.questions.length||!ff.mappings)return false;
@@ -6635,7 +6639,9 @@ function openFitFinder(opener,mode){
   if(!ffNative())return false;
   fbOpener=opener||null;
   var sh=fbSheetEl();
-  if(mode==='retake'){ffs.view='quiz';ffs.a={};ffs.done='';ffs.scan=null}
+  /* From the finder's card under a reply: the questions, then Submit (the FIT goes to the chat). */
+  ffs.chat=mode==='chat';
+  if(mode==='retake'||mode==='chat'){ffs.view='quiz';ffs.a={};ffs.done='';ffs.scan=null}
   else if(mode!=='keep'){
     var mine=savedFit(),answered=false;for(var k in ffs.a){if(ffs.a[k]){answered=true;break}}
     if(ffs.view!=='done'&&mine&&!answered){ffs.view='done';ffs.done=ffs.done||'known'}
@@ -6707,6 +6713,12 @@ function ffsQuizHtml(){
 /* What follows the questions: the card and Start over once there's a FIT;
    a word when the table has none for that combination; nothing before. */
 function ffsTailHtml(f){
+  /* From the chat: one step — Submit — in place of the result and the save question; the FIT shows in the chat instead. */
+  if(ffs.chat){
+    if(f)return '<div class="ai-ffs__submit"><button type="button" class="ai-ffs__btn is-primary" data-ffs="submit">Submit</button><span class="ai-ffs__submitnote">Your FIT shows in the chat, and we carry on from there.</span></div>'+ffsClearHtml();
+    if(f===false)return '<p class="ai-ffs__note is-warn">No matching FIT for that combination — try adjusting an answer.</p>';
+    return '';
+  }
   if(f)return ffsRecHtml(f,false)+ffsClearHtml();
   if(f===false)return '<p class="ai-ffs__note is-warn">No matching FIT for that combination — try adjusting an answer.</p>';
   return '';
@@ -6787,6 +6799,27 @@ function ffsRecUpdate(sh){
   if(rec&&rec.scrollIntoView)try{rec.scrollIntoView({block:'nearest',behavior:focusMotionOk()?'smooth':'auto'})}catch(e){}
 }
 function ffsSaved(how){ffs.view='done';ffs.done=how;ffs.a={};ffsRender(fbSheet)}
+/* The finder's card is in this chat already (under an earlier reply). */
+function ffOffered(){for(var i=0;i<messages.length;i++){if(messages[i]&&messages[i].ffCta)return true}return false}
+/* The finder's card under a reply (open_fit_finder): the mark, the store's
+   own line, the count of questions, an arrow — one tap opens the questions
+   in the sheet. */
+function ffCtaHtml(){
+  var n=ff&&ff.questions.length?ff.questions.length:2;
+  return '<button type="button" class="ai-chat-ffcta" data-ff-cta="1" aria-haspopup="dialog"><span class="ai-chat-ffcta__mark" aria-hidden="true"><b>FIT</b>FINDER</span><span class="ai-chat-ffcta__text"><span class="ai-chat-ffcta__title">'+esc((ff&&ff.words.cta)||'Help me find my Fit')+'</span><span class="ai-chat-ffcta__sub">'+n+' quick question'+(n===1?'':'s')+' \u00b7 your FIT in a moment</span></span><span class="ai-chat-ffcta__go" aria-hidden="true">'+WI.arrow+'</span></button>';
+}
+/* Submit in the finder from the chat: the FIT as a card in the chat (no
+   turn with the assistant), then the shopper's word to the assistant so it
+   carries on — who it's for, the shoes, the pick. */
+function ffChatResult(f){
+  if(isStreaming)return;
+  var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');
+  var text='Here\u2019s your FIT.',m={role:'assistant',content:text,fit:{key:f.key,label:f.label,name:f.name,description:f.description},local:true};
+  messages.push(m);
+  var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
+  saveH(messages);
+  setTimeout(function(){focusSend('My FIT is '+fitTitle(f)+'.')},150);
+}
 function ffsAct(b){
   var sh=fbSheet,a=b.getAttribute('data-ffs'),f;
   if(a==='opt'){
@@ -6796,6 +6829,11 @@ function ffsAct(b){
     ffsRecUpdate(sh);return;
   }
   if(a==='help'||a==='more'){ffsFold(b);return}
+  if(a==='submit'){
+    f=ffsFit();if(!f)return;
+    ffSave(f.key);ffs.view='done';ffs.done=ffsLogged()?'account':'guest';ffs.a={};ffs.chat=false;
+    closeFeedback();ffChatResult(f);return;
+  }
   if(a==='clear'){ffs.a={};ffs.view='quiz';ffsRender(sh);return}
   if(a==='save-guest'){f=ffsFit();if(!f)return;ffSave(f.key);ffsSaved('guest');return}
   if(a==='save-account'){
@@ -6903,7 +6941,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingRestock=null;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingRestock=null;pendingFfCta=false;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -6953,6 +6991,7 @@ if(p.type==='comparison'&&p.comparison&&Array.isArray(p.comparison.products)){pe
 if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
+if(p.type==='fitfinder_cta'){pendingFfCta=true}
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
 if(p.type==='restock_cta'){pendingRestock=cleanRestock(p)}
 if(p.type==='map_cta'){pendingMap=cleanMap(p)}
@@ -7089,6 +7128,7 @@ if(cleanText){
   /* The comparison table comes back with the chat too. */
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
   if(pendingForm)_saved.formCta=pendingForm;
+  if(pendingFfCta)_saved.ffCta=true;
   if(pendingMap)_saved.mapCta=pendingMap;
   if(pendingSizeIntro)_saved.sizeIntro=pendingSizeIntro;
   /* Everything else under the reply comes back with it too — the sign-in
@@ -7131,6 +7171,10 @@ if(pendingForm&&mDiv){
   var fcb=$('.ai-chat-msg-bubble',mDiv);
   if(fcb)fcb.insertAdjacentHTML('beforeend',formCtaHtml(pendingForm));
 }
+if(pendingFfCta&&mDiv&&ffNative()&&!savedFit()){
+  var ffcb=$('.ai-chat-msg-bubble',mDiv);
+  if(ffcb)ffcb.insertAdjacentHTML('beforeend',ffCtaHtml());
+}
 if(pendingMap&&mDiv){
   var mcb=$('.ai-chat-msg-bubble',mDiv);
   if(mcb)mcb.insertAdjacentHTML('beforeend',mapCtaHtml(pendingMap));
@@ -7143,7 +7187,7 @@ if(pendingSizeIntro&&mDiv){
   var tib=$('.ai-chat-msg-bubble',mDiv);
   if(tib)tib.insertAdjacentHTML('beforeend',sizeIntroHtml(pendingSizeIntro));
 }
-pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;
+pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingFfCta=false;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -7712,6 +7756,8 @@ var fitqBtn=e.target.closest('[data-fitq]');
 if(fitqBtn){e.preventDefault();e.stopPropagation();fitqToggle(fitqBtn);return;}
 var fitxBtn=e.target.closest('[data-fitx]');
 if(fitxBtn){e.preventDefault();e.stopPropagation();fitxOpen(fitxBtn);return;}
+var ffCtaBtn=e.target.closest('[data-ff-cta]');
+if(ffCtaBtn){e.preventDefault();if(!isStreaming)openFitFinder(ffCtaBtn,'chat');return;}
 var helperBtn=e.target.closest('[data-helper]');
 if(helperBtn){e.preventDefault();if(!isStreaming)startHelper(helperBtn.getAttribute('data-helper'));return;}
 var tfBtn=e.target.closest('[data-truefit]');
@@ -7798,6 +7844,7 @@ function restoreExtras(m,md,live){
   if(ch.length){add(choiceButtonsHtml(ch));var lc=b.querySelector('.ai-chat-choices:last-of-type');if(lc)initChoicesScroll(lc)}
   if(m.linkCTA&&m.linkCTA.url)add(ctaHtml(m.linkCTA));
   var sup=cleanSupport(m.support);if(sup)add(supportCtaHtml(sup));
+  if(m.ffCta&&ffNative()&&!savedFit())add(ffCtaHtml());
   var fc=m.formCta;
   if(fc&&/^[A-Za-z0-9]{4,32}$/.test(String(fc.form||'')))add(formCtaHtml({form:String(fc.form),label:String(fc.label||'').slice(0,40)||'Open the quiz'}));
   var mc=cleanMap(m.mapCta);if(mc)add(mapCtaHtml(mc));

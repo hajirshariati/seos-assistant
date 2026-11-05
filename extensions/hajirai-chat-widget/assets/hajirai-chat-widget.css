@@ -4004,6 +4004,32 @@ button.ai-chat-launcher__text {
 .ai-chat-panel[data-theme="dark"] .ai-chat-welcome__avatar.is-placeholder { background: var(--seos-ink); color: #0d0d12; }
 .ai-chat-panel[data-theme="dark"] .ai-chat-avatar-glow { opacity: 0.55; }
 .ai-chat-panel[data-theme="dark"] .ai-chat-fit-result { background: var(--seos-bg-raised); border-color: var(--seos-line); color: var(--seos-text); }
+/* FITFinder's card under a reply (open_fit_finder): the mark, the store's
+   line, the count of questions and an arrow — one tap opens the finder's
+   questions in the chat's sheet. The same quiet gradient as the FIT card. */
+.ai-chat-panel .ai-chat-ffcta { display: flex; align-items: center; gap: 12px; width: 100%; margin: 12px 0 4px; padding: 11px 12px 11px 11px; border: 1px solid var(--seos-line); border-radius: var(--seos-radius); background: linear-gradient(135deg, rgba(255, 79, 163, 0.07), rgba(163, 92, 255, 0.07) 40%, rgba(61, 123, 255, 0.07) 70%, rgba(41, 224, 208, 0.09)); color: var(--seos-text); font-family: var(--seos-font); text-align: left; cursor: pointer; box-sizing: border-box; transition: box-shadow .15s ease, transform .15s ease; }
+.ai-chat-panel .ai-chat-ffcta:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+.ai-chat-panel .ai-chat-ffcta:active { transform: scale(0.985); }
+.ai-chat-panel .ai-chat-ffcta:focus-visible { outline: 2px solid var(--seos-text); outline-offset: 2px; }
+.ai-chat-panel .ai-chat-ffcta__mark { flex: none; display: inline-flex; align-items: center; height: 40px; padding: 0 11px; border-radius: 12px; background: var(--seos-ink); color: #fff; font: 700 11px/1 var(--seos-font); letter-spacing: 0.08em; }
+.ai-chat-panel .ai-chat-ffcta__mark b { font-weight: 900; }
+.ai-chat-panel .ai-chat-ffcta__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.ai-chat-panel .ai-chat-ffcta__title { font: 600 14px/18px var(--seos-font); }
+.ai-chat-panel .ai-chat-ffcta__sub { font: 400 12px/16px var(--seos-font); color: var(--seos-text-2); }
+.ai-chat-panel .ai-chat-ffcta__go { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--seos-ink); color: #fff; }
+.ai-chat-panel .ai-chat-ffcta__go svg { width: 16px; height: 16px; }
+.ai-chat-panel[data-theme="dark"] .ai-chat-ffcta { background: var(--seos-bg-raised); border-color: var(--seos-line); }
+.ai-chat-panel[data-theme="dark"] .ai-chat-ffcta__mark, .ai-chat-panel[data-theme="dark"] .ai-chat-ffcta__go { color: #0d0d12; }
+@media (max-width: 480px) {
+  .ai-chat-panel .ai-chat-ffcta { gap: 10px; padding: 10px; }
+  .ai-chat-panel .ai-chat-ffcta__mark { height: 34px; padding: 0 8px; font-size: 10px; letter-spacing: 0.06em; border-radius: 10px; }
+  .ai-chat-panel .ai-chat-ffcta__title { font-size: 13.5px; line-height: 17px; }
+  .ai-chat-panel .ai-chat-ffcta__sub { font-size: 11.5px; line-height: 15px; }
+  .ai-chat-panel .ai-chat-ffcta__go { width: 26px; height: 26px; }
+}
+/* The finder opened from the chat: Submit in place of the result. */
+.ai-chat-panel .ai-ffs__submit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.ai-chat-panel .ai-ffs__submitnote { flex: 1 1 160px; font-size: 12px; line-height: 16px; color: var(--seos-text-2); }
 .ai-chat-panel[data-theme="dark"] .ai-chat-fit-result__badge { background: var(--seos-ink); color: #0d0d12; }
 /* Launcher: charcoal bar and bubble; the light reads richer with a soft atmosphere */
 .ai-chat-launcher[data-theme="dark"] {
