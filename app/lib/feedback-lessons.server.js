@@ -78,7 +78,7 @@ export async function draftLessons(shop, { apiKey, client, model = DEFAULT_MODEL
 
 // The daily run: every store with an AI key.
 export async function draftAllLessons() {
-  const shops = await prisma.shopConfig.findMany({ where: { anthropicApiKey: { not: null } }, select: { shop: true, anthropicApiKey: true } });
+  const shops = await prisma.shopConfig.findMany({ where: { anthropicApiKey: { not: "" } }, select: { shop: true, anthropicApiKey: true } });
   let drafted = 0;
   for (const s of shops) {
     if (!s.anthropicApiKey) continue;
