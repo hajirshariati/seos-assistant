@@ -66,6 +66,29 @@ export const PEAK_RINGS = ["fine", "regular", "bold"];
 export const PEAK_RING_WORDS = { fine: "Fine — as usual", regular: "Regular", bold: "Bold" };
 export const PEAK_DECORS = ["off", "lights"];
 export const PEAK_DECOR_WORDS = { off: "Nothing", lights: "A few points of light" };
+// Her look on every other day (Settings → Focus home → Her look): the same
+// colours, ring, lights and tint as peak days have, and whether the three
+// cards show above the bar while the chat is minimized (the mini home).
+// Stored as one JSON; nothing set → null for the widget (its built-in look).
+// On peak days the peak look stands in as a whole.
+export const HOME_LOOK_DEFAULT = { colors: [], ring: "fine", decor: "off", tint: false, mini: false };
+export function parseHomeLook(raw) {
+  const o = parseJson(raw);
+  const out = { ...HOME_LOOK_DEFAULT, colors: [] };
+  if (!o || typeof o !== "object") return out;
+  out.colors = cleanPeakColors(o.colors);
+  out.ring = PEAK_RINGS.includes(o.ring) ? o.ring : "fine";
+  out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : "off";
+  out.tint = o.tint === true;
+  out.mini = o.mini === true;
+  return out;
+}
+// For widget-config: the look when anything in it is set, else null.
+export function homeLookConfig(config = {}) {
+  const look = parseHomeLook(config.homeLook);
+  if (!look.colors.length && look.ring === "fine" && look.decor === "off" && !look.tint && !look.mini) return null;
+  return look;
+}
 const HEX = /^#[0-9a-f]{6}$/i;
 // Up to four colours, each a 6-digit hex (lowercase), in order; none → [].
 export function cleanPeakColors(list) {
@@ -87,7 +110,7 @@ const picture = (v) => appImageValue(v);
 // without a picture are dropped; the name is only for screen readers.
 export function parsePeakHome(raw) {
   const o = parseJson(raw);
-  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, blocks: [] };
+  const out = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, mini: false, blocks: [] };
   if (!o || typeof o !== "object") return out;
   out.avatar = picture(o.avatar);
   out.layout = PEAK_LAYOUTS.includes(o.layout) ? o.layout : "rail";
@@ -97,6 +120,8 @@ export function parsePeakHome(raw) {
   // Earlier days' choices (the ornaments "header"/"both", the "line") read as the lights, so a store that had them keeps a touch of gold.
   out.decor = PEAK_DECORS.includes(o.decor) ? o.decor : /^(header|both|line)$/.test(String(o.decor || "")) ? "lights" : "off";
   out.tint = o.tint === true;
+  // The three cards above the bar while the chat is minimized, on peak days.
+  out.mini = o.mini === true;
   const seen = new Set();
   for (const [i, b] of (Array.isArray(o.blocks) ? o.blocks : []).entries()) {
     if (!b || typeof b !== "object") continue;
@@ -171,9 +196,9 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
     ...(b.focus !== "center" ? { focus: b.focus } : {}),
     audience: b.audience, tag: b.tag,
   }));
-  const look = home.ring !== "fine" || home.decor !== "off" || home.tint;
+  const look = home.ring !== "fine" || home.decor !== "off" || home.tint || home.mini;
   if (!blocks.length && !home.avatar && !home.colors.length && !look) return null;
-  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, blocks };
+  return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, mini: home.mini, blocks };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.

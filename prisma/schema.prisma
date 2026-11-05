@@ -348,6 +348,8 @@ model ShopConfig {
   peakLiftDailyCap   Boolean   @default(true)
   peakPauseSync      Boolean   @default(true)
   peakHome           String    @default("{}")
+  // Settings → Focus home → Her look: colours, ring, lights, tint and the mini home on every other day (JSON).
+  homeLook           String    @default("{}")
   supportStaff       String    @default("[]") // the customer service team's emails: they see the Recordings page only (JSON) // the home on peak days: the assistant's peak picture and the promotion blocks (JSON)
 
   // Updated on each /widget-config call from the storefront, throttled to

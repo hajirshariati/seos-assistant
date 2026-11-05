@@ -2430,6 +2430,92 @@ body:has(cart-drawer.active, cart-drawer[open], #CartDrawer.active, #CartDrawer[
     left: 16px !important;
   }
 }
+
+/* ================================================================
+   THE MINI HOME — the three cards above the bar while the chat is
+   minimized (Settings → Focus home / Peak Mode → Show the three cards).
+   Part of the bar (so it fades, lifts and steps behind drawers with it),
+   sitting on its top edge, its width: a soft card holding three tiles,
+   each a picture (or line drawing), a small line and the card's name.
+   Gone with the bubble (every child but the orb is).
+   ================================================================ */
+.ai-chat-launcher .ai-chat-mini {
+  position: absolute;
+  left: -1px;  /* the bar's own edges (its border) */
+  right: -1px;
+  bottom: 100%;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 22px;
+  background: var(--ai-chat-bg, #fff);
+  border: 1px solid var(--seos-line, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 8px 28px rgba(13, 13, 18, 0.14), 0 1px 3px rgba(13, 13, 18, 0.08);
+  font-family: var(--seos-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  text-align: left;
+}
+.ai-chat-launcher .ai-chat-mini__tile {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 10px 7px 7px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--seos-surface, #f5f5f7);
+  color: var(--seos-text, #1d1d1f);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+@media (hover: hover) {
+  .ai-chat-launcher .ai-chat-mini__tile:hover { background: color-mix(in srgb, var(--seos-surface, #f5f5f7) 94%, var(--seos-text, #1d1d1f)); }
+}
+.ai-chat-launcher .ai-chat-mini__tile:active { transform: scale(0.97); }
+.ai-chat-launcher .ai-chat-mini__tile:focus-visible { outline: 2px solid var(--seos-text, #1d1d1f); outline-offset: 2px; }
+.ai-chat-launcher .ai-chat-mini__ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--seos-surface, #f5f5f7) 90%, var(--seos-text, #1d1d1f));
+  color: var(--seos-text, #1d1d1f);
+}
+.ai-chat-launcher .ai-chat-mini__ico.has-pic { background: transparent; }
+.ai-chat-launcher .ai-chat-mini__ico img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ai-chat-launcher .ai-chat-mini__ico svg { width: 20px; height: 20px; }
+.ai-chat-launcher .ai-chat-mini__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ai-chat-launcher .ai-chat-mini__eyebrow { font: 500 10.5px/13px var(--seos-font, inherit); color: var(--seos-text-2, #6e6e73); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-chat-launcher .ai-chat-mini__title { font: 600 13px/16px var(--seos-font, inherit); color: var(--seos-text, #1d1d1f); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) {
+  .ai-chat-launcher .ai-chat-mini { gap: 5px; padding: 5px; border-radius: 20px; }
+  .ai-chat-launcher .ai-chat-mini__tile { flex-direction: column; align-items: center; gap: 5px; padding: 8px 4px 7px; border-radius: 15px; }
+  .ai-chat-launcher .ai-chat-mini__eyebrow { display: none; }
+  .ai-chat-launcher .ai-chat-mini__text { align-items: center; max-width: 100%; }
+  .ai-chat-launcher .ai-chat-mini__title { font-size: 12px; max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-launcher .ai-chat-mini__tile { transition: none; }
+  .ai-chat-launcher .ai-chat-mini__tile:active { transform: none; }
+}
+/* The bar clips its orb's lights to its rounded end (overflow: hidden, below);
+   with the row above it that clip would take the row too, so the bar lets
+   go and the orb's box clips its lights to the same rounded end itself
+   (the bar's padding box — 6px above and below, 16px at the left). */
+.ai-chat-launcher.has-mini:not(.is-bubble) { overflow: visible; }
+.ai-chat-launcher.has-mini:not(.is-bubble) .ai-chat-launcher__icon.is-orb { clip-path: inset(-6px -600px -6px -16px round 24px); }
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-orb-glow,
   .ai-chat-launcher.is-bubble .ai-chat-launcher__orb svg,
@@ -7790,9 +7876,10 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-deco .d-light { opacity: 0.2; transform-box: fill-box; transform-origin: center; animation: aiDecoLight var(--t, 7s) ease-in-out var(--d, 0s) infinite; }
 @keyframes aiDecoLight { 0%, 100% { opacity: 0.18; transform: translateY(0); } 50% { opacity: 0.95; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .ai-chat-panel .ai-chat-deco .d-light { animation: none; opacity: 0.6; } }
-/* On peak days the header's straight grey line is gone at home — with or
-   without the lights (important, as the dark theme's border is). */
-.ai-chat-panel[data-peak].is-home .ai-chat-header { border-bottom-color: transparent !important; }
+/* The tint takes the header's straight grey line with it at home — on peak
+   days and every other day alike; without the tint the line stays
+   (important, as the dark theme's border is). */
+.ai-chat-panel[data-peak-tint="1"].is-home .ai-chat-header { border-bottom-color: transparent !important; }
 /* No lights on phones: the header has no room for them there. */
 @media (max-width: 480px) { .ai-chat-panel .ai-chat-deco--lights { display: none !important; } }
 /* The tint is painted once, over the whole box: repeated, its first row

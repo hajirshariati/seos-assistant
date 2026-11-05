@@ -24,6 +24,7 @@ import {
   Icon,
   Modal,
   Spinner,
+  Checkbox,
 } from "@shopify/polaris";
 import {
   MagicIcon,
@@ -57,7 +58,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, parseHomeLook, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -220,6 +221,8 @@ export const loader = async ({ request }) => {
     peakPauseSync: config.peakPauseSync !== false,
     // The home on peak days (promotion blocks, the peak picture).
     peakHome: parsePeakHome(config.peakHome),
+    // Her look on every other day (Focus home): colours, ring, lights, tint, the mini home.
+    homeLook: parseHomeLook(config.homeLook),
     peakPreviewUrl: previewUrl(storeUrl, session.shop),
     supportStaff: parseSupportStaff(config.supportStaff),
     limitsOverridden: storeChatLimits(config, { env: process.env }).overridden,
@@ -398,6 +401,10 @@ export const action = async ({ request }) => {
   bool("returnsDeliveredOnly");
   bool("returnsCardOn");
   bool("focusCollectionsOn");
+  const homeLookRaw = formData.get("homeLook");
+  if (homeLookRaw !== null) {
+    try { data.homeLook = JSON.stringify(parseHomeLook(JSON.parse(homeLookRaw))); } catch { /* ignore invalid JSON */ }
+  }
   // Return rules (mirrored from AfterShip): the lists as JSON, made safe.
   const rulesRaw = formData.get("returnRules");
   if (rulesRaw !== null) {
@@ -641,7 +648,7 @@ const FIELDS = {
   homeCountries: ["visibility"], hideOnUrls: ["visibility", "json"], hideLiveChatButton: ["visibility", "bool"],
   supportUrl: ["care"], supportLabel: ["care"], supportHours: ["care"], supportPhone: ["care"], supportEmail: ["care"], supportReplyTime: ["care"], trackingPageUrl: ["care"], returnsPageUrl: ["care"],
   rewardsCard: ["tools", "json"],
-  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], focusCollectionsOn: ["look", "bool"], returnRules: ["care", "json"],
+  returnsInChat: ["care", "bool"], returnWindowDays: ["care"], returnsDeliveredOnly: ["care", "bool"], guestOrderLookup: ["care", "bool"], returnsCardOn: ["care", "bool"], focusCollectionsOn: ["look", "bool"], homeLook: ["look", "json"], returnRules: ["care", "json"],
   promoPageUrl: ["tools"], promoPageStop: ["tools"], promoMemoryDays: ["tools"], styleMemoryDays: ["tools"], dealsCardOn: ["tools", "bool"], dealsUrl: ["tools"], whichOrthotic: ["tools"], whichOrthoticLabel: ["tools"],
   storeLocatorMapId: ["tools"], storeLocatorLabel: ["tools"], storeLocatorUrl: ["tools"], storeLocatorStores: ["tools"],
   feedbackSurveyOn: ["tools", "bool"], feedbackSurvey: ["tools"], feedbackSurveyLabel: ["tools"],
@@ -1033,9 +1040,10 @@ function LookSection({ d, values, set }) {
               <TextField label="Chat name" value={values.textName} onChange={set("textName")} placeholder={tp("name")} maxLength={TEXT_MAX.name} autoComplete="off" helpText="At the top of the chat. In its replies, AVA always introduces itself as Ava, the Aetrex Virtual Assistant." />
               <TextField label="Under the chat name" value={values.textNameSub} onChange={set("textNameSub")} placeholder="Optional, e.g. Aetrex Virtual Assistant" maxLength={TEXT_MAX.nameSub} autoComplete="off" helpText="A smaller gray line under the name. Left blank, the header shows just the name." />
             </div>
-            <div className="set-grid">
-              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={tp("greeting")} maxLength={TEXT_MAX.greeting} autoComplete="off" helpText="The header's words at home, beside Ava's face, until a chat starts." />
-              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={tp("greetingLoggedIn")} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="The same, for signed-in shoppers; {name} becomes their first name." />
+            <div className="set-grid set-grid--3">
+              <TextField label="Welcome greeting" value={values.textGreeting} onChange={set("textGreeting")} placeholder={tp("greeting")} maxLength={TEXT_MAX.greeting} autoComplete="off" helpText="The header's words at home, beside Ava's face, until a chat starts. On computers, and on phones unless the next field is set." />
+              <TextField label="Welcome greeting on phones" value={values.textGreetingPhone} onChange={set("textGreetingPhone")} placeholder={values.textGreeting || tp("greeting")} maxLength={TEXT_MAX.greetingPhone} autoComplete="off" helpText="A shorter one for phone screens. Left blank, phones show the greeting too." />
+              <TextField label="Welcome greeting, signed in" value={values.textGreetingLoggedIn} onChange={set("textGreetingLoggedIn")} placeholder={tp("greetingLoggedIn")} maxLength={TEXT_MAX.greetingLoggedIn} autoComplete="off" helpText="For signed-in shoppers, on every screen; {name} becomes their first name." />
             </div>
             <div className="set-grid">
               <TextField label="Line under the greeting" value={values.textGreetingCta} onChange={set("textGreetingCta")} placeholder={tp("greetingCta")} maxLength={TEXT_MAX.greetingCta} autoComplete="off" helpText="The gray line under the greeting; it slides through other languages when that's on." />
@@ -1091,6 +1099,9 @@ function LookSection({ d, values, set }) {
             <FocusPicture kind="footwear" initial={d.focusFootwearImage} />
             <FocusPicture kind="orthotics" initial={d.focusOrthoticsImage} />
           </BlockStack>
+        </Row>
+        <Row stack help="Her look on every other day — the same choices Peak Mode has for peak days. Left as they are, the chat keeps its usual look. While Peak Mode is on, the peak look is used instead, as a whole.">
+          <LookEditor value={values.homeLook} onChange={set("homeLook")} />
         </Row>
       </Group>
       <OrbColorsCard initial={d.orbColors} initialBg={d.orbBackground} initialMark={d.launcherMark} initialText={d.launcherText} avatarUrl={d.avatarUrl} avatarState={d.avatarState} launcherPrompt={values.textLauncher || TEXT_DEFAULT.launcher} />
@@ -1542,29 +1553,24 @@ function AnchorPicker({ image, video, shape, value, onChange }) {
     </div>
   );
 }
-function PeakHomeEditor({ value, onChange }) {
-  const v = value && typeof value === "object" && !Array.isArray(value) ? value : { avatar: "", blocks: [] };
-  const blocks = Array.isArray(v.blocks) ? v.blocks : [];
-  const up = (patch) => onChange({ ...v, blocks, ...patch });
-  const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
-  const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
-  const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
-  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", video: "", focus: "center", audience: "all", tag: "" }] }); };
-  const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
-  const layout = PEAK_LAYOUTS.includes(v.layout) ? v.layout : "rail";
-  const shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, v.shape) ? v.shape : "wide";
+// Her look — on peak days (the Peak Mode editor) or every other day (Focus
+// home): the colours, the ring, the lights, the tint, and the mini home (the
+// three cards above the chat bar while the chat is minimized). `value` is the
+// whole saved object; the editor hands back the same object with its part
+// changed, so the peak editor's pictures ride along untouched.
+function LookEditor({ value, onChange, peak = false }) {
+  const v = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const up = (patch) => onChange({ ...v, ...patch });
   // Her colours: the set that matches what's saved, else the store's own.
   const colors = cleanPeakColors(v.colors);
   const setId = (PEAK_COLOR_SETS.find((c) => c.colors.join() === colors.join()) || { id: "own" }).id;
   const pickOwn = () => up({ colors: colors.length ? colors : PEAK_COLOR_SETS[1].colors });
   const setColor = (i, hex) => { const next = (colors.length ? colors : PEAK_COLOR_SETS[1].colors).slice(); while (next.length < PEAK_COLORS_MAX) next.push(next[next.length - 1]); next[i] = hex; up({ colors: next }); };
   const ownAt = (i) => colors[i] || colors[colors.length - 1] || "#ffffff";
-  const shapeWords = { wide: "wide (16 : 9)", standard: "standard (4 : 3)", square: "square" }[shape];
   return (
     <BlockStack gap="400">
-      <PeakPicture round image={v.avatar || ""} onChange={(avatar) => up({ avatar })} title="The assistant's peak picture" hint="Shown in place of her usual picture while Peak Mode is on — a festive version of the same face. Square, at least 320px." size={480} />
       <div className="set-peak-colors">
-        <Text as="p" variant="bodyMd" fontWeight="semibold">Her colours on peak days</Text>
+        <Text as="p" variant="bodyMd" fontWeight="semibold">{peak ? "Her colours on peak days" : "Her colours"}</Text>
         <Text as="p" variant="bodySm" tone="subdued">The glow around her face, the ring and the line under the header — usually pink, violet, blue and teal. Pick a set, or your own four.</Text>
         <div className="set-palettes" role="group" aria-label="Colour sets">
           {PEAK_COLOR_SETS.map((c) => (
@@ -1593,9 +1599,30 @@ function PeakHomeEditor({ value, onChange }) {
       </div>
       <div className="set-grid set-grid--3">
         <Select label="The ring around her face" options={PEAK_RINGS.map((k) => ({ value: k, label: PEAK_RING_WORDS[k] }))} value={PEAK_RINGS.includes(v.ring) ? v.ring : "fine"} onChange={(x) => up({ ring: x })} helpText="Heavier reads as a band of colour; the glow follows." />
-        <Select label="Under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="On peak days the straight grey line under the header is gone at home. This adds, in the open space at the right of the header, a few small points of the set's third colour, drifting and twinkling slowly — over nothing. Not on phones." />
-        <Select label="Tint behind the header" options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot." />
+        <Select label="Under the header" options={PEAK_DECORS.map((k) => ({ value: k, label: PEAK_DECOR_WORDS[k] }))} value={PEAK_DECORS.includes(v.decor) ? v.decor : "off"} onChange={(x) => up({ decor: x })} helpText="A few small points of the set's third colour in the open space at the right of the header, drifting and twinkling slowly. None on phones, where the header has no room." />
+        <Select label="Tint behind the header" options={[{ value: "off", label: "Off — the grey line stays" }, { value: "on", label: "On — no grey line" }]} value={v.tint === true ? "on" : "off"} onChange={(x) => up({ tint: x === "on" })} helpText="A breath of the first colour behind her name, gone by the header's foot. With it on, the straight grey line under the header goes at home; off, the line stays as usual." />
       </div>
+      <Checkbox label="Show the three cards while the chat is minimized" checked={v.mini === true} onChange={(x) => up({ mini: x })} helpText="Foot pain, Footwear and Orthotics as a small row above the chat bar on every page, each opening the chat on that card. Gone once the bar is folded into the bubble." />
+    </BlockStack>
+  );
+}
+
+function PeakHomeEditor({ value, onChange }) {
+  const v = value && typeof value === "object" && !Array.isArray(value) ? value : { avatar: "", blocks: [] };
+  const blocks = Array.isArray(v.blocks) ? v.blocks : [];
+  const up = (patch) => onChange({ ...v, blocks, ...patch });
+  const setBlock = (i, patch) => up({ blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const next = blocks.slice(); [next[i], next[j]] = [next[j], next[i]]; up({ blocks: next }); };
+  const remove = (i) => up({ blocks: blocks.filter((_, j) => j !== i) });
+  const add = () => { if (blocks.length >= PEAK_BLOCKS_MAX) return; up({ blocks: [...blocks, { id: `b${Date.now().toString(36).slice(-6)}`, title: "", kind: "link", url: "", message: "", image: "", video: "", focus: "center", audience: "all", tag: "" }] }); };
+  const audienceOptions = Object.entries(PEAK_AUDIENCE_WORDS).map(([value, label]) => ({ value, label }));
+  const layout = PEAK_LAYOUTS.includes(v.layout) ? v.layout : "rail";
+  const shape = Object.prototype.hasOwnProperty.call(PEAK_SHAPES, v.shape) ? v.shape : "wide";
+  const shapeWords = { wide: "wide (16 : 9)", standard: "standard (4 : 3)", square: "square" }[shape];
+  return (
+    <BlockStack gap="400">
+      <PeakPicture round image={v.avatar || ""} onChange={(avatar) => up({ avatar })} title="The assistant's peak picture" hint="Shown in place of her usual picture while Peak Mode is on — a festive version of the same face. Square, at least 320px." size={480} />
+      <LookEditor value={v} onChange={(next) => up(next)} peak />
       <div className="set-grid">
         <Select label="How the pictures sit" options={PEAK_LAYOUTS.map((k) => ({ value: k, label: PEAK_LAYOUT_WORDS[k] }))} value={layout} onChange={(x) => up({ layout: x })} helpText={layout === "rail" ? "Two and a half in view on a computer, one and a quarter on a phone; the rest a swipe away, no arrows." : layout === "mosaic" ? "The first picture big, the others around it — three to six look best." : "Two to a row, all the same size."} />
         <Select label="Their shape" options={Object.keys(PEAK_SHAPES).map((k) => ({ value: k, label: PEAK_SHAPE_WORDS[k] }))} value={shape} onChange={(x) => up({ shape: x })} helpText="Every picture is cropped to this shape, centred." />

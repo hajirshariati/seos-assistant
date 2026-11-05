@@ -3816,6 +3816,117 @@ for (const coop of ["1", "2"]) {
       const classic = await cl.page.evaluate(() => ({ peak: document.querySelectorAll(".ai-chat-welcome .ai-chat-peak__tile").length, banner: !!document.querySelector(".ai-chat-welcome__banner"), avatar: document.querySelector(".ai-chat-welcome__avatar img")?.getAttribute("src") || "", glow: getComputedStyle(document.querySelector(".ai-chat-avatar-glow")).backgroundImage }));
       check("peak home (classic layout): the pictures in place of the banner there too, the peak picture on the welcome, her colours on the glow around it", classic.peak === 2 && !classic.banner && /pic-orthotics/.test(classic.avatar) && /rgb\(212, 43, 58\)/.test(classic.glow), JSON.stringify({ ...classic, glow: classic.glow.slice(0, 80) }));
       await cl.ctx.close();
+      // Peak Mode with the tint off: the header's straight grey line stays at home (the tint is what takes it away).
+      const pt = await open("/full?home=focus&pk=1&pkt=0&login=Ann&tags=vip");
+      const ptl = await pt.page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { peak: p.getAttribute("data-peak"), tint: p.getAttribute("data-peak-tint"), grey: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor, home: p.classList.contains("is-home"), k: p.style.getPropertyValue("--ai-ring-k") }; });
+      check("peak home (tint off): the straight grey line under the header stays at home — her colours, the bold ring and the lights still on", ptl.peak === "1" && !ptl.tint && ptl.home && !/rgba\(.*, 0\)|transparent/.test(ptl.grey) && ptl.k === "2.8", JSON.stringify(ptl));
+      await pt.ctx.close();
+    }
+    // Settings → Focus home → Her look (every other day, Peak Mode off): the same colours, ring, lights and tint as peak days have — the winter blue on the glow, the ring and the line, a regular ring, the lights; the tint off, so the grey line stays; the tint on, and it goes.
+    {
+      const lk = await open("/full?home=focus&look=1&lkd=1&banner=1");
+      const lkl = await lk.page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); const hdr = document.querySelector(".ai-chat-header"); const l = document.querySelector(".ai-chat-launcher"); const box = hdr.querySelector(".ai-chat-deco--lights"); return { peak: p.getAttribute("data-peak"), k: p.style.getPropertyValue("--ai-ring-k"), glow: p.style.getPropertyValue("--ai-glow-1"), lglow: l.style.getPropertyValue("--ai-glow-1"), stop: document.querySelector("#ai-chat-band-g stop")?.getAttribute("stop-color"), halo: getComputedStyle(document.querySelector(".ai-chat-hero__halo")).backgroundImage, decor: p.getAttribute("data-peak-decor"), lights: box ? box.querySelectorAll(".d-light").length : 0, tint: p.getAttribute("data-peak-tint"), grey: getComputedStyle(hdr).borderBottomColor, banner: !!document.querySelector(".ai-chat-welcome__banner"), peakTiles: document.querySelectorAll(".ai-chat-peak__tile").length, home: p.classList.contains("is-home"), avatar: document.querySelector(".ai-chat-hero__photo img, .ai-chat-header__avatar img")?.getAttribute("src") || "" }; });
+      check("her look (every other day): the winter blue on the glow around her face, the ring, the line and the bar's glow; a regular ring; the points of light — with no peak marking, the banner in place, her usual picture; the tint off, so the straight grey line under the header stays", !lkl.peak && lkl.k === "1.8" && lkl.glow === "#8fd3ff" && lkl.lglow === "#8fd3ff" && lkl.stop === "#8fd3ff" && /rgb\(143, 211, 255\)/.test(lkl.halo) && lkl.decor === "lights" && lkl.lights === 8 && !lkl.tint && !/rgba\(.*, 0\)|transparent/.test(lkl.grey) && lkl.banner && lkl.peakTiles === 0 && lkl.home && !/pic-orthotics/.test(lkl.avatar), JSON.stringify(lkl));
+      check("her look: no JS errors", lk.errors.length === 0, lk.errors.join(" | "));
+      await lk.ctx.close();
+      const lt = await open("/full?home=focus&look=1&lkt=1");
+      const ltl = await lt.page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); const hdr = document.querySelector(".ai-chat-header"); return { peak: p.getAttribute("data-peak"), tint: p.getAttribute("data-peak-tint"), hbg: getComputedStyle(hdr).backgroundImage, grey: getComputedStyle(hdr).borderBottomColor, decor: p.getAttribute("data-peak-decor"), home: p.classList.contains("is-home") }; });
+      check("her look (tint on): a breath of the first colour behind the header, and the straight grey line is gone at home — no lights unless asked", !ltl.peak && ltl.tint === "1" && ltl.hbg !== "none" && /143, 211, 255|0\.8\d* 0\.8\d* 1/.test(ltl.hbg) && /rgba\(.*, 0\)|transparent/.test(ltl.grey) && !ltl.decor && ltl.home, JSON.stringify(ltl));
+      // Once a chat starts the page's look is the chat's own: the tint stays with the header, the home marking goes.
+      await startChat(lt.page);
+      await lt.page.waitForTimeout(1500);
+      const ltc = await lt.page.evaluate(() => ({ home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), grey: getComputedStyle(document.querySelector(".ai-chat-header")).borderBottomColor }));
+      check("her look (tint on, in a chat): the home is left, the header's foot as the chat has it", !ltc.home, JSON.stringify(ltc));
+      await lt.ctx.close();
+      // A page remembers the look: the next page starts with it before the settings are read again.
+      const rm = await open("/full?home=focus&look=1");
+      await rm.page.goto("http://localhost:4789/full?home=focus&look=1");
+      const early = await rm.page.evaluate(() => { const p = document.querySelector(".ai-chat-panel"); return { k: p.style.getPropertyValue("--ai-ring-k"), glow: p.style.getPropertyValue("--ai-glow-1"), kept: localStorage.getItem("hajirai_look") }; });
+      check("her look: remembered for the next page — the ring and the colours are there from the first paint", early.k === "1.8" && early.glow === "#8fd3ff" && /8fd3ff/.test(early.kept || ""), JSON.stringify(early));
+      await rm.ctx.close();
+    }
+    // The mini home (Settings → Focus home / Peak Mode → Show the three cards while the chat is minimized): the three cards as a row above the chat bar, the bar's width, each opening the chat on its sheet; gone with the bubble; back when the chat closes; none without the setting.
+    {
+      const readMini = (page) => page.evaluate(() => {
+        const l = document.querySelector(".ai-chat-launcher"); const m = l.querySelector(".ai-chat-mini"); const lr = l.getBoundingClientRect();
+        const tiles = m ? [...m.querySelectorAll(".ai-chat-mini__tile")] : [];
+        const mr = m ? m.getBoundingClientRect() : null; const cs = m ? getComputedStyle(m) : null;
+        return { has: !!m, shown: !!m && cs.display !== "none" && cs.visibility !== "hidden" && parseFloat(getComputedStyle(l).opacity) > 0.5 && mr.height > 0, n: tiles.length,
+          labels: tiles.map((t) => t.getAttribute("aria-label")), kinds: tiles.map((t) => t.getAttribute("data-mini")), titles: tiles.map((t) => t.querySelector(".ai-chat-mini__title").textContent), eyebrowShown: tiles.map((t) => getComputedStyle(t.querySelector(".ai-chat-mini__eyebrow")).display !== "none"),
+          oneRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().top))).size <= 1, buttons: tiles.every((t) => t.tagName === "BUTTON" && t.getAttribute("aria-haspopup") === "dialog"),
+          aligned: !!mr && Math.abs(mr.left - lr.left) <= 1 && Math.abs(mr.right - lr.right) <= 1, above: !!mr && mr.bottom < lr.top && lr.top - mr.bottom >= 8 && lr.top - mr.bottom <= 14, inside: !!mr && mr.left >= 0 && mr.right <= window.innerWidth && mr.top >= 0,
+          pics: tiles.map((t) => !!t.querySelector(".ai-chat-mini__ico img")), icons: tiles.map((t) => !!t.querySelector(".ai-chat-mini__ico svg")), bubble: l.classList.contains("is-bubble"), open: document.querySelector(".ai-chat-panel").classList.contains("open") };
+      });
+      const mk = async (url, opts = {}) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, ...opts }); const page = await ctx.newPage(); const errors = []; page.on("pageerror", (e) => errors.push(e.message)); await page.goto("http://localhost:4789" + url); await page.waitForFunction(() => !!document.querySelector(".ai-chat-launcher .ai-chat-mini"), null, { timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); return { ctx, page, errors }; };
+      const mn = await mk("/full?home=focus&mini=1&pics=1&texts=home");
+      const m1 = await readMini(mn.page);
+      check("mini home (computer): the three cards as one row above the chat bar — the bar's width, a little over it, inside the screen — each a button with its picture, its small line and its name in the store's words, read out as one line", m1.shown && m1.n === 3 && m1.kinds.join() === "pain,footwear,orthotics" && m1.oneRow && m1.buttons && m1.aligned && m1.above && m1.inside && m1.titles.join("|") === "Pain help|Shoes|Orthotics" && m1.labels[0] === "Sore feet? Pain help" && m1.eyebrowShown.every(Boolean) && m1.pics.every(Boolean) && !m1.bubble && !m1.open, JSON.stringify(m1));
+      // A tap on Footwear: the chat opens on the Footwear sheet, the row away with the bar.
+      await mn.page.click('.ai-chat-mini__tile[data-mini="footwear"]');
+      await mn.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
+      await mn.page.waitForTimeout(900);
+      const m2 = await mn.page.evaluate(() => { const l = document.querySelector(".ai-chat-launcher"); const sh = document.querySelector(".ai-chat-focus-sheet"); return { open: document.querySelector(".ai-chat-panel").classList.contains("open"), home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), sheet: sh ? sh.getAttribute("data-kind") : "", sheetOpen: !!sh && sh.classList.contains("is-open"), barHidden: l.classList.contains("hidden") && parseFloat(getComputedStyle(l).opacity) < 0.05, inert: l.inert === true, focusIn: !!sh && sh.contains(document.activeElement) }; });
+      check("mini home: a tap on Footwear opens the chat at home with the Footwear sheet up, the focus in the sheet (not stolen by the message box), the bar and its row gone while the chat is open", m2.open && m2.home && m2.sheet === "footwear" && m2.sheetOpen && m2.barHidden && m2.inert && m2.focusIn, JSON.stringify(m2));
+      await mn.page.click(".ai-chat-focus-sheet__close");
+      await mn.page.waitForTimeout(400);
+      await mn.page.click(".ai-chat-close-btn");
+      await mn.page.waitForTimeout(700);
+      const m3 = await readMini(mn.page);
+      check("mini home: the chat closed, the row is back above the bar", m3.shown && m3.n === 3 && !m3.open, JSON.stringify(m3));
+      // The × folds the bar into the bubble: the row goes with it; the bubble tapped, the chat opens as always.
+      await mn.page.click(".ai-chat-launcher__close");
+      await mn.page.waitForTimeout(900);
+      const m4 = await readMini(mn.page);
+      check("mini home: folded into the bubble, the row is gone", m4.bubble && !m4.shown, JSON.stringify(m4));
+      check("mini home: no JS errors", mn.errors.length === 0, mn.errors.join(" | "));
+      await mn.ctx.close();
+      // Keyboard: Tab reaches the cards; Enter on one opens its sheet (and doesn't also open the chat twice).
+      const kb = await mk("/full?home=focus&mini=1");
+      await kb.page.focus('.ai-chat-mini__tile[data-mini="orthotics"]');
+      await kb.page.keyboard.press("Enter");
+      await kb.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
+      await kb.page.waitForTimeout(600);
+      const k1 = await kb.page.evaluate(() => ({ open: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: document.querySelector(".ai-chat-focus-sheet")?.getAttribute("data-kind") || "", sheets: document.querySelectorAll(".ai-chat-focus-sheet").length }));
+      check("mini home (keyboard): Enter on a card opens the chat on that card's sheet, once", k1.open && k1.sheet === "orthotics" && k1.sheets === 1, JSON.stringify(k1));
+      await kb.ctx.close();
+      // Without the setting: no row. With Peak Mode's own switch: the row on peak days.
+      const no = await mk("/full?home=focus&look=1");
+      const m5 = await readMini(no.page);
+      check("mini home: none without the setting (her look alone doesn't bring it)", !m5.has, JSON.stringify(m5));
+      await no.ctx.close();
+      const pk = await mk("/full?home=focus&pk=1&pkm=1");
+      const m6 = await readMini(pk.page);
+      check("mini home (peak days): the Peak Mode switch brings the row — the built-in heel picture on Foot pain, line drawings where the other cards have no pictures", m6.shown && m6.n === 3 && m6.pics.join() === "true,false,false" && m6.icons.join() === "false,true,true" && m6.titles.join("|") === "Foot pain|Footwear|Orthotics", JSON.stringify(m6));
+      await pk.ctx.close();
+      // Phones: the three side by side, picture over name (no small line), the bar's full width, inside the screen.
+      const ph = await mk("/full?home=focus&mini=1&pics=1", { viewport: { width: 390, height: 760 } });
+      const m7 = await readMini(ph.page);
+      const phw = await ph.page.evaluate(() => { const m = document.querySelector(".ai-chat-mini").getBoundingClientRect(); const t = [...document.querySelectorAll(".ai-chat-mini__tile")].map((x) => x.getBoundingClientRect()); return { w: m.width, vw: window.innerWidth, tiles: t.map((r) => Math.round(r.width)), stacked: t.every((r) => r.height > 50) }; });
+      check("mini home (phone): three side by side across the bar's width, inside the screen, picture over name, no small line", m7.shown && m7.n === 3 && m7.oneRow && m7.aligned && m7.inside && m7.eyebrowShown.every((x) => !x) && phw.w >= phw.vw - 26 && phw.tiles.every((w) => w > 100) && phw.stacked, JSON.stringify({ m7, phw }));
+      await ph.page.click('.ai-chat-mini__tile[data-mini="pain"]');
+      await ph.page.waitForSelector(".ai-chat-focus-sheet.is-open", { timeout: 3000 }).catch(() => {});
+      await ph.page.waitForTimeout(700);
+      const m8 = await ph.page.evaluate(() => ({ open: document.querySelector(".ai-chat-panel").classList.contains("open"), sheet: document.querySelector(".ai-chat-focus-sheet")?.getAttribute("data-kind") || "" }));
+      check("mini home (phone): a tap on Foot pain opens the chat on the Foot pain sheet", m8.open && m8.sheet === "pain", JSON.stringify(m8));
+      await ph.ctx.close();
+    }
+    // Settings → Chat text → Welcome greeting on phones: phones show it in the header at home; computers keep the greeting; a signed-in shopper's greeting still wins on both.
+    {
+      const title = (page) => page.evaluate(() => document.querySelector(".ai-chat-header__title--home")?.textContent || "");
+      const gd = await open("/full?home=focus&texts=home");
+      const gdt = await title(gd.page);
+      await gd.ctx.close();
+      const gp = await open("/full?home=focus&texts=home", { viewport: { width: 390, height: 760 } });
+      const gpt = await title(gp.page);
+      // The screen widens past the phone line: the greeting follows.
+      await gp.page.setViewportSize({ width: 1280, height: 860 });
+      await gp.page.waitForTimeout(300);
+      const gpw = await title(gp.page);
+      await gp.ctx.close();
+      const gs = await open("/full?home=focus&texts=home&login=Ann", { viewport: { width: 390, height: 760 } });
+      const gst = await title(gs.page);
+      await gs.ctx.close();
+      check("greeting on phones: the phone greeting in the header at home on a phone, the greeting on a computer (and once the window widens), the signed-in greeting for a known shopper on both", gpt === "Hi! Let’s find your fit." && gdt === "Hi! I'm your personal shopping assistant." && gpw === gdt && /Ann/.test(gst), JSON.stringify({ gdt, gpt, gpw, gst }));
     }
     // Phones: the sheets' helper rows stay side by side — two to a row — and on a very narrow phone the row scrolls sideways rather than stacking them.
     for (const w of [390, 320]) {

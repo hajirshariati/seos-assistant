@@ -88,6 +88,9 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
   var _pk=d.peak&&typeof d.peak==='object'?d.peak:null,_pkWas=JSON.stringify(PEAK);
   try{if(_pk)sessionStorage.setItem(PEAK_KEY,JSON.stringify(_pk));else sessionStorage.removeItem(PEAK_KEY)}catch(e){}
   if(JSON.stringify(_pk)!==_pkWas){PEAK=_pk;applyPeakColors();setAvatar(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar)?PEAK.avatar:AVATAR_USUAL);if(typeof msgsEl!=='undefined'&&msgsEl&&msgsEl.classList.contains('is-welcome')&&typeof buildWelcome==='function')buildWelcome()}
+  var _hl=d.homeLook&&typeof d.homeLook==='object'?d.homeLook:null,_hlWas=JSON.stringify(HOME_LOOK);
+  try{if(_hl)localStorage.setItem(LOOK_KEY,JSON.stringify(_hl));else localStorage.removeItem(LOOK_KEY)}catch(e){}
+  if(JSON.stringify(_hl)!==_hlWas){HOME_LOOK=_hl;applyPeakColors()}
   if(RETURNS&&RETURNS.pages&&!Object.keys(ordPages).length)ordPages=cleanPages(RETURNS.pages);
   /* The home's links row may already be drawn: give it the My rewards button.
      And a restored chat's cards, drawn before these settings arrived, go in now. */
@@ -113,7 +116,7 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
     if(was!==[FB_ON,FB_FORM,FB_LABEL,FB_COLOR,FB_ICON,FB_HIDE_AFTER].join('|')&&typeof refreshWelcomeCtas==='function')refreshWelcomeCtas();
   }
   if(d.chatTexts&&typeof d.chatTexts==='object'){
-    var txtNow=function(){return [NAME,NAME_SUB,GREET,GREET_LOGGED,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL,GREETCTA,DISCL,JSON.stringify(FT)].join('|')},txtWas=txtNow(),inWas=IPLACE;
+    var txtNow=function(){return [NAME,NAME_SUB,GREET,GREET_LOGGED,GREET_PHONE,LPLACE,IPLACE,START_LBL,POP_LBL,FIT_LBL,GREETCTA,DISCL,JSON.stringify(FT)].join('|')},txtWas=txtNow(),inWas=IPLACE;
     try{localStorage.setItem(TXT_KEY,JSON.stringify(d.chatTexts))}catch(e){}
     setTexts(d.chatTexts);
     if(txtWas!==txtNow()&&typeof refreshTexts==='function')refreshTexts(inWas);
@@ -171,6 +174,8 @@ fetch(CONFIG_URL+'?cta='+encodeURIComponent(C.greetingCta||'What can I help you 
 var SHOP=C.shopDomain||'';
 var GREET=C.greeting||'Hi! I\'m your personal shopping assistant.';
 var GREET_LOGGED=C.greetingLoggedIn||'';
+/* Settings → Chat text → Welcome greeting on phones (blank: the greeting). */
+var GREET_PHONE='';
 var GREETCTA=C.greetingCta||'What can I help you find today?';
 var AVATAR=C.avatarUrl||'';
 /* Peak Mode's home (Settings → Peak Mode → The home on peak days): the
@@ -178,6 +183,14 @@ var AVATAR=C.avatarUrl||'';
    the session so the home opens with them (no banner flashing first). */
 var PEAK_KEY='hajirai_peak',PEAK=null;
 try{PEAK=JSON.parse(sessionStorage.getItem(PEAK_KEY)||'null');if(PEAK&&typeof PEAK!=='object')PEAK=null}catch(e){PEAK=null}
+/* Her look on every other day (Settings → Focus home → Her look): the
+   colours, ring, lights and tint as peak days have them, and the mini home
+   (the three cards above the bar while the chat is minimized) — kept across
+   pages so a page starts with them. On peak days the peak look stands in
+   as a whole. */
+var LOOK_KEY='hajirai_look',HOME_LOOK=null;
+try{HOME_LOOK=JSON.parse(localStorage.getItem(LOOK_KEY)||'null');if(HOME_LOOK&&typeof HOME_LOOK!=='object')HOME_LOOK=null}catch(e){HOME_LOOK=null}
+function homeLook(){return PEAK||HOME_LOOK}
 /* The assistant's usual picture; the peak one stands in while Peak Mode is on. */
 var AVATAR_USUAL=AVATAR;
 if(PEAK&&PEAK.avatar&&safeUrl(PEAK.avatar))AVATAR=PEAK.avatar;
@@ -212,7 +225,7 @@ var FT={};for(var _fk in FT_DEF)FT[_fk]=FT_DEF[_fk];
 function setTexts(t){
   t=t&&typeof t==='object'?t:{};
   var v=function(k,max){var x=t[k];return typeof x==='string'&&x.trim()?x.replace(/\s+/g,' ').trim().slice(0,max):''};
-  NAME=v('name',60)||TXT_BASE.name;NAME_SUB=v('nameSub',60);GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;
+  NAME=v('name',60)||TXT_BASE.name;NAME_SUB=v('nameSub',60);GREET=v('greeting',120)||TXT_BASE.greeting;GREET_LOGGED=v('greetingLoggedIn',120)||TXT_BASE.greetingLoggedIn;GREET_PHONE=v('greetingPhone',120);
   LPLACE=v('launcher',60)||TXT_BASE.launcher;IPLACE=v('input',60)||TXT_BASE.input;
   START_LBL=v('startHeading',30)||'Start here';POP_LBL=v('popularHeading',30)||'Popular';
   FIT_LBL=v('fitButton',24)||'Check fit & size';
@@ -557,13 +570,14 @@ function peakVideosWatch(){
   peakVidObs=new IntersectionObserver(function(es){for(var i=0;i<es.length;i++){var v=es[i].target;try{if(es[i].isIntersecting){var p=v.play();if(p&&p.catch)p.catch(function(){})}else v.pause()}catch(e){}}},{threshold:0.2});
   for(var j=0;j<vids.length;j++)peakVidObs.observe(vids[j]);
 }
-/* Her colours on peak days (Settings → Peak Mode): up to four, standing in
-   for the usual pink, violet, blue and teal in the glow around her face,
-   the minimized pill's glow, the ring and the line (fewer than four
-   repeat). Nothing set: the usual ones. */
+/* Her colours (Settings → Peak Mode on peak days, Focus home → Her look on
+   every other day): up to four, standing in for the usual pink, violet,
+   blue and teal in the glow around her face, the minimized pill's glow,
+   the ring and the line (fewer than four repeat). Nothing set: the usual
+   ones. */
 var GLOW_USUAL=['#ff4fa3','#a35cff','#3d7bff','#29e0d0'];
 function peakGlow(){
-  var c=[],src=PEAK&&Array.isArray(PEAK.colors)?PEAK.colors:[];
+  var L=homeLook(),c=[],src=L&&Array.isArray(L.colors)?L.colors:[];
   for(var i=0;i<src.length&&c.length<4;i++)if(/^#[0-9a-f]{6}$/i.test(String(src[i])))c.push(String(src[i]).toLowerCase());
   if(!c.length)return null;
   var n=c.length;while(c.length<4)c.push(c[c.length-n]);
@@ -575,17 +589,19 @@ function applyPeakColors(){
   var els=[typeof panel!=='undefined'?panel:null,typeof launcher!=='undefined'?launcher:null];
   for(var k=0;k<els.length;k++){if(!els[k])continue;for(var i=0;i<4;i++){if(own)els[k].style.setProperty('--ai-glow-'+(i+1),g[i]);else els[k].style.removeProperty('--ai-glow-'+(i+1))}}
   var stops=document.querySelectorAll('#ai-chat-band-g stop');for(var j=0;j<stops.length;j++)stops[j].setAttribute('stop-color',g[j%4]);
-  /* Her look on peak days: the panel marked (the header's grey line goes
-     at home), the ring's weight (a multiplier on its strokes), the line
-     of gold, the tint behind the header. */
+  /* Her look: the panel marked on peak days, the ring's weight (a
+     multiplier on its strokes), the lights, the tint behind the header
+     (which takes the header's grey line with it at home), the mini home. */
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
+  var L=homeLook();
   if(PEAK)p.setAttribute('data-peak','1');else p.removeAttribute('data-peak');
-  var ring={fine:1,regular:1.8,bold:2.8}[PEAK&&PEAK.ring]||1;
+  var ring={fine:1,regular:1.8,bold:2.8}[L&&L.ring]||1;
   if(ring!==1)p.style.setProperty('--ai-ring-k',String(ring));else p.style.removeProperty('--ai-ring-k');
-  if(PEAK&&PEAK.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
+  if(L&&L.tint===true)p.setAttribute('data-peak-tint','1');else p.removeAttribute('data-peak-tint');
   peakDecoRender();
+  miniRender();
 }
-/* A few points of light on peak days (Settings → Peak Mode → Under the
+/* A few points of light (Settings → Peak Mode or Focus home → Under the
    header): small soft dots of the set's third colour in the open space at
    the right of the header — past the words, under the controls, over
    nothing — drifting up a little and twinkling slowly, each to its own
@@ -600,7 +616,7 @@ function decoLightsHtml(){
 /* Draws (or removes) the lights to match the setting. */
 function peakDecoRender(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;
-  var want=PEAK&&PEAK.decor==='lights';
+  var L=homeLook(),want=!!(L&&L.decor==='lights');
   var hdr=p.querySelector('.ai-chat-header'),old=hdr?hdr.querySelector('.ai-chat-deco--lights'):null;
   if(want){if(hdr&&!old){hdr.insertAdjacentHTML('beforeend',decoLightsHtml());peakDecoFit.greet=0;
     /* Placed again once the panel or header finishes moving (opening animates the header's words). */
@@ -1271,6 +1287,13 @@ function inConsentUi(el){for(var a=el;a&&a!==document.body;a=a.parentElement){if
    CSS translate property, so the scripts that place them keep working. */
 var PHONE_BAR=window.matchMedia?window.matchMedia('(max-width: 600px)'):null;
 function phoneBar(){return !!(PHONE_BAR&&PHONE_BAR.matches)&&!launcher.classList.contains('is-bubble')}
+/* The bar's footprint — with the mini home's row above it, when shown. */
+function launcherRect(){
+  var r=launcher.getBoundingClientRect(),m=$('.ai-chat-mini',launcher),mr=m&&!launcher.classList.contains('is-bubble')?m.getBoundingClientRect():null;
+  if(!mr||!mr.height)return r;
+  var left=Math.min(r.left,mr.left),right=Math.max(r.right,mr.right),top=Math.min(r.top,mr.top);
+  return {left:left,right:right,top:top,bottom:r.bottom,width:right-left,height:r.bottom-top};
+}
 function placeLauncher(){
   /* Behind a drawer or pop-up: stay put (its rows aren't buttons to clear). */
   if(underLayer)return;
@@ -1278,7 +1301,7 @@ function placeLauncher(){
   if(launcher.classList.contains('hidden')){liftFloaters(false);return}
   var phone=phoneBar(),vw=window.innerWidth;
   for(var pass=0;pass<4;pass++){
-    var r=launcher.getBoundingClientRect();
+    var r=launcherRect();
     var hits=[].concat(floatingNear(r),floatingAt(r.left+r.width/2,r.top+r.height/2),floatingAt(r.left+6,r.top+6),floatingAt(r.right-6,r.bottom-6));
     if(phone)hits=hits.filter(function(h){return h.width>=vw*0.6&&!isLifted(h)});
     if(!hits.length)break;
@@ -1306,7 +1329,7 @@ function dropLift(rec){
 function liftFloaters(on){
   var keep=[];
   if(on){
-    var b=launcher.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight,line=b.top-10;
+    var b=launcherRect(),vw=window.innerWidth,vh=window.innerHeight,line=b.top-10;
     var cands=[].slice.call(document.body.children).concat([].slice.call(document.querySelectorAll('iframe')));
     for(var i=0;i<cands.length;i++){
       var el=cands[i];
@@ -1833,8 +1856,18 @@ function welcomeCtasHtml(ctas){
   var h='';for(var i=0;i<ctas.length;i++)h+=ctas[i].sea?seaTileHtml():ctas[i].fb?fbTileHtml():ctaTileHtml(ctas[i]);return h;
 }
 function welcomeGreetingText(){
-  return (CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())?GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME):GREET;
+  if(CUST_LOGGED_IN&&CUST_NAME&&GREET_LOGGED&&GREET_LOGGED.trim())return GREET_LOGGED.replace(/\{name\}/gi,CUST_NAME);
+  /* Phones get their own greeting when the store wrote one. */
+  return (GREET_PHONE&&PHONE_BAR&&PHONE_BAR.matches)?GREET_PHONE:GREET;
 }
+/* The screen crossed the phone line (a window resized, a tablet turned):
+   the greeting follows. */
+function greetingRefresh(){
+  if(!GREET_PHONE||typeof panel==='undefined'||!panel)return;
+  if(FOCUS)focusTitleBuild();
+  var wt=$('.ai-chat-welcome__title',panel);if(wt)wt.textContent=welcomeGreetingText()||('Hi, I\'m '+NAME);
+}
+try{if(PHONE_BAR){if(PHONE_BAR.addEventListener)PHONE_BAR.addEventListener('change',greetingRefresh);else if(PHONE_BAR.addListener)PHONE_BAR.addListener(greetingRefresh)}}catch(e){}
 /* Settings' chat text arrived after the chat was drawn: put it in place. */
 function refreshTexts(inWas){
   var hn=$('.ai-chat-header__name',panel);if(hn){if(FOCUS)focusTitleBuild();else hn.textContent=NAME}
@@ -1854,6 +1887,7 @@ function refreshTexts(inWas){
   var ft=$('.ai-chat-footer',panel),fth=esc(DISCL)+' <a href="'+(safeUrl(PRIVURL)||'/policies/privacy-policy')+'">Privacy Policy</a>';
   if(ft&&DISCL)ft.innerHTML=fth;
   else if(!ft&&DISCL){var ia=$('.ai-chat-input-area',panel);if(ia)ia.insertAdjacentHTML('afterend','<div class="ai-chat-footer">'+fth+'</div>')}
+  miniRender();
 }
 /* The settings arrived after the welcome was drawn: redraw just the buttons. */
 function refreshWelcomeCtas(){
@@ -1960,6 +1994,7 @@ function focusLineIcon(kind,size){
 function focusRefreshPics(){
   var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
   for(var i=0;i<boxes.length;i++){var k=boxes[i].getAttribute('data-kind');boxes[i].innerHTML=focusLineIcon(k,boxes[i].getAttribute('data-size')||30);boxes[i].classList.toggle('has-pic',!!focusPicOf(k))}
+  miniRender();
 }
 function focusIcoBox(kind,size){return '<span class="ai-chat-focus__card-ico'+(focusPicOf(kind)?' has-pic':'')+'" data-kind="'+kind+'" data-size="'+size+'">'+focusLineIcon(kind,size)+'</span>'}
 function focusFtKey(kind){return kind==='pain'?'homePain':kind==='footwear'?'homeFootwear':'homeOrthotics'}
@@ -1981,6 +2016,38 @@ function focusCardHtml(kind){
    (instant cards, no AI), then the store's own links (Settings) — minus a
    returns one when the card stands in for it. */
 function focusLinksHtml(){var h='';if(REWARDS)h+='<button type="button" data-rewards-open="1">My rewards</button>';if(RETURNS)h+='<button type="button" data-returns-open="1">Returns &amp; exchanges</button>';for(var i=1;i<=3;i++){var l=FT['homeLink'+i+'Label'],m=FT['homeLink'+i+'Message'];if(l&&m&&!(RETURNS&&/return|exchange/i.test(l))&&!(DEALS&&/deal|sale|promo|offer/i.test(l)))h+='<button type="button" data-message="'+esc(m)+'">'+esc(l)+'</button>'}if(DEALS)h+='<button type="button" data-deals-open="1">'+esc(DEALS.label||'Deals')+'</button>';return h}
+/* The mini home (Settings → Focus home or Peak Mode → Show the three cards
+   while the chat is minimized): Foot pain, Footwear and Orthotics as a
+   small row above the chat bar — each its picture (or line drawing), its
+   small line and its name — opening the chat on that card's sheet. Part of
+   the bar, so it goes wherever the bar goes: lifted over other apps'
+   buttons, behind the theme's drawers, away with the bar when the chat
+   opens, folded away with the bubble. Phones get the three side by side,
+   picture over name. Only on the Focus home. */
+function miniOn(){var L=homeLook();return FOCUS&&!!(L&&L.mini===true)}
+function miniHtml(){
+  var kinds=['pain','footwear','orthotics'],h='';
+  for(var i=0;i<kinds.length;i++){var k=kinds[i],w=focusCardWords(k);
+    h+='<button type="button" class="ai-chat-mini__tile ai-chat-mini__tile--'+k+'" data-mini="'+k+'" aria-haspopup="dialog" aria-label="'+w[0]+' '+w[1]+'"><span class="ai-chat-mini__ico'+(focusPicOf(k)?' has-pic':'')+'" aria-hidden="true">'+focusLineIcon(k,20)+'</span><span class="ai-chat-mini__text" aria-hidden="true"><span class="ai-chat-mini__eyebrow">'+w[0]+'</span><span class="ai-chat-mini__title">'+w[1]+'</span></span></button>'}
+  return h;
+}
+/* Draws the row to match the setting (or takes it away); fresh words and
+   pictures go in when they arrive. Waits until the home's parts exist. */
+function miniRender(){
+  if(typeof launcher==='undefined'||!launcher||typeof FOCUS_PICS==='undefined'||!FOCUS_PICS||typeof WI==='undefined'||!WI)return;
+  var box=$('.ai-chat-mini',launcher),want=miniOn()&&!HIDDEN_BY_URL;
+  if(!want){if(box){box.remove();launcher.classList.remove('has-mini');placeLauncher()}return}
+  if(!box){box=el('div','ai-chat-mini');box.setAttribute('role','group');box.setAttribute('aria-label','Start with');launcher.insertBefore(box,launcher.firstChild)}
+  var html=miniHtml();if(box.innerHTML!==html)box.innerHTML=html;
+  if(!launcher.classList.contains('has-mini')){launcher.classList.add('has-mini');placeLauncher()}
+}
+/* A tap on one of its cards: the chat opens on that card's sheet. */
+function miniOpen(kind){
+  if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
+  toggle(true);
+  if(!isOpen)return;
+  openFocusSheet(kind,$('.ai-chat-focus__card--'+kind,panel));
+}
 function buildFocusHome(){
   var pk=peakBlocks(),banner=!pk.length&&!!(SHOWBAN&&BANNER&&safeUrl(BANNER));
   var h='<div class="ai-chat-welcome ai-chat-welcome--focus'+(banner?' has-banner':'')+(pk.length?' has-peak':'')+'">';
@@ -2838,8 +2905,8 @@ if(isOpen){
   lockPage(true);
   /* A chat the guard ended stays paused until its time, whatever reset the box. */
   var pz=chatPausedUntil();if(pz)pauseChat(pz);
-  setTimeout(function(){inputEl.focus()},400);
-  setTimeout(function(){inputEl.focus()},800);
+  setTimeout(function(){if(!focusSheetEl)inputEl.focus()},400);
+  setTimeout(function(){if(!focusSheetEl)inputEl.focus()},800);
   playWelcomeIntro();
   if(GREETCTA)startGreetCtaRotator();
   /* Back from checkout (Buy now): how did it go? */
@@ -7498,11 +7565,14 @@ sendBtn.disabled=false;
 /* Events */
 launcher.addEventListener('click',function(e){
 if(e.target.closest('.ai-chat-launcher__close')){e.stopPropagation();setLauncherBubble(true,true);return}
+var mt=e.target.closest('.ai-chat-mini__tile');
+if(mt){e.stopPropagation();miniOpen(mt.getAttribute('data-mini'));return}
 if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);
 toggle(true);
 });
 closeBtn.addEventListener('click',function(){toggle(false)});
-launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
+launcher.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.ai-chat-launcher__close')&&!e.target.closest('.ai-chat-mini')){e.preventDefault();if(launcher.classList.contains('is-bubble'))setLauncherBubble(false);toggle(true)}});
+miniRender();
 overlay.addEventListener('click',function(){if(Date.now()-focusSheetShut<600)return;toggle(false)});
 sendBtn.addEventListener('click',function(){if(listening){stopVoice();return}sendMessage()});
 /* Talk instead of typing. The mic (in Send's place while the box is empty) listens with the browser's own

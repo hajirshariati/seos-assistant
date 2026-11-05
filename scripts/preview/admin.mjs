@@ -16,6 +16,10 @@ import { chromium } from "playwright";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const [routePath = "/app/recordings", out = "preview.png", ...rest] = process.argv.slice(2);
 const width = Number((rest.find((a) => a.startsWith("--width=")) || "--width=1280").slice(8));
+// --section="Look & feel": the Settings page opens on that section (its nav
+// is client state, so the server render shows the first; the matching
+// section is shown in its place before the screenshot).
+const section = (rest.find((a) => a.startsWith("--section=")) || "").slice(10);
 process.env.NODE_ENV ||= "development";
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 process.env.ENCRYPTION_KEY ||= "0".repeat(64);
@@ -43,7 +47,7 @@ const vite = await createServer({
   }],
 });
 try {
-  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx", "/app/exports": "app/routes/app.exports.jsx" }[routePath.split("?")[0]];
+  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx", "/app/exports": "app/routes/app.exports.jsx", "/app/api-keys": "app/routes/app.api-keys.jsx" }[routePath.split("?")[0]];
   if (!file) throw new Error(`no route file for ${routePath}`);
   const mod = await vite.ssrLoadModule(path.join(root, file));
   const { rr, polaris, React, renderToString } = await vite.ssrLoadModule(path.join(root, "scripts/preview/libs.js"));
@@ -76,6 +80,13 @@ try {
   const bp = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
   await bp.goto(`file://${path.resolve(htmlOut)}`);
   await bp.waitForTimeout(400); // past any entrance animation
+  if (section) await bp.evaluate((label) => {
+    const navs = [...document.querySelectorAll(".set-nav__item")];
+    const i = navs.findIndex((b) => b.textContent.trim().startsWith(label));
+    if (i < 0) throw new Error(`no section ${label}`);
+    const box = [...document.querySelectorAll("div")].find((d) => [...d.children].filter((c) => c.tagName === "DIV" && c.hasAttribute("hidden")).length >= navs.length - 1);
+    [...box.children].forEach((c, j) => { c.hidden = j !== i; });
+  }, section);
   await bp.screenshot({ path: out, fullPage: true });
   const h = await bp.evaluate(() => document.documentElement.scrollHeight);
   await browser.close();

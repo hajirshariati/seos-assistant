@@ -4,7 +4,7 @@
 //
 // Run: node scripts/eval-peak-home.mjs
 import assert from "node:assert/strict";
-import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, peakSrcset, blocksFor, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
+import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, peakSrcset, blocksFor, cleanPeakColors, parseHomeLook, homeLookConfig, HOME_LOOK_DEFAULT, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed += 1; console.log(`  ✓ ${name}`); } catch (e) { failed += 1; console.log(`  ✗ ${name} — ${e.message}`); } };
@@ -35,11 +35,13 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.equal(h.blocks[2].tag, "VIP");
   assert.equal(h.blocks[3].url, "", "an unsafe link is dropped");
   assert.deepEqual([h.blocks[4].kind, h.blocks[4].url, h.blocks[4].title], ["none", "", ""], "a picture that does nothing when tapped");
-  const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, blocks: [] };
+  const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, mini: false, blocks: [] };
   assert.deepEqual(parsePeakHome("{broken"), plain);
   assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
   const look = parsePeakHome({ ring: "bold", decor: "lights", tint: true });
-  assert.deepEqual([look.ring, look.decor, look.tint], ["bold", "lights", true]);
+  assert.deepEqual([look.ring, look.decor, look.tint, look.mini], ["bold", "lights", true, false]);
+  assert.equal(parsePeakHome({ mini: true }).mini, true, "the mini home on peak days");
+  assert.equal(parsePeakHome({ mini: "yes" }).mini, false);
   assert.equal(parsePeakHome({ decor: "both" }).decor, "lights", "earlier days' choices read as the lights");
   assert.equal(parsePeakHome({ decor: "header" }).decor, "lights");
   assert.equal(parsePeakHome({ decor: "line" }).decor, "lights");
@@ -101,9 +103,10 @@ test("the home is handed over only while Peak Mode is on, pictures as fingerprin
   assert.equal(peakHomeConfig(sched, new Date("2026-11-26T12:00:00Z")), null, "not yet");
   assert.ok(peakHomeConfig(sched, new Date("2026-11-28T12:00:00Z")), "the day itself");
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: "{}" }), null, "nothing set: the usual home");
-  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, blocks: [] }, "colours alone are worth handing over");
-  assert.deepEqual([on.ring, on.decor, on.tint], ["fine", "off", false]);
+  assert.deepEqual(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ colors: ["#d42b3a"] }) }), { avatar: "", layout: "rail", shape: "wide", colors: ["#d42b3a"], ring: "fine", decor: "off", tint: false, mini: false, blocks: [] }, "colours alone are worth handing over");
+  assert.deepEqual([on.ring, on.decor, on.tint, on.mini], ["fine", "off", false, false]);
   assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ decor: "lights" }) }).decor, "lights", "a look alone is worth handing over too");
+  assert.equal(peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ mini: true }) }).mini, true, "the mini home alone is worth handing over too");
   assert.equal(peakImage({ peakHome: saved }, "b1").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "avatar").type, "image/png");
   assert.equal(peakImage({ peakHome: saved }, "nope"), null);
@@ -139,6 +142,27 @@ test("an upload keeps its smaller copies and its width; a Files picture has none
   assert.match(on.blocks[2].srcset, /w=400 400w, .* 700w$/);
   assert.equal(peakSrcset(png, "", {}), "", "an upload without copies: none");
   assert.equal(peakSrcset("", "x", { sizes: [400] }), "");
+});
+
+console.log("\nher look on every other day (Settings → Focus home → Her look)");
+test("the saved look comes back clean: up to four colours, the ring, the lights, the tint, the mini home; unknown choices fall back; nothing saved → the defaults", () => {
+  assert.deepEqual(parseHomeLook(""), HOME_LOOK_DEFAULT);
+  assert.deepEqual(parseHomeLook("{}"), { colors: [], ring: "fine", decor: "off", tint: false, mini: false });
+  assert.deepEqual(parseHomeLook("not json"), HOME_LOOK_DEFAULT);
+  assert.deepEqual(parseHomeLook({ colors: ["#8FD3FF", "bad", "#5b8def"], ring: "regular", decor: "lights", tint: true, mini: true }), { colors: ["#8fd3ff", "#5b8def"], ring: "regular", decor: "lights", tint: true, mini: true });
+  assert.deepEqual(parseHomeLook({ ring: "huge", decor: "bow", tint: "yes", mini: 1 }), HOME_LOOK_DEFAULT, "unknown choices fall back");
+  assert.deepEqual(parseHomeLook(JSON.stringify({ decor: "both" })).decor, "off", "the peak home's older names aren't read here");
+});
+test("for the widget: null while nothing is set (the built-in look), the look once anything is — each part alone counts", () => {
+  assert.equal(homeLookConfig({}), null);
+  assert.equal(homeLookConfig({ homeLook: "{}" }), null);
+  assert.equal(homeLookConfig({ homeLook: JSON.stringify({ colors: [], ring: "fine", decor: "off", tint: false, mini: false }) }), null);
+  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ mini: true }) }), { colors: [], ring: "fine", decor: "off", tint: false, mini: true });
+  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ tint: true }) }), { colors: [], ring: "fine", decor: "off", tint: true, mini: false });
+  assert.deepEqual(homeLookConfig({ homeLook: JSON.stringify({ colors: ["#d42b3a"] }) }).colors, ["#d42b3a"]);
+  assert.equal(homeLookConfig({ homeLook: JSON.stringify({ ring: "bold" }) }).ring, "bold");
+  // Peak Mode doesn't change what the look says: the widget picks the peak look over it while Peak Mode is on.
+  assert.deepEqual(homeLookConfig({ peakMode: "on", homeLook: JSON.stringify({ ring: "bold" }) }).ring, "bold");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

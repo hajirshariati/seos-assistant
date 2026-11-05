@@ -21,6 +21,8 @@ export const CHAT_TEXT_FIELDS = [
   ["nameSub", "textNameSub", 60, ""],
   ["greeting", "textGreeting", 120, "Hi! I'm your personal shopping assistant."],
   ["greetingLoggedIn", "textGreetingLoggedIn", 120, "Welcome back, {name}!"],
+  // The greeting on phones (blank: the one above everywhere); the signed-in one still wins.
+  ["greetingPhone", "textGreetingPhone", 120, ""],
   ["greetingCta", "textGreetingCta", 80, "How can I help you today?"],
   ["launcher", "textLauncher", 60, "How can I help you today?"],
   ["input", "textInput", 60, "How can I help you today?"],
