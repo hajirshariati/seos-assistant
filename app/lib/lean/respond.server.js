@@ -185,7 +185,7 @@ export function leanChatResponse({
         const featured = seasonalView ? { ...seasonal, title: seasonalView.title || seasonal.title } : null;
         if (seasonalTap) console.log(`[lean] seasonal button tapped shop=${shop} collection=${featured ? `${featured.handle} (${seasonalView.order.size})` : "unavailable"}`);
         // No message text in the logs — shoppers type emails, order numbers, health details.
-        console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length}`);
+        console.log(`[lean] turn shop=${shop} internal=${internal} products=${catalog?.products?.length || 0} chars=${String(latestUserMessage).length} viewing=${viewingHandle || "none"}${viewingHandle && !(catalog?.products || []).some((p) => p.handle === viewingHandle) ? " (not in catalog)" : ""}`);
         const support = resolveSupport({ adminUrl: config.supportUrl, adminLabel: config.supportLabel, themeUrl: supportUrl, themeLabel: supportLabel });
         // Quick yes/no meaning checks on the cheap model. A failure or a slow
         // answer is "can't tell" (null): the engine then doesn't force a rewrite.

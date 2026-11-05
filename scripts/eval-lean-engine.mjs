@@ -691,6 +691,33 @@ await test("product page: the bot knows what 'these' is, and can name and price 
   assert.equal(r.retried, false, "no fact-check rewrite for naming the product on screen");
   assert.equal(s.requests.length, 1);
 });
+// Live chat, Nov 5: "it this shoe on 50% off" on the Chrissy page was
+// answered "the shoe didn't come through". The page's product now rides on
+// the message itself when the shopper points at it ("this", "it", "these"),
+// with its price and whether it's on sale.
+await test("product page: 'is this shoe on sale?' carries the page's product and price on the message", async () => {
+  const p = catalog.products.find((x) => x.handle === H["Ashley Arch Support Wedge - Navy"]);
+  const s = scripted([{ stop_reason: "end_turn", content: [txt(`The ${p.style} is $${p.price.toFixed(2)} and isn't on sale right now.`)] }]);
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "it this shoe on 50% off" }], latestUserMessage: "it this shoe on 50% off", callModel: s.callModel, log: quiet, viewingHandle: p.handle });
+  const last = s.requests[0].messages[s.requests[0].messages.length - 1];
+  const parts = Array.isArray(last.content) ? last.content.map((b) => b.text || "") : [String(last.content)];
+  const note = parts.find((t) => t.startsWith("(They're on the "));
+  assert.ok(note, "the message carries the page's product");
+  assert.ok(note.includes(p.title) && note.includes(`$${p.price.toFixed(2)}`), note);
+  assert.match(note, p.onSale ? /on sale at/ : /not on sale/);
+  assert.equal(parts[0], "it this shoe on 50% off", "the shopper's words come first, unchanged");
+});
+await test("product page: a message naming another style gets no page note on the message", async () => {
+  const p = catalog.products.find((x) => x.handle === H["Ashley Arch Support Wedge - Navy"]);
+  const other = catalog.products.find((x) => x.style.toLowerCase() !== p.style.toLowerCase());
+  const s = scripted([{ stop_reason: "end_turn", content: [txt("Sure.")] }]);
+  const msg = `does the ${other.style} run true to size? it looks wide`;
+  await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: msg }], latestUserMessage: msg, callModel: s.callModel, log: quiet, viewingHandle: p.handle });
+  const last = s.requests[0].messages[s.requests[0].messages.length - 1];
+  const parts = Array.isArray(last.content) ? last.content.map((b) => b.text || "") : [String(last.content)];
+  assert.ok(!parts.some((t) => t.startsWith("(They're on the ")), JSON.stringify(parts));
+  assert.match(s.requests[0].system.map((b) => b.text).join("\n"), /THE PAGE THE CUSTOMER IS ON/, "the system note still says which page they're on");
+});
 await test("product page: an unknown handle adds nothing", async () => {
   const s = scripted([{ stop_reason: "end_turn", content: [txt("Which shoes do you mean?")] }]);
   await runLeanTurn({ catalog, model: "m", messages: [{ role: "user", content: "these?" }], latestUserMessage: "these?", callModel: s.callModel, log: quiet, viewingHandle: "not-a-product" });

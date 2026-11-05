@@ -481,6 +481,20 @@ const LOOK_INTO = {
   search_store_info: "the store's own policy on it (search_store_info)",
 };
 
+// "this", "these", "it", "this shoe" with no style named: the shopper means
+// the product page they're on.
+const POINTS_AT_PAGE = /\b(this|these|it|its|them|that|those|the (?:shoe|shoes|boot|boots|sandal|sandals|sneaker|sneakers|orthotic|orthotics|insole|insoles|pair|one|ones))\b/i;
+export function pointsAtPage(message) {
+  return POINTS_AT_PAGE.test(String(message || ""));
+}
+
+// The short form of the page note, attached to the message itself.
+export function viewingTurnNote(p) {
+  const price = Number.isFinite(p.price) ? `$${p.price.toFixed(2)}${Number.isFinite(p.maxPrice) && p.maxPrice > p.price ? `–$${p.maxPrice.toFixed(2)}` : ""}` : "";
+  const sale = p.onSale && Number.isFinite(p.compareAtPrice) ? `on sale at ${price}, was $${p.compareAtPrice.toFixed(2)}` : price ? `${price}, not on sale` : "";
+  return `(They're on the ${p.title} page${sale ? ` — ${sale}` : ""}; "this", "it" or "this shoe" means that product. Answer about it by name.)`;
+}
+
 // What the model is told about the product page the shopper is on: the
 // catalog's own facts, nothing more.
 export function viewingNote(p) {
@@ -582,6 +596,14 @@ export async function runLeanTurn({
   if (String(turnNote || "").trim()) {
     const last = conv[conv.length - 1];
     if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), { type: "text", text: String(turnNote).trim() }];
+  }
+  // "Is this shoe on sale?" on a product page: the product is named on the
+  // message itself, so the answer can't miss it even when the system note
+  // is overlooked (a live chat answered "the shoe didn't come through").
+  if (viewing && pointsAtPage(latestUserMessage) && !stylesInText(catalog, latestUserMessage).length) {
+    const last = conv[conv.length - 1];
+    const note = { type: "text", text: viewingTurnNote(viewing) };
+    if (last?.role === "user") last.content = [...(Array.isArray(last.content) ? last.content : [{ type: "text", text: last.content }]), note];
   }
   const typedCodes = codesInText(catalog, latestUserMessage);
   if (typedCodes.length) {
