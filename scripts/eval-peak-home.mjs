@@ -4,7 +4,7 @@
 //
 // Run: node scripts/eval-peak-home.mjs
 import assert from "node:assert/strict";
-import { parsePeakHome, peakHomeError, peakHomeConfig, peakImage, peakSrcset, blocksFor, cleanPeakColors, parseHomeLook, homeLookConfig, HOME_LOOK_DEFAULT, HOME_CARDS, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
+import { peakWords, PEAK_ALIGNS, PEAK_INKS, parsePeakHome, peakHomeError, peakHomeConfig, peakImage, peakSrcset, blocksFor, cleanPeakColors, parseHomeLook, homeLookConfig, HOME_LOOK_DEFAULT, HOME_CARDS, PEAK_BLOCKS_MAX, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_LAYOUTS, PEAK_SHAPES } from "../app/lib/peak-home.js";
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed += 1; console.log(`  ✓ ${name}`); } catch (e) { failed += 1; console.log(`  ✗ ${name} — ${e.message}`); } };
@@ -26,9 +26,21 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   assert.equal(h.layout, "mosaic"); assert.equal(h.shape, "square");
   assert.deepEqual(h.colors, ["#d42b3a", "#1f7a4d", "#e9b949", "#8f1d2b"], "four good colours, lowercased, the rest dropped");
   assert.equal(h.blocks.length, PEAK_BLOCKS_MAX);
-  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, video: "", focus: "center", audience: "all", tag: "" }, "no eyebrow, text or button any more");
+  assert.deepEqual(h.blocks[0], { id: "a1", title: "30% off everything", kind: "link", url: "/collections/sale", message: "", image: PNG, video: "", focus: "center", audience: "all", tag: "", eyebrow: "Black Friday", heading: "", text: "Today only", cta: "Shop", at: "bottom left", align: "auto", ink: "light" }, "the words on the picture trimmed like the name; where they sit, how they align and their colour at their defaults");
   assert.equal(parsePeakHome({ blocks: [{ image: PNG, focus: "top right" }] }).blocks[0].focus, "top right");
   assert.equal(parsePeakHome({ blocks: [{ image: PNG, focus: "middle" }] }).blocks[0].focus, "center", "an unknown anchor is the centre");
+  // Words on the picture: each line optional, cut to its length; the spot, the alignment and the colour fall back.
+  const worded = parsePeakHome({ blocks: [{ image: PNG, kind: "none", eyebrow: "  Meet Ava ", heading: "Find the perfect gift", text: "x".repeat(200), cta: "Shop gift ideas", at: "top right", align: "center", ink: "dark" }] }).blocks[0];
+  assert.deepEqual([worded.eyebrow, worded.heading, worded.text.length, worded.cta, worded.at, worded.align, worded.ink], ["Meet Ava", "Find the perfect gift", 120, "Shop gift ideas", "top right", "center", "dark"]);
+  const fell = parsePeakHome({ blocks: [{ image: PNG, kind: "none", heading: "Hi", at: "nowhere", align: "justify", ink: "red" }] }).blocks[0];
+  assert.deepEqual([fell.at, fell.align, fell.ink], ["bottom left", "auto", "light"]);
+  assert.equal(peakWords(parsePeakHome({ blocks: [{ image: PNG, kind: "none" }] }).blocks[0]), null, "nothing written → no words handed over");
+  assert.deepEqual(peakWords(worded), { eyebrow: "Meet Ava", heading: "Find the perfect gift", text: "x".repeat(120), cta: "Shop gift ideas", at: "top right", align: "center", ink: "dark" });
+  assert.deepEqual(peakWords(parsePeakHome({ blocks: [{ image: PNG, kind: "none", cta: "Shop" }] }).blocks[0]), { cta: "Shop", at: "bottom left", align: "auto", ink: "light" }, "only the lines written, plus where and how");
+  const handed = peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ blocks: [{ id: "w", kind: "none", image: PNG, heading: "Hi there" }, { id: "p", kind: "none", image: PNG }] }) });
+  assert.deepEqual(handed.blocks[0].words, { heading: "Hi there", at: "bottom left", align: "auto", ink: "light" });
+  assert.ok(!("words" in handed.blocks[1]), "a picture without words carries none");
+  assert.deepEqual([PEAK_ALIGNS, PEAK_INKS], [["auto", "left", "center", "right"], ["light", "dark"]]);
   const anchored = peakHomeConfig({ peakMode: "on", peakHome: JSON.stringify({ blocks: [{ id: "r", kind: "none", image: PNG, focus: "right" }, { id: "c", kind: "none", image: PNG }] }) });
   assert.equal(anchored.blocks[0].focus, "right"); assert.ok(!("focus" in anchored.blocks[1]), "the centre goes without saying");
   assert.equal(h.blocks[1].id, "badid"); assert.equal(h.blocks[1].url, ""); assert.equal(h.blocks[1].message, "What's my offer?");

@@ -526,16 +526,33 @@ function peakTilesHtml(blocks){
   var layout=PEAK&&/^(rail|mosaic|grid)$/.test(String(PEAK.layout))?PEAK.layout:'rail',ar=PEAK_SHAPES[PEAK&&PEAK.shape]||PEAK_SHAPES.wide;
   var h='<div class="ai-chat-peak ai-chat-peak--'+layout+'" data-peak role="region" aria-label="Today\u2019s offers" style="--ai-peak-ar:'+ar+'"><div class="ai-chat-peak__tiles" data-n="'+blocks.length+'">';
   var still=!focusMotionOk();
-  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image?safeUrl(b.image):'',vid=b.video?safeUrl(b.video):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',label=esc(b.title||('Offer '+(i+1))),img;
+  for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image?safeUrl(b.image):'',vid=b.video?safeUrl(b.video):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',wd=peakWordsHtml(b.words),label=esc(b.title||(b.words&&b.words.heading)||('Offer '+(i+1))),img;
     /* A video plays by itself, silent and looping (not for shoppers who prefer reduced motion: its first frame, or its picture, stays); its picture is the poster. */
     /* Where the picture is anchored in the tile's crop (Settings): the centre as usual, or an edge or corner. */
     var at=/^(center|left|right|top|bottom|top left|top right|bottom left|bottom right)$/.test(String(b.focus))&&b.focus!=='center'?' style="object-position:'+b.focus+'"':'';
     if(vid)img='<video class="ai-chat-peak__video" muted loop playsinline preload="metadata"'+(still?'':' autoplay')+(pic?' poster="'+pic+'"':'')+at+' aria-hidden="true" tabindex="-1"><source src="'+vid+'" type="'+(/\.webm(\?|$)/i.test(vid)?'video/webm':'video/mp4')+'"></video>';
     else img='<img src="'+pic+'" alt="" loading="lazy" draggable="false"'+at+(b.srcset&&peakSrcsetOk(b.srcset)?' srcset="'+esc(b.srcset)+'" sizes="'+peakSizeGuess(layout)+'px"':'')+'>';
-    if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+'</button>';
-    else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+'</a>';
-    else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+'</div>'}
+    if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+wd+'</button>';
+    else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+wd+'</a>';
+    else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+wd+'</div>'}
   return h+'</div></div>';
+}
+/* Words on a picture (Settings → Peak Mode → Words on the picture): the
+   lines that are filled in — the small line, the title, a line of text, a
+   button label (a pill, not a control: the whole tile is the tap) — at one
+   of nine spots, the lines aligned with the spot unless set, in white or
+   black. Hidden from screen readers: the tile's name says it. */
+function peakWordsHtml(w){
+  if(!w||typeof w!=='object')return '';
+  var at=/^(center|left|right|top|bottom|top left|top right|bottom left|bottom right)$/.test(String(w.at))?String(w.at):'bottom left';
+  var al=/^(left|center|right)$/.test(String(w.align))?String(w.align):(/right/.test(at)?'right':/left/.test(at)?'left':'center');
+  var p='';
+  if(w.eyebrow)p+='<span class="ai-chat-peak__eyebrow">'+esc(w.eyebrow)+'</span>';
+  if(w.heading)p+='<span class="ai-chat-peak__heading">'+esc(w.heading)+'</span>';
+  if(w.text)p+='<span class="ai-chat-peak__text">'+esc(w.text)+'</span>';
+  if(w.cta)p+='<span class="ai-chat-peak__cta">'+esc(w.cta)+'</span>';
+  if(!p)return '';
+  return '<span class="ai-chat-peak__words is-'+al+(w.ink==='dark'?' is-dark':'')+'" data-at="'+at.replace(' ','-')+'" aria-hidden="true">'+p+'</span>';
 }
 /* The tiles' videos play only while in view (the home open, the tile on
    screen): off screen, minimized or behind a chat, they pause. */

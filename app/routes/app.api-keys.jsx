@@ -56,7 +56,7 @@ import { launcherMark, cleanLauncherText, avatarPreviewUrl } from "../lib/launch
 import { clampDelay, startTheme, parseCountries, APPEAR_DELAY_MIN, APPEAR_DELAY_MAX } from "../lib/appear-delay.js";
 import { pageHandleFromUrl } from "../lib/promo-page.js";
 import { NORMAL_LIMITS, PEAK_LIMITS, LIMIT_MAX, PEAK_MODES, peakState, storeChatLimits } from "../lib/peak-mode.js";
-import { parsePeakHome, peakHomeError, parseHomeLook, HOME_CARDS as HOME_CARD_STYLES, HOME_CARD_WORDS, HOME_CARD_TONES, HOME_CARD_TONE_WORDS, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
+import { parsePeakHome, peakHomeError, parseHomeLook, HOME_CARDS as HOME_CARD_STYLES, HOME_CARD_WORDS, HOME_CARD_TONES, HOME_CARD_TONE_WORDS, PEAK_ALIGNS, PEAK_ALIGN_WORDS, PEAK_INKS, PEAK_INK_WORDS, PEAK_WORDS_AT_DEFAULT, cleanPeakColors, PEAK_BLOCKS_MAX, PEAK_MAX, PEAK_AUDIENCE_WORDS, PEAK_LAYOUTS, PEAK_LAYOUT_WORDS, PEAK_SHAPES, PEAK_SHAPE_WORDS, PEAK_COLOR_SETS, PEAK_COLORS_MAX, PEAK_RINGS, PEAK_RING_WORDS, PEAK_DECORS, PEAK_DECOR_WORDS, PEAK_FOCUS } from "../lib/peak-home.js";
 import { previewUrl } from "../lib/peak-preview.server.js";
 import { parseSupportStaff, SUPPORT_STAFF_MAX } from "../lib/staff-access.js";
 import { seasonOf, colorOf, collectionHandle, LABEL_MAX } from "../lib/seasonal-cta.js";
@@ -1533,6 +1533,60 @@ function glowRing(colors) {
 // points on a live preview of the tile, the picture moving as one is picked.
 const FOCUS_WORDS = { center: "Centre", left: "Left", right: "Right", top: "Top", bottom: "Bottom", "top left": "Top left", "top right": "Top right", "bottom left": "Bottom left", "bottom right": "Bottom right" };
 const FOCUS_GRID = ["top left", "top", "top right", "left", "center", "right", "bottom left", "bottom", "bottom right"];
+// Words on a picture: four optional lines (the small line, the title, a
+// line of text, a button label), where they sit (one of nine spots), how
+// the lines align, and their colour. Folded to one line until something is
+// written, so the page stays short.
+function WordsOnPicture({ b, onChange }) {
+  const filled = [b.eyebrow, b.heading, b.text, b.cta].some((x) => String(x || "").trim());
+  const [open, setOpen] = useState(filled);
+  const at = PEAK_FOCUS.includes(b.at) ? b.at : PEAK_WORDS_AT_DEFAULT;
+  const align = PEAK_ALIGNS.includes(b.align) ? b.align : "auto";
+  const ink = PEAK_INKS.includes(b.ink) ? b.ink : "light";
+  const summary = filled ? `${[b.eyebrow, b.heading, b.cta].map((x) => String(x || "").trim()).filter(Boolean).join(" · ")} — ${FOCUS_WORDS[at].toLowerCase()}` : "None — the picture speaks for itself";
+  return (
+    <div className="set-words">
+      <button type="button" className="set-words__head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="set-words__title">Words on the picture</span>
+        <span className="set-words__sum">{summary}</span>
+        <span className="set-words__chev" aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="set-words__body">
+          <div className="set-grid">
+            <TextField label="Small line" value={b.eyebrow || ""} onChange={(x) => onChange({ eyebrow: x })} placeholder="Meet Ava" maxLength={PEAK_MAX.eyebrow} autoComplete="off" />
+            <TextField label="Title" value={b.heading || ""} onChange={(x) => onChange({ heading: x })} placeholder="Find the perfect gift" maxLength={PEAK_MAX.title} autoComplete="off" />
+          </div>
+          <div className="set-grid">
+            <TextField label="A line of text" value={b.text || ""} onChange={(x) => onChange({ text: x })} placeholder="Gifts for every pair of feet, picked by Ava." maxLength={PEAK_MAX.text} autoComplete="off" />
+            <TextField label="Button" value={b.cta || ""} onChange={(x) => onChange({ cta: x })} placeholder="Shop gift ideas" maxLength={PEAK_MAX.cta} autoComplete="off" helpText="A label — the whole picture is the tap." />
+          </div>
+          <div className="set-words__row">
+            <div className="set-words__ctl">
+              <span className="set-words__lbl">Where they sit</span>
+              <div className="set-place">
+                <div className="set-place__grid" role="radiogroup" aria-label="Where the words sit">
+                  {FOCUS_GRID.map((k) => <button key={k} type="button" role="radio" aria-checked={at === k} aria-label={FOCUS_WORDS[k]} className="set-place__dot" onClick={() => onChange({ at: k })} />)}
+                </div>
+                <span className="set-place__word">{FOCUS_WORDS[at]}</span>
+              </div>
+            </div>
+            <div className="set-words__ctl">
+              <span className="set-words__lbl">Lines aligned</span>
+              <Seg label="Lines aligned" value={align} options={PEAK_ALIGNS.map((k) => ({ value: k, label: PEAK_ALIGN_WORDS[k] }))} onChange={(x) => onChange({ align: x })} />
+            </div>
+            <div className="set-words__ctl">
+              <span className="set-words__lbl">Words</span>
+              <Seg label="Words" value={ink} options={PEAK_INKS.map((k) => ({ value: k, label: PEAK_INK_WORDS[k] }))} onChange={(x) => onChange({ ink: x })} />
+            </div>
+          </div>
+          <Text as="p" variant="bodySm" tone="subdued">Only the lines that are filled in show, with a soft shade behind them so they read on any picture. Leave all four empty and the picture shows as it is.</Text>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AnchorPicker({ image, video, shape, value, onChange }) {
   const focus = PEAK_FOCUS.includes(value) ? value : "center";
   const ar = { wide: "16 / 9", standard: "4 / 3", square: "1 / 1" }[shape] || "16 / 9";
@@ -1664,7 +1718,7 @@ function PeakHomeEditor({ value, onChange }) {
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
-          <PeakPicture copies image={b.image || ""} video={b.video || ""} kinds="all" onChange={(v) => setBlock(i, typeof v === "string" ? { image: v, imageW: 0, image800: "", image400: "" } : v)} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "", imageW: 0, image800: "", image400: "" }) : setBlock(i, { image: f.url, imageW: 0, image800: "", image400: "" }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video) — no words or buttons are drawn on it. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
+          <PeakPicture copies image={b.image || ""} video={b.video || ""} kinds="all" onChange={(v) => setBlock(i, typeof v === "string" ? { image: v, imageW: 0, image800: "", image400: "" } : v)} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "", imageW: 0, image800: "", image400: "" }) : setBlock(i, { image: f.url, imageW: 0, image800: "", image400: "" }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video); any words go on it below. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
           {b.image || b.video ? <AnchorPicker image={b.image || ""} video={b.video || ""} shape={shape} value={b.focus || "center"} onChange={(focus) => setBlock(i, { focus })} /> : null}
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />
@@ -1676,7 +1730,8 @@ function PeakHomeEditor({ value, onChange }) {
             <Select label="Who sees it" options={audienceOptions} value={b.audience || "all"} onChange={(x) => setBlock(i, { audience: x })} />
             {b.audience === "tag" ? <TextField label="Customer tag (as in Shopify)" value={b.tag || ""} onChange={(x) => setBlock(i, { tag: x })} placeholder="VIP" maxLength={PEAK_MAX.tag} autoComplete="off" helpText="Signed-in customers carrying this tag." /> : <div />}
           </div>
-          <TextField label="What it says, for screen readers" value={b.title || ""} onChange={(x) => setBlock(i, { title: x })} placeholder="Black Friday: 30% off everything" maxLength={PEAK_MAX.title} autoComplete="off" helpText="Not shown — read out to shoppers who can't see the picture." />
+          <WordsOnPicture b={b} onChange={(patch) => setBlock(i, patch)} />
+          <TextField label="What it says, for screen readers" value={b.title || ""} onChange={(x) => setBlock(i, { title: x })} placeholder="Black Friday: 30% off everything" maxLength={PEAK_MAX.title} autoComplete="off" helpText="Not shown — read out to shoppers who can't see the picture. Without it, the title on the picture is read out." />
         </div>
       ))}
       {blocks.length < PEAK_BLOCKS_MAX ? <div><Button onClick={add}>Add a picture</Button></div> : null}

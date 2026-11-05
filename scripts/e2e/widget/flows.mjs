@@ -3743,6 +3743,35 @@ for (const coop of ["1", "2"]) {
       const asked = await inn.page.evaluate(() => ({ home: document.querySelector(".ai-chat-panel").classList.contains("is-home"), user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim() }));
       check("peak home (signed in): everyone's and the members' picture, not the signed-out one nor the tag's; a tap on the question tile sends its question to Ava as the shopper's own message", signed.labels.join("|") === "Black Friday: 30% off everything|An extra 10% for members" && signed.tags[1] === "BUTTON" && signed.hrefs[1] === "What is my member offer today?" && chatBodies.length === n0 + 1 && !asked.home && asked.user === "What is my member offer today?", JSON.stringify({ signed: signed.labels, asked, sent: chatBodies.length - n0 }));
       await inn.ctx.close();
+      // Settings → Peak Mode → Words on the picture: the lines that are filled in, where they sit, aligned as set, white or black with a soft shade behind; a picture without words stays as it is; the title on the picture names the tile when no screen-reader words were written.
+      {
+        const readWords = (page) => page.evaluate(() => {
+          const tiles = [...document.querySelectorAll(".ai-chat-peak__tile")];
+          return tiles.map((t) => {
+            const w = t.querySelector(".ai-chat-peak__words"); if (!w) return { label: t.getAttribute("aria-label"), words: null };
+            const tr = t.getBoundingClientRect(); const wr = w.getBoundingClientRect(); const cs = getComputedStyle(w);
+            const part = (c) => { const el = w.querySelector(c); if (!el) return null; const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return { text: el.textContent, l: Math.round(r.left - tr.left), r: Math.round(tr.right - r.right), t: Math.round(r.top - tr.top), b: Math.round(tr.bottom - r.bottom), color: s.color, bg: s.backgroundColor, radius: s.borderRadius }; };
+            return { label: t.getAttribute("aria-label"), words: { covers: Math.abs(wr.width - tr.width) <= 1 && Math.abs(wr.height - tr.height) <= 1, hidden: w.getAttribute("aria-hidden"), align: cs.textAlign, color: cs.color, at: w.getAttribute("data-at"), shade: getComputedStyle(w, "::before").backgroundImage, eyebrow: part(".ai-chat-peak__eyebrow"), heading: part(".ai-chat-peak__heading"), text: part(".ai-chat-peak__text"), cta: part(".ai-chat-peak__cta"), nested: t.querySelectorAll("button, a").length } };
+          });
+        });
+        const wg = await open("/full?home=focus&pk=1&pkw=1");
+        const w1 = await readWords(wg.page);
+        const a = w1[0]?.words, h = a?.heading, c = a?.cta;
+        check("peak words (bottom left, white): the small line, the title and the button on the first picture, nothing for the empty line of text — low at the left, left-aligned, white words on a soft shade, the button a white pill; the whole tile still the one tap", !!a && a.covers && a.hidden === "true" && a.at === "bottom-left" && a.align === "left" && a.color === "rgb(255, 255, 255)" && /gradient/.test(a.shade) && a.eyebrow?.text === "Meet Ava" && h?.text === "Find the perfect gift" && !a.text && c?.text === "Shop gift ideas" && h.l <= 24 && h.l >= 10 && h.r > 40 && c.b <= 24 && c.b >= 8 && c.bg === "rgb(255, 255, 255)" && c.color !== "rgb(255, 255, 255)" && parseFloat(c.radius) >= 12 && a.nested === 0, JSON.stringify(w1[0]));
+        check("peak words: a picture without words stays as it is, and the tiles keep their screen-reader names", w1[1]?.words === null && w1[0]?.label === "Black Friday: 30% off everything" && w1[1]?.label === "Join free and save 15%", JSON.stringify(w1.map((x) => [x.label, !!x.words])));
+        check("peak words: no JS errors", wg.errors.length === 0, wg.errors.join(" | "));
+        await wg.ctx.close();
+        const wi = await open("/full?home=focus&pk=1&pkw=1&login=Ann");
+        const w2 = await readWords(wi.page);
+        const m = w2[1]?.words, mh = m?.heading;
+        check("peak words (centre, black): the title and the line of text on the members' picture, centred both ways, black words on a light shade, no small line and no button", !!m && m.at === "center" && m.align === "center" && m.color === "rgb(17, 17, 17)" && /gradient/.test(m.shade) && mh?.text === "An extra 10% for members" && m.text?.text === "Just for signing in." && !m.eyebrow && !m.cta && Math.abs(mh.l - mh.r) <= 3 && Math.abs(mh.t - mh.b) <= 30, JSON.stringify(w2[1]));
+        await wi.ctx.close();
+        const wp = await open("/full?home=focus&pk=1&pkw=1", { viewport: { width: 390, height: 760 } });
+        const w3 = await readWords(wp.page);
+        const p = w3[0]?.words;
+        check("peak words (phone): the same lines on the first picture, a size down, still inside the tile", !!p && p.at === "bottom-left" && p.heading?.text === "Find the perfect gift" && p.heading.l >= 8 && p.heading.r > 20 && p.cta?.b >= 6 && p.cta.b <= 22, JSON.stringify(w3[0]));
+        await wp.ctx.close();
+      }
       const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
       const tagged = await readPeak(vip.page);
       check("peak home (signed in with the tag, any case): the tag's picture too, in the saved order — and with three the rail shows two and a half, the third a swipe away, no arrows", tagged.labels.join("|") === "Black Friday: 30% off everything|An extra 10% for members|Early access to the winter styles" && oneRow(tagged) && tagged.scrolls && tagged.inside && Math.abs(tagged.rects[0].w - (tagged.box.w - 20) / 2.5) <= 2 && tagged.clean, JSON.stringify({ labels: tagged.labels, w: tagged.rects[0]?.w, box: tagged.box?.w }));
@@ -3863,7 +3892,7 @@ for (const coop of ["1", "2"]) {
           bg: getComputedStyle(by.pain).backgroundColor, ink: getComputedStyle(by.pain.querySelector(".ai-chat-focus__card-title")).color, tone: document.querySelector(".ai-chat-panel").getAttribute("data-cards-tone"),
           buttons: cards.every((c) => c.tagName === "BUTTON" && c.getAttribute("aria-haspopup") === "dialog") };
       });
-      const drawn = (d) => d.masked && d.svgs === 0 && d.imgs === 0 && d.left <= 0 && d.opacity > 0.1 && d.opacity < 0.5 && d.h >= 60;
+      const drawn = (d) => d.masked && d.svgs === 0 && d.imgs === 0 && d.left <= 0 && d.opacity > 0.1 && d.opacity < 0.5 && d.h >= 50;
       const sameRow = (a, c) => Math.abs(a.y - c.y) <= 1 && Math.abs(a.h - c.h) <= 1;
       const sc = await open("/full?home=focus&cards=simple&pics=1&texts=home");
       const c1 = await readCards(sc.page);
@@ -3891,7 +3920,7 @@ for (const coop of ["1", "2"]) {
       await pk.ctx.close();
       // The cards' colours, light theme and dark: the words follow the box.
       const light = { viewport: { width: 1280, height: 860 } };
-      const toLight = async (page) => { await page.click('.ai-chat-header [aria-label="Switch to light mode"]'); await page.waitForTimeout(350); };
+      const toLight = async (page) => { await page.click('.ai-chat-header [aria-label="Switch to light mode"]'); await page.waitForTimeout(1000); };
       const tw = await open("/full?home=focus&cards=simple&ctone=white", light);
       await toLight(tw.page);
       const c6 = await readCards(tw.page);

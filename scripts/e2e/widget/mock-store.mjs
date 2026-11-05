@@ -29,7 +29,10 @@ function peakFor(referer) {
   const cardTone = (referer.match(/[?&]pkct=(soft|white|dark|tint|custom)/) || [])[1] || "soft";
   // ?pks=1: the first picture an upload with smaller copies — the app's picture route, candidates by width.
   const withSizes = /[?&]pks=1/.test(referer) ? blocks.map((b, i) => (i ? b : { ...b, image: "/apps/hajirai/peak-image?b=b1&v=abc", srcset: "/apps/hajirai/peak-image?b=b1&v=abc&w=400 400w, /apps/hajirai/peak-image?b=b1&v=abc&w=800 800w, /apps/hajirai/peak-image?b=b1&v=abc 1600w" })) : blocks;
-  return { ...PEAK_HOME, layout, decor, tint, cards, cardTone, cardBg: "", cardInk: "", blocks: withSizes };
+  // ?pkw=1: words on the first two pictures — the first's at the bottom left (the small line, the title, a button; white), the second's centred (the title and a line of text; black).
+  const PEAK_WORDS = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift", cta: "Shop gift ideas", at: "bottom left", align: "auto", ink: "light" }, b2: { heading: "An extra 10% for members", text: "Just for signing in.", at: "center", align: "center", ink: "dark" } };
+  const worded = /[?&]pkw=1/.test(referer) ? withSizes.map((b) => (PEAK_WORDS[b.id] ? { ...b, words: PEAK_WORDS[b.id] } : b)) : withSizes;
+  return { ...PEAK_HOME, layout, decor, tint, cards, cardTone, cardBg: "", cardInk: "", blocks: worded };
 }
 // Settings → Focus home → Her look (every other day): ?look=1 — the winter colours and a regular ring;
 // &lkd=1 adds the lights, &lkt=1 the tint, &cards=simple the simple cards.

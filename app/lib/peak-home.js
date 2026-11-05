@@ -58,6 +58,14 @@ export const PEAK_COLORS_MAX = 4;
 // Where a picture is anchored when it's cropped to the tile's shape (the
 // CSS object-position words): the centre as usual, or an edge or corner.
 export const PEAK_FOCUS = ["center", "left", "right", "top", "bottom", "top left", "top right", "bottom left", "bottom right"];
+// Words on a picture (optional, each line on its own): the small line, the
+// title, a line of text and a button label, at one of the nine spots, the
+// lines aligned with the spot or as set, in white or black.
+export const PEAK_ALIGNS = ["auto", "left", "center", "right"];
+export const PEAK_ALIGN_WORDS = { auto: "With the spot", left: "Left", center: "Centre", right: "Right" };
+export const PEAK_INKS = ["light", "dark"];
+export const PEAK_INK_WORDS = { light: "White", dark: "Black" };
+export const PEAK_WORDS_AT_DEFAULT = "bottom left";
 // Her look on peak days, beyond the colours: the ring around her face
 // (fine as usual, or thicker); a curved line of the set's gold under the
 // header at the right, with a soft glow, in place of the header's grey
@@ -173,6 +181,14 @@ export function parsePeakHome(raw) {
       focus: PEAK_FOCUS.includes(b.focus) ? b.focus : "center",
       audience,
       tag: audience === "tag" ? clean(b.tag, PEAK_MAX.tag) : "",
+      // Words on the picture — only what's filled in shows.
+      eyebrow: clean(b.eyebrow, PEAK_MAX.eyebrow),
+      heading: clean(b.heading, PEAK_MAX.title),
+      text: clean(b.text, PEAK_MAX.text),
+      cta: clean(b.cta, PEAK_MAX.cta),
+      at: PEAK_FOCUS.includes(b.at) ? b.at : PEAK_WORDS_AT_DEFAULT,
+      align: PEAK_ALIGNS.includes(b.align) ? b.align : "auto",
+      ink: PEAK_INKS.includes(b.ink) ? b.ink : "light",
     });
     if (out.blocks.length >= PEAK_BLOCKS_MAX) break;
   }
@@ -215,10 +231,21 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
     ...(b.video ? { video: b.video } : {}),
     ...(b.focus !== "center" ? { focus: b.focus } : {}),
     audience: b.audience, tag: b.tag,
+    ...(peakWords(b) ? { words: peakWords(b) } : {}),
   }));
   const look = home.ring !== "fine" || home.decor !== "off" || home.tint || home.cards !== "full" || home.cardTone !== "soft" || home.cardBg || home.cardInk;
   if (!blocks.length && !home.avatar && !home.colors.length && !look) return null;
   return { avatar: link("avatar", home.avatar), layout: home.layout, shape: home.shape, colors: home.colors, ring: home.ring, decor: home.decor, tint: home.tint, cards: home.cards, cardTone: home.cardTone, cardBg: home.cardBg, cardInk: home.cardInk, blocks };
+}
+
+// The words on a block's picture for the widget — the lines that are filled
+// in, with where they sit, their alignment and colour; null when none.
+export function peakWords(b) {
+  const lines = { eyebrow: b.eyebrow, heading: b.heading, text: b.text, cta: b.cta };
+  const out = {};
+  for (const [k, v] of Object.entries(lines)) if (v) out[k] = v;
+  if (!Object.keys(out).length) return null;
+  return { ...out, at: b.at || PEAK_WORDS_AT_DEFAULT, align: b.align || "auto", ink: b.ink || "light" };
 }
 
 // The route: the picture behind ?b=avatar or ?b=<block id>.
