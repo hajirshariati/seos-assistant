@@ -36,6 +36,8 @@ const DOWNS = [
 const UPS = [["does the rebecca come in wide", "Yes — Medium and Wide."], ["return policy", "Free returns within 30 days."], ["is the maui waterproof", "The Maui is water-resistant, not waterproof."]];
 
 await prisma.chatRecording.deleteMany({ where: { shop: SHOP } });
+await prisma.chatInteraction.deleteMany({ where: { shop: SHOP } });
+await prisma.chatUsage.deleteMany({ where: { shop: SHOP } });
 await prisma.chatFlag.deleteMany({ where: { shop: SHOP } });
 await prisma.chatFeedback.deleteMany({ where: { shop: SHOP } });
 await prisma.feedbackLesson.deleteMany({ where: { shop: SHOP } });
@@ -102,3 +104,17 @@ for (const [title, summary, kind, lookAt, count] of themes) {
 for (const s of sessions) await prisma.chatConcernChat.upsert({ where: { shop_sessionId: { shop: SHOP, sessionId: s.sessionId } }, create: { shop: SHOP, sessionId: s.sessionId, concernIds: [], quoteIds: [], lastTurnAt: new Date(now + H) }, update: { lastTurnAt: new Date(now + H) } });
 console.log(`seeded ${SHOP}: ${sessions.length} chats`);
 await prisma.$disconnect();
+
+// The engagement rate and the daily chart: for each of the last 14 days a
+// handful of chats (the per-chat log) with a few messages each (usage rows).
+for (let d = 13; d >= 0; d--) {
+  const chats = 8 + ((d * 7) % 11);
+  for (let i = 0; i < chats; i++) {
+    const at = new Date(Date.now() - d * 86400000 - (i * 37 + 11) * 60000);
+    const sessionId = `eng-${d}-${i}`;
+    const messages = 1 + ((d + i) % 4);
+    await prisma.chatInteraction.create({ data: { shop: SHOP, sessionId, startedAt: at, lastAt: at, messages, signedIn: i % 3 === 0 } });
+    await prisma.chatUsage.createMany({ data: Array.from({ length: messages }, (_, k) => ({ shop: SHOP, model: "claude", inputTokens: 1200, outputTokens: 180, costUsd: 0.006, createdAt: new Date(at.getTime() + k * 40000) })) });
+  }
+}
+console.log("seeded engagement: 14 days of chats and messages");

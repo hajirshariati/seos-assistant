@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import prisma from "../db.server";
+import { dayKeyIn } from "../lib/store-day.js";
 
 // Customer service log (NYC DCWP 6 RCNY 5-313): one row per chat with the
 // assistant, kept three years — when, how many messages, whether a way to
@@ -57,6 +58,20 @@ export async function markHuman(shop, { sessionId, how = "" }) {
     return prisma.chatInteraction.create({ data: { shop, sessionId: id, messages: 0, humanOffered: true, humanActivated: true, outcome } });
   }
   return prisma.chatInteraction.update({ where: { shop_sessionId: { shop, sessionId: id } }, data: { lastAt: new Date(), humanOffered: true, humanActivated: true, outcome } });
+}
+
+// Chats that sent at least one message, by the store's day they started:
+// { byDay: { "YYYY-MM-DD": n }, total } — the engagement rate's numerator.
+export async function countChatsByDay(shop, { start, end }, { timeZone = "" } = {}) {
+  const dayKey = dayKeyIn(timeZone);
+  const rows = await prisma.chatInteraction.findMany({
+    where: { shop, messages: { gte: 1 }, startedAt: { gte: start, lte: end } },
+    select: { startedAt: true },
+    take: 400000,
+  });
+  const byDay = {};
+  for (const r of rows) { const k = dayKey(r.startedAt); byDay[k] = (byDay[k] || 0) + 1; }
+  return { byDay, total: rows.length };
 }
 
 export async function listInteractions(shop, { since = null, until = null, take = 200000 } = {}) {

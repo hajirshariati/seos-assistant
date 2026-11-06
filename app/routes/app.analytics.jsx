@@ -18,7 +18,10 @@ import { getShopConfig } from "../models/ShopConfig.server";
 import BrandHeader from "../components/BrandHeader";
 import { SETTINGS_CSS, Row } from "../components/SettingsUI";
 import CostEstimator from "../components/CostEstimator";
-import { getMonthlySessions } from "../lib/store-traffic.server";
+import { getMonthlySessions, getDailySessions } from "../lib/store-traffic.server";
+import { countChatsByDay } from "../models/ChatInteraction.server";
+import { dayKeyIn, dayKeysBetween } from "../lib/store-day.js";
+import { engagementSeries, engagementNote } from "../lib/engagement.js";
 import { estimateStoreReplyCost } from "../lib/lean/cost-model.server";
 import { warmAverage } from "../lib/cost-estimator-math";
 import { RATINGS_CSS } from "../components/Ratings";
@@ -64,6 +67,20 @@ function daysBetween(a, b) {
   return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000));
 }
 
+// Engagement for a range: chats that sent a message (the per-chat log) over
+// Shopify's online-store sessions, both by the store's day. Without Shopify's
+// counts (no permission, or no answer) the chats are still counted and the
+// rate is null, with the reason.
+async function engagementFor(admin, shop, { startDate, endDate }, timeZone) {
+  const dayKey = dayKeyIn(timeZone);
+  const keys = dayKeysBetween(startDate, endDate, dayKey);
+  const [chats, sessions] = await Promise.all([
+    countChatsByDay(shop, { start: startDate, end: endDate }, { timeZone }).catch(() => ({ byDay: {}, total: 0 })),
+    getDailySessions(admin, shop, { since: keys[0], until: keys[keys.length - 1] }).catch((err) => ({ error: String(err?.message || err) })),
+  ]);
+  return { ...engagementSeries(keys, chats.byDay, sessions.byDay || null), error: sessions.error || "" };
+}
+
 export const loader = async ({ request }) => {
   const { session, admin } = await requireFullAccess(request);
   const url = new URL(request.url);
@@ -78,16 +95,22 @@ export const loader = async ({ request }) => {
   const prevStart = new Date(prevEnd.getTime() - spanDays * 86400000);
   const prevRange = { startDate: prevStart, endDate: prevEnd };
 
-  const [usage, feedback, daily, prevUsage, prevFeedback, conversions, prevConversions, config] = await Promise.all([
+  const timeZone = await getShopTimeZone(admin, session.shop);
+  const [usage, feedback, daily, prevUsage, prevFeedback, conversions, prevConversions, config, engagement, prevEngagement] = await Promise.all([
     getUsageSummary(session.shop, rangeArg),
     getFeedbackSummary(session.shop, rangeArg),
-    getShopTimeZone(admin, session.shop).then((timeZone) => getDailySeries(session.shop, rangeArg, { timeZone })),
+    getDailySeries(session.shop, rangeArg, { timeZone }),
     getUsageSummary(session.shop, prevRange),
     getFeedbackSummary(session.shop, prevRange),
     getConversionSummary(session.shop, rangeArg),
     getConversionSummary(session.shop, prevRange),
     getShopConfig(session.shop),
+    engagementFor(admin, session.shop, rangeArg, timeZone),
+    engagementFor(admin, session.shop, prevRange, timeZone),
   ]);
+  // The chart carries each day's rate beside its conversations.
+  const rateByDay = new Map(engagement.days.map((d) => [d.date, d]));
+  for (const d of daily) { const e = rateByDay.get(d.date); d.rate = e ? e.rate : null; d.chats = e ? e.chats : 0; d.sessions = e ? e.sessions : null; }
   // Cost estimator: real traffic, this store's priced setup, recorded replies.
   const [traffic, modeled, costRows] = await Promise.all([
     getMonthlySessions(admin, session.shop).catch((err) => ({ error: String(err?.message || err) })),
@@ -106,6 +129,7 @@ export const loader = async ({ request }) => {
 
   return {
     usage, feedback, daily, conversions,
+    engagement: { rate: engagement.rate, chats: engagement.chats, sessions: engagement.sessions, note: engagementNote(engagement.error) },
     lessons, review, ideas,
     estimator: {
       traffic,
@@ -122,6 +146,7 @@ export const loader = async ({ request }) => {
       toolCalls: prevUsage.totalToolCalls,
       conversionCount: prevConversions.count,
       conversionRevenue: prevConversions.revenue,
+      engagement: prevEngagement.rate,
     },
     range: { preset, label, startDate: startDate.toISOString(), endDate: endDate.toISOString(), days: spanDays },
   };
@@ -205,6 +230,14 @@ const ANALYTICS_CSS = `
   .an-delta.is-good { color: #2D6B4F; background: rgba(45,107,79,0.10); }
   .an-delta.is-warn { color: #8a5a1f; background: rgba(185,138,90,0.16); }
   .an-chart { padding: 4px 12px 12px; }
+  /* Engagement: one number, and in words what it is — the share of the store's sessions that chatted. */
+  .an-engage { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+  .an-engage__num { flex: none; min-width: 84px; font-size: 30px; line-height: 34px; font-weight: 700; color: #1a2e26; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .an-engage__text { display: grid; gap: 2px; min-width: 0; }
+  .an-engage__title { font-size: 13px; line-height: 18px; font-weight: 650; color: #1a2e26; }
+  .an-engage__line { font-size: 12.5px; line-height: 18px; color: #616161; }
+  .an-engage .an-delta { margin-top: 4px; }
+  @media (max-width: 760px) { .an-engage { align-items: flex-start; } .an-engage__num { min-width: 0; font-size: 26px; line-height: 30px; } }
   .an-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: #616161; }
   .an-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .an-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
@@ -270,13 +303,17 @@ function LineChart({ data, height = 170 }) {
   }
 
   const maxMsg = Math.max(1, ...data.map((d) => d.messages));
-  const maxCost = Math.max(0.01, ...data.map((d) => d.cost));
+  // The rate's axis: days Shopify hasn't reported (today, early) have none, and break the line.
+  const rates = data.map((d) => (typeof d.rate === "number" ? d.rate : null));
+  const hasRate = rates.some((r) => r !== null);
+  const maxRate = Math.max(0.1, ...rates.filter((r) => r !== null));
   const x = (i) => padL + (data.length === 1 ? innerW / 2 : (i * innerW) / (data.length - 1));
   const yMsg = (v) => padT + innerH - (v / maxMsg) * innerH;
-  const yCost = (v) => padT + innerH - (v / maxCost) * innerH;
+  const yRate = (v) => padT + innerH - (v / maxRate) * innerH;
 
   const pathMsg = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${yMsg(d.messages).toFixed(1)}`).join(" ");
-  const pathCost = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${yCost(d.cost).toFixed(1)}`).join(" ");
+  let pathRate = "", pen = false;
+  rates.forEach((r, i) => { if (r === null) { pen = false; return; } pathRate += `${pen ? "L" : "M"}${x(i).toFixed(1)},${yRate(r).toFixed(1)} `; pen = true; });
   const areaMsg = `${pathMsg} L${x(data.length - 1).toFixed(1)},${padT + innerH} L${x(0).toFixed(1)},${padT + innerH} Z`;
 
   const ticks = [];
@@ -285,7 +322,7 @@ function LineChart({ data, height = 170 }) {
   if (ticks[ticks.length - 1] !== data.length - 1) ticks.push(data.length - 1);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily conversations and cost" style={{ width: "100%", height: "auto", display: "block" }}>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={hasRate ? "Daily conversations and engagement rate" : "Daily conversations"} style={{ width: "100%", height: "auto", display: "block" }}>
       <defs>
         <linearGradient id="seosAnArea" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#2D6B4F" stopOpacity="0.16" />
@@ -299,8 +336,8 @@ function LineChart({ data, height = 170 }) {
       {[0, 0.5, 1].map((t, i) => (
         <text key={i} x={padL - 6} y={padT + innerH * (1 - t) + 4} fontSize="10" fill="rgba(26,46,38,0.45)" textAnchor="end">{Math.round(maxMsg * t)}</text>
       ))}
-      {[0, 0.5, 1].map((t, i) => (
-        <text key={i} x={width - padR + 6} y={padT + innerH * (1 - t) + 4} fontSize="10" fill="rgba(26,46,38,0.45)" textAnchor="start">${(maxCost * t).toFixed(2)}</text>
+      {hasRate && [0, 0.5, 1].map((t, i) => (
+        <text key={i} x={width - padR + 6} y={padT + innerH * (1 - t) + 4} fontSize="10" fill="rgba(26,46,38,0.45)" textAnchor="start">{`${(maxRate * t).toFixed(1)}%`}</text>
       ))}
       {ticks.map((i) => (
         <text key={i} x={x(i)} y={height - 7} fontSize="10" fill="rgba(26,46,38,0.45)" textAnchor="middle">
@@ -308,7 +345,7 @@ function LineChart({ data, height = 170 }) {
         </text>
       ))}
       <path d={areaMsg} fill="url(#seosAnArea)" />
-      <path d={pathCost} fill="none" stroke="#b98a5a" strokeWidth="2" strokeDasharray="4 3" />
+      {hasRate && <path d={pathRate.trim()} fill="none" stroke="#5b7fa6" strokeWidth="2" strokeDasharray="4 3" strokeLinejoin="round" strokeLinecap="round" />}
       <path d={pathMsg} fill="none" stroke="#2D6B4F" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       {data.length <= 45 && data.map((d, i) => <circle key={`m${i}`} cx={x(i)} cy={yMsg(d.messages)} r="2.5" fill="#2D6B4F" />)}
     </svg>
@@ -406,7 +443,7 @@ function ExportMenu({ onExport, exporting }) {
 }
 
 export default function Analytics() {
-  const { usage, feedback, daily, conversions, previous, range, estimator, lessons, review, ideas } = useLoaderData();
+  const { usage, feedback, daily, conversions, engagement, previous, range, estimator, lessons, review, ideas } = useLoaderData();
   const navigate = useNavigate();
   // While the chat review runs, the page checks back every few seconds.
   const revalidator = useRevalidator();
@@ -528,12 +565,27 @@ export default function Analytics() {
           </div>
 
           <Card padding="0">
+            <div className="an-engage">
+              <div className="an-engage__num">{typeof engagement.rate === "number" ? `${engagement.rate.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : "—"}</div>
+              <div className="an-engage__text">
+                <div className="an-engage__title">Engagement</div>
+                <div className="an-engage__line">
+                  {typeof engagement.rate === "number"
+                    ? `of the store's online sessions in this range chatted with AVA — ${engagement.chats.toLocaleString()} chat${engagement.chats === 1 ? "" : "s"} across ${engagement.sessions.toLocaleString()} session${engagement.sessions === 1 ? "" : "s"} (Shopify Analytics).`
+                    : `${engagement.chats.toLocaleString()} chat${engagement.chats === 1 ? "" : "s"} in this range. ${engagement.note || "Shopify hasn't reported sessions for these days yet."}`}
+                </div>
+                {typeof engagement.rate === "number" && typeof previous.engagement === "number" ? <Delta curr={engagement.rate} prev={previous.engagement} /> : null}
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="0">
             <Row
               title="Conversations per day"
               control={
                 <div className="an-legend">
                   <span><i style={{ background: "#2D6B4F" }} />Conversations</span>
-                  <span><i style={{ background: "#b98a5a" }} />Cost</span>
+                  {typeof engagement.rate === "number" && <span><i style={{ background: "#5b7fa6" }} />Engagement</span>}
                 </div>
               }
             />
