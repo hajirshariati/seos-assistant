@@ -1613,9 +1613,15 @@ function LookEditor({ value, onChange, peak = false }) {
   const v = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const up = (patch) => onChange({ ...v, ...patch });
   // Her colours: the set that matches what's saved, else the store's own.
+  // "Your own" is also a choice in its own right — picked, the swatches open
+  // on the current colours (a set's, or the festive ones to start from), so
+  // it works even while the colours still match a set.
   const colors = cleanPeakColors(v.colors);
-  const setId = (PEAK_COLOR_SETS.find((c) => c.colors.join() === colors.join()) || { id: "own" }).id;
-  const pickOwn = () => up({ colors: colors.length ? colors : PEAK_COLOR_SETS[1].colors });
+  const [ownPicked, setOwnPicked] = useState(false);
+  const matched = PEAK_COLOR_SETS.find((c) => c.colors.join() === colors.join());
+  const setId = ownPicked || !matched ? "own" : matched.id;
+  const pickSet = (c) => { setOwnPicked(false); up({ colors: c.colors }); };
+  const pickOwn = () => { setOwnPicked(true); up({ colors: colors.length ? colors : PEAK_COLOR_SETS[1].colors }); };
   const setColor = (i, hex) => { const next = (colors.length ? colors : PEAK_COLOR_SETS[1].colors).slice(); while (next.length < PEAK_COLORS_MAX) next.push(next[next.length - 1]); next[i] = hex; up({ colors: next }); };
   const ownAt = (i) => colors[i] || colors[colors.length - 1] || "#ffffff";
   return (
@@ -1625,7 +1631,7 @@ function LookEditor({ value, onChange, peak = false }) {
         <Text as="p" variant="bodySm" tone="subdued">The glow around her face, the ring and the line under the header — usually pink, violet, blue and teal. Pick a set, or your own four.</Text>
         <div className="set-palettes" role="group" aria-label="Colour sets">
           {PEAK_COLOR_SETS.map((c) => (
-            <button key={c.id} type="button" className="set-palette" aria-pressed={setId === c.id} onClick={() => up({ colors: c.colors })}>
+            <button key={c.id} type="button" className="set-palette" aria-pressed={setId === c.id} onClick={() => pickSet(c)}>
               <span className="set-palette__ring" style={glowRing(c.colors)} aria-hidden="true" />
               <span>{c.label}</span>
             </button>

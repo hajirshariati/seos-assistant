@@ -3835,6 +3835,11 @@ for (const coop of ["1", "2"]) {
         const centredOnGroup = (p) => !!p && Math.abs(((p.l + (q.group.tileMid * 2 - p.r)) / 2) - q.group.mid) <= 3;
         check("peak words (middle right, lines centred): the words sit at the right of the picture, each line centred on the others — the small line, the title and the button share one middle — not spread across the picture", !!q && q.at === "right" && q.align === "center" && q.group.r <= 24 && q.group.w <= q.group.tileMid * 2 * 0.72 && q.group.l > q.group.r + 20 && centredOnGroup(qh) && centredOnGroup(qc) && Math.abs(qh.t - qh.b) <= 40, JSON.stringify(w4[0]));
         await wr.ctx.close();
+        // A long title at the middle, centred: it takes the words' whole width (the padding the only margin) before it wraps — nothing caps it short of the picture.
+        const wl = await open("/full?home=focus&pk=1&pkw=3");
+        const w5 = await wl.page.evaluate(() => { const w = document.querySelector(".ai-chat-peak__words"); const t = w.closest(".ai-chat-peak__tile") || w.parentElement; const tr = t.getBoundingClientRect(); const h = w.querySelector(".ai-chat-peak__heading"); const hr = h.getBoundingClientRect(); const g = w.querySelector(".ai-chat-peak__group").getBoundingClientRect(); const pad = parseFloat(getComputedStyle(w).paddingLeft); return { boxed: w.classList.contains("is-boxed"), tile: Math.round(tr.width), room: Math.round(tr.width - pad * 2), group: Math.round(g.width), heading: Math.round(hr.width), lines: Math.round(hr.height / parseFloat(getComputedStyle(h).lineHeight)), max: getComputedStyle(h).maxWidth, mid: Math.round((hr.left + hr.right) / 2 - tr.left), tileMid: Math.round(tr.width / 2) }; });
+        check("peak words (middle, centred, a long title): the title may use the picture's whole width inside the padding — no cap short of it — and sits centred on the picture", !w5.boxed && w5.max === "100%" && w5.group >= w5.room - 1 && w5.heading >= w5.group * 0.85 && w5.heading <= w5.group + 1 && w5.lines <= 3 && Math.abs(w5.mid - w5.tileMid) <= 2, JSON.stringify(w5));
+        await wl.ctx.close();
       }
       const vip = await open("/full?home=focus&pk=1&login=Ann&tags=wholesale,vip");
       const tagged = await readPeak(vip.page);

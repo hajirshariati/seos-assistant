@@ -33,8 +33,11 @@ function peakFor(referer) {
   const PEAK_WORDS = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift", cta: "Shop gift ideas", at: "bottom left", align: "auto", ink: "light" }, b2: { heading: "An extra 10% for members", text: "Just for signing in.", at: "center", align: "center", ink: "dark" } };
   // ?pkw=2: the first picture's words at the middle right, the lines centred on each other (white).
   const PEAK_WORDS_RIGHT = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift", cta: "Shop gift ideas", at: "right", align: "center", ink: "light" } };
+  // ?pkw=3: a long title at the middle, centred — it should use the picture's width before it wraps.
+  const PEAK_WORDS_LONG = { b1: { eyebrow: "Meet Ava", heading: "Find the perfect gift for every pair of feet", text: "Gifts for every pair of feet, picked by Ava.", cta: "Shop gift ideas", at: "center", align: "center", ink: "light" } };
   const worded = /[?&]pkw=1/.test(referer) ? withSizes.map((b) => (PEAK_WORDS[b.id] ? { ...b, words: PEAK_WORDS[b.id] } : b))
-    : /[?&]pkw=2/.test(referer) ? withSizes.map((b) => (PEAK_WORDS_RIGHT[b.id] ? { ...b, words: PEAK_WORDS_RIGHT[b.id] } : b)) : withSizes;
+    : /[?&]pkw=2/.test(referer) ? withSizes.map((b) => (PEAK_WORDS_RIGHT[b.id] ? { ...b, words: PEAK_WORDS_RIGHT[b.id] } : b))
+    : /[?&]pkw=3/.test(referer) ? withSizes.map((b) => (PEAK_WORDS_LONG[b.id] ? { ...b, words: PEAK_WORDS_LONG[b.id] } : b)) : withSizes;
   return { ...PEAK_HOME, layout, decor, tint, cards, cardTone, cardBg: "", cardInk: "", blocks: worded };
 }
 // Settings → Focus home → Her look (every other day): ?look=1 — the winter colours and a regular ring;

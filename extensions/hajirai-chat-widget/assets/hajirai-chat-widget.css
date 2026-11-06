@@ -7906,15 +7906,15 @@ button.ai-chat-launcher__text {
 .ai-chat-panel .ai-chat-peak__words.is-center .ai-chat-peak__group { align-items: center; text-align: center; }
 .ai-chat-panel .ai-chat-peak__words.is-right .ai-chat-peak__group { align-items: flex-end; text-align: right; }
 /* Lines aligned differently from the spot (centred at the right, say): the group is boxed so it sits at the spot instead of stretching across the picture. */
-.ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__group { max-width: 68%; }
-.ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__heading, .ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__text { max-width: 100%; }
+.ai-chat-panel .ai-chat-peak__words.is-boxed .ai-chat-peak__group { max-width: 76%; }
 .ai-chat-panel .ai-chat-peak__words.is-dark { color: #111; text-shadow: none; }
 .ai-chat-panel .ai-chat-peak__words.is-dark::before { background: linear-gradient(to top, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%); }
 .ai-chat-panel .ai-chat-peak__words.is-dark[data-at^="top"]::before { background: linear-gradient(to bottom, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0) 100%); }
 .ai-chat-panel .ai-chat-peak__words.is-dark[data-at="left"]::before, .ai-chat-panel .ai-chat-peak__words.is-dark[data-at="center"]::before, .ai-chat-panel .ai-chat-peak__words.is-dark[data-at="right"]::before { background: rgba(255, 255, 255, 0.42); }
 .ai-chat-panel .ai-chat-peak__eyebrow { font: 600 11px/14px var(--seos-font); letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.92; max-width: 100%; }
-.ai-chat-panel .ai-chat-peak__heading { font: 700 20px/24px var(--seos-font); letter-spacing: -0.01em; text-wrap: balance; max-width: 92%; }
-.ai-chat-panel .ai-chat-peak__text { font: 400 12.5px/17px var(--seos-font); opacity: 0.94; max-width: 92%; text-wrap: pretty; }
+/* The title and the line take the words' whole width — the padding is the only margin — so a long title stays on one line as long as the picture allows. */
+.ai-chat-panel .ai-chat-peak__heading { font: 700 20px/24px var(--seos-font); letter-spacing: -0.01em; text-wrap: balance; max-width: 100%; }
+.ai-chat-panel .ai-chat-peak__text { font: 400 12.5px/17px var(--seos-font); opacity: 0.94; max-width: 100%; text-wrap: pretty; }
 .ai-chat-panel .ai-chat-peak__cta { display: inline-flex; align-items: center; height: 30px; margin-top: 4px; padding: 0 14px; border-radius: 999px; background: #fff; color: #111; font: 600 12.5px/16px var(--seos-font); text-shadow: none; white-space: nowrap; }
 .ai-chat-panel .ai-chat-peak__words.is-dark .ai-chat-peak__cta { background: #111; color: #fff; }
 /* The smaller tiles (the mosaic's side ones, the grid's) and phones: a size down. */
