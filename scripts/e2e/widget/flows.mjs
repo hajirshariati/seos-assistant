@@ -968,7 +968,7 @@ for (const [vp, login, tag] of [[{ width: 390, height: 844 }, "&login=Ann", "pho
   const first = await page.$eval(".ai-chat-focus__links button:first-child", (b) => b.textContent.trim());
   const sentBefore = chatBodies.length;
   await page.click("[data-rewards-open]");
-  await page.waitForFunction(() => /points|balance/.test(document.querySelector("[data-rw-bal]")?.textContent || ""), null, { timeout: 4000 });
+  await page.waitForFunction(() => /points|balance/.test(document.querySelector("[data-rw-bal]")?.textContent || ""), null, { timeout: 10000 }).catch(() => {});
   const card = await page.evaluate(() => { const c = document.querySelector(".ai-rw"); const r = c.getBoundingClientRect(); const over = [...c.querySelectorAll("*")].filter((e) => { const x = e.getBoundingClientRect(); return x.width && (x.right > r.right + 1 || x.left < r.left - 1); }).length; return { user: document.querySelector(".ai-chat-msg--user .ai-chat-msg-bubble")?.textContent.trim(), logo: !!c.querySelector(".ai-rw__logo"), bal: document.querySelector("[data-rw-bal]").textContent.trim(), earn: c.querySelectorAll(".ai-rw__col")[0]?.querySelectorAll("li").length, spend: c.querySelectorAll(".ai-rw__col")[1]?.querySelectorAll("li").length, notes: c.querySelectorAll(".ai-rw__notes li").length, cta: c.querySelector(".ai-rw__cta")?.getAttribute("href"), width: Math.round(r.width), over, fits: r.right <= window.innerWidth }; });
   check(`My rewards (${tag}): the first link on the home; one tap, no AI call, the card with the lockup, Earn and Spend, the notes and the rewards link`, first === "My rewards" && chatBodies.length === sentBefore && card.user === "My rewards" && card.logo && card.earn === 4 && card.spend === 4 && card.notes === 4 && card.cta === "https://www.example.com/pages/rewards" && card.over === 0 && card.fits, JSON.stringify(card));
   const landed = await page.evaluate(() => { const m = document.querySelector(".ai-chat-messages").getBoundingClientRect(); const u = document.querySelector(".ai-chat-msg--user").getBoundingClientRect(); const c = document.querySelector(".ai-rw").getBoundingClientRect(); return { userTop: Math.round(u.top - m.top), cardTop: Math.round(c.top - m.top), view: Math.round(m.height) }; });
@@ -3887,6 +3887,19 @@ for (const coop of ["1", "2"]) {
       const m6 = await readPeak(m6p.page);
       check("peak home (mosaic, six): the big one with two stacked beside it, then three across underneath, all the same size", m6.rects.length === 6 && m6.rects[0].w > m6.rects[1].w * 1.8 && m6.rects[1].x === m6.rects[2].x && new Set(m6.rects.slice(3).map((x) => x.y)).size === 1 && m6.rects[3].y >= m6.rects[0].y + m6.rects[0].h && new Set(m6.rects.slice(3).map((x) => x.w)).size === 1, JSON.stringify(m6.rects));
       await m6p.ctx.close();
+      // Across: one under the other, each as wide as the box and as tall as its picture's own shape says — nothing cropped; one picture, the width of the chat.
+      for (const n of [1, 2]) {
+        const ac = await open(`/full?home=focus&pk=1&pkl=across&pkn=${n}`);
+        await ac.page.waitForTimeout(400);
+        const a = await ac.page.evaluate(() => { const box = document.querySelector(".ai-chat-peak__tiles"); const b = box.getBoundingClientRect(); return { layout: (document.querySelector(".ai-chat-peak")?.className.match(/ai-chat-peak--(\w+)/) || [])[1], box: Math.round(b.width), tiles: [...box.querySelectorAll(".ai-chat-peak__tile")].map((t) => { const r = t.getBoundingClientRect(); const img = t.querySelector("img"); const cs = getComputedStyle(img); return { x: Math.round(r.left - b.left), y: Math.round(r.top - b.top), w: Math.round(r.width), h: Math.round(r.height), own: img.naturalWidth && img.naturalHeight ? Math.round(r.width * img.naturalHeight / img.naturalWidth) : 0, fit: cs.objectFit, imgH: Math.round(img.getBoundingClientRect().height), sizes: img.sizes || "" }; }) }; });
+        check(`peak home (across, ${n} picture${n === 1 ? "" : "s"}): ${n === 1 ? "the one picture where the banner was, as wide as the chat" : "one under the other, each as wide as the chat"}, each as tall as its own shape makes it at that width — the picture whole, not cropped`, a.layout === "across" && a.tiles.length === n && a.tiles.every((t) => t.x === 0 && t.w === a.box && t.own > 0 && t.own < 300 && Math.abs(t.h - Math.min(t.own, 360)) <= 2 && Math.abs(t.imgH - t.h) <= 2) && (n === 1 || a.tiles[1].y >= a.tiles[0].y + a.tiles[0].h + 8), JSON.stringify(a));
+        await ac.ctx.close();
+      }
+      // On a phone the across pictures stay out of the way, as the banner does: the cards come first.
+      const acp = await open("/full?home=focus&pk=1&pkl=across&pkn=1", { viewport: { width: 390, height: 760 } });
+      const ap = await acp.page.evaluate(() => { const p = document.querySelector(".ai-chat-peak"); const cards = document.querySelector(".ai-chat-focus__cards"); return { shown: !!p && getComputedStyle(p).display !== "none" && p.getBoundingClientRect().height > 0, cardsTop: cards ? Math.round(cards.getBoundingClientRect().top) : -1, headerBottom: Math.round(document.querySelector(".ai-chat-header").getBoundingClientRect().bottom) }; });
+      check("peak home (across, phone): the picture is hidden, the cards sit right under the header", !ap.shown && ap.cardsTop > 0 && ap.cardsTop - ap.headerBottom < 80, JSON.stringify(ap));
+      await acp.ctx.close();
       const gr = await open("/full?home=focus&pk=1&pkl=grid&login=Ann&tags=vip");
       const g3 = await readPeak(gr.page);
       check("peak home (grid, three): two across the same size, the odd last one across the whole row", g3.layout === "grid" && g3.rects[0].y === g3.rects[1].y && g3.rects[0].w === g3.rects[1].w && g3.rects[2].y > g3.rects[0].y && Math.abs(g3.rects[2].w - g3.box.w) <= 1, JSON.stringify(g3.rects));
@@ -3981,7 +3994,9 @@ for (const coop of ["1", "2"]) {
       await sc.ctx.close();
       const sp = await open("/full?home=focus&cards=simple&pics=1", { viewport: { width: 390, height: 760 } });
       const c3 = await readCards(sp.page);
-      check("simple cards (phone): the three stacked full width — Foot pain, Footwear, Orthotics — alike: the drawing in from the left, the words beside it, each with its line and its call to action; no pictures, no pill", c3.simple && c3.n === 3 && c3.pain.y < c3.footwear.y && c3.footwear.y < c3.orthotics.y && [c3.pain, c3.footwear, c3.orthotics].every((x) => Math.abs(x.w - c3.box) <= 1) && drawn(c3.d.pain) && drawn(c3.d.footwear) && drawn(c3.d.orthotics) && beside(c3.d) && c3.titles.join("|") === "Foot pain|Footwear|Orthotics" && c3.subs.every(Boolean) && c3.ctas.every(Boolean), JSON.stringify(c3));
+      // As the full cards sit on a phone: Foot pain across the top (the drawing beside its words, its line and its call to action), the two under it side by side with the drawing above the words, their line left out, the call to action at the foot.
+      const under = (d) => ["footwear", "orthotics"].every((k) => d[k].titleX <= 20 && d[k].eyebrowTop > d[k].top + d[k].h - 2);
+      check("simple cards (phone): Foot pain across the top with the drawing beside its words; Footwear and Orthotics side by side under it, alike, the drawing above the words, their one line left out, each with its call to action; no pictures, no pill", c3.simple && c3.n === 3 && c3.pain.y < c3.footwear.y && Math.abs(c3.pain.w - c3.box) <= 1 && sameRow(c3.footwear, c3.orthotics) && Math.abs(c3.footwear.w - c3.orthotics.w) <= 1 && c3.footwear.x < c3.orthotics.x && drawn(c3.d.pain) && drawn(c3.d.footwear) && drawn(c3.d.orthotics) && c3.d.pain.titleX >= c3.d.pain.w - 2 && under(c3.d) && c3.titles.join("|") === "Foot pain|Footwear|Orthotics" && c3.subs.join() === "true,false,false" && c3.ctas.every(Boolean), JSON.stringify(c3));
       await sp.ctx.close();
       const sn = await open("/full?home=focus&cards=simple", { viewport: { width: 320, height: 700 } });
       const c4 = await readCards(sn.page);

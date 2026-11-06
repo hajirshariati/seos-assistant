@@ -37,9 +37,11 @@ export const PEAK_AUDIENCES = ["all", "guest", "signed", "tag"];
 export const PEAK_AUDIENCE_WORDS = { all: "Everyone", guest: "Signed out", signed: "Signed in", tag: "Customers with a tag" };
 // How the pictures sit: a rail that scrolls sideways (two and a half in
 // view on a computer, one and a quarter on a phone), a mosaic (the first
-// picture big, the rest around it), or a grid (two across).
-export const PEAK_LAYOUTS = ["rail", "mosaic", "grid"];
-export const PEAK_LAYOUT_WORDS = { rail: "Rail — scrolls sideways", mosaic: "Mosaic — one big, the rest around it", grid: "Grid — two across" };
+// picture big, the rest around it), a grid (two across), or across — one
+// under the other, each the whole width at its own shape, nothing cropped
+// (one picture: where the banner was, as wide as the chat).
+export const PEAK_LAYOUTS = ["rail", "mosaic", "grid", "across"];
+export const PEAK_LAYOUT_WORDS = { rail: "Rail — scrolls sideways", mosaic: "Mosaic — one big, the rest around it", grid: "Grid — two across", across: "Across — full width, each at its own shape" };
 // The pictures' shape (every tile in a layout shares it).
 export const PEAK_SHAPES = { wide: "16 / 9", standard: "4 / 3", square: "1 / 1" };
 export const PEAK_SHAPE_WORDS = { wide: "Wide (16 : 9)", standard: "Standard (4 : 3)", square: "Square" };
@@ -161,6 +163,7 @@ export function parsePeakHome(raw) {
     // Files picture has the CDN's sizes instead.
     const own = !!appImageData(image);
     const imageW = own ? Math.min(4000, Math.max(0, Math.round(Number(b.imageW) || 0))) : 0;
+    const imageH = own && imageW ? Math.min(4000, Math.max(0, Math.round(Number(b.imageH) || 0))) : 0;
     const smaller = {};
     if (own) for (const w of PEAK_PICTURE_SIZES) { const v = b[`image${w}`]; if (appImageData(v) && (!imageW || w < imageW)) smaller[`image${w}`] = String(v); }
     let id = cleanId(b.id, i);
@@ -176,6 +179,7 @@ export function parsePeakHome(raw) {
       message: kind === "ask" ? clean(b.message, PEAK_MAX.message) : "",
       image,
       ...(imageW ? { imageW } : {}),
+      ...(imageH ? { imageH } : {}),
       ...smaller,
       video,
       focus: PEAK_FOCUS.includes(b.focus) ? b.focus : "center",
@@ -230,6 +234,8 @@ export function peakHomeConfig(config = {}, now = new Date(), { force = false } 
     ...(srcsetOf(b) ? { srcset: srcsetOf(b) } : {}),
     ...(b.video ? { video: b.video } : {}),
     ...(b.focus !== "center" ? { focus: b.focus } : {}),
+    // The picture's own size, so the across layout can shape its tile before the picture loads.
+    ...(b.imageW && b.imageH ? { w: b.imageW, h: b.imageH } : {}),
     audience: b.audience, tag: b.tag,
     ...(peakWords(b) ? { words: peakWords(b) } : {}),
   }));

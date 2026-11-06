@@ -18,9 +18,10 @@ export const peakImageLog = [];
 export const dealsLog = [];
 // Peak Mode's home: four blocks — everyone, signed in, a tag's, signed out.
 function peakFor(referer) {
-  const layout = (referer.match(/[?&]pkl=(rail|mosaic|grid)/) || [])[1] || PEAK_HOME.layout;
+  const layout = (referer.match(/[?&]pkl=(rail|mosaic|grid|across)/) || [])[1] || PEAK_HOME.layout;
   const n = Number((referer.match(/[?&]pkn=(\d)/) || [])[1] || 0);
-  const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
+  // The across layout gets wide pictures (3 : 1), the shape a banner would be; the others square ones.
+  const blocks = n ? Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, title: `Picture ${i + 1}`, url: `/collections/p${i + 1}`, image: layout === "across" ? "/pic-wide.svg" : ["/pic-footwear.svg", "/pic-orthotics.svg", "/pic-pain.svg"][i % 3], audience: "all", tag: "" })) : PEAK_HOME.blocks;
   const decor = /[?&]pkd=off/.test(referer) ? "off" : PEAK_HOME.decor;
   // ?pkt=0: the tint off (the header's grey line stays); ?pkc=simple: the three cards simple.
   const tint = /[?&]pkt=0/.test(referer) ? false : PEAK_HOME.tint;
@@ -369,6 +370,7 @@ export function start(port) {
         if (u.pathname === "/pic-access.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100"><rect width="250" height="100" fill="#8fa3ad"/><rect x="250" width="250" height="100" fill="#5c6b73"/><text x="125" y="66" font-family="Arial" font-size="44" fill="#fff" text-anchor="middle">aetrex</text><text x="375" y="66" font-family="Arial" font-weight="700" font-size="40" fill="#fff" text-anchor="middle">ACCESS</text></svg>`);
         // A short video for a peak tile (VP8, which the test browser plays).
         if (u.pathname === "/peak.webm") return send(200, "video/webm", fs.readFileSync(new URL("./fixtures/peak.webm", import.meta.url)));
+        if (u.pathname === "/pic-wide.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400"><rect width="1200" height="400" fill="#d9e8ff"/><circle cx="600" cy="200" r="150" fill="#fff"/></svg>`);
         if (u.pathname === "/pic-pain.svg") return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#ffe3e3"/><circle cx="80" cy="80" r="46" fill="#ff5a5a"/></svg>`);
         // The app's picture route (an upload, or one of its smaller copies): the same picture whatever ?w says, its width in the picture for the test to read.
         if (u.pathname === "/apps/hajirai/peak-image") { peakImageLog.push(u.search); const w = Number(u.searchParams.get("w")) || 1600; return send(200, "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${Math.round(w * 9 / 16)}"><rect width="100%" height="100%" fill="#dbe6f3"/></svg>`); }

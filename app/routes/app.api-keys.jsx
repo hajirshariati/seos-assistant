@@ -1472,7 +1472,7 @@ function RewardsGroup({ card, onChange }) {
 const PEAK_COPY_WIDTHS = [800, 400];
 async function peakCopies(dataUrl) {
   const im = new Image(); im.src = dataUrl; await im.decode();
-  const out = { imageW: im.naturalWidth };
+  const out = { imageW: im.naturalWidth, imageH: im.naturalHeight };
   for (const w of PEAK_COPY_WIDTHS) {
     if (w >= im.naturalWidth) continue;
     let cur = im, cw = im.naturalWidth, ch = im.naturalHeight;
@@ -1709,8 +1709,8 @@ function PeakHomeEditor({ value, onChange }) {
       <PeakPicture round image={v.avatar || ""} onChange={(avatar) => up({ avatar })} title="The assistant's peak picture" hint="Shown in place of her usual picture while Peak Mode is on — a festive version of the same face. Square, at least 320px." size={480} />
       <LookEditor value={v} onChange={(next) => up(next)} peak />
       <div className="set-grid">
-        <Select label="How the pictures sit" options={PEAK_LAYOUTS.map((k) => ({ value: k, label: PEAK_LAYOUT_WORDS[k] }))} value={layout} onChange={(x) => up({ layout: x })} helpText={layout === "rail" ? "Two and a half in view on a computer, one and a quarter on a phone; the rest a swipe away, no arrows." : layout === "mosaic" ? "The first picture big, the others around it — three to six look best." : "Two to a row, all the same size."} />
-        <Select label="Their shape" options={Object.keys(PEAK_SHAPES).map((k) => ({ value: k, label: PEAK_SHAPE_WORDS[k] }))} value={shape} onChange={(x) => up({ shape: x })} helpText="Every picture is cropped to this shape, centred." />
+        <Select label="How the pictures sit" options={PEAK_LAYOUTS.map((k) => ({ value: k, label: PEAK_LAYOUT_WORDS[k] }))} value={layout} onChange={(x) => up({ layout: x })} helpText={layout === "rail" ? "Two and a half in view on a computer, one and a quarter on a phone; the rest a swipe away, no arrows." : layout === "mosaic" ? "The first picture big, the others around it — three to six look best." : layout === "across" ? "One under the other, each as wide as the chat and in its own shape — nothing cropped. One picture sits where the banner was. Hidden on phones, as the banner is." : "Two to a row, all the same size."} />
+        <Select label="Their shape" options={Object.keys(PEAK_SHAPES).map((k) => ({ value: k, label: PEAK_SHAPE_WORDS[k] }))} value={shape} onChange={(x) => up({ shape: x })} disabled={layout === "across"} helpText={layout === "across" ? "Across keeps each picture's own shape." : "Every picture is cropped to this shape, centred."} />
       </div>
       <Text as="p" variant="bodySm" fontWeight="semibold">Pictures — up to {PEAK_BLOCKS_MAX}, in this order</Text>
       {blocks.length === 0 ? <Text as="p" variant="bodySm" tone="subdued">None yet. Without pictures the home keeps its banner; the peak picture and her colours still apply.</Text> : null}
@@ -1724,7 +1724,7 @@ function PeakHomeEditor({ value, onChange }) {
               <Button variant="plain" tone="critical" onClick={() => remove(i)}>Remove</Button>
             </InlineStack>
           </InlineStack>
-          <PeakPicture copies image={b.image || ""} video={b.video || ""} kinds="all" onChange={(v) => setBlock(i, typeof v === "string" ? { image: v, imageW: 0, image800: "", image400: "" } : v)} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "", imageW: 0, image800: "", image400: "" }) : setBlock(i, { image: f.url, imageW: 0, image800: "", image400: "" }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video); any words go on it below. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
+          <PeakPicture copies image={b.image || ""} video={b.video || ""} kinds="all" onChange={(v) => setBlock(i, typeof v === "string" ? { image: v, imageW: 0, imageH: 0, image800: "", image400: "" } : v)} onPickFile={(f) => (f.kind === "video" ? setBlock(i, { video: f.url, image: b.image || f.poster || "", imageW: 0, imageH: 0, image800: "", image400: "" }) : setBlock(i, { image: f.url, imageW: 0, imageH: 0, image800: "", image400: "" }))} onRemoveVideo={() => setBlock(i, { video: "" })} title="The picture or video" hint={`Just the picture (or a short silent video); any words go on it below. Shown ${shapeWords}. For a sharp picture on Retina screens make it at least 1600px wide — about twice the size it's shown at; a smaller one is stretched and looks soft. Upload a picture, or pick a picture or video from your Shopify files.`} size={1100} />
           {b.image || b.video ? <AnchorPicker image={b.image || ""} video={b.video || ""} shape={shape} value={b.focus || "center"} onChange={(focus) => setBlock(i, { focus })} /> : null}
           <div className="set-grid">
             <Select label="A tap on it" options={[{ label: "Opens a link", value: "link" }, { label: "Asks AVA a question", value: "ask" }, { label: "Does nothing", value: "none" }]} value={b.kind === "ask" ? "ask" : b.kind === "none" ? "none" : "link"} onChange={(x) => setBlock(i, { kind: x })} />

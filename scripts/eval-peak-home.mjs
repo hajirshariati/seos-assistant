@@ -50,6 +50,10 @@ test("blocks come back clean: a picture required, the name trimmed and capped, a
   const plain = { avatar: "", layout: "rail", shape: "wide", colors: [], ring: "fine", decor: "off", tint: false, cards: "full", cardTone: "soft", cardBg: "", cardInk: "", blocks: [] };
   assert.deepEqual(parsePeakHome("{broken"), plain);
   assert.deepEqual(parsePeakHome({ layout: "spiral", shape: "round", colors: "red", ring: "huge", decor: "bow", tint: "yes" }), plain, "unknown choices fall back");
+  assert.equal(parsePeakHome({ layout: "across" }).layout, "across", "across is a layout");
+  // An upload's size: the height only with a width, both whole numbers, and only for the app's own pictures.
+  const sized = parsePeakHome({ blocks: [{ id: "s", image: PNG, imageW: 1600.4, imageH: 533.6 }, { id: "t", image: PNG, imageH: 500 }, { id: "u", image: "https://cdn.shopify.com/s/files/1/x.png", imageW: 1600, imageH: 500 }] }).blocks;
+  assert.deepEqual(sized.map((b) => [b.imageW || 0, b.imageH || 0]), [[1600, 534], [0, 0], [0, 0]]);
   const look = parsePeakHome({ ring: "bold", decor: "lights", tint: true });
   assert.deepEqual([look.ring, look.decor, look.tint, look.cards], ["bold", "lights", true, "full"]);
   assert.equal(parsePeakHome({ cards: "simple" }).cards, "simple", "the simple cards on peak days");
@@ -96,7 +100,7 @@ test("the colour sets: her usual colours are an empty set; every other set is fo
   for (const set of PEAK_COLOR_SETS.slice(1)) assert.deepEqual(cleanPeakColors(set.colors), set.colors, set.id);
   assert.equal(cleanPeakColors(["#111111", "#222222", "#333333", "#444444", "#555555"]).length, PEAK_COLORS_MAX);
   assert.deepEqual(cleanPeakColors(null), []);
-  assert.deepEqual(PEAK_LAYOUTS, ["rail", "mosaic", "grid"]);
+  assert.deepEqual(PEAK_LAYOUTS, ["rail", "mosaic", "grid", "across"]);
   assert.deepEqual(Object.keys(PEAK_SHAPES), ["wide", "standard", "square"]);
 });
 

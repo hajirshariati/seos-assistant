@@ -518,12 +518,14 @@ function peakBlocks(){
 /* The pictures where the banner was — each just a picture: a link, a
    question to the assistant, or nothing — as a rail that scrolls sideways
    (two and a half in view on a computer, one and a quarter on a phone, no
-   arrows), a mosaic (the first big, the rest around it) or a grid (two
-   across); every tile the shape chosen in Settings. Its name is only for
-   screen readers. */
+   arrows), a mosaic (the first big, the rest around it), a grid (two
+   across) or across (one under the other, each the whole width at its own
+   shape — nothing cropped; a tile is shaped from the picture's size before
+   it loads, when known); every other layout's tile is the shape chosen in
+   Settings. Its name is only for screen readers. */
 var PEAK_SHAPES={wide:'16 / 9',standard:'4 / 3',square:'1 / 1'};
 function peakTilesHtml(blocks){
-  var layout=PEAK&&/^(rail|mosaic|grid)$/.test(String(PEAK.layout))?PEAK.layout:'rail',ar=PEAK_SHAPES[PEAK&&PEAK.shape]||PEAK_SHAPES.wide;
+  var layout=PEAK&&/^(rail|mosaic|grid|across)$/.test(String(PEAK.layout))?PEAK.layout:'rail',ar=PEAK_SHAPES[PEAK&&PEAK.shape]||PEAK_SHAPES.wide;
   var h='<div class="ai-chat-peak ai-chat-peak--'+layout+'" data-peak role="region" aria-label="Today\u2019s offers" style="--ai-peak-ar:'+ar+'"><div class="ai-chat-peak__tiles" data-n="'+blocks.length+'">';
   var still=!focusMotionOk();
   for(var i=0;i<blocks.length;i++){var b=blocks[i],pic=b.image?safeUrl(b.image):'',vid=b.video?safeUrl(b.video):'',url=b.url&&safeUrl(b.url)?safeUrl(b.url):'',wd=peakWordsHtml(b.words),label=esc(b.title||(b.words&&b.words.heading)||('Offer '+(i+1))),img;
@@ -532,9 +534,10 @@ function peakTilesHtml(blocks){
     var at=/^(center|left|right|top|bottom|top left|top right|bottom left|bottom right)$/.test(String(b.focus))&&b.focus!=='center'?' style="object-position:'+b.focus+'"':'';
     if(vid)img='<video class="ai-chat-peak__video" muted loop playsinline preload="metadata"'+(still?'':' autoplay')+(pic?' poster="'+pic+'"':'')+at+' aria-hidden="true" tabindex="-1"><source src="'+vid+'" type="'+(/\.webm(\?|$)/i.test(vid)?'video/webm':'video/mp4')+'"></video>';
     else img='<img src="'+pic+'" alt="" loading="lazy" draggable="false"'+at+(b.srcset&&peakSrcsetOk(b.srcset)?' srcset="'+esc(b.srcset)+'" sizes="'+peakSizeGuess(layout)+'px"':'')+'>';
-    if(b.message)h+='<button type="button" class="ai-chat-peak__tile" data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+wd+'</button>';
-    else if(url)h+='<a class="ai-chat-peak__tile" href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+wd+'</a>';
-    else h+='<div class="ai-chat-peak__tile is-still" role="img" aria-label="'+label+'">'+img+wd+'</div>'}
+    var own=layout==='across'&&b.w>0&&b.h>0?' style="--ai-peak-own:'+Math.round(b.w)+' / '+Math.round(b.h)+'"':'';
+    if(b.message)h+='<button type="button" class="ai-chat-peak__tile"'+own+' data-message="'+esc(b.message)+'" aria-label="'+label+'">'+img+wd+'</button>';
+    else if(url)h+='<a class="ai-chat-peak__tile"'+own+' href="'+url+'"'+(/^https?:/i.test(url)?' target="_blank" rel="noopener"':'')+' aria-label="'+label+'">'+img+wd+'</a>';
+    else h+='<div class="ai-chat-peak__tile is-still"'+own+' role="img" aria-label="'+label+'">'+img+wd+'</div>'}
   return h+'</div></div>';
 }
 /* Words on a picture (Settings → Peak Mode → Words on the picture): the
@@ -573,7 +576,7 @@ function peakSrcsetOk(v){
    layout), then exactly, once laid out and whenever the header is measured. */
 function peakSizeGuess(layout){
   var W=(typeof panel!=='undefined'&&panel&&panel.clientWidth)||500;
-  return Math.round(layout==='rail'?W*0.4:layout==='grid'?W*0.5:W*0.66);
+  return Math.round(layout==='rail'?W*0.4:layout==='grid'?W*0.5:layout==='across'?W:W*0.66);
 }
 function peakSizesFit(){
   var p=typeof panel!=='undefined'?panel:null;if(!p)return;

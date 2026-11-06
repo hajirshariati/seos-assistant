@@ -7742,6 +7742,28 @@ button.ai-chat-launcher__text {
   .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card .ai-chat-focus__card-text { justify-content: flex-start; padding: 10px 14px 14px 14px; }
   .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card .ai-chat-focus__card-cta { margin-top: auto; padding-top: 9px; }
 }
+/* Phones (the home narrower than 440px): as the full cards sit — Foot pain
+   across the top with the drawing beside its words, the two under it side
+   by side with the drawing above the words, their one line left out for
+   room, the call to action at the foot. */
+@container (max-width: 439px) {
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card--pain { grid-column: 1 / -1; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { --sc-h: 56px; flex-direction: column; align-items: stretch; min-height: 0; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { position: relative; left: 0; top: 0; transform: none; margin: 12px 0 0 -6px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { justify-content: flex-start; padding: 8px 12px 12px 12px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { display: none; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-cta { margin-top: auto; padding-top: 8px; }
+}
+/* The smallest phones: the three stacked full width, each with the drawing beside its words. */
+@container (max-width: 339px) {
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple { grid-template-columns: minmax(0, 1fr); }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) { --sc-h: 72px; flex-direction: row; align-items: stretch; min-height: 124px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-ico { position: absolute; left: -6px; top: 50%; transform: translateY(-50%); margin: 0; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-text { justify-content: center; padding: 14px 14px 14px 112px; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-sub { display: -webkit-box; }
+  .ai-chat-panel.is-focus .ai-chat-focus__cards.is-simple .ai-chat-focus__card:not(.ai-chat-focus__card--pain) .ai-chat-focus__card-cta { margin-top: 9px; padding-top: 0; }
+}
 /* The cards' colours (Settings → the cards' colours): soft grey as the chat
    (the default, light or dark with the theme), white with a hairline,
    charcoal, a breath of her first colour, or the store's own two. */
@@ -7938,6 +7960,19 @@ button.ai-chat-launcher__text {
 /* Grid: two across; an odd last one takes the row. */
 .ai-chat-panel .ai-chat-peak--grid .ai-chat-peak__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ai-chat-panel .ai-chat-peak--grid .ai-chat-peak__tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* Across: one under the other, each the whole width at the picture's own
+   shape — the picture whole, nothing cropped or enlarged; a tile knows its
+   shape before the picture loads when the picture's size came with it. A
+   very tall picture is capped and cropped at its anchor. One picture:
+   where the banner was, as wide as the chat. */
+.ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tiles { grid-template-columns: minmax(0, 1fr); }
+.ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tile { aspect-ratio: var(--ai-peak-own, auto); max-height: 360px; }
+.ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tile img, .ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tile video { position: relative; inset: auto; height: auto; max-height: 360px; }
+.ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tile[style*="--ai-peak-own"] img, .ai-chat-panel .ai-chat-peak--across .ai-chat-peak__tile[style*="--ai-peak-own"] video { position: absolute; inset: 0; height: 100%; max-height: none; }
+/* On a phone (the home narrower than 440px) the across pictures stay out of the way, as the banner does: the cards come first. */
+@container (max-width: 439px) {
+  .ai-chat-panel .ai-chat-peak--across { display: none; }
+}
 /* Mosaic: the first picture big, the rest around it — each count its own
    arrangement, no holes. The small tiles set the rows; the big one (and
    the wide one, with four) stretch to fill. */
