@@ -2008,10 +2008,9 @@ function focusLineIcon(kind,size){
   return pic?'<img src="'+pic+'" alt="" decoding="async">':focusLineDrawing(kind,size);
 }
 /* The cards' style (Settings → Focus home → Her look, or Peak Mode on peak
-   days): simple keeps the three cards' places and widths, each a flat box
-   with a big faded line drawing in its top left corner and the words low
-   at the left — the same spot in all three; the wide Foot pain card has
-   its one line too — no pictures, no line under the name, no button. */
+   days): three flat boxes of one width, each with the store's line drawing
+   faded in its top left corner, the small line, the name, its one line and
+   a quiet call to action — the three alike; no pictures, no pill button. */
 function focusSimple(){var L=homeLook();return !!(L&&L.cards==='simple')}
 function focusRefreshPics(){
   var boxes=panel.querySelectorAll('.ai-chat-focus__card-ico[data-kind]');
@@ -2030,8 +2029,8 @@ var FOCUS_CHEV='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stro
    in the middle of the row (the short one on phones, and in its sheet). */
 function focusCardHtml(kind){
   var w=focusCardWords(kind),title=kind==='pain'?'<span class="is-short">'+w[1]+'</span><span class="is-long">'+esc(FT.homePainTitleWide)+'</span>':w[1];
-  /* Simple: the small line, the name, and — on the wide Foot pain card only, where there's room — its one line. */
-  if(focusSimple())return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico is-line" aria-hidden="true"></span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span>'+(kind==='pain'?'<span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span>':'')+'</span></button>';
+  /* Simple: the small line, the name, its one line and its call to action — the three alike. */
+  if(focusSimple())return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-ico is-line" aria-hidden="true"></span><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+w[1]+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span></button>';
   return '<button type="button" class="ai-chat-focus__card ai-chat-focus__card--'+kind+'" data-focus-sheet="'+kind+'" aria-haspopup="dialog"><span class="ai-chat-focus__card-text"><span class="ai-chat-focus__card-eyebrow">'+w[0]+'</span><span class="ai-chat-focus__card-title">'+title+'</span><span class="ai-chat-focus__card-sub">'+focusCardSub(kind)+'</span><span class="ai-chat-focus__card-cta"><span>'+focusCardCta(kind)+FOCUS_CHEV+'</span></span></span>'+focusIcoBox(kind,30)+'</button>';
 }
 /* The three links above the message box: what each says, what it sends. */
