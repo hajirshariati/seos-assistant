@@ -47,7 +47,7 @@ const vite = await createServer({
   }],
 });
 try {
-  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx", "/app/exports": "app/routes/app.exports.jsx", "/app/api-keys": "app/routes/app.api-keys.jsx" }[routePath.split("?")[0]];
+  const file = { "/app/recordings": "app/routes/app.recordings.jsx", "/app/analytics": "app/routes/app.analytics.jsx", "/app": "app/routes/app._index.jsx", "/app/exports": "app/routes/app.exports.jsx", "/app/api-keys": "app/routes/app.api-keys.jsx", "/app/catalog": "app/routes/app.catalog.jsx" }[routePath.split("?")[0]];
   if (!file) throw new Error(`no route file for ${routePath}`);
   const mod = await vite.ssrLoadModule(path.join(root, file));
   const { rr, polaris, React, renderToString } = await vite.ssrLoadModule(path.join(root, "scripts/preview/libs.js"));

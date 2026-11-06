@@ -35,6 +35,7 @@ const DOWNS = [
 ];
 const UPS = [["does the rebecca come in wide", "Yes — Medium and Wide."], ["return policy", "Free returns within 30 days."], ["is the maui waterproof", "The Maui is water-resistant, not waterproof."]];
 
+await prisma.product.deleteMany({ where: { shop: SHOP } });
 await prisma.chatRecording.deleteMany({ where: { shop: SHOP } });
 await prisma.chatInteraction.deleteMany({ where: { shop: SHOP } });
 await prisma.chatUsage.deleteMany({ where: { shop: SHOP } });
@@ -118,3 +119,18 @@ for (let d = 13; d >= 0; d--) {
   }
 }
 console.log("seeded engagement: 14 days of chats and messages");
+
+
+// A few products with fields, so the Catalog page's "Show me something
+// similar" ticks (and Must match) have something to offer; two ticked, one a must.
+const FIELDS = [
+  { footbed: "Removable", activity: "Walking", "helps with": "Arch Pain, Plantar Fasciitis", "color family": "Black", color: "Black" },
+  { footbed: "Removable", activity: "Walking, Standing", "helps with": "Heel Pain", "color family": "Blue", color: "Navy" },
+  { footbed: "Memory foam", activity: "Casual", "helps with": "Arch Pain", "color family": "Brown", color: "Tan" },
+  { footbed: "Cork", activity: "Casual", "helps with": "Plantar Fasciitis", "color family": "Black", color: "Charcoal" },
+];
+for (let i = 0; i < FIELDS.length; i++) {
+  await prisma.product.create({ data: { shop: SHOP, shopifyId: `gid://shopify/Product/90${i}`, handle: `preview-shoe-${i}`, title: `Preview Shoe ${i + 1}`, status: "active", tags: [], attributesJson: FIELDS[i] } });
+}
+await prisma.shopConfig.update({ where: { shop: SHOP }, data: { similarMatchAttributes: JSON.stringify(["footbed", "activity", "helps with", "color family"]), similarMustAttributes: JSON.stringify(["footbed"]) } });
+console.log("seeded catalog fields for the similar ticks");

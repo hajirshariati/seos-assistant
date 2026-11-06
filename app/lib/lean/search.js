@@ -5,7 +5,7 @@
 // says how many products each filter's removal would bring back
 // (`if_relaxed`), so Claude decides how to broaden, honestly. Pure.
 
-import { valueOverlap } from "../similar-attributes.js";
+import { valueOverlap, valueParts } from "../similar-attributes.js";
 import { matchColorValues, colorFamiliesIn, isColorful } from "../color-match.js";
 import { styleName, closeCodes, productKind } from "./catalog.js";
 import { merchScore, fewSizesLeft, ratingOf } from "./merch.js";
@@ -457,12 +457,17 @@ export function productDetails(catalog, handle) {
 
 // "Something like the Savannah": same category and line, plus the qualities
 // the store chose (Catalog → "Show me something similar"), excluding the style
-// itself. Ranked by how many of those qualities match.
-export function similarProducts(catalog, { handle, attributes = [], limit = 6, max_price } = {}) {
+// itself. The qualities marked "must match" are gates: a style is shown only
+// when it holds every value the reference has for that field (the same
+// footbed; for a list, all of the reference's entries) — skipped when the
+// reference has no value there, so results still come. The rest rank: by
+// how many of those qualities match.
+export function similarProducts(catalog, { handle, attributes = [], must = [], limit = 6, max_price } = {}) {
   const products = catalog?.products || [];
   const ref = products.find((x) => x.handle === handle);
   if (!ref) return { error: "No product with that handle. Search first." };
   const want = attributes.map((a) => String(a).toLowerCase());
+  const mustKeys = (Array.isArray(must) ? must : []).map((a) => String(a).toLowerCase()).filter((k) => want.includes(k));
   const valueOf = (p, key) => {
     if (key === "color" || key === "colors" || key === "color_family") return p.colors.join(", ");
     if (key === "activity") return p.activities.join(", ");
@@ -475,6 +480,7 @@ export function similarProducts(catalog, { handle, attributes = [], limit = 6, m
     if (lc(p.category) !== lc(ref.category)) continue;
     if (ref.gender.length && p.gender.length && !p.gender.some((g) => ref.gender.includes(g) || g === "unisex")) continue;
     if (Number.isFinite(max_price) && p.price > max_price) continue;
+    if (mustKeys.some((key) => !holdsAll(valueOf(ref, key), valueOf(p, key)))) continue;
     let score = 0;
     for (const key of want) score += valueOverlap(valueOf(ref, key), valueOf(p, key));
     if (want.length && score === 0) continue;
@@ -489,7 +495,17 @@ export function similarProducts(catalog, { handle, attributes = [], limit = 6, m
     out.push(toModelProduct(p));
     if (out.length >= Math.min(Math.max(1, limit || 6), 10)) break;
   }
-  return { reference: ref.title, matched_on: ["category", "line", ...want], products: out };
+  return { reference: ref.title, matched_on: ["category", "line", ...want.map((k) => (mustKeys.includes(k) ? `${k} (must match)` : k))], products: out };
+}
+
+// Must match: every value the reference has for the field is on the
+// candidate too ("Cork" needs "Cork"; "Arch Pain, Heel Pain" needs both).
+// A reference with no value there can't demand one.
+function holdsAll(refValue, value) {
+  const need = valueParts(refValue);
+  if (!need.length) return true;
+  const have = new Set(valueParts(value));
+  return need.every((x) => have.has(x));
 }
 
 export { styleName };

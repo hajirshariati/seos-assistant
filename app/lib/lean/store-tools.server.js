@@ -188,6 +188,7 @@ export async function buildLeanStoreExtras({
     .map((m) => (typeof m.content === "string" ? m.content : ""))
     .join(" ");
   const similarAttributes = parseJson(config.similarMatchAttributes, []);
+  const similarMust = parseJson(config.similarMustAttributes, []);
   const ctx = {
     shop,
     accessToken,
@@ -381,6 +382,7 @@ export async function buildLeanStoreExtras({
     retired,
     memoryTz: MEMORY_TZ,
     similarAttributes: Array.isArray(similarAttributes) ? similarAttributes.map(String).filter(Boolean) : [],
+    similarMust: Array.isArray(similarMust) ? similarMust.map(String).filter(Boolean) : [],
     systemBlock: buildStoreContextBlock({ rules, campaigns, customer, loyaltyText, pagePromos, promoPageUrl: config.promoPageUrl || "" }),
     // This shopper and page (after the cached prompt), and the current time
     // with their latest message — every turn, so a date in a promotion, the

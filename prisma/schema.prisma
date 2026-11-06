@@ -164,6 +164,9 @@ model ShopConfig {
   // have ended, changes nothing for the shopper) or "on" (ends them).
   chatGuardMode          String   @default("watch")
   similarMatchAttributes String   @default("[]")
+  // Of those, the fields a similar style must share outright (Catalog →
+  // "Show me something similar" → Must match): a JSON list of field names.
+  similarMustAttributes  String   @default("[]")
   collectionLinks        String   @default("[]")
   fitPredictorEnabled    Boolean  @default(false)
   fitPredictorConfig     String   @default("{}")

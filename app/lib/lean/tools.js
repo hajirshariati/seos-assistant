@@ -141,7 +141,7 @@ export function buildLeanTools(vocab = {}, { similar = false, collection = null,
     tools.splice(2, 0, {
       name: "find_similar_products",
       description:
-        "Styles like one specific product (\"something like the Savannah\", \"similar but cheaper\"): same category and line, matched on the qualities this store chose. The product itself is excluded.",
+        "Styles like one specific product (\"something like the Savannah\", \"similar but cheaper\"): same category and line, matched on the qualities this store chose — some of which a style must share outright (the result says which). The product itself is excluded.",
       input_schema: {
         type: "object",
         properties: {

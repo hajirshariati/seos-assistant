@@ -176,7 +176,7 @@ export function leanChatResponse({
           buildLeanStoreExtras({ shop, config, accessToken, loggedInCustomerId, messages, latestUserMessage, fitfinder, sizeFinder })
             .catch((err) => {
               console.error("[lean] store extras failed:", err?.message || err);
-              return { tools: [], similarAttributes: [], systemBlock: "", pageBlock: "", turnNote: "" };
+              return { tools: [], similarAttributes: [], similarMust: [], systemBlock: "", pageBlock: "", turnNote: "" };
             }),
           seasonal ? featuredCollection({ shop, accessToken, handle: seasonal.handle }).catch(() => null) : null,
         ]);
@@ -220,6 +220,7 @@ export function leanChatResponse({
           pageSystem: extras.pageBlock,
           turnNote: [extras.turnNote, seasonalTap && featured ? seasonalTapNote(featured) : "", sizePickTap && sizeFinder ? TRUE_FIT_PICK_NOTE : ""].filter(Boolean).join("\n"),
           similarAttributes: extras.similarAttributes,
+          similarMust: extras.similarMust || [],
           retired: extras.retired || [],
           memoryTz: extras.memoryTz || "",
           featured,

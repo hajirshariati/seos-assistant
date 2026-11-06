@@ -1382,10 +1382,10 @@ await test("conversation normalization: starts with user, merges repeats", () =>
 });
 await test("store-chosen product fields reach Claude and are searchable", () => {
   const rows = [
-    { ...row("Lexa Quarter Strap Wedge - Black", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork", materials: "Leather upper" } },
+    { ...row("Lexa Quarter Strap Wedge - Black", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork", materials: "Leather upper", heel: "Low" } },
     { ...row("Lexa Quarter Strap Wedge - Ivory", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork" } },
-    { ...row("Noelle Arch Support Wedge - Navy", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Memory foam" } },
-    { ...row("Ashley Arch Support Wedge - Rose", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork" } },
+    { ...row("Noelle Arch Support Wedge - Navy", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Memory foam", heel: "Low" } },
+    { ...row("Ashley Arch Support Wedge - Rose", { cat: "Wedges/Heels" }), attributesJson: { category_for_filter: "Wedges/Heels", gender: "women", footbed: "Cork", heel: "Low" } },
     { ...row("Savannah Adjustable Quarter Strap Sandal - Red", { cat: "Sandals" }), attributesJson: { category_for_filter: "Sandals", gender: "women", footbed: "Cork" } },
   ];
   const c = buildLeanCatalog(rows, { shop: "s.myshopify.com" });
@@ -1397,6 +1397,22 @@ await test("store-chosen product fields reach Claude and are searchable", () => 
 
   const sim = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"] });
   assert.deepEqual(sim.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "same category + footbed, other styles only");
+  // Must match: with footbed ranking only, a memory-foam wedge still shows when
+  // another ticked field matches; made a must, it doesn't.
+  const loose = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed", "heel"] });
+  assert.deepEqual(loose.products.map((p) => p.title).sort(), ["Ashley Arch Support Wedge - Rose", "Noelle Arch Support Wedge - Navy"]);
+  const strict = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed", "heel"], must: ["footbed"] });
+  assert.deepEqual(strict.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "must match footbed: only cork");
+  assert.ok(strict.matched_on.includes("footbed (must match)"));
+  // A must on a field the reference has no value for can't demand one: results still come.
+  const ashley = c.products.find((p) => p.title.startsWith("Ashley"));
+  const noval = similarProducts(c, { handle: ashley.handle, attributes: ["footbed", "heel"], must: ["materials"] });
+  assert.deepEqual(noval.products.map((p) => p.title).sort(), ["Lexa Quarter Strap Wedge - Black", "Noelle Arch Support Wedge - Navy"], "must-match materials, but the reference has none → not a gate");
+  const mat = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed", "materials"], must: ["materials"] });
+  assert.equal(mat.products.length, 0, "the reference has materials no other wedge has → nothing passes the gate");
+  // A must on a field that isn't ticked is ignored.
+  const untick = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"], must: ["heel"] });
+  assert.deepEqual(untick.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"]);
 });
 await test("'similar' matches shared list values, and only sensible fields are offered", async () => {
   const { similarityOptions, valueOverlap } = await import("../app/lib/similar-attributes.js");

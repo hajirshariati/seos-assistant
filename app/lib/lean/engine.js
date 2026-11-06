@@ -528,6 +528,8 @@ export async function runLeanTurn({
   turnNote = "",
   // Qualities "similar" means for this store; empty → no similar tool.
   similarAttributes = [],
+  // Of those, the ones a similar style must share outright.
+  similarMust = [],
   // The seasonal button's collection { handle, title, label } when its
   // products are known (catalog.collections), else null.
   featured = null,
@@ -723,7 +725,7 @@ export async function runLeanTurn({
       };
     }
     if (name === "find_similar_products") {
-      const r = similarProducts(catalog, { ...input, attributes: similarAttributes });
+      const r = similarProducts(catalog, { ...input, attributes: similarAttributes, must: similarMust });
       if (!r.error) markSeen(r.products.map((p) => p.handle));
       log(`[lean] similar ${input.handle} → ${r.error ? r.error : r.products.length}`);
       return r;

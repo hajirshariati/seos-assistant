@@ -173,6 +173,7 @@ export const loader = async ({ request }) => {
     embeddingProvider,
     embeddedCount,
     similarMatchAttributes: safeParse(config.similarMatchAttributes, []),
+    similarMustAttributes: safeParse(config.similarMustAttributes, []),
     productCardStyle: config.productCardStyle === "showcase" ? "showcase" : "horizontal",
   };
 };
@@ -337,13 +338,18 @@ export const action = async ({ request }) => {
   
   if (intent === "save_similar_attrs") {
     const raw = formData.get("similarMatchAttributes");
+    const rawMust = formData.get("similarMustAttributes");
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
+      const parsedMust = rawMust ? JSON.parse(rawMust) : [];
+      if (Array.isArray(parsed) && Array.isArray(parsedMust)) {
         const clean = parsed
           .map((s) => (typeof s === "string" ? s.trim() : ""))
           .filter(Boolean);
-        await updateShopConfig(session.shop, { similarMatchAttributes: JSON.stringify(clean) });
+        // Must match only among the ticked fields.
+        const lower = new Set(clean.map((s) => s.toLowerCase()));
+        const must = parsedMust.map((s) => (typeof s === "string" ? s.trim() : "")).filter((s) => s && lower.has(s.toLowerCase()));
+        await updateShopConfig(session.shop, { similarMatchAttributes: JSON.stringify(clean), similarMustAttributes: JSON.stringify(must) });
         return { saved: true };
       }
     } catch { /* */ }
@@ -421,6 +427,11 @@ const CATALOG_CSS = `
   .ct-cov__status { justify-self: end; }
   .ct-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .ct-ticks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+  .ct-tick { display: grid; gap: 2px; align-content: start; }
+  /* Must match: a small tick under a ticked field, lit green when it's on. */
+  .ct-must { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px 28px; justify-self: start; cursor: pointer; font-size: 12px; line-height: 16px; color: #616161; }
+  .ct-must input { margin: 0; width: 14px; height: 14px; accent-color: #2D6B4F; cursor: pointer; }
+  .ct-must.is-on { color: #1f4d39; font-weight: 600; }
   .ct-note { padding: 10px 12px; border-radius: 10px; background: rgba(26,46,38,0.035); font-size: 12.5px; line-height: 18px; color: #616161; }
   .ct-note strong, .ct-note code { color: #1a1a1a; }
   .ct-note code { font-size: 12px; }
@@ -1157,26 +1168,37 @@ function ProductSpecsCard({ specs, maxBytes }) {
 // Attributes that already scope every similar-products lookup.
 const SIMILAR_ALWAYS = new Set(["gender", "category", "category_for_filter"]);
 
-function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
+function SimilarMatchAttributesCard({ initial, initialMust = [], attributeKeys = [] }) {
   const fetcher = useFetcher();
   const [attrs, setAttrs] = useState(initial || []);
+  const [must, setMust] = useState(initialMust || []);
   const [input, setInput] = useState("");
   const [showManual, setShowManual] = useState(attributeKeys.length === 0);
   // Ticked ones first, as they were when the page opened — a box doesn't
   // jump away from the pointer when it's ticked.
   const [firstPicked] = useState(() => new Set((initial || []).map((a) => String(a).toLowerCase())));
 
-  const save = (list) => {
+  const save = (list, mustList) => {
     const fd = new FormData();
     fd.set("intent", "save_similar_attrs");
     fd.set("similarMatchAttributes", JSON.stringify(list));
+    fd.set("similarMustAttributes", JSON.stringify(mustList));
     fetcher.submit(fd, { method: "post" });
   };
-  const has = (k) => attrs.some((a) => a.toLowerCase() === String(k).toLowerCase());
+  const same = (a, k) => a.toLowerCase() === String(k).toLowerCase();
+  const has = (k) => attrs.some((a) => same(a, k));
+  const isMust = (k) => must.some((a) => same(a, k));
   const toggle = (k, on) => {
-    const updated = on ? (has(k) ? attrs : [...attrs, k]) : attrs.filter((a) => a.toLowerCase() !== String(k).toLowerCase());
-    setAttrs(updated);
-    save(updated);
+    const updated = on ? (has(k) ? attrs : [...attrs, k]) : attrs.filter((a) => !same(a, k));
+    // Unticking a field drops its must-match too.
+    const updatedMust = on ? must : must.filter((a) => !same(a, k));
+    setAttrs(updated); setMust(updatedMust);
+    save(updated, updatedMust);
+  };
+  const toggleMust = (k, on) => {
+    const updated = on ? (isMust(k) ? must : [...must, k]) : must.filter((a) => !same(a, k));
+    setMust(updated);
+    save(attrs, updated);
   };
   const addManual = () => {
     const v = input.trim();
@@ -1193,20 +1215,27 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
   return (
     <Group
       title="“Show me something similar”"
-      badge={attrs.length > 0 ? <Badge tone="success">{`${attrs.length} ticked`}</Badge> : <Badge>Off</Badge>}
+      badge={attrs.length > 0 ? <Badge tone="success">{`${attrs.length} ticked${must.length ? ` · ${must.length} must match` : ""}`}</Badge> : <Badge>Off</Badge>}
     >
-      <Row stack help="When a shopper asks for “something like this one” or “similar but cheaper”, AVA shows other styles from the same category and gender that share what you tick. Nothing ticked turns this off.">
+      <Row stack help="When a shopper asks for “something like this one” or “similar but cheaper”, AVA shows other styles from the same category and gender that share what you tick, the ones sharing most first. Mark a ticked field Must match and only styles with the same value there are shown at all — the same footbed, say — and the other ticks rank them. Nothing ticked turns this off.">
         <BlockStack gap="300">
           {options.length > 0 ? (
             <div className="ct-ticks">
               {options.map((r) => (
-                <Checkbox
-                  key={r.key}
-                  label={String(r.key).replace(/_/g, " ")}
-                  helpText={`On ${Number(r.n).toLocaleString()} product${r.n === 1 ? "" : "s"}`}
-                  checked={has(r.key)}
-                  onChange={(on) => toggle(r.key, on)}
-                />
+                <div key={r.key} className="ct-tick">
+                  <Checkbox
+                    label={String(r.key).replace(/_/g, " ")}
+                    helpText={`On ${Number(r.n).toLocaleString()} product${r.n === 1 ? "" : "s"}`}
+                    checked={has(r.key)}
+                    onChange={(on) => toggle(r.key, on)}
+                  />
+                  {has(r.key) && (
+                    <label className={`ct-must${isMust(r.key) ? " is-on" : ""}`}>
+                      <input type="checkbox" checked={isMust(r.key)} onChange={(e) => toggleMust(r.key, e.target.checked)} aria-label={`${String(r.key).replace(/_/g, " ")}: must match`} />
+                      <span>Must match</span>
+                    </label>
+                  )}
+                </div>
               ))}
             </div>
           ) : (
@@ -1217,7 +1246,7 @@ function SimilarMatchAttributesCard({ initial, attributeKeys = [] }) {
 
           {extra.length > 0 && (
             <InlineStack gap="200" wrap>
-              {extra.map((a) => <Tag key={a} onRemove={() => toggle(a, false)}>{a}</Tag>)}
+              {extra.map((a) => <Tag key={a} onRemove={() => toggle(a, false)}>{isMust(a) ? `${a} (must match)` : a}</Tag>)}
             </InlineStack>
           )}
 
@@ -1282,7 +1311,7 @@ export default function Catalog() {
               What “similar” means for your products, and how cards look in the chat.
             </SectionHead>
             <div className="ct-two">
-              <SimilarMatchAttributesCard initial={data.similarMatchAttributes} attributeKeys={data.attributeKeys || []} />
+              <SimilarMatchAttributesCard initial={data.similarMatchAttributes} initialMust={data.similarMustAttributes} attributeKeys={data.attributeKeys || []} />
               <DisplayCard productCardStyle={data.productCardStyle} />
             </div>
           </section>
