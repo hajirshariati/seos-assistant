@@ -9,9 +9,11 @@
 // scrolls for ever. The page loads a window
 // of days (the last 7 by default; a day, 30, 90 or everything kept) plus
 // every flagged chat whatever its age; ?chat=<id> opens that chat. Chats
-// are never deleted by hand: they go when the keep time in Settings runs
-// out, flagged chats never. The lessons and the chat review live on
-// Analytics → Learn, not here.
+// go when the keep time in Settings runs out, flagged chats never; the one
+// way to remove a chat by hand is tucked at the very foot of its drawer —
+// faint words that show when the pointer rests there (or on a tab to
+// them), one chat at a time, with a confirm. The lessons and the chat
+// review live on Analytics → Learn, not here.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLoaderData, useFetcher, useNavigate, useRevalidator, useSearchParams } from "react-router";
 import { Page, Card, Button, TextField, Select, Icon, Popover, ActionList } from "@shopify/polaris";
@@ -21,7 +23,7 @@ import { adminWithAccess } from "../lib/staff-access.server";
 import { getRecentQuestions } from "../models/ChatFeedback.server";
 import { RATINGS_CSS, RankList, useCsvExport } from "../components/Ratings";
 import { getShopConfig } from "../models/ShopConfig.server";
-import { listRecordings } from "../models/ChatRecording.server";
+import { listRecordings, deleteRecordingSession } from "../models/ChatRecording.server";
 import { listFlags, setFlag, noteFlag, clearFlag } from "../models/ChatFlag.server";
 import { FLAG_NOTE_MAX } from "../lib/chat-flags.js";
 import { staffName } from "../lib/staff-access.js";
@@ -153,6 +155,11 @@ export const action = async ({ request }) => {
     await unlockGuardSession(session.shop, form.get("sessionId"));
     return { unlocked: true };
   }
+  // One chat, by hand, from the foot of its drawer (its flag goes with it).
+  if (intent === "delete_session") {
+    const out = await deleteRecordingSession(session.shop, form.get("sessionId"));
+    return { deleted: out.deleted + out.trashed };
+  }
   if (intent === "refresh_concerns") {
     const config = await getShopConfig(session.shop);
     if (!config?.anthropicApiKey) return { concerns: concernRunState(session.shop) };
@@ -163,7 +170,7 @@ export const action = async ({ request }) => {
 };
 
 const REC_CSS = `
-  .rd { --rd-line: rgba(30,27,51,0.08); --rd-green: #2D6B4F; --rd-red: #a33d3d; }
+  .rd, .rd-drawer { --rd-line: rgba(30,27,51,0.08); --rd-green: #2D6B4F; --rd-red: #a33d3d; }
   /* One column no wider than the screen: a row that scrolls sideways (the
      numbers, the windows) scrolls inside it, and never widens the page. */
   .rd-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
@@ -265,6 +272,15 @@ const REC_CSS = `
   .rd-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 14px; display: grid; gap: 12px; align-content: start; }
   .rd-drawer__flag { display: inline-flex; align-items: center; gap: 6px; flex: none; }
   .rd-votes { display: grid; gap: 8px; }
+  /* The foot of a chat's drawer: the words to delete the chat, unseen until
+     the pointer rests there (or a tab lands on them) — on purpose hard to
+     find, never in the way. */
+  .rd-drawer__end { display: flex; justify-content: flex-end; margin-top: 8px; padding: 10px 0 0; min-height: 28px; }
+  .rd-gone { all: unset; cursor: pointer; font-size: 11px; line-height: 14px; font-weight: 500; color: #8a8a8a; opacity: 0; transition: opacity 0.25s ease, color 0.15s ease; }
+  .rd-drawer__end:hover .rd-gone { opacity: 0.6; }
+  .rd-drawer__end .rd-gone:hover { opacity: 1; color: var(--rd-red); text-decoration: underline; text-underline-offset: 2px; }
+  .rd-drawer__end .rd-gone:focus-visible { opacity: 1; color: var(--rd-red); outline: 2px solid var(--rd-red); outline-offset: 2px; border-radius: 3px; }
+  @media (hover: none) { .rd-gone { opacity: 0.35; } }
   .rd-votes__title { font-size: 11px; line-height: 16px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: #616161; }
   .rd-vote { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: #f7f7f8; font-size: 12.5px; line-height: 18px; color: #303030; }
   .rd-vote__top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -457,14 +473,26 @@ export default function Recordings() {
     flagFetcher.submit({ intent: "unlock_session", sessionId: s.sessionId }, { method: "post" });
     shopify.toast.show("The chat can send again.");
   };
+  // Delete one chat (the faint words at the foot of its drawer): a confirm,
+  // then the chat is gone from the list at once — the drawer closes with
+  // it — while the save runs; the page reloads its numbers after.
+  const goneFetcher = useFetcher();
+  const [gone, setGone] = useState(() => new Set());
+  const deleteChat = (s) => {
+    const note = s.flag ? " It is flagged; deleting it removes the flag too." : "";
+    if (!window.confirm(`Delete this chat (${plural(s.turns.length, "message", "messages")})?${note} This can't be undone.`)) return;
+    setGone((o) => new Set([...o, s.sessionId]));
+    goneFetcher.submit({ intent: "delete_session", sessionId: s.sessionId }, { method: "post" });
+    shopify.toast.show("Chat deleted.");
+  };
   useEffect(() => { setFlagEdits({}); }, [sessions]);
-  const shown = useMemo(() => sessions.map((s) => {
+  const shown = useMemo(() => sessions.filter((s) => !gone.has(s.sessionId)).map((s) => {
     const e = flagEdits[s.sessionId];
     if (e === undefined) return s;
     if (!e.on) return { ...s, flag: null };
     const base = s.flag || { kind: "manual", note: "", by: "", at: "just now" };
     return { ...s, flag: e.note === undefined ? base : { ...base, kind: "manual", note: e.note, by: "you", at: "just now" } };
-  }), [sessions, flagEdits]);
+  }), [sessions, flagEdits, gone]);
   const setWindow = (d) => { setPage(1); setSearchParams(d === 7 ? {} : { days: String(d) }); };
 
   const testers = useMemo(() => [...new Set(shown.map((s) => s.tester || "Shopper"))].sort(), [shown]);
@@ -843,6 +871,9 @@ export default function Recordings() {
                       ))}
                     </div>
                   )}
+                  <div className="rd-drawer__end">
+                    <button type="button" className="rd-gone" onClick={() => deleteChat(current)} aria-label="Delete this chat">Delete this chat</button>
+                  </div>
                 </>
               ) : <VoteDetail v={currentVote} />}
             </div>
