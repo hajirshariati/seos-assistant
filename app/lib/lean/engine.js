@@ -18,7 +18,7 @@ import { storeLocatorConfig } from "../feedback-survey.js";
 import { verifyLeanAnswer, buildFamilyIndex, misappliedShipping, productLineNames } from "./verify.js";
 import { resolvePreselect, preselectAvailable, availableAlternatives } from "./variant-choice.js";
 import { RESTOCK_TOOL, restockCheck, restockIssues } from "./restock.js";
-import { fitFinderIssues } from "./fit-finder.js";
+import { fitFinderIssues, footScanIssues } from "./fit-finder.js";
 import { productKind, codesInText, stylesInText, GENERIC_STYLE_WORDS } from "./catalog.js";
 import { liveStyleKeys, retiredStyleIndex, retiredStylesInText, retiredNote, claimsFromMemory } from "../memory.js";
 import { containsColorWord } from "../color-match.js";
@@ -1033,6 +1033,9 @@ export async function runLeanTurn({
     // The arch / ball-of-foot questions asked in words while the store's FIT
     // finder could take them in two taps: offer the finder's card instead.
     issues.push(...fitFinderIssues({ text, called: [...calledTools], available: tools.map((t) => t.name), fitfinder }));
+    // "I can't access your foot scan" while the scan lookup is a tap away in
+    // the chat: offer its card instead.
+    issues.push(...footScanIssues({ latestUserMessage, text, called: [...calledTools], available: tools.map((t) => t.name) }));
     // "That offer ended" / "that style was discontinued" with no record
     // behind it: only the store's memory may say so.
     if (claimsFromMemory(text) && !memoryEvidence && !soldOut.length) {

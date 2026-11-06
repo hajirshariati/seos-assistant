@@ -2887,7 +2887,7 @@ if(isOpen){
   revealLauncher();
   if(FOCUS)focusGreetReset();
   focusBeforeOpen=document.activeElement;
-  loadFitfinder().then(renderHelpers);
+  loadFitfinder().then(function(){renderHelpers();ffCardsRestore()});
   launcher.classList.add('hidden');
   launcher.inert=true;launcher.setAttribute('aria-hidden','true');
   panel.classList.add('open');
@@ -4362,7 +4362,7 @@ function cmpMax(){return cmpIsPhone()?2:CMP_MAX}
 function cmpPickHint(){return cmpMax()===2?'Pick 2':'Pick 2 or 3'}
 var pendingCompare=null;
 /* A button under the reply that opens one of the store's Typeforms. */
-var pendingForm=null,pendingMap=null,pendingFfCta=false;
+var pendingForm=null,pendingMap=null,pendingFfCta=false,pendingFfScan=false;
 /* The back-in-stock card under a reply (the server's restock_cta): the
    shopper's email goes from here straight to the store's Klaviyo, for that
    one variant — never through the assistant. */
@@ -5829,12 +5829,12 @@ function resumeAfterSignIn(){
      they asked for. No message to the assistant. */
   if(r.intent==='fitfinder'||r.intent==='fitfinder-scan'){
     if(ff)ff.loggedIn=true;
-    var pk='';try{pk=sessionStorage.getItem(FFS_PENDING)||'';sessionStorage.removeItem(FFS_PENDING)}catch(e){}
+    var pk='',fromChat=false;try{pk=sessionStorage.getItem(FFS_PENDING)||'';sessionStorage.removeItem(FFS_PENDING);fromChat=sessionStorage.getItem(FFS_CHAT)==='1';sessionStorage.removeItem(FFS_CHAT)}catch(e){}
     if(pk&&ff)ffSave(pk);
     if(!isOpen)toggle(true);
     setTimeout(function(){
       if(!ffNative())return;
-      if(r.intent==='fitfinder-scan'){ffs.from=savedFit()?'done':'quiz';ffs.view='scan';if(openFitFinder(null,'keep'))ffsScanStart(fbSheet)}
+      if(r.intent==='fitfinder-scan'){ffs.from=savedFit()?'done':'quiz';ffs.view='scan';if(openFitFinder(null,'keep')){ffs.chat=fromChat;ffsScanStart(fbSheet)}}
       else{ffs.view='done';ffs.done='account';openFitFinder(null,'keep')}
     },isOpen?150:700);
     return;
@@ -6578,9 +6578,9 @@ function ffPayload(){
   var local=ffStored();/* a save on this device is the newest choice */
   /* "Retake my FIT": this one message goes without the saved FIT, so the
      questions are asked again; the new answer is saved as usual. */
-  /* native: the finder's own flow runs here (the card can go under a reply); offered: its card is in this chat already. */
-  if(ffRetake){ffRetake=false;return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:''},retake:true,native:ffNative(),offered:ffOffered()}}
-  return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:(local&&local.key)||ff.saved||''},native:ffNative(),offered:ffOffered()};
+  /* native: the finder's own flow runs here (the card can go under a reply); offered: its card is in this chat already; scan: the in-store scan lookup runs here too. */
+  if(ffRetake){ffRetake=false;return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:''},retake:true,native:ffNative(),offered:ffOffered(),scan:ffScanHere()}}
+  return{fits:ffFitsForAi(),questions:ffQuestionsForAi(),saved:{key:(local&&local.key)||ff.saved||''},native:ffNative(),offered:ffOffered(),scan:ffScanHere()};
 }
 /* The same consent rule FITFinder follows: remember across visits only when
    preference cookies are allowed (OneTrust group C0003 or Shopify's banner). */
@@ -6606,7 +6606,7 @@ function ffSave(key){
   var stale=msgsEl.querySelectorAll('.ai-chat-product-card [data-helper="fitfinder"]');
   for(var si=0;si<stale.length;si++){var row=stale[si].parentNode;row.removeChild(stale[si]);if(row.classList.contains('ai-tools'))toolsRelayout(row)}
   /* …and the finder's card under an earlier reply goes too (Retake is on the home). */
-  var cards=msgsEl.querySelectorAll('.ai-chat-ffcta');
+  var cards=msgsEl.querySelectorAll('.ai-chat-ffcta:not(.ai-chat-ffcta--scan)');
   for(var ci=0;ci<cards.length;ci++)cards[ci].parentNode.removeChild(cards[ci]);
 }
 
@@ -6630,6 +6630,8 @@ function ffNative(){
   return true;
 }
 function ffFitByKey(key){for(var i=0;i<ff.fits.length;i++)if(ff.fits[i].key===key)return ff.fits[i];return null}
+/* The in-store scan lookup runs in the sheet (the app's scan link is on). */
+function ffScanHere(){return !!(ff&&ff.scanCta)&&ffNative()}
 /* The FIT the answers map to: null until every question is answered,
    false when the table has nothing for that combination. */
 function ffsFit(){
@@ -6815,17 +6817,44 @@ function ffCtaHtml(){
   var n=ff&&ff.questions.length?ff.questions.length:2;
   return '<button type="button" class="ai-chat-ffcta" data-ff-cta="1" aria-haspopup="dialog"><span class="ai-chat-ffcta__mark" aria-hidden="true"><b>FIT</b>FINDER</span><span class="ai-chat-ffcta__text"><span class="ai-chat-ffcta__title">'+esc((ff&&ff.words.cta)||'Help me find my Fit')+'</span><span class="ai-chat-ffcta__sub">'+n+' quick question'+(n===1?'':'s')+' \u00b7 your FIT in a moment</span></span><span class="ai-chat-ffcta__go" aria-hidden="true">'+WI.arrow+'</span></button>';
 }
+/* The in-store scan's card under a reply (open_foot_scan): the mark, Pull
+   up my foot scan, what the tap does — it opens the sheet on the scan
+   lookup (sign in with the scan's email, then the scanned FIT). */
+function ffScanCtaHtml(){
+  return '<button type="button" class="ai-chat-ffcta ai-chat-ffcta--scan" data-ff-scan="1" aria-haspopup="dialog"><span class="ai-chat-ffcta__mark" aria-hidden="true"><b>FIT</b>FINDER</span><span class="ai-chat-ffcta__text"><span class="ai-chat-ffcta__title">Pull up my foot scan</span><span class="ai-chat-ffcta__sub">'+(ffsLogged()?'From your scan in our store \u00b7 your FIT in a moment':'Sign in with the email from your scan')+'</span></span><span class="ai-chat-ffcta__go" aria-hidden="true">'+WI.arrow+'</span></button>';
+}
+/* A chat reopened before FITFinder's config came (a reload, another page):
+   the finder's cards under earlier replies — the questions, the scan — are
+   put back once it has, as they'd have been restored with the chat. */
+function ffCardsRestore(){
+  if(!ff||!msgsEl)return;
+  var nodes=msgsEl.querySelectorAll('.ai-chat-msg--assistant');
+  for(var i=0;i<nodes.length;i++){
+    var m=nodes[i].__msg,b=m?$('.ai-chat-msg-bubble',nodes[i]):null;if(!b)continue;
+    if(m.ffCta&&ffNative()&&!savedFit()&&!b.querySelector('.ai-chat-ffcta:not(.ai-chat-ffcta--scan)'))b.insertAdjacentHTML('beforeend',ffCtaHtml());
+    if(m.ffScan&&ffScanHere()&&!b.querySelector('.ai-chat-ffcta--scan'))b.insertAdjacentHTML('beforeend',ffScanCtaHtml());
+  }
+}
+var FFS_CHAT='hajirai_ff_scanchat';
+function openFootScan(opener){
+  if(!ffScanHere())return;
+  ffs.from=savedFit()?'done':'quiz';ffs.view='scan';ffs.scan=null;
+  if(!openFitFinder(opener,'keep'))return;
+  /* From the chat: Use my scanned fit puts the FIT in the chat and the word to the assistant. */
+  ffs.chat=true;ffsScanStart(fbSheet);
+}
 /* Submit in the finder from the chat: the FIT as a card in the chat (no
    turn with the assistant), then the shopper's word to the assistant so it
-   carries on — who it's for, the shoes, the pick. */
-function ffChatResult(f){
+   carries on — who it's for, the shoes, the pick. From the scan: the card
+   and the word say the FIT came from their foot scan. */
+function ffChatResult(f,fromScan){
   if(isStreaming)return;
   var w=$('.ai-chat-welcome',msgsEl);if(w)w.remove();msgsEl.classList.remove('is-welcome');
-  var text='Here\u2019s your FIT.',m={role:'assistant',content:text,fit:{key:f.key,label:f.label,name:f.name,description:f.description},local:true};
+  var text=fromScan?'Here\u2019s your FIT, from your foot scan.':'Here\u2019s your FIT.',m={role:'assistant',content:text,fit:{key:f.key,label:f.label,name:f.name,description:f.description},local:true};
   messages.push(m);
   var md=appendMsg('assistant',text);md.__msg=m;restoreExtras(m,md,true);
   saveH(messages);
-  setTimeout(function(){focusSend('My FIT is '+fitTitle(f)+'.')},150);
+  setTimeout(function(){focusSend('My FIT is '+fitTitle(f)+(fromScan?', from my foot scan.':'.'))},150);
 }
 function ffsAct(b){
   var sh=fbSheet,a=b.getAttribute('data-ffs'),f;
@@ -6863,11 +6892,13 @@ function ffsAct(b){
   /* The scan leaves from the questions or from a saved FIT; its Back goes to the same. */
   if(a==='scan'){ffs.from=ffs.view==='done'?'done':'quiz';ffs.view='scan';ffsScanStart(sh);return}
   if(a==='quiz'){ffs.view=ffs.from==='done'&&savedFit()?'done':'quiz';ffs.scan=null;ffsRender(sh);return}
-  if(a==='scan-login'){startSignIn('fitfinder-scan');return}
+  if(a==='scan-login'){if(ffs.chat){try{sessionStorage.setItem(FFS_CHAT,'1')}catch(e){}}startSignIn('fitfinder-scan');return}
   if(a==='scan-retry'){ffsScanStart(sh);return}
   if(a==='scan-use'){
     var s=ffs.scan;if(!s||s.state!=='found')return;
-    if(!ffFitByKey(s.fit.key)){ffs.scan={state:'error'};ffsRender(sh);return}
+    var sf=ffFitByKey(s.fit.key);
+    if(!sf){ffs.scan={state:'error'};ffsRender(sh);return}
+    if(ffs.chat){ffSave(sf.key);ffs.scan=null;ffs.view='done';ffs.done=ffsLogged()?'account':'guest';ffs.a={};ffs.chat=false;closeFeedback();ffChatResult(sf,true);return}
     ffSave(s.fit.key);ffs.scan=null;ffsSaved(ffsLogged()?'account':'guest');return;
   }
 }
@@ -6948,7 +6979,7 @@ function handleSSE(response){
 var reader=response.body.getReader();
 var decoder=new TextDecoder();
 var buf='',full='',prods=[],msgDiv=null,buffSugg=[],buffChoices=[],linkCTA=null,fitReport=null,vizCta=null,supportCta=null,sizeFinder=null;
-fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingRestock=null;pendingFfCta=false;
+fitResult=null;pendingOrders=null;pendingLogin=null;pendingCompare=null;pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingRestock=null;pendingFfCta=false;pendingFfScan=false;
 function proc(chunk){
 buf+=chunk;var lines=buf.split('\n');buf=lines.pop()||'';
 for(var i=0;i<lines.length;i++){
@@ -6999,6 +7030,7 @@ if(p.type==='size_finder'&&p.handle){
   sizeFinder={handle:String(p.handle),title:String(p.title||'')};
 }
 if(p.type==='fitfinder_cta'){pendingFfCta=true}
+if(p.type==='fitfinder_scan'){pendingFfScan=true}
 if(p.type==='form_cta'&&/^[A-Za-z0-9]{4,32}$/.test(String(p.form||''))){pendingForm={form:String(p.form),label:String(p.label||'').trim().slice(0,40)||'Open the quiz'}}
 if(p.type==='restock_cta'){pendingRestock=cleanRestock(p)}
 if(p.type==='map_cta'){pendingMap=cleanMap(p)}
@@ -7136,6 +7168,7 @@ if(cleanText){
   if(pendingCompare){_saved.comparison=pendingCompare;_saved.compared=cmpCompared(pendingCompare)}
   if(pendingForm)_saved.formCta=pendingForm;
   if(pendingFfCta)_saved.ffCta=true;
+  if(pendingFfScan)_saved.ffScan=true;
   if(pendingMap)_saved.mapCta=pendingMap;
   if(pendingSizeIntro)_saved.sizeIntro=pendingSizeIntro;
   /* Everything else under the reply comes back with it too — the sign-in
@@ -7182,6 +7215,10 @@ if(pendingFfCta&&mDiv&&ffNative()&&!savedFit()){
   var ffcb=$('.ai-chat-msg-bubble',mDiv);
   if(ffcb)ffcb.insertAdjacentHTML('beforeend',ffCtaHtml());
 }
+if(pendingFfScan&&mDiv&&ffScanHere()){
+  var ffsb=$('.ai-chat-msg-bubble',mDiv);
+  if(ffsb)ffsb.insertAdjacentHTML('beforeend',ffScanCtaHtml());
+}
 if(pendingMap&&mDiv){
   var mcb=$('.ai-chat-msg-bubble',mDiv);
   if(mcb)mcb.insertAdjacentHTML('beforeend',mapCtaHtml(pendingMap));
@@ -7194,7 +7231,7 @@ if(pendingSizeIntro&&mDiv){
   var tib=$('.ai-chat-msg-bubble',mDiv);
   if(tib)tib.insertAdjacentHTML('beforeend',sizeIntroHtml(pendingSizeIntro));
 }
-pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingFfCta=false;
+pendingForm=null;pendingMap=null;pendingViewAll=null;pendingSizeIntro=null;pendingFfCta=false;pendingFfScan=false;
 if(fitResult&&mDiv){
   var fitP=$('.ai-chat-msg-bubble > p',mDiv),fitObj=null;
   for(var fi=0;ff&&fi<ff.fits.length;fi++){if(ff.fits[fi].key===fitResult)fitObj=ff.fits[fi]}
@@ -7765,6 +7802,8 @@ var fitxBtn=e.target.closest('[data-fitx]');
 if(fitxBtn){e.preventDefault();e.stopPropagation();fitxOpen(fitxBtn);return;}
 var ffCtaBtn=e.target.closest('[data-ff-cta]');
 if(ffCtaBtn){e.preventDefault();if(!isStreaming)openFitFinder(ffCtaBtn,'chat');return;}
+var ffScanBtn=e.target.closest('[data-ff-scan]');
+if(ffScanBtn){e.preventDefault();if(!isStreaming)openFootScan(ffScanBtn);return;}
 var helperBtn=e.target.closest('[data-helper]');
 if(helperBtn){e.preventDefault();if(!isStreaming)startHelper(helperBtn.getAttribute('data-helper'));return;}
 var tfBtn=e.target.closest('[data-truefit]');
@@ -7852,6 +7891,7 @@ function restoreExtras(m,md,live){
   if(m.linkCTA&&m.linkCTA.url)add(ctaHtml(m.linkCTA));
   var sup=cleanSupport(m.support);if(sup)add(supportCtaHtml(sup));
   if(m.ffCta&&ffNative()&&!savedFit())add(ffCtaHtml());
+  if(m.ffScan&&ffScanHere())add(ffScanCtaHtml());
   var fc=m.formCta;
   if(fc&&/^[A-Za-z0-9]{4,32}$/.test(String(fc.form||'')))add(formCtaHtml({form:String(fc.form),label:String(fc.label||'').slice(0,40)||'Open the quiz'}));
   var mc=cleanMap(m.mapCta);if(mc)add(mapCtaHtml(mc));

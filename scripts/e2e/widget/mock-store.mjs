@@ -679,6 +679,15 @@ export function start(port) {
             w({ type: "done" });
             return resp.end();
           }
+          // "pull up my foot scan": the assistant says the scan is right here and puts the scan card under the reply (open_foot_scan).
+          if (!/^My FIT is /i.test(parsed.message || "") && /\b(?:my|our) (?:foot |feet )?scan\b|\bscanned\b/i.test(parsed.message || "")) {
+            resp.writeHead(200, { "Content-Type": "text/event-stream" });
+            resp.write(`data: ${JSON.stringify({ type: "text", text: "Your foot scan from our store is right here — tap below and sign in with the email you gave at the scan, and your FIT comes up with your scan report." })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "products", products: [] })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "fitfinder_scan" })}\n\n`);
+            resp.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+            return resp.end();
+          }
           // "which orthotic should I get": the assistant explains the finder in a sentence and puts its card under the reply (open_fit_finder).
           if (/which orthotic/i.test(parsed.message || "")) {
             resp.writeHead(200, { "Content-Type": "text/event-stream" });

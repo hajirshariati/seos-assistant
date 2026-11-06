@@ -21,7 +21,7 @@ import { getRetiredProducts } from "../../models/RetiredProduct.server.js";
 import { matchOffers, pastOffersResult, promoMemoryDays, styleMemoryDays, MEMORY_TZ } from "../memory.js";
 import { promoPageBlock, nowNote } from "../promo-page.js";
 import { savedFitNote } from "../orthotic-finder.server.js";
-import { FIT_FINDER_TOOL_DEF, fitFinderToolResult } from "./fit-finder.js";
+import { FIT_FINDER_TOOL_DEF, fitFinderToolResult, FOOT_SCAN_TOOL_DEF, footScanToolResult } from "./fit-finder.js";
 import { getKnowledgeFilesWithContent } from "../../models/ShopConfig.server.js";
 import { trueFitTool } from "./size-finder.server.js";
 import { ordersTool } from "./orders-tool.server.js";
@@ -371,6 +371,12 @@ export async function buildLeanStoreExtras({
   // every shopper of the store alike — one with a FIT is told not to use it.
   if ((rec.tools || []).some((d) => d?.input_schema?.properties?.fit) && fitfinder?.native === true) {
     wrap(FIT_FINDER_TOOL_DEF, async () => fitFinderToolResult(fitfinder.questions?.length || 2));
+  }
+  // The in-store foot scan: the widget's FITFinder sheet can look a
+  // customer's scan up (sign in, then their scanned FIT) — a card under a
+  // reply opens it, so the assistant never says it can't see a scan.
+  if (fitfinder?.scan === true) {
+    wrap(FOOT_SCAN_TOOL_DEF, async () => footScanToolResult());
   }
 
   log(

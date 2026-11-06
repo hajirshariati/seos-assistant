@@ -1197,6 +1197,32 @@ await test("the orthotic-chat check only fires on a short answer that switches t
     assert.equal(r2.retried, false);
     assert.equal(r2.events.some((e) => e.type === "fitfinder_cta"), false);
   });
+  // The in-store foot scan: "pull up my foot scan" answered with "I can't
+  // access scan data" while the scan lookup runs in the chat is sent back;
+  // the rewrite calls open_foot_scan and the scan card goes under it.
+  await test("\"pull up my foot scan\" answered with \"I can't access it\" while the scan lookup is in the chat: sent back; the rewrite puts the scan card under the reply", async () => {
+    const { FOOT_SCAN_TOOL_DEF, footScanToolResult } = await import("../app/lib/lean/fit-finder.js");
+    const scanTool = { definition: FOOT_SCAN_TOOL_DEF, run: async () => footScanToolResult() };
+    const ask = "can you pull up my foot scan";
+    const s = scripted([
+      { stop_reason: "end_turn", content: [txt("I'm not able to access foot scan data directly in this chat — that's stored with the retailer where you had your scan done. What I can see is that you already have a FIT D on file.")] },
+      { stop_reason: "tool_use", content: [tu("t1", "open_foot_scan", {})] },
+      { stop_reason: "end_turn", content: [txt("Your foot scan from our store is right here — tap below and sign in with the email you gave at the scan, and your scanned FIT comes up with your scan report. You already have a FIT D on file, and your scan may confirm it.")] },
+    ]);
+    const logs = [];
+    const r = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, extraTools: [scanTool], callModel: s.callModel, log: (l) => logs.push(l) });
+    assert.ok(s.requests[0].tools.some((t) => t.name === "open_foot_scan"), "the tool is offered");
+    assert.equal(r.retried, true);
+    assert.ok(logs.some((l) => /rewrite: .*foot_scan_not_offered/.test(l)), logs.join("\n"));
+    assert.match(JSON.stringify(s.requests[1].messages.at(-1)), /never say you can't access or see it/);
+    assert.deepEqual(r.events.filter((e) => e.type === "fitfinder_scan"), [{ type: "fitfinder_scan" }]);
+    assert.match(r.text, /right here/);
+    assert.doesNotMatch(r.text, /not able to access/);
+    // Without the lookup in the chat (no tool), the words stand.
+    const s2 = scripted([{ stop_reason: "end_turn", content: [txt("Your scan is kept at the store where you had it done — but I can work out your FIT right here with two quick questions.")] }]);
+    const r2 = await runLeanTurn({ catalog: cat4, config, model: "m", messages: [{ role: "user", content: ask }], latestUserMessage: ask, callModel: s2.callModel, log: quiet });
+    assert.equal(r2.retried, false);
+  });
   await test("live stock is asked before the alert: back in stock since the sync → no card, show it", async () => {
     const s = scripted([
       { stop_reason: "tool_use", content: [tu("t1", "search_products", { query: "miles" })] },

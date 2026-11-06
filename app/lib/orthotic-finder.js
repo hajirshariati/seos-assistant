@@ -295,8 +295,8 @@ export function sanitizeFitfinder(raw) {
   const saved = fits.find((f) => f.key === savedKey) || null;
   // native: the finder's own flow runs in the chat (questions with ids and
   // the answers' table came along); offered: its card is already under a
-  // reply in this chat.
-  return { fits, questions, saved: saved ? saved.key : null, native: raw.native === true, offered: raw.offered === true };
+  // reply in this chat; scan: the in-store scan lookup runs in the chat too.
+  return { fits, questions, saved: saved ? saved.key : null, native: raw.native === true, offered: raw.offered === true, scan: raw.native === true && raw.scan === true };
 }
 
 // The FIT code of a version: arch + metatarsal pad, in Aetrex's numbering.

@@ -1225,6 +1225,13 @@ for (const [label, viewport] of [["computer", { width: 1280, height: 860 }], ["p
     return { tag: b.tagName, popup: b.getAttribute("aria-haspopup"), mark: b.querySelector(".ai-chat-ffcta__mark")?.textContent, title: b.querySelector(".ai-chat-ffcta__title")?.textContent, sub: b.querySelector(".ai-chat-ffcta__sub")?.textContent, inside: r.left >= br.left - 1 && r.right <= br.right + 1, wide: r.width >= br.width * 0.8, h: Math.round(r.height), text: bub.querySelector("p")?.textContent || "", sheet: !!document.querySelector(".ai-chat-fbsheet.is-open") };
   });
   check(`FIT finder from the chat (${label}): the reply explains the finder in a sentence and carries its card — the FITFINDER mark, the store's line, '2 quick questions', a tap target the width of the reply; the message said the finder runs here and hasn't been offered yet`, cta.tag === "BUTTON" && cta.popup === "dialog" && cta.mark === "FITFINDER" && cta.title === "Help me find my Fit" && cta.sub === "2 quick questions · your FIT in a moment" && cta.inside && cta.wide && cta.h >= 44 && /FIT finder/.test(cta.text) && !cta.sheet && sent1?.fitfinder?.native === true && sent1.fitfinder.offered === false, JSON.stringify({ cta, ff: sent1?.fitfinder && { native: sent1.fitfinder.native, offered: sent1.fitfinder.offered, saved: sent1.fitfinder.saved } }));
+  // Reloaded before a FIT: the card comes back under its reply (FITFinder's config arrives after the chat is rebuilt).
+  await page.reload();
+  await page.waitForTimeout(700);
+  if (!(await page.evaluate(() => !!document.querySelector(".ai-chat-panel.open")))) { await page.click(".ai-chat-launcher"); await page.waitForTimeout(700); }
+  await page.waitForSelector(".ai-chat-msg--assistant .ai-chat-ffcta", { timeout: 5000 }).catch(() => {});
+  const backEarly = await page.evaluate(() => ({ open: !!document.querySelector(".ai-chat-panel.open"), ctas: document.querySelectorAll(".ai-chat-ffcta").length, order: [...document.querySelectorAll(".ai-chat-msg")].map((m) => (m.classList.contains("ai-chat-msg--user") ? "u" : m.querySelector(".ai-chat-ffcta") ? "cta" : "a")).join(",") }));
+  check(`FIT finder from the chat (${label}): reloaded before they have a FIT, the finder's card is back under its reply`, backEarly.open && backEarly.ctas === 1 && backEarly.order === "u,cta", JSON.stringify(backEarly));
   await page.click(".ai-chat-ffcta");
   await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
   await page.waitForTimeout(300);
@@ -1257,6 +1264,63 @@ for (const [label, viewport] of [["computer", { width: 1280, height: 860 }], ["p
   check(`FIT finder from the chat (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
+// The in-store foot scan from the chat (open_foot_scan): "pull up my foot
+// scan" → the reply carries the scan card (the message said the lookup runs
+// here). Signed out, a tap opens the sheet on the scan lookup asking to sign
+// in with the scan's email. Signed in, the scan comes back; Use my scanned
+// fit closes the sheet, puts the FIT in the chat as its card and sends the
+// word, and the assistant carries on. The card comes back after a reload.
+for (const [label, guest] of [["signed out", true], ["signed in", false]]) {
+  mockCtl.ffGuest = guest;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("http://localhost:4789/full");
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(400);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "can you pull up my foot scan");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg--assistant .ai-chat-ffcta--scan", { timeout: 8000 });
+  await page.waitForTimeout(300);
+  const sent = chatBodies.at(-1);
+  const card = await page.evaluate(() => {
+    const b = document.querySelector(".ai-chat-ffcta--scan"); const bub = b.closest(".ai-chat-msg-bubble"); const r = b.getBoundingClientRect(); const br = bub.getBoundingClientRect();
+    return { tag: b.tagName, popup: b.getAttribute("aria-haspopup"), mark: b.querySelector(".ai-chat-ffcta__mark")?.textContent, title: b.querySelector(".ai-chat-ffcta__title")?.textContent, sub: b.querySelector(".ai-chat-ffcta__sub")?.textContent, inside: r.left >= br.left - 1 && r.right <= br.right + 1, wide: r.width >= br.width * 0.8, h: Math.round(r.height), text: bub.querySelector("p")?.textContent || "", sheet: !!document.querySelector(".ai-chat-fbsheet.is-open") };
+  });
+  check(`foot scan from the chat (${label}): the reply says the scan is right here and carries the scan card — the FITFINDER mark, 'Pull up my foot scan', ${guest ? "'Sign in with the email from your scan'" : "'From your scan in our store · your FIT in a moment'"}, a tap target the width of the reply; the message said the scan lookup runs here`, card.tag === "BUTTON" && card.popup === "dialog" && card.mark === "FITFINDER" && card.title === "Pull up my foot scan" && card.sub === (guest ? "Sign in with the email from your scan" : "From your scan in our store · your FIT in a moment") && card.inside && card.wide && card.h >= 44 && /scan/.test(card.text) && !card.sheet && sent?.fitfinder?.scan === true && sent.fitfinder.native === true, JSON.stringify({ card, ff: sent?.fitfinder && { scan: sent.fitfinder.scan, native: sent.fitfinder.native } }));
+  await page.click(".ai-chat-ffcta--scan");
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
+  if (guest) {
+    await page.waitForTimeout(300);
+    const out = await page.evaluate(() => ({ title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent, note: document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__note")?.textContent, btn: document.querySelector('.ai-chat-fbsheet [data-ffs="scan-login"]')?.textContent, back: document.querySelector('.ai-chat-fbsheet [data-ffs="quiz"]')?.textContent, qs: document.querySelectorAll(".ai-chat-fbsheet .ai-ffs__q").length }));
+    check("foot scan from the chat (signed out): the tap opens the sheet on the scan lookup — 'Scanned in one of our stores?', 'Sign in with the email from your scan', a Sign in button, Back to the questions — not the questions", out.title === "Scanned in one of our stores?" && out.note === "Sign in with the email from your scan." && out.btn === "Sign in" && out.back === "Back to the questions" && out.qs === 0, JSON.stringify(out));
+  } else {
+    await page.waitForSelector('.ai-chat-fbsheet [data-ffs="scan-use"]', { timeout: 3000 });
+    const found = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent, label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, report: !!r?.querySelector('a[href="https://scan.example/report/1"]') }; });
+    const nBodies = chatBodies.length, nS = fitSaves.length;
+    await page.click('.ai-chat-fbsheet [data-ffs="scan-use"]');
+    await page.waitForFunction(() => /which shoes will you wear them in/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => {
+      const msgs = [...document.querySelectorAll(".ai-chat-msg")];
+      const fit = document.querySelector(".ai-chat-msg--assistant .ai-chat-fit-result");
+      const users = msgs.filter((m) => m.classList.contains("ai-chat-msg--user")).map((m) => m.querySelector(".ai-chat-msg-bubble")?.textContent.trim());
+      const last = msgs.at(-1);
+      return { sheet: !!document.querySelector(".ai-chat-fbsheet.is-open"), cards: document.querySelectorAll(".ai-chat-ffcta--scan").length, fit: fit ? { badge: fit.querySelector(".ai-chat-fit-result__badge")?.textContent, text: fit.closest(".ai-chat-msg-bubble")?.querySelector("p")?.textContent } : null, users, lastRole: last?.classList.contains("ai-chat-msg--assistant"), lastText: last?.querySelector(".ai-chat-msg-bubble p")?.textContent || "", stored: (() => { try { return JSON.parse(sessionStorage.getItem("fitfinder_fit") || "null")?.key; } catch { return null; } })() };
+    });
+    const sent2 = chatBodies.at(-1);
+    check("foot scan from the chat (signed in): the tap opens the sheet on the scan lookup and the scan comes back — Your scanned fit · FIT C, its date, the report link; Use my scanned fit closes the sheet, the FIT comes into the chat as its card ('Here's your FIT, from your foot scan.'), saved here and to the profile, the word 'My FIT is FIT C, from my foot scan.' goes to the assistant, which carries on; the scan card stays under the earlier reply", found.title === "Scanned in one of our stores?" && found.label === "Your scanned fit" && found.key === "FIT C" && /^Scanned September 12, 2026$/.test(found.date || "") && found.report && !after.sheet && after.cards === 1 && after.fit?.badge === "FIT C" && after.fit.text === "Here’s your FIT, from your foot scan." && after.users.at(-1) === "My FIT is FIT C, from my foot scan." && after.lastRole && /Going by your FIT C/.test(after.lastText) && chatBodies.length === nBodies + 1 && sent2?.fitfinder?.saved?.key === "C" && after.stored === "C" && fitSaves.length === nS + 1 && fitSaves.at(-1)?.fitKey === "C", JSON.stringify({ found, after, ff: sent2?.fitfinder && { saved: sent2.fitfinder.saved } }));
+  }
+  await page.reload();
+  await page.waitForTimeout(700);
+  if (!(await page.evaluate(() => !!document.querySelector(".ai-chat-panel.open")))) { await page.click(".ai-chat-launcher"); await page.waitForTimeout(700); }
+  const back = await page.evaluate(() => ({ open: !!document.querySelector(".ai-chat-panel.open"), cards: document.querySelectorAll(".ai-chat-ffcta--scan").length, title: document.querySelector(".ai-chat-ffcta--scan .ai-chat-ffcta__title")?.textContent }));
+  check(`foot scan from the chat (${label}): after a reload the scan card is back under its reply`, back.open && back.cards === 1 && back.title === "Pull up my foot scan", JSON.stringify(back));
+  check(`foot scan from the chat (${label}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+mockCtl.ffGuest = false;
 // FITFinder in the sheet, signed out: the card asks to save (sign in) or carry
 // on as a guest; the in-store scan asks to sign in first. Signed in: the scan
 // comes back and can be used. Phone and desktop.
