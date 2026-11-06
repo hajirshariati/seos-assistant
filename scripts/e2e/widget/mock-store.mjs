@@ -74,6 +74,7 @@ export const HUMAN_HELP = { hours: "Mon–Fri 8:30am–12am ET · Sat–Sun 9am�
 export const cartUpdates = [];
 export const chatBodies = [];
 export const fitSaves = [];
+export const signedInLog = [];
 export const returnBodies = [];
 // Returns the "server" has started, like the ChatReturn table: orderId → list.
 export const startedReturns = {};
@@ -137,7 +138,7 @@ const FF_CONFIG = {
   ],
 };
 // The in-store scan the mock finds for a signed-in shopper (tests may swap it).
-const FF_SCAN = { found: true, fit: { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support" }, scannedAt: "2026-09-12T15:00:00Z", scanUrl: "https://scan.example/report/1" };
+const FF_SCAN = { found: true, fit: { key: "C", label: "FIT C", code: "05", name: "Cushioned + Metatarsal Support" }, scannedAt: "2026-09-12T15:00:00Z", scanUrl: "/scan-report" };
 const sizes = ["7 US", "7.5 US", "8 US", "8.5 US", "9 US", "10 US"];
 const widths = ["Medium", "Wide"];
 let vid = 1000;
@@ -307,7 +308,9 @@ export function start(port) {
           return resp.end();
         }
         if (u.pathname === "/apps/hajirai/signed-in" && u.searchParams.get("check")) return send(200, "application/json", JSON.stringify({ signedIn: /signedin=1/.test(req.headers.cookie || "") }));
-        if (u.pathname === "/apps/hajirai/signed-in") return send(200, "text/html", signedInPage(u.searchParams.get("back")));
+        if (u.pathname === "/apps/hajirai/signed-in") { signedInLog.push(u.search); return send(200, "text/html", signedInPage(u.searchParams.get("back"), u.searchParams.get("popup") === "1")); }
+        // The scan report FITFinder links to, as a page of the store's.
+        if (u.pathname === "/scan-report") return send(200, "text/html", "<!doctype html><title>Your scan report</title><body style=\"font-family:sans-serif;padding:24px\"><h1>Your scan report</h1><p>Scanned September 12, 2026 — FIT C.</p></body>");
         // Order status without signing in: order number (or confirmation code)
         // + email, both of the same order → that order's status, as the real
         // route answers (routes/order-lookup.jsx). mockCtl.lookupTries: tries
@@ -464,7 +467,7 @@ export function start(port) {
         if (u.pathname === "/apps/hajirai/deals") { dealsLog.push(u.search); return send(200, "application/json", JSON.stringify({ offers: DEALS_OFFERS, products: MANY_BOOTS.slice(0, 6), url: "https://www.example.com/collections/sale", label: "Deals", asOf: new Date().toISOString() })); }
         if (u.pathname === "/apps/hajirai/orders") { ordersLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, orders: ORDERS.map(orderNow), numberOfOrders: 7, returnMethods: METHODS, freeReasons: FREE_REASONS } : { signedIn: false })); }
         if (u.pathname === "/apps/hajirai/rewards") { rewardsLog.push(u.search); return send(200, "application/json", JSON.stringify(/login=/.test(String(req.headers.referer || "")) ? { signedIn: true, member: true, balance: "2,350 points · $11.75" } : { signedIn: false })); }
-        if (u.pathname === "/apps/fitfinder/config") return send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest }));
+        if (u.pathname === "/apps/fitfinder/config") return setTimeout(() => send(200, "application/json", JSON.stringify({ ...FF_CONFIG, loggedIn: !mockCtl.ffGuest })), mockCtl.ffDelayMs || 0);
         if (u.pathname === "/apps/fitfinder/scan-fit") return send(200, "application/json", JSON.stringify(mockCtl.ffScan || FF_SCAN));
         if (u.pathname === "/apps/fitfinder/fit") { fitSaves.push(JSON.parse(body || "{}")); return send(200, "application/json", '{"ok":true}'); }
         if (u.pathname === "/apps/hajirai/chat") {

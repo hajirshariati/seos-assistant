@@ -3513,9 +3513,9 @@ function fbSheetEl(){
   fbSheet=el('div','ai-chat-fbsheet');
   fbSheet.setAttribute('role','dialog');fbSheet.setAttribute('aria-label',FB_LABEL);fbSheet.hidden=true;
   fbSheet.innerHTML='<div class="ai-chat-fbsheet__bar"><button type="button" class="ai-chat-fbsheet__back" data-fb-close="1" aria-label="Back to the chat"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg><span>Chat</span></button><div class="ai-chat-fbsheet__title"></div><span class="ai-chat-fbsheet__end"><button type="button" class="ai-chat-fbsheet__x" data-sheet-x="1" aria-label="Close the chat" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></span></div>'+
-    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div><div class="ai-chat-fbsheet__ff"></div></div>';
+    '<div class="ai-chat-fbsheet__body"><div class="ai-chat-fbsheet__state" role="status"><span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading the survey…</span></div><div class="ai-chat-fbsheet__form"></div><div class="ai-chat-fbsheet__map"></div><div class="ai-chat-fbsheet__list ai-chat-msg-bubble"></div><div class="ai-chat-fbsheet__ff"></div><div class="ai-chat-fbsheet__frame"></div></div>';
   fbSheet.addEventListener('click',function(e){
-    if(e.target.closest('[data-fb-close]')){e.preventDefault();closeFeedback();return}
+    if(e.target.closest('[data-fb-close]')){e.preventDefault();sheetBack();return}
     /* × closes the whole chat. */
     if(e.target.closest('[data-sheet-x]')){e.preventDefault();sheetCloseAll();return}
     /* The filters' panel and anything in it. */
@@ -3623,6 +3623,54 @@ function openForm(opener,form,title,kind){
     $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__msg">'+(thisKind==='fb'?'The survey couldn’t open here.':'This couldn’t open here.')+'</span><a class="ai-chat-fbsheet__alt" href="'+esc(fbUrl())+'" target="_blank" rel="noopener">Open it in a new tab</a>';
   });
 }
+/* A page of the store's in the same sheet — the scan report from FITFinder
+   — in a frame, with a quiet way to open it in a tab (a page that won't sit
+   in a frame still has a way). Opened from the FIT sheet, Back returns to
+   it, the scan still showing. */
+var frameBack='',frameOpener=null;
+function sheetBackLabel(t){
+  if(!fbSheet)return;
+  var b=$('.ai-chat-fbsheet__back',fbSheet),s=b&&b.querySelector('span');
+  if(s)s.textContent=t;
+  if(b)b.setAttribute('aria-label',t==='Chat'?'Back to the chat':'Back to '+t);
+}
+function openFrame(opener,url,title,backTo){
+  url=safeUrl(url);if(!url)return;
+  var sh=fbSheetEl(),box=$('.ai-chat-fbsheet__frame',sh);
+  frameBack=backTo||'';frameOpener=frameBack?fbOpener:null;
+  fbOpener=opener||null;
+  sheetKind='frame';
+  sheetTitle=String(title||'').trim().slice(0,40)||'Page';
+  $('.ai-chat-fbsheet__title',sh).textContent=sheetTitle;
+  sh.setAttribute('aria-label',sheetTitle);
+  sh.setAttribute('data-kind','frame');
+  sheetBackLabel(frameBack==='fitfinder'?'FITFinder':'Chat');
+  menu.style.display='none';
+  clearTimeout(sh.__ffsT);sh.style.height='';
+  $('.ai-chat-fbsheet__state',sh).innerHTML='<span class="ai-chat-fbsheet__spin" aria-hidden="true"></span><span class="ai-chat-fbsheet__msg">Loading…</span>';
+  sh.classList.remove('is-ready','is-failed');
+  box.innerHTML='<iframe class="ai-chat-fbsheet__iframe" title="'+esc(sheetTitle)+'" src="'+url+'" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen"></iframe><div class="ai-chat-fbsheet__framefoot"><a class="ai-chat-fbsheet__newtab" href="'+url+'" target="_blank" rel="noopener">Open in a new tab \u2197</a></div>';
+  var fr=box.querySelector('iframe'),ready=function(){if(sheetKind==='frame'&&fr.isConnected)sh.classList.add('is-ready')};
+  fr.addEventListener('load',ready);setTimeout(ready,5000);
+  sh.hidden=false;void sh.offsetWidth;sh.classList.add('is-open');
+  fbBehind(true);
+  setTimeout(function(){var b=$('.ai-chat-fbsheet__back',sh);if(b)try{b.focus({preventScroll:true})}catch(e){}},60);
+}
+function frameClear(){
+  if(!fbSheet)return;
+  var fx=$('.ai-chat-fbsheet__frame',fbSheet);if(fx&&fx.firstChild)fx.innerHTML='';
+  frameBack='';frameOpener=null;sheetBackLabel('Chat');
+}
+/* Back on the sheet: a page opened from the FIT sheet goes back to it; anything else closes the sheet. */
+function sheetBack(){
+  if(sheetKind==='frame'&&frameBack==='fitfinder'&&ffNative()){
+    var op=frameOpener&&document.body.contains(frameOpener)?frameOpener:null;
+    frameClear();
+    openFitFinder(op,'keep');
+    return;
+  }
+  closeFeedback();
+}
 /* The store locator (Storepoint), in the same sheet. It's put on the page
    exactly as on the store's own locator page — Storepoint's container and
    script — inside a part of the sheet that's kept once built, so going
@@ -3701,6 +3749,7 @@ function closeSheetNow(quiet){
   if(!fbSheet||fbSheet.hidden)return;
   var sh=fbSheet;
   clearTimeout(sh.__ffsT);sh.style.height='';
+  if(sheetKind==='frame')frameClear();
   sh.classList.remove('is-open');fbBehind(false);
   /* Added to the cart from View all: asked once the sheet's away. */
   if(isOpen&&ratePending())maybeAskRating();
@@ -3726,7 +3775,7 @@ panel.addEventListener('keydown',function(e){
   if(e.key!=='Escape'||!fbSheet||fbSheet.hidden)return;
   e.preventDefault();e.stopPropagation();
   if(vfOpen){vfClose(true);return}
-  closeFeedback();
+  sheetBack();
 },true);
 /* Start fetching Typeform the moment the button is pointed at. */
 function wantsForm(t){return t&&t.closest&&(FB_ON&&t.closest('[data-feedback]')||t.closest('[data-form]'))}
@@ -5810,10 +5859,29 @@ function startSignIn(intent){
   try{sessionStorage.setItem(RESUME_KEY,JSON.stringify({q:q,intent:intent,at:Date.now()}))}catch(e){}
   var back=location.pathname+location.search;
   var landing='/apps/hajirai/signed-in?back='+encodeURIComponent(back);
-  var url=CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?')+'return_url='+encodeURIComponent(landing)+'&return_to='+encodeURIComponent(landing);
+  var loginTo=function(l){return CUST_LOGIN_URL+(CUST_LOGIN_URL.indexOf('?')>-1?'&':'?')+'return_url='+encodeURIComponent(l)+'&return_to='+encodeURIComponent(l)};
   var w=null;
-  try{var W=Math.min(480,screen.availWidth),H=Math.min(720,screen.availHeight);w=window.open(url,'hajirai-signin','popup=yes,width='+W+',height='+H+',left='+Math.max(0,(screen.availWidth-W)/2)+',top='+Math.max(0,(screen.availHeight-H)/2))}catch(e){w=null}
-  if(!w)location.href=url;
+  /* In a small window: its landing says so (it closes itself, or asks to be closed — never goes on to the store). */
+  try{var W=Math.min(480,screen.availWidth),H=Math.min(720,screen.availHeight);w=window.open(loginTo(landing+'&popup=1'),'hajirai-signin','popup=yes,width='+W+',height='+H+',left='+Math.max(0,(screen.availWidth-W)/2)+',top='+Math.max(0,(screen.availHeight-H)/2))}catch(e){w=null}
+  if(!w){location.href=loginTo(landing);return}
+  signInWatch(w);
+}
+/* While a sign-in is pending in the small window, the chat asks the store
+   every few seconds whether this browser is signed in now — Shopify's
+   sign-in pages cut the window's link back, and this tab doesn't always
+   get a focus event when it closes. Stops with the sign-in, when the
+   window has been closed a while, or after five minutes. */
+var signPoll=null;
+function signInWatch(w){
+  clearInterval(signPoll);
+  var started=Date.now(),afterClose=0;
+  signPoll=setInterval(function(){
+    var pending=null;try{pending=sessionStorage.getItem(RESUME_KEY)}catch(e){}
+    var closed=false;try{closed=!!(w&&w.closed)}catch(e){closed=true}
+    if(closed)afterClose+=1;
+    if(!pending||CUST_LOGGED_IN||afterClose>3||Date.now()-started>5*60*1000){clearInterval(signPoll);signPoll=null;return}
+    checkSignedIn();
+  },3000);
 }
 var lastAskedOrders='';
 function resumeAfterSignIn(){
@@ -5830,13 +5898,18 @@ function resumeAfterSignIn(){
   if(r.intent==='fitfinder'||r.intent==='fitfinder-scan'){
     if(ff)ff.loggedIn=true;
     var pk='',fromChat=false;try{pk=sessionStorage.getItem(FFS_PENDING)||'';sessionStorage.removeItem(FFS_PENDING);fromChat=sessionStorage.getItem(FFS_CHAT)==='1';sessionStorage.removeItem(FFS_CHAT)}catch(e){}
-    if(pk&&ff)ffSave(pk);
     if(!isOpen)toggle(true);
-    setTimeout(function(){
-      if(!ffNative())return;
-      if(r.intent==='fitfinder-scan'){ffs.from=savedFit()?'done':'quiz';ffs.view='scan';if(openFitFinder(null,'keep')){ffs.chat=fromChat;ffsScanStart(fbSheet)}}
-      else{ffs.view='done';ffs.done='account';openFitFinder(null,'keep')}
-    },isOpen?150:700);
+    /* The sheet needs FITFinder's config — on a page just loaded (a same-tab sign-in) it may still be on its way. */
+    loadFitfinder().then(function(){
+      if(!ff)return;
+      ff.loggedIn=true;
+      if(pk&&ff.saved!==pk)ffSave(pk);
+      setTimeout(function(){
+        if(!ffNative())return;
+        if(r.intent==='fitfinder-scan'){ffs.from=savedFit()?'done':'quiz';ffs.view='scan';if(openFitFinder(null,'keep')){ffs.chat=fromChat;ffsScanStart(fbSheet)}}
+        else{ffs.view='done';ffs.done='account';openFitFinder(null,'keep')}
+      },isOpen?150:700);
+    });
     return;
   }
   /* The sign-in cards above have done their job. */
@@ -6765,7 +6838,7 @@ function ffsRecHtml(f,done){
 function ffsScanHtml(){
   var s=ffs.scan||{state:'finding'},h='<div class="ai-ffs__scanbox">';
   if(s.state==='login')h+='<p class="ai-ffs__note">Sign in with the email from your scan.</p><div class="ai-ffs__ctas is-one"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-login">Sign in</button></div>';
-  else if(s.state==='found'){var f=s.fit;h+='<div class="ai-ffs__rec" role="status"><div class="ai-ffs__rec-label">Your scanned fit</div><div class="ai-ffs__rec-line"><span class="ai-ffs__rec-key">'+esc(f.label||((ff.words.prefix||'FIT')+' '+f.key))+'</span>'+(f.name?'<span class="ai-ffs__rec-name">'+esc(f.name)+'</span>':'')+'</div>'+(s.date?'<div class="ai-ffs__scandate">Scanned '+esc(s.date)+'</div>':'')+'<p class="ai-ffs__note">From your foot scan at our store.</p><div class="ai-ffs__save"><div class="ai-ffs__ctas'+(s.url?'':' is-one')+'"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-use">Use my scanned fit</button>'+(s.url?'<a class="ai-ffs__btn" href="'+esc(s.url)+'" target="_blank" rel="noopener">View my scan report</a>':'')+'</div></div></div>'}
+  else if(s.state==='found'){var f=s.fit;h+='<div class="ai-ffs__rec" role="status"><div class="ai-ffs__rec-label">Your scanned fit</div><div class="ai-ffs__rec-line"><span class="ai-ffs__rec-key">'+esc(f.label||((ff.words.prefix||'FIT')+' '+f.key))+'</span>'+(f.name?'<span class="ai-ffs__rec-name">'+esc(f.name)+'</span>':'')+'</div>'+(s.date?'<div class="ai-ffs__scandate">Scanned '+esc(s.date)+'</div>':'')+'<p class="ai-ffs__note">From your foot scan at our store.</p><div class="ai-ffs__save"><div class="ai-ffs__ctas'+(s.url?'':' is-one')+'"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-use">Use my scanned fit</button>'+(s.url?'<button type="button" class="ai-ffs__btn" data-ffs="scan-report" data-url="'+esc(s.url)+'">View my scan report</button>':'')+'</div></div></div>'}
   else if(s.state==='none')h+='<p class="ai-ffs__note">We couldn’t find a foot scan for your account. If you were scanned in one of our stores, sign in with the email you gave there.</p>';
   else if(s.state==='error')h+='<p class="ai-ffs__note">Sorry — that didn’t work. Please try again.</p><div class="ai-ffs__ctas is-one"><button type="button" class="ai-ffs__btn is-primary" data-ffs="scan-retry">Try again</button></div>';
   else h+='<div class="ai-ffs__progress" role="status"><span class="ai-ffs__spin" aria-hidden="true"></span>Finding your fit…</div>';
@@ -6894,6 +6967,7 @@ function ffsAct(b){
   if(a==='quiz'){ffs.view=ffs.from==='done'&&savedFit()?'done':'quiz';ffs.scan=null;ffsRender(sh);return}
   if(a==='scan-login'){if(ffs.chat){try{sessionStorage.setItem(FFS_CHAT,'1')}catch(e){}}startSignIn('fitfinder-scan');return}
   if(a==='scan-retry'){ffsScanStart(sh);return}
+  if(a==='scan-report'){var ru=b.getAttribute('data-url');if(ru)openFrame(b,ru,'My scan report','fitfinder');return}
   if(a==='scan-use'){
     var s=ffs.scan;if(!s||s.state!=='found')return;
     var sf=ffFitByKey(s.fit.key);

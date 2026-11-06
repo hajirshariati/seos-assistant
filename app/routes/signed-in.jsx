@@ -19,7 +19,7 @@ export const loader = async ({ request }) => {
     return Response.json({ signedIn }, { headers: { "Cache-Control": "private, no-store" } });
   }
   const back = url.searchParams.get("back") || "/";
-  return new Response(signedInPage(back), {
+  return new Response(signedInPage(back, url.searchParams.get("popup") === "1"), {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" },
   });
 };

@@ -5076,6 +5076,17 @@ button.ai-chat-launcher__text {
   transition: opacity 0.3s ease;
 }
 .ai-chat-panel .ai-chat-fbsheet.is-ready .ai-chat-fbsheet__form { opacity: 1; }
+/* A page of the store's in a frame (the scan report): the frame fills the
+   sheet, a quiet line under it opens the page in a tab. */
+.ai-chat-panel .ai-chat-fbsheet__frame { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="frame"] .ai-chat-fbsheet__frame { visibility: visible; pointer-events: auto; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="frame"].is-ready .ai-chat-fbsheet__frame { opacity: 1; }
+.ai-chat-panel .ai-chat-fbsheet[data-kind="frame"] .ai-chat-fbsheet__form { visibility: hidden; pointer-events: none; }
+.ai-chat-panel .ai-chat-fbsheet__iframe { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: #fff; }
+.ai-chat-panel .ai-chat-fbsheet__framefoot { flex: none; display: flex; justify-content: center; padding: 9px 16px calc(9px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--seos-line); background: var(--seos-bg, #fff); }
+.ai-chat-panel .ai-chat-fbsheet__newtab { font: 500 12.5px/18px var(--seos-font); color: var(--seos-text-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--seos-line-strong); }
+.ai-chat-panel .ai-chat-fbsheet__newtab:hover { color: var(--seos-text); }
+.ai-chat-panel .ai-chat-fbsheet__newtab:focus-visible { outline: 2px solid var(--seos-ink); outline-offset: 2px; border-radius: 4px; }
 /* The store map: its own part of the sheet, kept once built. Only the part
    for what's open shows; the other keeps its size (hidden, not removed) so
    the map never has to redraw. Storepoint draws on white in both looks. */

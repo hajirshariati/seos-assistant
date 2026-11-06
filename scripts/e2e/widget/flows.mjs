@@ -3,7 +3,7 @@
 // mobile layouts. Run: node scripts/e2e/widget/flows.mjs
 import os from "node:os";
 import { chromium } from "playwright";
-const { start, peakImageLog, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog, dealsLog } = await import("./mock-store.mjs");
+const { start, peakImageLog, cartLog, buyNowLog, cartUpdates, chatBodies, fitSaves, signedInLog, returnBodies, startedReturns, mockCtl, compareLog, feedbackBodies, viewAllLog, viewAllIndexLog, viewAllCardsLog, BOOT_PRODUCTS, lookupBodies, appQrLog, APP_LINKS, activityLog, ordersLog, dealsLog } = await import("./mock-store.mjs");
 const { srv, PRODUCTS } = await start(4789);
 const out = (n) => `${process.env.E2E_SHOTS || os.tmpdir()}/widget-${n}.png`;
 const browser = await chromium.launch();
@@ -1297,7 +1297,7 @@ for (const [label, guest] of [["signed out", true], ["signed in", false]]) {
     check("foot scan from the chat (signed out): the tap opens the sheet on the scan lookup — 'Scanned in one of our stores?', 'Sign in with the email from your scan', a Sign in button, Back to the questions — not the questions", out.title === "Scanned in one of our stores?" && out.note === "Sign in with the email from your scan." && out.btn === "Sign in" && out.back === "Back to the questions" && out.qs === 0, JSON.stringify(out));
   } else {
     await page.waitForSelector('.ai-chat-fbsheet [data-ffs="scan-use"]', { timeout: 3000 });
-    const found = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent, label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, report: !!r?.querySelector('a[href="https://scan.example/report/1"]') }; });
+    const found = await page.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { title: document.querySelector(".ai-chat-fbsheet .ai-ffs__title")?.textContent, label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, report: r?.querySelector('[data-ffs="scan-report"]')?.getAttribute("data-url") === "/scan-report" }; });
     const nBodies = chatBodies.length, nS = fitSaves.length;
     await page.click('.ai-chat-fbsheet [data-ffs="scan-use"]');
     await page.waitForFunction(() => /which shoes will you wear them in/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
@@ -1321,6 +1321,66 @@ for (const [label, guest] of [["signed out", true], ["signed in", false]]) {
   await ctx.close();
 }
 mockCtl.ffGuest = false;
+// Signing in from the scan view. The small window lands on the chat's
+// signed-in page (told it's a pop-up: it closes itself, never goes on to
+// the store) and the chat runs the scan lookup it asked for — the FIT
+// sheet shows the scan, no reload. When Shopify's sign-in leaves the window
+// on the account page instead (its link to the chat cut) and the shopper
+// closes it, the chat's own watch notices within seconds, with no focus
+// event. And back from a same-tab sign-in, the chat waits for FITFinder's
+// config before opening the sheet on the scan.
+for (const way of ["popup", "closed", "same-tab"]) {
+  mockCtl.ffGuest = true;
+  mockCtl.ffDelayMs = way === "same-tab" ? 1500 : 0;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  if (way === "same-tab") {
+    // The store page loads signed in, with the chat's note that a scan lookup was waiting.
+    await page.goto("http://localhost:4789/account/login?return_url=/full");
+    await page.evaluate(() => sessionStorage.setItem("hajirai_resume", JSON.stringify({ q: "", intent: "fitfinder-scan", at: Date.now() })));
+    await page.goto("http://localhost:4789/full");
+    await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"] [data-ffs="scan-use"]', { timeout: 8000 }).catch(() => {});
+    const same = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"); return { open: !!document.querySelector(".ai-chat-panel.open"), kind: sh?.getAttribute("data-kind"), sheet: !!sh?.classList.contains("is-open"), title: sh?.querySelector(".ai-ffs__title")?.textContent, key: sh?.querySelector(".ai-ffs__scanbox .ai-ffs__rec-key")?.textContent, resume: sessionStorage.getItem("hajirai_resume") }; });
+    check("sign in for the scan (same tab): back on the page signed in, the chat opens and the FIT sheet shows the scan — even with FITFinder's config arriving late", same.open && same.kind === "fitfinder" && same.sheet && same.title === "Scanned in one of our stores?" && same.key === "FIT C" && same.resume === null, JSON.stringify(same));
+    check("sign in for the scan (same tab): no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+    continue;
+  }
+  await page.goto(`http://localhost:4789/full${way === "closed" ? "?coop=2" : ""}`);
+  await page.click(".ai-chat-launcher");
+  await page.waitForTimeout(400);
+  await page.fill(".ai-chat-input-area textarea, .ai-chat-input-area input", "can you pull up my foot scan");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".ai-chat-msg--assistant .ai-chat-ffcta--scan", { timeout: 8000 });
+  await page.click(".ai-chat-ffcta--scan");
+  await page.waitForSelector('.ai-chat-fbsheet [data-ffs="scan-login"]', { timeout: 3000 });
+  const nLand = signedInLog.length;
+  const [popup] = await Promise.all([page.waitForEvent("popup"), page.click('.ai-chat-fbsheet [data-ffs="scan-login"]')]);
+  if (way === "closed") {
+    await popup.waitForURL(/\/account$/, { timeout: 6000 }).catch(() => {});
+    await popup.close();
+  } else {
+    await popup.waitForEvent("close", { timeout: 8000 }).catch(() => {});
+  }
+  await page.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"] [data-ffs="scan-use"]', { timeout: 12000 }).catch(() => {});
+  const after = await page.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"); return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), title: sh.querySelector(".ai-ffs__title")?.textContent, key: sh.querySelector(".ai-ffs__scanbox .ai-ffs__rec-key")?.textContent, loginBtn: !!sh.querySelector('[data-ffs="scan-login"]'), resume: sessionStorage.getItem("hajirai_resume") }; });
+  if (way === "popup") {
+    check("sign in for the scan (small window): the window lands on the chat's signed-in page, told it's a pop-up, and closes itself; the chat runs the lookup — the FIT sheet shows the scan, no reload", popup.isClosed() && signedInLog.length === nLand + 1 && /popup=1/.test(signedInLog.at(-1)) && /back=%2Ffull/.test(signedInLog.at(-1)) && after.kind === "fitfinder" && after.open && after.title === "Scanned in one of our stores?" && after.key === "FIT C" && !after.loginBtn && after.resume === null, JSON.stringify({ closed: popup.isClosed(), landing: signedInLog.at(-1), after }));
+    // Use my scanned fit from here still puts the FIT in the chat and tells the assistant.
+    await page.click('.ai-chat-fbsheet [data-ffs="scan-use"]');
+    await page.waitForFunction(() => /which shoes will you wear them in/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+    const used = await page.evaluate(() => ({ sheet: !!document.querySelector(".ai-chat-fbsheet.is-open"), fit: document.querySelector(".ai-chat-msg--assistant .ai-chat-fit-result .ai-chat-fit-result__badge")?.textContent, word: [...document.querySelectorAll(".ai-chat-msg--user")].pop()?.textContent.trim() }));
+    check("sign in for the scan (small window): Use my scanned fit then closes the sheet, puts the FIT in the chat and tells the assistant it came from the scan", !used.sheet && used.fit === "FIT C" && used.word === "My FIT is FIT C, from my foot scan.", JSON.stringify(used));
+  } else {
+    check("sign in for the scan (window left on the account page, then closed): the chat's own watch notices the sign-in without a focus event and runs the lookup — the FIT sheet shows the scan", after.kind === "fitfinder" && after.open && after.title === "Scanned in one of our stores?" && after.key === "FIT C" && !after.loginBtn && after.resume === null, JSON.stringify(after));
+  }
+  check(`sign in for the scan (${way}): no JS errors`, errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+mockCtl.ffGuest = false;
+mockCtl.ffDelayMs = 0;
 // FITFinder in the sheet, signed out: the card asks to save (sign in) or carry
 // on as a guest; the in-store scan asks to sign in first. Signed in: the scan
 // comes back and can be used. Phone and desktop.
@@ -1368,7 +1428,15 @@ mockCtl.ffGuest = false;
   await page2.waitForSelector('.ai-chat-fbsheet[data-kind="fitfinder"].is-open', { timeout: 3000 });
   await page2.click('.ai-chat-fbsheet [data-ffs="scan"]');
   await page2.waitForSelector('.ai-chat-fbsheet [data-ffs="scan-use"]', { timeout: 3000 });
-  const found = await page2.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, name: r?.querySelector(".ai-ffs__rec-name")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, note: r?.querySelector(".ai-ffs__note")?.textContent, report: r?.querySelector('a[href="https://scan.example/report/1"]')?.textContent }; });
+  const found = await page2.evaluate(() => { const r = document.querySelector(".ai-chat-fbsheet .ai-ffs__scanbox .ai-ffs__rec"); return { label: r?.querySelector(".ai-ffs__rec-label")?.textContent, key: r?.querySelector(".ai-ffs__rec-key")?.textContent, name: r?.querySelector(".ai-ffs__rec-name")?.textContent, date: r?.querySelector(".ai-ffs__scandate")?.textContent, note: r?.querySelector(".ai-ffs__note")?.textContent, report: r?.querySelector('[data-ffs="scan-report"]')?.textContent, reportUrl: r?.querySelector('[data-ffs="scan-report"]')?.getAttribute("data-url") }; });
+  // View my scan report: the report as a page inside the chat's sheet (as the store's Typeforms open), Back to FITFinder returns to the scan.
+  await page2.click('.ai-chat-fbsheet [data-ffs="scan-report"]');
+  await page2.waitForSelector('.ai-chat-fbsheet[data-kind="frame"].is-ready', { timeout: 6000 }).catch(() => {});
+  const framed = await page2.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"); const fr = sh.querySelector(".ai-chat-fbsheet__iframe"); const r = fr?.getBoundingClientRect(); const sr = sh.getBoundingClientRect(); return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), ready: sh.classList.contains("is-ready"), title: sh.querySelector(".ai-chat-fbsheet__title")?.textContent, back: sh.querySelector(".ai-chat-fbsheet__back span")?.textContent, backAria: sh.querySelector(".ai-chat-fbsheet__back")?.getAttribute("aria-label"), src: fr?.getAttribute("src"), frameTitle: fr?.getAttribute("title"), tall: !!r && r.height >= sr.height * 0.7 && r.width >= sr.width - 2, newTab: sh.querySelector(".ai-chat-fbsheet__newtab")?.getAttribute("href"), newTabTarget: sh.querySelector(".ai-chat-fbsheet__newtab")?.getAttribute("target"), ffHidden: getComputedStyle(sh.querySelector(".ai-chat-fbsheet__ff")).visibility === "hidden", full: Math.abs(sr.top - document.querySelector(".ai-chat-panel").getBoundingClientRect().top) < 2 }; });
+  await page2.click(".ai-chat-fbsheet__back");
+  await page2.waitForTimeout(300);
+  const backed = await page2.evaluate(() => { const sh = document.querySelector(".ai-chat-fbsheet"); return { kind: sh.getAttribute("data-kind"), open: sh.classList.contains("is-open"), title: sh.querySelector(".ai-ffs__title")?.textContent, key: sh.querySelector(".ai-ffs__scanbox .ai-ffs__rec-key")?.textContent, back: sh.querySelector(".ai-chat-fbsheet__back span")?.textContent, frame: sh.querySelectorAll(".ai-chat-fbsheet__iframe").length }; });
+  check("FITFinder (signed in): View my scan report opens the report inside the chat's sheet — the full sheet, 'My scan report', the page in a frame filling it, an 'Open in a new tab' line under it, Back to FITFinder — and Back returns to the scan in the FIT sheet, the frame gone", found.reportUrl === "/scan-report" && framed.kind === "frame" && framed.open && framed.ready && framed.title === "My scan report" && framed.back === "FITFinder" && framed.backAria === "Back to FITFinder" && framed.src === "/scan-report" && framed.frameTitle === "My scan report" && framed.tall && framed.full && framed.newTab === "/scan-report" && framed.newTabTarget === "_blank" && framed.ffHidden && backed.kind === "fitfinder" && backed.open && backed.title === "Scanned in one of our stores?" && backed.key === "FIT C" && backed.back === "Chat" && backed.frame === 0, JSON.stringify({ framed, backed }));
   const nS = fitSaves.length;
   await page2.click('.ai-chat-fbsheet [data-ffs="scan-use"]');
   await page2.waitForTimeout(250);
