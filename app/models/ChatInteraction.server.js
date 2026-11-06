@@ -62,16 +62,33 @@ export async function markHuman(shop, { sessionId, how = "" }) {
 
 // Chats that sent at least one message, by the store's day they started:
 // { byDay: { "YYYY-MM-DD": n }, total } — the engagement rate's numerator.
+// The per-chat log began on Nov 3, 2026; chats before it (and any it
+// missed) are read from the recordings while the store keeps them — one
+// chat per session id, from its first message; admin test chats left out.
 export async function countChatsByDay(shop, { start, end }, { timeZone = "" } = {}) {
   const dayKey = dayKeyIn(timeZone);
-  const rows = await prisma.chatInteraction.findMany({
-    where: { shop, messages: { gte: 1 }, startedAt: { gte: start, lte: end } },
-    select: { startedAt: true },
-    take: 400000,
-  });
+  const [logged, recorded] = await Promise.all([
+    prisma.chatInteraction.findMany({
+      where: { shop, messages: { gte: 1 }, startedAt: { gte: start, lte: end } },
+      select: { sessionId: true, startedAt: true },
+      take: 400000,
+    }),
+    prisma.chatRecording.groupBy({
+      by: ["sessionId"],
+      where: { shop, tester: "", createdAt: { gte: start, lte: end } },
+      _min: { createdAt: true },
+    }).catch(() => []),
+  ]);
+  const first = new Map();
+  for (const r of logged) first.set(r.sessionId, r.startedAt);
+  for (const r of recorded) {
+    const at = r._min?.createdAt; if (!at) continue;
+    const have = first.get(r.sessionId);
+    if (!have || at < have) first.set(r.sessionId, at);
+  }
   const byDay = {};
-  for (const r of rows) { const k = dayKey(r.startedAt); byDay[k] = (byDay[k] || 0) + 1; }
-  return { byDay, total: rows.length };
+  for (const at of first.values()) { const k = dayKey(at); byDay[k] = (byDay[k] || 0) + 1; }
+  return { byDay, total: first.size };
 }
 
 export async function listInteractions(shop, { since = null, until = null, take = 200000 } = {}) {

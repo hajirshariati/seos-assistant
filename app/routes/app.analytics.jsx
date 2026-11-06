@@ -147,6 +147,7 @@ export const loader = async ({ request }) => {
       conversionCount: prevConversions.count,
       conversionRevenue: prevConversions.revenue,
       engagement: prevEngagement.rate,
+      engagementChats: prevEngagement.chats,
     },
     range: { preset, label, startDate: startDate.toISOString(), endDate: endDate.toISOString(), days: spanDays },
   };
@@ -546,7 +547,7 @@ export default function Analytics() {
               curr={conversions.revenue}
               prev={previous.conversionRevenue}
             />
-            <Kpi label="Conversations" value={usage.totalMessages.toLocaleString()} curr={usage.totalMessages} prev={previous.messages} />
+            <Kpi label="Conversations" value={usage.totalMessages.toLocaleString()} sub={engagement.chats > 0 ? `messages, in ${engagement.chats.toLocaleString()} chat${engagement.chats === 1 ? "" : "s"}` : "messages"} curr={usage.totalMessages} prev={previous.messages} />
             <Kpi
               label="Satisfaction"
               value={feedback.total > 0 ? `${feedback.satisfactionRate}%` : "—"}
@@ -574,7 +575,7 @@ export default function Analytics() {
                     ? `of the store's online sessions in this range chatted with AVA — ${engagement.chats.toLocaleString()} chat${engagement.chats === 1 ? "" : "s"} across ${engagement.sessions.toLocaleString()} session${engagement.sessions === 1 ? "" : "s"} (Shopify Analytics).`
                     : `${engagement.chats.toLocaleString()} chat${engagement.chats === 1 ? "" : "s"} in this range. ${engagement.note || "Shopify hasn't reported sessions for these days yet."}`}
                 </div>
-                {typeof engagement.rate === "number" && typeof previous.engagement === "number" ? <Delta curr={engagement.rate} prev={previous.engagement} /> : null}
+                {typeof engagement.rate === "number" && typeof previous.engagement === "number" && previous.engagementChats > 0 ? <Delta curr={engagement.rate} prev={previous.engagement} /> : null}
               </div>
             </div>
           </Card>
