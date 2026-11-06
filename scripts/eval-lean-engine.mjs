@@ -1408,8 +1408,12 @@ await test("store-chosen product fields reach Claude and are searchable", () => 
   const ashley = c.products.find((p) => p.title.startsWith("Ashley"));
   const noval = similarProducts(c, { handle: ashley.handle, attributes: ["footbed", "heel"], must: ["materials"] });
   assert.deepEqual(noval.products.map((p) => p.title).sort(), ["Lexa Quarter Strap Wedge - Black", "Noelle Arch Support Wedge - Navy"], "must-match materials, but the reference has none → not a gate");
+  // A gate nothing passes is let go: the closest on the other qualities come, with a note that says so (never a dead end).
   const mat = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed", "materials"], must: ["materials"] });
-  assert.equal(mat.products.length, 0, "the reference has materials no other wedge has → nothing passes the gate");
+  assert.deepEqual(mat.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"], "no wedge shares the materials → the closest by footbed instead");
+  assert.match(mat.note, /No other style here shares its materials \(leather upper\)/);
+  assert.ok(mat.matched_on.includes("materials") && !mat.matched_on.includes("materials (must match)"), "the let-go gate isn't claimed as must match");
+  assert.equal(strict.note, undefined, "a gate that bit has no note");
   // A must on a field that isn't ticked is ignored.
   const untick = similarProducts(c, { handle: c.products[0].handle, attributes: ["footbed"], must: ["heel"] });
   assert.deepEqual(untick.products.map((p) => p.title), ["Ashley Arch Support Wedge - Rose"]);

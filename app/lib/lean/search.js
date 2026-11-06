@@ -460,8 +460,10 @@ export function productDetails(catalog, handle) {
 // itself. The qualities marked "must match" are gates: a style is shown only
 // when it holds every value the reference has for that field (the same
 // footbed; for a list, all of the reference's entries) — skipped when the
-// reference has no value there, so results still come. The rest rank: by
-// how many of those qualities match.
+// reference has no value there. When nothing passes a gate, the gates are
+// let go and the closest styles on the other qualities come instead, with a
+// note that says so — never a dead end. The rest rank: by how many of those
+// qualities match.
 export function similarProducts(catalog, { handle, attributes = [], must = [], limit = 6, max_price } = {}) {
   const products = catalog?.products || [];
   const ref = products.find((x) => x.handle === handle);
@@ -474,19 +476,27 @@ export function similarProducts(catalog, { handle, attributes = [], must = [], l
     if (key === "helps_with") return p.conditions.join(", ");
     return lc(p.attributes?.[key] || "");
   };
-  const scored = [];
-  for (const p of products) {
-    if (!p.inStock || lc(p.style) === lc(ref.style)) continue;
-    if (lc(p.category) !== lc(ref.category)) continue;
-    if (ref.gender.length && p.gender.length && !p.gender.some((g) => ref.gender.includes(g) || g === "unisex")) continue;
-    if (Number.isFinite(max_price) && p.price > max_price) continue;
-    if (mustKeys.some((key) => !holdsAll(valueOf(ref, key), valueOf(p, key)))) continue;
-    let score = 0;
-    for (const key of want) score += valueOverlap(valueOf(ref, key), valueOf(p, key));
-    if (want.length && score === 0) continue;
-    scored.push({ p, score });
-  }
-  scored.sort((a, b) => b.score - a.score || a.p.price - b.p.price);
+  const gather = (gates) => {
+    const scored = [];
+    for (const p of products) {
+      if (!p.inStock || lc(p.style) === lc(ref.style)) continue;
+      if (lc(p.category) !== lc(ref.category)) continue;
+      if (ref.gender.length && p.gender.length && !p.gender.some((g) => ref.gender.includes(g) || g === "unisex")) continue;
+      if (Number.isFinite(max_price) && p.price > max_price) continue;
+      if (gates.some((key) => !holdsAll(valueOf(ref, key), valueOf(p, key)))) continue;
+      let score = 0;
+      for (const key of want) score += valueOverlap(valueOf(ref, key), valueOf(p, key));
+      if (want.length && score === 0) continue;
+      scored.push({ p, score });
+    }
+    scored.sort((a, b) => b.score - a.score || a.p.price - b.p.price);
+    return scored;
+  };
+  // The gates that actually bite (the reference has a value there).
+  const gating = mustKeys.filter((key) => valueParts(valueOf(ref, key)).length > 0);
+  let scored = gather(gating);
+  let relaxed = [];
+  if (!scored.length && gating.length) { relaxed = gating; scored = gather([]); }
   const seenStyles = new Set();
   const out = [];
   for (const { p } of scored) {
@@ -495,7 +505,12 @@ export function similarProducts(catalog, { handle, attributes = [], must = [], l
     out.push(toModelProduct(p));
     if (out.length >= Math.min(Math.max(1, limit || 6), 10)) break;
   }
-  return { reference: ref.title, matched_on: ["category", "line", ...want.map((k) => (mustKeys.includes(k) ? `${k} (must match)` : k))], products: out };
+  const named = (k) => k.replace(/_/g, " ");
+  const out2 = { reference: ref.title, matched_on: ["category", "line", ...want.map((k) => (mustKeys.includes(k) && !relaxed.includes(k) ? `${k} (must match)` : k))], products: out };
+  if (relaxed.length && out.length) {
+    out2.note = `No other style here shares its ${relaxed.map((k) => `${named(k)} (${valueOf(ref, k) || "—"})`).join(" and ")}, so these are the closest on the other qualities — say so to the customer, and name what they do share.`;
+  }
+  return out2;
 }
 
 // Must match: every value the reference has for the field is on the
